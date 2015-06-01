@@ -86,7 +86,7 @@ class Backend {
             result.first += adjust ? 32 - adjust : 0;
 
             result.second = std::min(i * numComputeUnits,
-                                    CEIL_DIV(count, result.first));
+                                     CEIL_DIV(count, result.first));
 
             return result;
         }
@@ -112,9 +112,7 @@ class Backend {
         void runKernel
             ( typename kernel< Platform, Args... >::type kernel
             , Args... args)
-        {
-            self().template runKernel(kernel, args...);
-        }
+        { self().template runKernel(kernel, args...); }
 
         template<typename V>
         std::shared_ptr<alloc_t<V>> alloc(size_t count)

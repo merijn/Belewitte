@@ -12,6 +12,7 @@
 #include "Util.hpp"
 
 #include "bfs.hpp"
+#include "pagerank.hpp"
 
 using namespace std;
 
@@ -185,7 +186,14 @@ int main(int argc, char **argv)
             break;
         case framework::cuda:
             run_with_backend(cuda, argc, argv, platform, device, verbose);
-            bfs(cuda, timers, run_count, argv[optind], outputFile, warp, chunk);
+            switch (algorithm) {
+                //case 0:
+                //    bfs(cuda, timers, run_count, argv[optind], outputFile, warp, chunk);
+                //    break;
+                default:
+                    pagerank(cuda, timers, run_count, argv[optind], outputFile, algorithm, warp, chunk);
+                    break;
+            }
             break;
     }
 

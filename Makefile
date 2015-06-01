@@ -63,11 +63,12 @@ all: main normalise gen-graph reorder-graph check-degree
 
 -include $(patsubst %.cpp, build/%.d, $(wildcard *.cpp))
 
-DIRS=bfs
+DIRS=bfs pagerank
 include $(foreach d, $(DIRS), $d/Makefile)
 
 main: build/main.o build/CUDA.o build/OpenCL.o build/Timer.o build/Util.o \
-      build/GraphFile.o build/bfs.o build/bfs/libbfs.a
+      build/GraphFile.o build/bfs.o build/bfs/libbfs.a build/pagerank.o \
+      build/pagerank/libpagerank.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
