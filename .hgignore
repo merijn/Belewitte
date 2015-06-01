@@ -1,0 +1,9 @@
+syntax: glob
+main
+main.dSYM/*
+normalise
+normalise.dSYM/*
+gen-graph
+reorder-graph
+check-degree
+*.d
