@@ -85,8 +85,6 @@ int main(int argc, char **argv)
     int algorithm = 0;
     size_t warp = 32;
     size_t chunk = 32;
-    CUDA cuda;
-    OpenCL opencl;
     int verbose = false;
     framework fw = framework::cuda;
     int device = 0;
@@ -174,7 +172,8 @@ int main(int argc, char **argv)
     TimerRegister timers(verbose);
 
     switch (fw) {
-        case framework::opencl:
+        case framework::opencl: {
+            OpenCL opencl;
             run_with_backend(opencl, argc, argv, platform, device, verbose);
             {
                 //array<const char*,1> files {{&_binary_kernel_cl_start}};
@@ -184,7 +183,9 @@ int main(int argc, char **argv)
                 //benchmark<OpenCL>(opencl, initKernel, runKernel, graph, root, run_count, outputFile);
             }
             break;
-        case framework::cuda:
+        }
+        case framework::cuda: {
+            CUDA cuda;
             run_with_backend(cuda, argc, argv, platform, device, verbose);
             switch (algorithm) {
                 //case 0:
@@ -195,6 +196,7 @@ int main(int argc, char **argv)
                     break;
             }
             break;
+        }
     }
 
     if (timingsFile) {
