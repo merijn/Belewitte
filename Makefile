@@ -19,7 +19,7 @@ WFLAGS = -Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic \
          -Wno-unused-const-variable
 
 CFLAGS=-MMD -MP -std=c++14 $(WFLAGS) -g
-LDFLAGS=-lcuda -lcudart -ldl -g
+LDFLAGS=-lcudart -ldl -g
 
 LD=$(CC)
 
@@ -48,7 +48,7 @@ ifeq ($(UNAME),Darwin)
 endif
 ifeq ($(UNAME),Linux)
     WFLAGS += -Wno-reserved-id-macro
-    CFLAGS += --gcc-toolchain=/cm/shared/package/gcc/4.9.0/ \
+    CFLAGS += --gcc-toolchain=$(addsuffix .., $(dir $(shell which gcc))) \
               -isystem$(CUDA_PATH)/include/
     LDFLAGS += -L$(CUDA_PATH)/lib64 -lOpenCL
 
