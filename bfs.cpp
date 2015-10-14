@@ -13,7 +13,7 @@ struct BFSImpl {
         TimerRegister &timers;
         size_t run_count;
         const char *outputFile;
-        int vertex_count;
+        size_t vertex_count;
 
     public:
         BFSImpl
@@ -21,7 +21,7 @@ struct BFSImpl {
         , TimerRegister& ts
         , size_t count
         , const char *output
-        , int vertices
+        , size_t vertices
         ) : backend(b), timers(ts), run_count(count), outputFile(output)
           , vertex_count(vertices)
         {}
@@ -52,16 +52,13 @@ struct BFSImpl {
                 initResults.stop();
 
                 bfsTime.start();
-                //backend.setWorkSizes(1, {nodeSizes.first}, {nodeSizes.second}, (nodeSizes.first/8) * sizeof(warp_mem_t));
 
                 bool val;
                 int curr = 0;
                 do {
                     resetFinished();
-                    //backend.runKernel(cudabfs, results, nodes, edges, static_cast<int>(results->size), curr++);
                     kernel.call(backend, results, curr++);
                     val = getFinished();
-                    //CUDA_CHK(cudaMemcpyFromSymbol(&val, &finished, sizeof val));
                 } while (!val);
                 bfsTime.stop();
 
@@ -98,7 +95,7 @@ void bfs
     , size_t chunk_size
     )
 {
-    const GraphFile graph_file(filename);
+    const GraphFile<unsigned, unsigned> graph_file(filename);
     auto nodeSizes = backend.computeDivision(graph_file.vertex_count);
 
     BFSImpl<CUDA> bfs(backend, timers, count, outputFile, graph_file.vertex_count);
@@ -110,7 +107,7 @@ void bfs
         std::get<1>(graph)->copyHostToDev();
     };
 
-    auto kernel = warp_dispatch<bfswarp>::work(warp_size, chunk_size, 1_sz, nodeSizes, std::get<0>(graph), std::get<1>(graph), graph_file.vertex_count);
+    auto kernel = warp_dispatch<bfswarp>::work(warp_size, chunk_size, 1_sz, nodeSizes, std::get<0>(graph), std::get<1>(graph), static_cast<size_t>(graph_file.vertex_count));
 
     bfs.runKernel(kernel, transfer);
 }

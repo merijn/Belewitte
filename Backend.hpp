@@ -1,12 +1,13 @@
 #ifndef __BACKEND_HPP__
 #define __BACKEND_HPP__
 
-#include <cassert>
 #include <cstdlib>
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
+
+#include "Util.hpp"
 
 #define CEIL_DIV(x, y)          (((x) + ((y) - 1)) / (y))
 
@@ -21,9 +22,6 @@ class alloc_t {
         V* host;
 
         alloc_t(size_t N, bool readonly) : size(N), read_only(readonly) {}
-        alloc_t(int N, bool readonly)
-            : size(static_cast<size_t>(N)), read_only(readonly)
-        { assert(N >= 0); }
 
     public:
         const size_t size;
@@ -37,13 +35,8 @@ class alloc_t {
 
         V& operator[](size_t i)
         {
-            assert(0 <= i && i < size);
-            return host[i];
-        }
-
-        V& operator[](int i)
-        {
-            assert(0 <= i && static_cast<size_t>(i) < size);
+            checkError(i < size, "Attempting to index invalid offset! Index: ",
+                       i, " Max: ", size);
             return host[i];
         }
 };
@@ -91,13 +84,6 @@ class Backend {
             return result;
         }
 
-        std::pair<size_t,size_t>
-        computeDivision(int count)
-        {
-            assert(count >= 0);
-            return computeDivision(static_cast<size_t>(count));
-        }
-
         Platform& self() { return *static_cast<Platform*>(this); }
 
         virtual void queryPlatform(size_t platform, bool verbose) = 0;
@@ -121,20 +107,6 @@ class Backend {
         template<typename V>
         std::shared_ptr<alloc_t<V>> allocConstant(size_t count)
         { return self().template allocConstant<V>(count); }
-
-        template<typename V>
-        std::shared_ptr<alloc_t<V>> alloc(int count)
-        {
-            assert(count >= 0);
-            return self().template alloc<V>(static_cast<size_t>(count));
-        }
-
-        template<typename V>
-        std::shared_ptr<alloc_t<V>> allocConstant(int count)
-        {
-            assert(count >= 0);
-            return self().template allocConstant<V>(static_cast<size_t>(count));
-        }
 
         const std::string name;
         std::vector<int> devicesPerPlatform;

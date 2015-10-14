@@ -31,10 +31,10 @@ int main(int argc, char **argv)
     for (int i = 2; i < argc; i++) {
         name = string(argv[i]);
 
-        const GraphFile graph(name);
+        const GraphFile<unsigned, unsigned> graph(name);
         map<int, int> degrees;
 
-        for (int j = 0; j < graph.vertex_count; j++) {
+        for (unsigned j = 0; j < graph.vertex_count; j++) {
             int degree = 0;
 
             if (ordering == out_degree || ordering == abs_degree) {

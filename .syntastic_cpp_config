@@ -2,3 +2,4 @@
 -Wno-exit-time-destructors
 -Wno-global-constructors
 -std=c++14
+-Wno-reserved-id-macro

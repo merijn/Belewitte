@@ -13,7 +13,7 @@ struct PageRankImpl {
         TimerRegister& timers;
         size_t run_count;
         const char *outputFile;
-        int vertex_count;
+        size_t vertex_count;
 
     public:
         PageRankImpl
@@ -21,7 +21,7 @@ struct PageRankImpl {
         , TimerRegister& ts
         , size_t count
         , const char *output
-        , int vertices
+        , size_t vertices
         ) : backend(b), timers(ts), run_count(count), outputFile(output)
           , vertex_count(vertices)
         {}
@@ -120,7 +120,7 @@ void pagerank
     , size_t chunk_size
     )
 {
-    const GraphFile graph_file(filename);
+    const GraphFile<unsigned, unsigned> graph_file(filename);
     auto nodeSizes = backend.computeDivision(graph_file.vertex_count);
     auto edgeSizes = backend.computeDivision(graph_file.edge_count);
 
@@ -143,7 +143,7 @@ void pagerank
                                        0, std::get<0>(graph),
                                        std::get<1>(graph),
                                        std::get<2>(graph),
-                                       graph_file.edge_count);
+                                       static_cast<size_t>(graph_file.edge_count));
 
                 pr.runKernel(kernel, consolidate, transfer);
             }
@@ -161,7 +161,7 @@ void pagerank
                                        {edgeSizes.first}, {edgeSizes.second},
                                        0, std::get<0>(graph),
                                        std::get<1>(graph),
-                                       graph_file.edge_count);
+                                       static_cast<size_t>(graph_file.edge_count));
 
                 pr.runKernel(kernel, consolidate, transfer);
             }
@@ -178,7 +178,7 @@ void pagerank
                                        {nodeSizes.second}, 0,
                                        std::get<0>(graph),
                                        std::get<1>(graph),
-                                       graph_file.vertex_count);
+                                       static_cast<size_t>(graph_file.vertex_count));
 
                 pr.runKernel(kernel, consolidate, transfer);
             }
@@ -198,7 +198,7 @@ void pagerank
                                        std::get<0>(graph),
                                        std::get<1>(graph),
                                        std::get<2>(graph),
-                                       graph_file.vertex_count);
+                                       static_cast<size_t>(graph_file.vertex_count));
 
                 pr.runKernel(kernel, consolidate, transfer);
             }
@@ -212,7 +212,7 @@ void pagerank
                     std::get<1>(graph)->copyHostToDev();
                 };
 
-                auto kernel = warp_dispatch<pushwarp>::work(warp_size, chunk_size, 1_sz, nodeSizes, std::get<0>(graph), std::get<1>(graph), graph_file.vertex_count);
+                auto kernel = warp_dispatch<pushwarp>::work(warp_size, chunk_size, 1_sz, nodeSizes, std::get<0>(graph), std::get<1>(graph), static_cast<size_t>(graph_file.vertex_count));
 
                 pr.runKernel(kernel, consolidate, transfer);
             }
@@ -227,7 +227,7 @@ void pagerank
                     std::get<2>(graph)->copyHostToDev();
                 };
 
-                auto kernel = warp_dispatch<pullwarp>::work(warp_size, chunk_size, 1_sz, nodeSizes, std::get<0>(graph), std::get<1>(graph), std::get<2>(graph), graph_file.vertex_count);
+                auto kernel = warp_dispatch<pullwarp>::work(warp_size, chunk_size, 1_sz, nodeSizes, std::get<0>(graph), std::get<1>(graph), std::get<2>(graph), static_cast<size_t>(graph_file.vertex_count));
 
                 pr.runKernel(kernel, consolidate, transfer);
             }
@@ -247,7 +247,7 @@ void pagerank
                                        std::get<0>(graph),
                                        std::get<1>(graph),
                                        std::get<2>(graph),
-                                       graph_file.vertex_count);
+                                       static_cast<size_t>(graph_file.vertex_count));
 
                 auto consolidatePull = makeBind(consolidateRankPull, 1,
                                                 {nodeSizes.first},
@@ -268,7 +268,7 @@ void pagerank
                     std::get<2>(graph)->copyHostToDev();
                 };
 
-                auto kernel = warp_dispatch<pullwarpnodiv>::work(warp_size, chunk_size, 1_sz, nodeSizes, std::get<0>(graph), std::get<1>(graph), std::get<2>(graph), graph_file.vertex_count);
+                auto kernel = warp_dispatch<pullwarpnodiv>::work(warp_size, chunk_size, 1_sz, nodeSizes, std::get<0>(graph), std::get<1>(graph), std::get<2>(graph), static_cast<size_t>(graph_file.vertex_count));
 
                 auto consolidatePull = makeBind(consolidateRankPull, 1,
                                                 {nodeSizes.first},

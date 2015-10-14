@@ -6,18 +6,17 @@
 #include <sstream>
 #include <vector>
 
+#include "Graph.hpp"
 #include "GraphFile.hpp"
 
 using namespace std;
 
-typedef pair<int,int> edge_t;
-
-string gen_chain(vector<edge_t>&, size_t);
-string gen_star(vector<edge_t>&, size_t);
-string gen_mesh(vector<edge_t>&, size_t, size_t);
-string gen_degree4(vector<edge_t>&, size_t);
-string gen_degree6(vector<edge_t>&, size_t);
-string gen_anydegree(vector<edge_t>&, size_t, size_t);
+string gen_chain(vector<edge<uint64_t>>&, size_t);
+string gen_star(vector<edge<uint64_t>>&, size_t);
+string gen_mesh(vector<edge<uint64_t>>&, size_t, size_t);
+string gen_degree4(vector<edge<uint64_t>>&, size_t);
+string gen_degree6(vector<edge<uint64_t>>&, size_t);
+string gen_anydegree(vector<edge<uint64_t>>&, size_t, size_t);
 
 string gen_name(ostringstream&);
 
@@ -42,18 +41,18 @@ string file_name(T first, Args... args)
     return gen_name(fileName, args...);
 }
 
-string gen_chain(vector<edge_t>& edges, size_t N)
+string gen_chain(vector<edge<uint64_t>>& edges, size_t N)
 {
     edges.reserve(N);
 
-    for (size_t i = 0; i < N; i++) {
+    for (uint64_t i = 0; i < N; i++) {
         edges.emplace_back(i, i+1);
     }
 
     return file_name("chain", N);
 }
 
-string gen_star(vector<edge_t>& edges, size_t N)
+string gen_star(vector<edge<uint64_t>>& edges, size_t N)
 {
     edges.reserve(N);
 
@@ -64,7 +63,7 @@ string gen_star(vector<edge_t>& edges, size_t N)
     return file_name("star", N);
 }
 
-string gen_mesh(vector<edge_t>& edges, size_t H, size_t W)
+string gen_mesh(vector<edge<uint64_t>>& edges, size_t H, size_t W)
 {
     size_t edge_count = 0;
 
@@ -88,7 +87,7 @@ string gen_mesh(vector<edge_t>& edges, size_t H, size_t W)
     return file_name("mesh", H, W);
 }
 
-string gen_degree4(vector<edge_t>& edges, size_t N)
+string gen_degree4(vector<edge<uint64_t>>& edges, size_t N)
 {
     edges.reserve(2 * N * N);
 
@@ -112,7 +111,7 @@ string gen_degree4(vector<edge_t>& edges, size_t N)
     return tmp;
 }
 
-string gen_degree6(vector<edge_t>& edges, size_t N)
+string gen_degree6(vector<edge<uint64_t>>& edges, size_t N)
 {
     edges.reserve( 3 * N * N * N);
 
@@ -143,26 +142,26 @@ string gen_degree6(vector<edge_t>& edges, size_t N)
     return file_name("degree6", N);
 }
 
-string gen_anydegree(vector<edge_t>& edges, size_t N, size_t D)
+string gen_anydegree(vector<edge<uint64_t>>& edges, size_t N, size_t D)
 {
-    std::vector<int> powA(D + 1);
-    std::vector<int> coef(D);
+    std::vector<uint64_t> powA(D + 1);
+    std::vector<uint64_t> coef(D);
 
     for (size_t p = 0; p <= D; p++) {
-        powA[p] = static_cast<int>(pow(N,p));
+        powA[p] = static_cast<uint64_t>(pow(N,p));
     }
 
-    edges.reserve(D * static_cast<size_t>(pow(N, D)));
+    edges.reserve(D * static_cast<uint64_t>(pow(N, D)));
 
-    for (size_t i = 0; i < static_cast<size_t>(pow(N, D)); i++) {
-        size_t tmp = i;
+    for (uint64_t i = 0; i < static_cast<uint64_t>(pow(N, D)); i++) {
+        uint64_t tmp = i;
 
-        for (size_t p = 0; p < D; p++) {
+        for (uint64_t p = 0; p < D; p++) {
             coef[p] = tmp % N;
             tmp /= N;
         }
 
-        for (size_t p = 0; p < D; p++) {
+        for (uint64_t p = 0; p < D; p++) {
             if (coef[p] < N-1) {
                 edges.emplace_back(i, i + powA[p]);
             } else {
@@ -175,45 +174,46 @@ string gen_anydegree(vector<edge_t>& edges, size_t N, size_t D)
 }
 
 static void
-outputGraph(string fileName, vector<edge_t>& tmp_vector)
+outputGraph(string fileName, vector<edge<uint64_t>>& tmp_vector)
 {
-    vector<edge_t> edge_vector;
+    vector<edge<uint64_t>> edge_vector;
     edge_vector.reserve(2 * tmp_vector.size());
 
     for (auto &edge : tmp_vector) {
         edge_vector.push_back(edge);
-        edge_vector.emplace_back(edge.second, edge.first);
+        edge_vector.emplace_back(edge.out, edge.in);
     }
 
     sort(edge_vector.begin(), edge_vector.end());
 
-    int vertex_count = 0;
-    for (auto &pair : edge_vector) {
-        vertex_count = max(vertex_count, max(pair.first, pair.second));
+    uint64_t vertex_count = 0;
+    for (auto &edge : edge_vector) {
+        vertex_count = max(vertex_count, max(edge.in, edge.out));
     }
 
-    int edge_count = static_cast<int>(edge_vector.size());
+    size_t edge_count = edge_vector.size();
 
-    GraphFile graph(fileName, true, vertex_count, edge_count);
+    GraphFile<uint64_t, uint64_t> graph(fileName, true, vertex_count, edge_count);
 
-    int vertex = -1, edgeOffset = 0;
+    uint64_t vertex = 0, edgeOffset = 0;
 
-    for (auto &pair : edge_vector) {
-        while (vertex < pair.first) {
-           graph.vertices[++vertex] = edgeOffset;
+    graph.vertices[0] = edgeOffset;
+    for (auto &edge : edge_vector) {
+        while (vertex < edge.in) {
+           graph.vertices[vertex++] = edgeOffset;
         }
-        graph.edges[edgeOffset++] = pair.second;
+        graph.edges[edgeOffset++] = edge.out;
     }
 
     while (vertex < vertex_count) {
-        graph.vertices[++vertex] = edgeOffset;
+        graph.vertices[vertex++] = edgeOffset;
     }
 }
 
 int main(int argc, char **argv)
 {
     string name;
-    vector<edge_t> graph;
+    vector<edge<uint64_t>> graph;
 
     if (argc == 3 && !strcmp(argv[1], "chain")) {
         name = gen_chain(graph, stoull(argv[2]));

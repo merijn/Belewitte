@@ -1,6 +1,6 @@
 #include "pagerank.h"
 
-__global__ void vertexPull(int *rev_nodes, int *rev_edges, int *nodes, int size, float *pagerank, float *new_pagerank)
+__global__ void vertexPull(unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, size_t size, float *pagerank, float *new_pagerank)
 {
     int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 

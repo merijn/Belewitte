@@ -15,12 +15,11 @@
 #include <string>
 #include <unordered_map>
 
+#include "Graph.hpp"
 #include "GraphFile.hpp"
 #include "Util.hpp"
 
 using namespace std;
-
-typedef pair<int,int> edge_t;
 
 static void __attribute__((noreturn))
 usage(const char *name)
@@ -32,10 +31,10 @@ usage(const char *name)
     exit(EXIT_FAILURE);
 }
 
-static int
-translate(unordered_map<string,int> &map, int &unique_id, string key)
+static size_t
+translate(unordered_map<string,uint64_t> &map, uint64_t &unique_id, string key)
 {
-    int result;
+    uint64_t result;
     try {
         result = map.at(key);
     } catch (const out_of_range &oor) {
@@ -75,41 +74,42 @@ ignoreLine(std::istream& is)
 }
 
 static void
-outputGraph(const char *fileName, bool undirected, int vertex_count,
-            set<edge_t>& edge_set)
+outputGraph(const char *fileName, bool undirected, uint64_t vertex_count,
+            set<edge<uint64_t>>& edge_set)
 {
-    GraphFile graph(fileName, undirected, vertex_count, edge_set.size());
+    GraphFile<uint64_t, uint64_t> graph(fileName, undirected, vertex_count, edge_set.size());
 
-    set<edge_t> rev_edge_set;
+    set<edge<uint64_t>> rev_edge_set;
 
-    int vertex = -1, edgeOffset = 0;
+    uint64_t vertex = 0, edgeOffset = 0;
 
-    for (auto &pair : edge_set) {
-        while (vertex < pair.first)
-            graph.vertices[++vertex] = edgeOffset;
+    graph.vertices[0] = edgeOffset;
+    for (auto &edge : edge_set) {
+        while (vertex < edge.in)
+            graph.vertices[vertex++] = edgeOffset;
 
-        graph.edges[edgeOffset++] = pair.second;
+        graph.edges[edgeOffset++] = edge.out;
 
-        if (!undirected) rev_edge_set.insert({pair.second, pair.first});
+        if (!undirected) rev_edge_set.insert({edge.out, edge.in});
     }
 
     while (vertex < vertex_count) {
-        graph.vertices[++vertex] = edgeOffset;
+        graph.vertices[vertex++] = edgeOffset;
     }
 
     if (!undirected) {
-        vertex = -1;
+        vertex = 0;
         edgeOffset = 0;
 
-        for (auto &pair : rev_edge_set) {
-            while (vertex < pair.first)
+        for (auto &edge : rev_edge_set) {
+            while (vertex < edge.in)
                 graph.rev_vertices[++vertex] = edgeOffset;
 
-            graph.rev_edges[edgeOffset++] = pair.second;
+            graph.rev_edges[edgeOffset++] = edge.out;
         }
 
         while (vertex < vertex_count) {
-            graph.rev_vertices[++vertex] = edgeOffset;
+            graph.rev_vertices[vertex++] = edgeOffset;
         }
     }
 }
@@ -118,11 +118,12 @@ static void
 normalise(const string path, const string graphName, bool undirected)
 {
     bool cond;
-    int next, inId, outId;
+    int next;
+    uint64_t inId, outId;
     string in, out;
-    int unique_id = 0;
-    set<edge_t> edge_set;
-    unordered_map<string,int> lookup_map;
+    uint64_t unique_id = 0;
+    set<edge<uint64_t>> edge_set;
+    unordered_map<string,uint64_t> lookup_map;
 
     ifstream graph (path + "/raw/" + graphName);
     ofstream lookup_table (path + "/map/" + graphName);

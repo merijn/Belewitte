@@ -16,9 +16,9 @@ endif
 CC=clang++
 WFLAGS = -Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic \
          -Wno-documentation-deprecated-sync -Wno-documentation -Wno-padded \
-         -Wno-unused-const-variable
+         -Wno-unused-const-variable -Wno-reserved-id-macro
 
-CFLAGS=-MMD -MP -std=c++14 $(WFLAGS) -g
+CFLAGS=-O3 -MMD -MP -std=c++14 $(WFLAGS) -g -ftrapv
 LDFLAGS=-lcudart -ldl -g
 
 LD=$(CC)
@@ -34,7 +34,7 @@ NVLINK=$(NVCC)
 
 UNAME := $(shell uname -s)
 ifeq ($(UNAME),Darwin)
-    CFLAGS += -isystem/Developer/NVIDIA/CUDA-7.0/include/
+    CFLAGS += -isystem/Developer/NVIDIA/CUDA-7.5/include/
     LDFLAGS += -L/usr/local/cuda/lib -framework opencl
 
     NVWFLAGS = $(WFLAGS) -Wno-unused-macros -Wno-c++11-long-long \
@@ -43,7 +43,7 @@ ifeq ($(UNAME),Darwin)
                -Wno-pedantic -Wno-missing-prototypes -Wno-unused-parameter
 
     NVCCFLAGS += --compiler-options "$(NVWFLAGS)" \
-                 -isystem /Developer/NVIDIA/CUDA-7.0/include/
+                 -isystem /Developer/NVIDIA/CUDA-7.5/include/
 
 endif
 ifeq ($(UNAME),Linux)
@@ -74,31 +74,31 @@ main: build/main.o build/CUDA.o build/OpenCL.o build/Timer.o build/Util.o \
 
 normalise: build/normalise.o build/Util.o build/GraphFile.o
 	$(PRINTF) " LD\t$@\n"
-	$(AT)$(LD) $(CFLAGS) -ldl $^ -o $@
+	$(AT)$(LD) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
-gen-graph: build/gen-graph.o build/GraphFile.o
+gen-graph: build/gen-graph.o build/Util.o build/GraphFile.o
 	$(PRINTF) " LD\t$@\n"
-	$(AT)$(LD) $(CFLAGS) $^ -o $@
+	$(AT)$(LD) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
-reorder-graph: build/reorder-graph.o build/GraphFile.o
+reorder-graph: build/reorder-graph.o build/Util.o build/GraphFile.o
 	$(PRINTF) " LD\t$@\n"
-	$(AT)$(LD) $(CFLAGS) $^ -o $@
+	$(AT)$(LD) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
-check-degree: build/check-degree.o build/GraphFile.o
+check-degree: build/check-degree.o build/Util.o build/GraphFile.o
 	$(PRINTF) " LD\t$@\n"
-	$(AT)$(LD) $(CFLAGS) $^ -o $@
+	$(AT)$(LD) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
 build:
 	$(AT)mkdir -p $@
 
 build/%.o: %.cpp | build/
 	$(PRINTF) " CXX\t$*.cpp\n"
-	$(AT)$(CC) $(CFLAGS) $< -c -o $@
+	$(AT)$(CC) $(CFLAGS) -I. $< -c -o $@
 
 build/%.o: %.cu | build/
 	$(PRINTF) " NVCC\t$*.cu\n"
-	$(AT)$(NVCC) -M $< -o build/$*.d
-	$(AT)$(NVCC) $(NVCCFLAGS) --device-c $< -o $@
+	$(AT)$(NVCC) -M -I. $< -o build/$*.d
+	$(AT)$(NVCC) $(NVCCFLAGS) -I. --device-c $< -o $@
 
 clean:
 	$(PRINTF) "cleaning...\n"

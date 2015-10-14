@@ -37,3 +37,5 @@ dump_stack_trace(int exit_code)
     if (frame_count == max_frames) fprintf(stderr, "[truncated]\n");
     exit(exit_code);
 }
+
+void printVals(void) {}

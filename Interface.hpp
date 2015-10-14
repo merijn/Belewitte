@@ -7,12 +7,9 @@
 #include <utility>
 #include <vector>
 
+#include "Graph.hpp"
 #include "Backend.hpp"
 #include "GraphFile.hpp"
-
-struct edge {
-    int in, out;
-};
 
 enum class prop_type { edge, vertex };
 
@@ -68,22 +65,22 @@ static Bind<K, Graph...> makeBind(K k, size_t d, std::vector<size_t> blocks,
     return Bind<K, Graph...>(k, d, blocks, grids, shared, g...);
 }
 
-template<typename Platform>
+template<typename Platform, typename V, typename E>
 std::tuple
-< std::shared_ptr<alloc_t<int>>
-, std::shared_ptr<alloc_t<int>>
-, std::shared_ptr<alloc_t<int>>
+< std::shared_ptr<alloc_t<V>>
+, std::shared_ptr<alloc_t<E>>
+, std::shared_ptr<alloc_t<E>>
 >
-loadEdgeListCSR(Backend<Platform> &p, const GraphFile &graph)
+loadEdgeListCSR(Backend<Platform> &p, const GraphFile<V,E> &graph)
 {
-    auto vertices = p.template allocConstant<int>(graph.vertices.size);
-    auto edges_in = p.template allocConstant<int>(graph.edges.size);
-    auto edges_out = p.template allocConstant<int>(graph.edges.size);
+    auto vertices = p.template allocConstant<V>(graph.vertices.size);
+    auto edges_in = p.template allocConstant<E>(graph.edges.size);
+    auto edges_out = p.template allocConstant<E>(graph.edges.size);
 
     size_t edge = 0;
 
-    for (int i = 0; i < graph.vertex_count; i++) {
-        for (int j = graph.vertices[i]; j < graph.vertices[i+1]; j++) {
+    for (E i = 0; i < graph.vertex_count; i++) {
+        for (size_t j = graph.vertices[i]; j < graph.vertices[i+1]; j++) {
             (*edges_in)[edge] = i;
             (*edges_out)[edge] = graph.edges[j];
             edge++;
@@ -96,20 +93,20 @@ loadEdgeListCSR(Backend<Platform> &p, const GraphFile &graph)
     return std::make_tuple(vertices, edges_in, edges_out);
 }
 
-template<typename Platform>
+template<typename Platform, typename V, typename E>
 std::tuple
-< std::shared_ptr<alloc_t<int>>
-, std::shared_ptr<alloc_t<edge>>
+< std::shared_ptr<alloc_t<V>>
+, std::shared_ptr<alloc_t<edge<E>>>
 >
-loadStructEdgeListCSR(Backend<Platform> &p, const GraphFile &graph)
+loadStructEdgeListCSR(Backend<Platform> &p, const GraphFile<V,E> &graph)
 {
-    auto vertices = p.template allocConstant<int>(graph.vertices.size);
-    auto edges = p.template allocConstant<edge>(graph.edges.size);
+    auto vertices = p.template allocConstant<V>(graph.vertices.size);
+    auto edges = p.template allocConstant<edge<E>>(graph.edges.size);
 
     size_t edge = 0;
 
-    for (int i = 0; i < graph.vertex_count; i++) {
-        for (int j = graph.vertices[i]; j < graph.vertices[i+1]; j++) {
+    for (E i = 0; i < graph.vertex_count; i++) {
+        for (size_t j = graph.vertices[i]; j < graph.vertices[i+1]; j++) {
             (*edges)[edge].in = i;
             (*edges)[edge].out = graph.edges[j];
             edge++;
@@ -122,15 +119,15 @@ loadStructEdgeListCSR(Backend<Platform> &p, const GraphFile &graph)
     return std::make_tuple(vertices, edges);
 }
 
-template<typename Platform>
+template<typename Platform, typename V, typename E>
 std::tuple
-< std::shared_ptr<alloc_t<int>>
-, std::shared_ptr<alloc_t<int>>
+< std::shared_ptr<alloc_t<V>>
+, std::shared_ptr<alloc_t<E>>
 >
-loadCSR(Backend<Platform> &p, const GraphFile &graph)
+loadCSR(Backend<Platform> &p, const GraphFile<V,E> &graph)
 {
-    auto nodes = p.template allocConstant<int>(graph.vertices.size);
-    auto edges = p.template allocConstant<int>(graph.edges.size);
+    auto nodes = p.template allocConstant<V>(graph.vertices.size);
+    auto edges = p.template allocConstant<E>(graph.edges.size);
 
     for (size_t i = 0; i < graph.vertices.size; i++) {
         (*nodes)[i] = graph.vertices[i];
@@ -143,17 +140,17 @@ loadCSR(Backend<Platform> &p, const GraphFile &graph)
     return std::make_tuple(nodes, edges);
 }
 
-template<typename Platform>
+template<typename Platform, typename V, typename E>
 std::tuple
-< std::shared_ptr<alloc_t<int>>
-, std::shared_ptr<alloc_t<int>>
-, std::shared_ptr<alloc_t<int>>
+< std::shared_ptr<alloc_t<V>>
+, std::shared_ptr<alloc_t<E>>
+, std::shared_ptr<alloc_t<V>>
 >
-loadReverseCSR(Backend<Platform> &p, const GraphFile &graph)
+loadReverseCSR(Backend<Platform> &p, const GraphFile<V,E> &graph)
 {
-    auto rev_nodes = p.template allocConstant<int>(graph.rev_vertices.size);
-    auto rev_edges = p.template allocConstant<int>(graph.rev_edges.size);
-    auto nodes = p.template allocConstant<int>(graph.vertices.size);
+    auto rev_nodes = p.template allocConstant<V>(graph.rev_vertices.size);
+    auto rev_edges = p.template allocConstant<E>(graph.rev_edges.size);
+    auto nodes = p.template allocConstant<V>(graph.vertices.size);
 
     for (size_t i = 0; i < graph.rev_vertices.size; i++) {
         (*rev_nodes)[i] = graph.rev_vertices[i];

@@ -5,6 +5,8 @@ void cudaAssert(const cudaError_t code, const char *file, const int line);
 
 __device__ float diff = 0.0;
 
+__device__ size_t size_min(size_t x, size_t y) { return min(static_cast<unsigned long long>(x), static_cast<unsigned long long>(y)); }
+
 void resetDiff()
 {
     const float val = 0.0;
@@ -24,7 +26,7 @@ __global__ void setArrayFloat(float *array, size_t size, float val)
     if (idx < size) array[idx] = val;
 }
 
-__global__ void consolidateRank(int size, float *pagerank, float *new_pagerank)
+__global__ void consolidateRank(size_t size, float *pagerank, float *new_pagerank)
 {
     int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
     if (idx < size) {
@@ -36,7 +38,7 @@ __global__ void consolidateRank(int size, float *pagerank, float *new_pagerank)
     }
 }
 
-__global__ void consolidateRankPull(int *nodes, int size, float *pagerank, float *new_pagerank)
+__global__ void consolidateRankPull(unsigned *nodes, size_t size, float *pagerank, float *new_pagerank)
 {
     int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
     if (idx < size) {
