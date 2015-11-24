@@ -59,7 +59,7 @@ endif
 
 CLEANUP = main normalise build/*.o
 
-all: main normalise gen-graph reorder-graph check-degree
+all: main normalise gen-graph reorder-graph check-degree breed print-graph
 
 -include $(patsubst %.cpp, build/%.d, $(wildcard *.cpp))
 
@@ -67,24 +67,36 @@ DIRS=bfs pagerank
 include $(foreach d, $(DIRS), $d/Makefile)
 
 main: build/main.o build/CUDA.o build/OpenCL.o build/Timer.o build/Util.o \
-      build/GraphFile.o build/bfs.o build/bfs/libbfs.a build/pagerank.o \
+      build/bfs.o build/bfs/libbfs.a build/pagerank.o \
       build/pagerank/libpagerank.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
-normalise: build/normalise.o build/Util.o build/GraphFile.o
+normalise: build/normalise.o build/Util.o
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
-gen-graph: build/gen-graph.o build/Util.o build/GraphFile.o
+gen-graph: build/gen-graph.o build/Util.o
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
-reorder-graph: build/reorder-graph.o build/Util.o build/GraphFile.o
+reorder-graph: build/reorder-graph.o build/Util.o
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
-check-degree: build/check-degree.o build/Util.o build/GraphFile.o
+check-degree: build/check-degree.o build/Util.o
+	$(PRINTF) " LD\t$@\n"
+	$(AT)$(LD) $(CFLAGS) $(LDFLAGS) $^ -o $@
+
+breed: build/breed.o build/Util.o
+	$(PRINTF) " LD\t$@\n"
+	$(AT)$(LD) $(CFLAGS) $(LDFLAGS) $^ -o $@
+
+print-graph: build/print-graph.o build/Util.o
+	$(PRINTF) " LD\t$@\n"
+	$(AT)$(LD) $(CFLAGS) $(LDFLAGS) $^ -o $@
+
+test: build/test.o build/Util.o
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(CFLAGS) $(LDFLAGS) $^ -o $@
 

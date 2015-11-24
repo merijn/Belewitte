@@ -95,7 +95,7 @@ void bfs
     , size_t chunk_size
     )
 {
-    const GraphFile<unsigned, unsigned> graph_file(filename);
+    const Graph<unsigned, unsigned> graph_file(filename);
     auto nodeSizes = backend.computeDivision(graph_file.vertex_count);
 
     BFSImpl<CUDA> bfs(backend, timers, count, outputFile, graph_file.vertex_count);

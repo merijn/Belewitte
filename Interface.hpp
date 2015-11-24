@@ -7,9 +7,8 @@
 #include <utility>
 #include <vector>
 
-#include "Graph.hpp"
 #include "Backend.hpp"
-#include "GraphFile.hpp"
+#include "Graph.hpp"
 
 enum class prop_type { edge, vertex };
 
@@ -71,7 +70,7 @@ std::tuple
 , std::shared_ptr<alloc_t<E>>
 , std::shared_ptr<alloc_t<E>>
 >
-loadEdgeListCSR(Backend<Platform> &p, const GraphFile<V,E> &graph)
+loadEdgeListCSR(Backend<Platform> &p, const Graph<V,E> &graph)
 {
     auto vertices = p.template allocConstant<V>(graph.vertices.size);
     auto edges_in = p.template allocConstant<E>(graph.edges.size);
@@ -80,15 +79,15 @@ loadEdgeListCSR(Backend<Platform> &p, const GraphFile<V,E> &graph)
     size_t edge = 0;
 
     for (E i = 0; i < graph.vertex_count; i++) {
-        for (size_t j = graph.vertices[i]; j < graph.vertices[i+1]; j++) {
+        for (size_t j = graph.raw_vertices[i]; j < graph.raw_vertices[i+1]; j++) {
             (*edges_in)[edge] = i;
-            (*edges_out)[edge] = graph.edges[j];
+            (*edges_out)[edge] = graph.raw_edges[j];
             edge++;
         }
-        (*vertices)[i] = graph.vertices[i];
+        (*vertices)[i] = graph.raw_vertices[i];
     }
 
-    (*vertices)[graph.vertex_count] = graph.vertices[graph.vertex_count];
+    (*vertices)[graph.vertex_count] = graph.raw_vertices[graph.vertex_count];
 
     return std::make_tuple(vertices, edges_in, edges_out);
 }
@@ -96,25 +95,25 @@ loadEdgeListCSR(Backend<Platform> &p, const GraphFile<V,E> &graph)
 template<typename Platform, typename V, typename E>
 std::tuple
 < std::shared_ptr<alloc_t<V>>
-, std::shared_ptr<alloc_t<edge<E>>>
+, std::shared_ptr<alloc_t<Edge<E>>>
 >
-loadStructEdgeListCSR(Backend<Platform> &p, const GraphFile<V,E> &graph)
+loadStructEdgeListCSR(Backend<Platform> &p, const Graph<V,E> &graph)
 {
     auto vertices = p.template allocConstant<V>(graph.vertices.size);
-    auto edges = p.template allocConstant<edge<E>>(graph.edges.size);
+    auto edges = p.template allocConstant<Edge<E>>(graph.edges.size);
 
     size_t edge = 0;
 
     for (E i = 0; i < graph.vertex_count; i++) {
-        for (size_t j = graph.vertices[i]; j < graph.vertices[i+1]; j++) {
+        for (size_t j = graph.raw_vertices[i]; j < graph.raw_vertices[i+1]; j++) {
             (*edges)[edge].in = i;
-            (*edges)[edge].out = graph.edges[j];
+            (*edges)[edge].out = graph.raw_edges[j];
             edge++;
         }
-        (*vertices)[i] = graph.vertices[i];
+        (*vertices)[i] = graph.raw_vertices[i];
     }
 
-    (*vertices)[graph.vertex_count] = graph.vertices[graph.vertex_count];
+    (*vertices)[graph.vertex_count] = graph.raw_vertices[graph.vertex_count];
 
     return std::make_tuple(vertices, edges);
 }
@@ -124,17 +123,17 @@ std::tuple
 < std::shared_ptr<alloc_t<V>>
 , std::shared_ptr<alloc_t<E>>
 >
-loadCSR(Backend<Platform> &p, const GraphFile<V,E> &graph)
+loadCSR(Backend<Platform> &p, const Graph<V,E> &graph)
 {
     auto nodes = p.template allocConstant<V>(graph.vertices.size);
     auto edges = p.template allocConstant<E>(graph.edges.size);
 
-    for (size_t i = 0; i < graph.vertices.size; i++) {
-        (*nodes)[i] = graph.vertices[i];
+    for (size_t i = 0; i < graph.raw_vertices.size; i++) {
+        (*nodes)[i] = graph.raw_vertices[i];
     }
 
-    for (size_t i = 0; i < graph.edges.size; i++) {
-        (*edges)[i] = graph.edges[i];
+    for (size_t i = 0; i < graph.raw_edges.size; i++) {
+        (*edges)[i] = graph.raw_edges[i];
     }
 
     return std::make_tuple(nodes, edges);
@@ -146,22 +145,22 @@ std::tuple
 , std::shared_ptr<alloc_t<E>>
 , std::shared_ptr<alloc_t<V>>
 >
-loadReverseCSR(Backend<Platform> &p, const GraphFile<V,E> &graph)
+loadReverseCSR(Backend<Platform> &p, const Graph<V,E> &graph)
 {
     auto rev_nodes = p.template allocConstant<V>(graph.rev_vertices.size);
     auto rev_edges = p.template allocConstant<E>(graph.rev_edges.size);
     auto nodes = p.template allocConstant<V>(graph.vertices.size);
 
-    for (size_t i = 0; i < graph.rev_vertices.size; i++) {
-        (*rev_nodes)[i] = graph.rev_vertices[i];
+    for (size_t i = 0; i < graph.raw_rev_vertices.size; i++) {
+        (*rev_nodes)[i] = graph.raw_rev_vertices[i];
     }
 
-    for (size_t i = 0; i < graph.rev_edges.size; i++) {
-        (*rev_edges)[i] = graph.rev_edges[i];
+    for (size_t i = 0; i < graph.raw_rev_edges.size; i++) {
+        (*rev_edges)[i] = graph.raw_rev_edges[i];
     }
 
-    for (size_t i = 0; i < graph.vertices.size; i++) {
-        (*nodes)[i] = graph.vertices[i];
+    for (size_t i = 0; i < graph.raw_vertices.size; i++) {
+        (*nodes)[i] = graph.raw_vertices[i];
     }
 
     return std::make_tuple(rev_nodes, rev_edges, nodes);

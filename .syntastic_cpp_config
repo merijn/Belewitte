@@ -1,4 +1,4 @@
--isystem/Developer/NVIDIA/CUDA-7.0/include
+-isystem/Developer/NVIDIA/CUDA-7.5/include
 -Wno-exit-time-destructors
 -Wno-global-constructors
 -std=c++14

@@ -3,7 +3,7 @@
 #include <iostream>
 #include <map>
 
-#include "GraphFile.hpp"
+#include "Graph.hpp"
 
 using namespace std;
 
@@ -31,18 +31,18 @@ int main(int argc, char **argv)
     for (int i = 2; i < argc; i++) {
         name = string(argv[i]);
 
-        const GraphFile<unsigned, unsigned> graph(name);
+        const Graph<unsigned, unsigned> graph(name);
         map<int, int> degrees;
 
         for (unsigned j = 0; j < graph.vertex_count; j++) {
             int degree = 0;
 
             if (ordering == out_degree || ordering == abs_degree) {
-                degree += graph.vertices[j+1] - graph.vertices[j];
+                degree += graph.raw_vertices[j+1] - graph.raw_vertices[j];
             }
 
             if (ordering == in_degree || ordering == abs_degree) {
-                degree += graph.rev_vertices[j+1] - graph.rev_vertices[j];
+                degree += graph.raw_rev_vertices[j+1] - graph.raw_rev_vertices[j];
             }
 
             degrees[degree]++;

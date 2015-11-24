@@ -12,8 +12,8 @@
 #include <sstream>
 #include <vector>
 
+#include "Util.hpp"
 #include "Graph.hpp"
-#include "GraphFile.hpp"
 
 #define CEIL_DIV(x, y)          (((x) + ((y) - 1)) / (y))
 
@@ -26,12 +26,12 @@ enum sort_order {
 };
 
 static void
-messupSort(std::vector<edge<uint64_t>>& vertices)
+messupSort(std::vector<Edge<uint64_t>>& vertices)
 {
     ssize_t numWarps = CEIL_DIV(vertices.size(), 32);
     auto start = vertices.begin();
     auto end = vertices.end();
-    std::vector<edge<uint64_t>> tmpVector;
+    std::vector<Edge<uint64_t>> tmpVector;
 
     advance(start, numWarps);
     advance(end, -numWarps);
@@ -49,11 +49,11 @@ messupSort(std::vector<edge<uint64_t>>& vertices)
 }
 
 static void
-sortGraph(GraphFile<uint64_t,uint64_t>& graph, string fileName, sort_order order, bool worst)
+sortGraph(Graph<uint64_t,uint64_t>& graph, string fileName, sort_order order, bool worst)
 {
-    GraphFile<uint64_t,uint64_t> newGraph(fileName, graph.undirected, graph.vertex_count, graph.edge_count);
+    Graph<uint64_t,uint64_t> newGraph(fileName, graph.undirected, graph.vertex_count, graph.edge_count);
 
-    vector<edge<uint64_t>> newOrder;
+    vector<Edge<uint64_t>> newOrder;
     newOrder.reserve(graph.vertex_count);
 
     for (uint64_t v = 0; v < graph.vertex_count; v++) {
@@ -61,46 +61,46 @@ sortGraph(GraphFile<uint64_t,uint64_t>& graph, string fileName, sort_order order
 
         switch (order) {
             case in_degree:
-                degree = graph.rev_vertices[v + 1] - graph.rev_vertices[v];
+                degree = graph.raw_rev_vertices[v + 1] - graph.raw_rev_vertices[v];
                 break;
             case out_degree:
-                degree = graph.vertices[v + 1] - graph.vertices[v];
+                degree = graph.raw_vertices[v + 1] - graph.raw_vertices[v];
                 break;
             case abs_degree:
-                degree = graph.vertices[v + 1] - graph.vertices[v];
-                degree += graph.rev_vertices[v + 1] - graph.rev_vertices[v];
+                degree = graph.raw_vertices[v + 1] - graph.raw_vertices[v];
+                degree += graph.raw_rev_vertices[v + 1] - graph.raw_rev_vertices[v];
                 break;
         }
 
         newOrder.emplace_back(degree, v);
     }
 
-    stable_sort(newOrder.begin(), newOrder.end(), greater<edge<uint64_t>>());
+    stable_sort(newOrder.begin(), newOrder.end(), greater<Edge<uint64_t>>());
     if (worst) messupSort(newOrder);
 
     uint64_t edgeOffset = 0, revEdgeOffset = 0;
 
     for (uint64_t n = 0; n < graph.vertex_count; n++) {
-        newGraph.vertices[n] = edgeOffset;
+        newGraph.raw_vertices[n] = edgeOffset;
 
         uint64_t v = newOrder[n].out;
-        uint64_t degree = graph.vertices[v+1] - graph.vertices[v];
+        uint64_t degree = graph.raw_vertices[v+1] - graph.raw_vertices[v];
         for (uint64_t i = 0; i < degree; i++) {
-            newGraph.edges[edgeOffset++] = graph.edges[graph.vertices[v] + i];
+            newGraph.raw_edges[edgeOffset++] = graph.raw_edges[graph.raw_vertices[v] + i];
         }
 
         if (!graph.undirected) {
-            degree = graph.rev_vertices[v+1] - graph.rev_vertices[v];
-            newGraph.rev_vertices[n] = revEdgeOffset;
+            degree = graph.raw_rev_vertices[v+1] - graph.raw_rev_vertices[v];
+            newGraph.raw_rev_vertices[n] = revEdgeOffset;
             for (uint64_t i = 0; i < degree; i++) {
-                newGraph.rev_edges[revEdgeOffset++] = graph.rev_edges[graph.rev_vertices[v] + i];
+                newGraph.raw_rev_edges[revEdgeOffset++] = graph.raw_rev_edges[graph.raw_rev_vertices[v] + i];
             }
         }
     }
 
-    newGraph.vertices[graph.vertex_count] = edgeOffset;
+    newGraph.raw_vertices[graph.vertex_count] = edgeOffset;
     if (!graph.undirected) {
-        newGraph.rev_vertices[graph.vertex_count] = revEdgeOffset;
+        newGraph.raw_rev_vertices[graph.vertex_count] = revEdgeOffset;
     }
 }
 
@@ -108,9 +108,10 @@ int main(int argc, char **argv)
 {
     string name;
 
+    checkError(argc >= 2, "Not enough arguments!");
     for (int i = 1; i < argc; i++) {
         name = string(argv[i]);
-        GraphFile<uint64_t, uint64_t> graph(name);
+        Graph<uint64_t, uint64_t> graph(name);
         sortGraph(graph, name + ".in", in_degree, false);
         sortGraph(graph, name + ".out", out_degree, false);
         sortGraph(graph, name + ".abs", abs_degree, false);

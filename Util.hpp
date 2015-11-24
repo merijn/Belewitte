@@ -42,4 +42,19 @@ checkError(bool cond, Args... args)
     if (cond) return;
     reportError(args...);
 }
+
+template<typename C>
+class simple_iterator : public C::const_iterator {
+    typedef typename C::const_iterator parent_type;
+    parent_type end;
+
+    public:
+        simple_iterator(const C& c)
+            : parent_type(c.cbegin())
+            , end(c.cend())
+        {}
+
+        explicit operator bool() const
+        { return *this != end; }
+};
 #endif

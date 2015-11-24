@@ -1,6 +1,6 @@
 #include "pagerank.h"
 
-__global__ void updateRankStructEdgeList(unsigned *nodes, struct edge<unsigned> *edges, size_t size, float *pagerank, float *new_pagerank)
+__global__ void updateRankStructEdgeList(unsigned *nodes, struct Edge<unsigned> *edges, size_t size, float *pagerank, float *new_pagerank)
 {
     int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 

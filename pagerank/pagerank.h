@@ -43,6 +43,6 @@ __global__ void vertexPullWarp(unsigned *rev_nodes, unsigned *rev_edges, unsigne
 template<size_t, size_t>
 __global__ void vertexPullWarpNoDiv(unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, size_t size, float *pagerank, float *new_pagerank);
 
-__global__ void updateRankStructEdgeList(unsigned *nodes, struct edge<unsigned> *, size_t, float *pagerank, float *new_pagerank);
+__global__ void updateRankStructEdgeList(unsigned *nodes, struct Edge<unsigned> *, size_t, float *pagerank, float *new_pagerank);
 __global__ void updateRankEdgeList(unsigned *nodes, unsigned *edges_in, unsigned *edges_out, size_t edge_count, float *pagerank, float *new_pagerank);
 #endif

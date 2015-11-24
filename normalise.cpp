@@ -16,7 +16,6 @@
 #include <unordered_map>
 
 #include "Graph.hpp"
-#include "GraphFile.hpp"
 #include "Util.hpp"
 
 using namespace std;
@@ -74,47 +73,6 @@ ignoreLine(std::istream& is)
 }
 
 static void
-outputGraph(const char *fileName, bool undirected, uint64_t vertex_count,
-            set<edge<uint64_t>>& edge_set)
-{
-    GraphFile<uint64_t, uint64_t> graph(fileName, undirected, vertex_count, edge_set.size());
-
-    set<edge<uint64_t>> rev_edge_set;
-
-    uint64_t vertex = 0, edgeOffset = 0;
-
-    graph.vertices[0] = edgeOffset;
-    for (auto &edge : edge_set) {
-        while (vertex < edge.in)
-            graph.vertices[vertex++] = edgeOffset;
-
-        graph.edges[edgeOffset++] = edge.out;
-
-        if (!undirected) rev_edge_set.insert({edge.out, edge.in});
-    }
-
-    while (vertex < vertex_count) {
-        graph.vertices[vertex++] = edgeOffset;
-    }
-
-    if (!undirected) {
-        vertex = 0;
-        edgeOffset = 0;
-
-        for (auto &edge : rev_edge_set) {
-            while (vertex < edge.in)
-                graph.rev_vertices[++vertex] = edgeOffset;
-
-            graph.rev_edges[edgeOffset++] = edge.out;
-        }
-
-        while (vertex < vertex_count) {
-            graph.rev_vertices[vertex++] = edgeOffset;
-        }
-    }
-}
-
-static void
 normalise(const string path, const string graphName, bool undirected)
 {
     bool cond;
@@ -122,7 +80,7 @@ normalise(const string path, const string graphName, bool undirected)
     uint64_t inId, outId;
     string in, out;
     uint64_t unique_id = 0;
-    set<edge<uint64_t>> edge_set;
+    vector<Edge<uint64_t>> edges;
     unordered_map<string,uint64_t> lookup_map;
 
     ifstream graph (path + "/raw/" + graphName);
@@ -138,15 +96,14 @@ normalise(const string path, const string graphName, bool undirected)
             inId = translate(lookup_map, unique_id, in);
             outId = translate(lookup_map, unique_id, out);
 
-            edge_set.insert({inId, outId});
-            if (undirected) edge_set.insert({outId, inId});
+            edges.emplace_back(inId, outId);
         }
 
         ignoreLine(graph);
     }
 
     string name(path + graphName + ".graph");
-    outputGraph(name.c_str(), undirected, unique_id, edge_set);
+    Graph<uint64_t,uint64_t>::outputGraph(name, undirected, edges);
 
     lookup_table << unique_id << endl;
     for (auto &pair : lookup_map) {
