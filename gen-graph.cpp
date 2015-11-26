@@ -209,7 +209,7 @@ int main(int argc, char **argv)
         name = gen_anydegree(graph, undirected, stoull(argv[2]), stoull(argv[3]));
     }
 
-    Graph<uint64_t,uint64_t>::outputGraph(name, undirected, graph);
+    Graph<uint64_t,uint64_t>::output(name, graph);
 
     return 0;
 }

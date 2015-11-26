@@ -97,13 +97,14 @@ normalise(const string path, const string graphName, bool undirected)
             outId = translate(lookup_map, unique_id, out);
 
             edges.emplace_back(inId, outId);
+            if (undirected) edges.emplace_back(outId, inId);
         }
 
         ignoreLine(graph);
     }
 
     string name(path + graphName + ".graph");
-    Graph<uint64_t,uint64_t>::outputGraph(name, undirected, edges);
+    Graph<uint64_t,uint64_t>::output(name, edges);
 
     lookup_table << unique_id << endl;
     for (auto &pair : lookup_map) {

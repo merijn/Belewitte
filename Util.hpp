@@ -57,4 +57,8 @@ class simple_iterator : public C::const_iterator {
         explicit operator bool() const
         { return *this != end; }
 };
+
+template<typename C>
+simple_iterator<C> make_simple_iterator(const C& val)
+{ return simple_iterator<C>(val); }
 #endif

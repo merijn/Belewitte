@@ -718,6 +718,36 @@ class Graph {
       return static_cast<uint32_t*>(result);
     }
 
+    static std::vector<Edge<E>>& empty_vector()
+    {
+        static auto& result = *new std::vector<Edge<E>>();
+        return result;
+    }
+
+    template<typename C>
+    static void writeEdges
+        ( uint64_t vertex_count
+        , Accessor<V>& vertices
+        , Accessor<E>& edges
+        , const C& edgeCollection)
+    {
+        uint64_t vertex = 0, edgeOffset = 0;
+
+        if (edgeCollection.empty()) return;
+
+        vertices[0] = edgeOffset;
+        for (auto&& edge : edgeCollection) {
+            while (vertex < edge.in) {
+               vertices[++vertex] = edgeOffset;
+            }
+            edges[edgeOffset++] = edge.out;
+        }
+
+        while (vertex < vertex_count) {
+            vertices[++vertex] = edgeOffset;
+        }
+    }
+
   public:
     Graph(std::string file)
       : fileName(file)
@@ -869,35 +899,68 @@ class Graph {
     ~Graph()
     { munmap(const_cast<uint32_t*>(data), size); }
 
-    static void outputGraph
-        ( std::string fileName
-        , bool undirected
-        , std::vector<Edge<E>>& edges)
+    template<typename C, typename D = std::vector<Edge<E>>>
+    static void
+    output(std::string fileName, C& edges, D& rev_edges = empty_vector())
     {
         sort(edges.begin(), edges.end());
+        edges.erase(unique(edges.begin(), edges.end()), edges.end());
 
+        sort(rev_edges.begin(), rev_edges.end());
+        rev_edges.erase(unique(rev_edges.begin(), rev_edges.end()), rev_edges.end());
+
+        outputSortedUniq(fileName, edges, rev_edges);
+    }
+
+    template<typename C, typename D = std::vector<Edge<E>>>
+    static void
+    outputUniq(std::string fileName, C& edges, D& rev_edges = empty_vector())
+    {
+        sort(edges.begin(), edges.end());
+        sort(rev_edges.begin(), rev_edges.end());
+        outputSortedUniq(fileName, edges, rev_edges);
+    }
+
+    template<typename C, typename D = std::vector<Edge<E>>>
+    static void
+    outputSorted(std::string fileName, C& edges, D& rev_edges = empty_vector())
+    {
+        edges.erase(unique(edges.begin(), edges.end()), edges.end());
+        rev_edges.erase(unique(rev_edges.begin(), rev_edges.end()), rev_edges.end());
+        outputSortedUniq(fileName, edges, rev_edges);
+    }
+
+    template<typename C, typename D = std::vector<Edge<E>>>
+    static void
+    outputSortedUniq
+        ( std::string fileName
+        , const C& edges
+        , const D& rev_edges = empty_vector())
+    {
         uint64_t vertex_count = 0;
-        for (auto &edge : edges) {
+        uint64_t edge_count = 0;
+
+        for (auto&& edge : edges) {
             vertex_count = std::max(vertex_count, std::max(edge.in, edge.out));
+            edge_count++;
         }
 
-        size_t edge_count = edges.size();
+        outputSortedUniq(fileName, vertex_count, edge_count, edges, rev_edges);
+    }
 
-        Graph<uint64_t, uint64_t> graph(fileName, undirected, vertex_count, edge_count);
-
-        uint64_t vertex = 0, edgeOffset = 0;
-
-        graph.raw_vertices[0] = edgeOffset;
-        for (auto &edge : edges) {
-            while (vertex < edge.in) {
-               graph.raw_vertices[++vertex] = edgeOffset;
-            }
-            graph.raw_edges[edgeOffset++] = edge.out;
-        }
-
-        while (vertex < vertex_count) {
-            graph.raw_vertices[++vertex] = edgeOffset;
-        }
+    template<typename C, typename D = std::vector<Edge<E>>>
+    static void
+    outputSortedUniq
+        ( std::string fileName
+        , uint64_t vertex_count
+        , uint64_t edge_count
+        , const C& edges
+        , const D& rev_edges = empty_vector)
+    {
+        bool undirected = rev_edges.empty();
+        Graph graph(fileName, undirected, vertex_count, edge_count);
+        writeEdges(vertex_count, graph.raw_vertices, graph.raw_edges, edges);
+        writeEdges(vertex_count, graph.raw_rev_vertices, graph.raw_rev_edges, rev_edges);
     }
 
     const bool undirected;

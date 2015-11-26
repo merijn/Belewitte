@@ -19,6 +19,7 @@ int main(int argc, char **argv)
             }
         }
 
+        /*
         cout << endl;
 
         for (auto v : graph.rev_vertices) {
@@ -39,6 +40,7 @@ int main(int argc, char **argv)
         for (auto e : graph.rev_edges) {
               cout << e.in << " -> " << e.out << endl;
         }
+        */
     }
     return 0;
 }

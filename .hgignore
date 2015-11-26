@@ -6,4 +6,6 @@ normalise.dSYM/*
 gen-graph
 reorder-graph
 check-degree
+print-graph
 *.d
+*.graph
