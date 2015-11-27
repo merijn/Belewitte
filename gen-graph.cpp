@@ -1,3 +1,5 @@
+#include <getopt.h>
+
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -38,6 +40,32 @@ string file_name(T first, Args... args)
     ostringstream fileName;
     fileName << first;
     return gen_name(fileName, args...);
+}
+
+static const char *execName = "gen-graph";
+
+static void __attribute__((noreturn))
+usage(int exitCode = EXIT_FAILURE)
+{
+    vector<string> args = {
+        "chain <vertex count>",
+        "star <vertex count>",
+        "mesh <mesh width> <mesh height>",
+        "degree4 <vertex count>",
+        "degree6 <vertex count>",
+        "any <?> <?>",
+        "random <graph> <vertex count> <edge count>",
+        "random-mutations <graph> <vertex count> <mutation rate>"
+    };
+
+    ostream& out(exitCode == EXIT_SUCCESS ? cout : cerr);
+    out << "Usage:" << endl;
+    out << execName << " [--help | -h ]" << endl;
+    for (auto&& arg : args) {
+        out << execName << " [--directed | -d ] [--undirected | -u] "
+             << arg << endl;
+    }
+    exit(exitCode);
 }
 
 string gen_chain(vector<Edge<uint64_t>>& edges, bool undirected, size_t N)
@@ -192,24 +220,90 @@ string gen_anydegree(vector<Edge<uint64_t>>& edges, bool undirected, size_t N, s
 int main(int argc, char **argv)
 {
     string name;
-    bool undirected = true;
-    vector<Edge<uint64_t>> graph;
+    int undirected = false;
+    bool sorted = false;
+    vector<Edge<uint64_t>> edges;
 
-    if (argc == 3 && !strcmp(argv[1], "chain")) {
-        name = gen_chain(graph, undirected, stoull(argv[2]));
-    } else if (argc == 3 && !strcmp(argv[1], "star")) {
-        name = gen_star(graph, undirected, stoull(argv[2]));
-    } else if (argc == 4 && !strcmp(argv[1], "mesh")) {
-        name = gen_mesh(graph, undirected, stoull(argv[2]), stoull(argv[3]));
-    } else if (argc == 3 && !strcmp(argv[1], "degree4")) {
-        name = gen_degree4(graph, undirected, stoull(argv[2]));
-    } else if (argc == 3 && !strcmp(argv[1], "degree6")) {
-        name = gen_degree6(graph, undirected, stoull(argv[2]));
-    } else if (argc == 4 && !strcmp(argv[1], "any")) {
-        name = gen_anydegree(graph, undirected, stoull(argv[2]), stoull(argv[3]));
+    const char *optString = ":duh?";
+    static const struct option longopts[] = {
+        { "directed", no_argument, &undirected, false},
+        { "undirected", no_argument, &undirected, true},
+        { "help", no_argument, nullptr, 'h' },
+        { nullptr, 0, nullptr, 0 },
+    };
+
+    std::set_new_handler(out_of_memory);
+    std::locale::global(std::locale(""));
+    cout.imbue(std::locale());
+
+    for (;;) {
+        int longIndex;
+        int opt = getopt_long(argc, argv, optString, longopts, &longIndex);
+        if (opt == -1) break;
+
+        switch (opt) {
+            case 'd':
+                undirected = false;
+                break;
+
+            case 'u':
+                undirected = true;
+                break;
+
+            case 'h':
+            case '?':
+                usage(EXIT_SUCCESS);
+
+            case ':':
+                cerr << "Missing option for flag '" << optopt << "'." << endl;
+                [[clang::fallthrough]];
+            default:
+                usage();
+        }
     }
 
-    Graph<uint64_t,uint64_t>::output(name, graph);
+    argc -= optind;
+    argv = &argv[optind];
+
+    if (argc == 2 && !strcmp(argv[0], "chain")) {
+        name = gen_chain(edges, undirected, stoull(argv[1]));
+    } else if (argc == 2 && !strcmp(argv[0], "star")) {
+        name = gen_star(edges, undirected, stoull(argv[1]));
+    } else if (argc == 3 && !strcmp(argv[0], "mesh")) {
+        name = gen_mesh(edges, undirected, stoull(argv[1]), stoull(argv[2]));
+    } else if (argc == 2 && !strcmp(argv[0], "degree4")) {
+        name = gen_degree4(edges, undirected, stoull(argv[1]));
+    } else if (argc == 2 && !strcmp(argv[0], "degree6")) {
+        name = gen_degree6(edges, undirected, stoull(argv[1]));
+    } else if (argc == 3 && !strcmp(argv[0], "any")) {
+        name = gen_anydegree(edges, undirected, stoull(argv[1]), stoull(argv[2]));
+    } else if (argc == 4 && !strcmp(argv[0], "random")) {
+        sorted = true;
+        name = argv[1];
+        uint64_t vertex_count = stoul(argv[2]);
+        uint64_t edge_count = stoul(argv[3]);
+        edges = random_edges<uint64_t>(undirected, vertex_count, edge_count);
+    } else if (argc == 4 && !strcmp(argv[0], "random-mutations")) {
+        sorted = true;
+        name = argv[1];
+        uint64_t vertex_count = stoul(argv[2]);
+        double mutation_rate = stod(argv[3]);
+        edges = random_edges<uint64_t>(undirected, vertex_count, mutation_rate);
+    } else {
+        usage();
+    }
+
+    if (undirected) {
+        if (sorted) Graph<uint64_t,uint64_t>::outputSortedUniq(name, edges);
+        else Graph<uint64_t,uint64_t>::outputUniq(name, edges);
+    } else {
+        auto rev_edges = reverse_and_sort(edges);
+        if (sorted) {
+            Graph<uint64_t,uint64_t>::outputSortedUniq(name, edges, rev_edges);
+        } else {
+            Graph<uint64_t,uint64_t>::outputUniq(name, edges, rev_edges);
+        }
+    }
 
     return 0;
 }

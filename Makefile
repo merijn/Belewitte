@@ -18,14 +18,15 @@ WFLAGS = -Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic \
          -Wno-documentation-deprecated-sync -Wno-documentation -Wno-padded \
          -Wno-unused-const-variable -Wno-reserved-id-macro
 
-CFLAGS=-O3 -MMD -MP -std=c++14 $(WFLAGS) -g -ftrapv
+CFLAGS=-O3 -MMD -MP -std=c++14 $(WFLAGS) -g -ftrapv -I$(BOOST_PATH) \
+       -isystem$(BOOST_PATH)
 LDFLAGS=-lcudart -ldl -g
 
 LD=$(CC)
 
 NVCC=nvcc
-NVCCFLAGS=-std=c++11 -O3 -g -G -lineinfo \
-    -gencode arch=compute_20,code=sm_20 \
+NVCCFLAGS=-std=c++11 -O3 -g -G -lineinfo
+NVCCARCHFLAGS=-gencode arch=compute_20,code=sm_20 \
     -gencode arch=compute_20,code=sm_21 \
     -gencode arch=compute_30,code=sm_30 \
     -gencode arch=compute_35,code=sm_35
@@ -59,7 +60,7 @@ endif
 
 CLEANUP = main normalise build/*.o
 
-all: main normalise gen-graph reorder-graph check-degree breed print-graph
+all: main normalise gen-graph reorder-graph check-degree evolve print-graph
 
 -include $(patsubst %.cpp, build/%.d, $(wildcard *.cpp))
 
@@ -88,7 +89,7 @@ check-degree: build/check-degree.o build/Util.o
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
-breed: build/breed.o build/Util.o
+evolve: build/evolve.o build/Util.o
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(CFLAGS) $(LDFLAGS) $^ -o $@
 
@@ -109,8 +110,8 @@ build/%.o: %.cpp | build/
 
 build/%.o: %.cu | build/
 	$(PRINTF) " NVCC\t$*.cu\n"
-	$(AT)$(NVCC) -M -I. $< -o build/$*.d
-	$(AT)$(NVCC) $(NVCCFLAGS) -I. --device-c $< -o $@
+	$(AT)$(NVCC) $(NVCCFLAGS) -M -I. $< -o build/$*.d
+	$(AT)$(NVCC) $(NVCCFLAGS) $(NVCCARCHFLAGS) -I. --device-c $< -o $@
 
 clean:
 	$(PRINTF) "cleaning...\n"

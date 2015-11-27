@@ -7,8 +7,11 @@
 #include <unistd.h>
 
 #include <cassert>
-#include <string>
+#include <algorithm>
 #include <limits>
+#include <random>
+#include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "Util.hpp"
@@ -37,6 +40,98 @@ struct Edge {
   bool operator>=(const Edge& e) const
   { return operator>(e) || operator==(e); }
 };
+
+template<typename E>
+Edge<E> triangular_edge(uint64_t idx)
+{
+    uint64_t row = static_cast<uint64_t>(floor((sqrt(8*idx + 1) - 1)/2));
+    uint64_t triangular = (row * (row+1))/2;
+    uint64_t col = idx - triangular;
+    return Edge<E>(row, col);
+}
+
+template<typename E>
+std::vector<Edge<E>>
+random_edges(bool undirected, uint64_t vertex_count, uint64_t edge_count)
+{
+    std::mt19937_64 generator{std::random_device()()};
+    std::vector<Edge<E>> edges;
+    uint64_t max_edges;
+
+    if (undirected) max_edges = (vertex_count * (vertex_count + 1))/2;
+    else max_edges = vertex_count * vertex_count;
+
+    edges.reserve(undirected ? 2*edge_count : edge_count);
+
+    for (uint64_t i = 0; i < edge_count; i++) {
+        if (undirected) edges.emplace_back(triangular_edge<E>(i));
+        else edges.emplace_back(i / vertex_count, i % vertex_count);
+    }
+
+    {
+        std::unordered_map<uint64_t, Edge<E>> sparse_array;
+        sparse_array.reserve(edge_count);
+
+        for (uint64_t i = 0; i < edge_count; i++) {
+            std::uniform_int_distribution<uint64_t> new_edge(i, max_edges - 1);
+            uint64_t idx = new_edge(generator);
+
+            if (idx < edge_count) {
+                std::swap(edges[i], edges[idx]);
+            } else {
+                Edge<E> edge(0,0);
+                if (undirected) edge = triangular_edge<E>(idx);
+                else edge = Edge<E>(idx / vertex_count, idx % vertex_count);
+
+                std::swap(edges[i], sparse_array.emplace(idx, edge).first->second);
+            }
+        }
+    }
+
+    if (undirected) {
+        uint64_t size = edges.size();
+        for (uint64_t i = 0; i < size; i++) {
+            Edge<E> e = edges[i];
+            if (e.in != e.out) edges.emplace_back(e.out, e.in);
+        }
+    }
+
+    std::sort(edges.begin(), edges.end());
+
+    return edges;
+}
+
+template<typename E>
+std::vector<Edge<E>>
+random_edges(bool undirected, uint64_t vertex_count, double mutation_rate)
+{
+    std::mt19937_64 generator{std::random_device()()};
+    uint64_t max_edges;
+
+    if (undirected) max_edges = (vertex_count * (vertex_count + 1))/2;
+    else max_edges = vertex_count * vertex_count;
+
+    std::binomial_distribution<uint64_t> num_mutations(max_edges, mutation_rate);
+    uint64_t mutation_count = num_mutations(generator);
+
+    return random_edges<E>(undirected, vertex_count, mutation_count);
+}
+
+template<typename E>
+std::vector<Edge<E>>
+reverse_and_sort(const std::vector<Edge<E>>& edges)
+{
+    std::vector<Edge<E>> result;
+    result.reserve(edges.size());
+
+    for (auto&& e : edges) {
+        result.emplace_back(e.out, e.in);
+    }
+
+    std::sort(result.begin(), result.end());
+
+    return result;
+}
 
 template<typename T>
 class Accessor {
@@ -280,39 +375,13 @@ class Graph {
     const std::string fileName;
 
     struct Vertex {
-      typedef typename Accessor<E>::iterator iterator;
-      typedef typename Accessor<E>::const_iterator const_iterator;
-      typedef typename Accessor<E>::reverse_iterator reverse_iterator;
-      typedef typename Accessor<E>::const_reverse_iterator const_reverse_iterator;
-
       V id;
       Accessor<E> edges;
+      Accessor<E> rev_edges;
 
-      Vertex(V i, Accessor<E>&& e)
-        : id(i), edges(e)
+      Vertex(V i, Accessor<E>&& e, Accessor<E>&& r)
+        : id(i), edges(e), rev_edges(r)
       {}
-
-      decltype(edges.operator[](0)) operator[](size_t n)
-      { return edges[n]; }
-
-      const decltype(edges.operator[](0)) operator[](size_t n) const
-      { return edges[n]; }
-
-      iterator begin() { return edges.begin(); }
-      const_iterator begin() const { return edges.begin(); }
-      const_iterator cbegin() const { return edges.cbegin(); }
-
-      iterator end() { return edges.end(); }
-      const_iterator end() const { return edges.end(); }
-      const_iterator cend() const { return edges.cend(); }
-
-      reverse_iterator rbegin() { return edges.rbegin(); }
-      const_reverse_iterator rbegin() const { return edges.rbegin(); }
-      const_reverse_iterator crbegin() const { return edges.crbegin(); }
-
-      reverse_iterator rend() { return edges.rend(); }
-      const_reverse_iterator rend() const { return edges.rend(); }
-      const_reverse_iterator crend() const { return edges.crend(); }
     };
 
     class Vertices;
@@ -535,7 +604,9 @@ class Graph {
 
     class Vertices {
       Accessor<V>& vertices;
+      Accessor<V>& rev_vertices;
       Accessor<E>& edges;
+      Accessor<E>& rev_edges;
 
       public:
         typedef VertexIterator<false> iterator;
@@ -545,20 +616,22 @@ class Graph {
 
         const decltype(vertices.size) size;
 
-        Vertices(Accessor<V>& v, Accessor<E>& e)
-          : vertices(v), edges(e), size(v.size - 1)
+        Vertices(Accessor<V>& v, Accessor<V>& rv, Accessor<E>& e, Accessor<E>& re)
+          : vertices(v), rev_vertices(rv), edges(e), rev_edges(re), size(v.size - 1)
         {}
 
-        Vertex operator[](size_t n)
+        Vertex operator[](V n)
         {
           checkError(n < size , "Index too large! Index: ", n, " Max: ", size);
-          return Vertex(n, Accessor<E>(edges, vertices[n], vertices[n+1]));
+          return Vertex(n, Accessor<E>(edges, vertices[n], vertices[n+1]),
+                  Accessor<E>(rev_edges, rev_vertices[n], rev_vertices[n+1]));
         }
 
-        const Vertex operator[](size_t n) const
+        const Vertex operator[](V n) const
         {
           checkError(n < size, "Index too large! Index: ", n, " Max: ", size);
-          return Vertex(n, Accessor<E>(edges, vertices[n], vertices[n+1]));
+          return Vertex(n, Accessor<E>(edges, vertices[n], vertices[n+1]),
+                  Accessor<E>(rev_edges, rev_vertices[n], rev_vertices[n+1]));
         }
 
         bool operator==(const Vertices& v) const
@@ -568,12 +641,12 @@ class Graph {
         { return !operator==(v); }
 
         iterator begin() { return iterator(*this); }
-        const_iterator begin() const { return iterator(*this); }
-        const_iterator cbegin() const { return iterator(*this); }
+        const_iterator begin() const { return const_iterator(*this); }
+        const_iterator cbegin() const { return const_iterator(*this); }
 
         iterator end() { return iterator(*this, true); }
-        const_iterator end() const { return iterator(*this, true); }
-        const_iterator cend() const { return iterator(*this, true); }
+        const_iterator end() const { return const_iterator(*this, true); }
+        const_iterator cend() const { return const_iterator(*this, true); }
 
         reverse_iterator rbegin() { return reverse_iterator(end()); }
         const_reverse_iterator rbegin() const
@@ -724,6 +797,84 @@ class Graph {
         return result;
     }
 
+    template<bool sorted, bool uniq, typename C, typename D>
+    struct GraphOutput {
+        std::string fileName;
+        uint64_t vertex_count;
+        uint64_t edge_count;
+        C& edges;
+        D& rev_edges;
+
+        GraphOutput
+            ( std::string file, uint64_t vCount, uint64_t eCount, C& edges_
+            , D& rev_edges_)
+            : fileName(file), vertex_count(vCount), edge_count(eCount)
+            , edges(edges_), rev_edges(rev_edges_)
+        {
+            sort_edges<sorted>();
+            erase_edges<uniq>();
+        }
+
+        GraphOutput(std::string f, uint64_t vCount, C& edges_, D& rev_edges_)
+            : GraphOutput(f, vCount, 0, edges_, rev_edges_)
+        {
+            for (auto&& edge : edges) {
+                (void) edge;
+                edge_count++;
+            }
+        }
+
+        GraphOutput(std::string f, C& edges_, D& rev_edges_)
+            : GraphOutput(f, 0, 0, edges_, rev_edges_)
+        {
+            for (auto&& edge : edges) {
+                vertex_count = std::max(vertex_count, std::max(edge.in, edge.out));
+                edge_count++;
+            }
+        }
+
+        private:
+            template<bool SORTED>
+            void sort_edges(typename std::enable_if<SORTED>::type* = nullptr)
+            {}
+
+            template<bool SORTED>
+            void sort_edges(typename std::enable_if<!SORTED>::type* = nullptr)
+            {
+                sort(edges.begin(), edges.end());
+                sort(rev_edges.begin(), rev_edges.end());
+            }
+
+            template<bool UNIQ>
+            void erase_edges(typename std::enable_if<UNIQ>::type* = nullptr)
+            {}
+
+            template<bool UNIQ>
+            void erase_edges(typename std::enable_if<!UNIQ>::type* = nullptr)
+            {
+                edges.erase(unique(edges.begin(), edges.end()), edges.end());
+                rev_edges.erase(unique(rev_edges.begin(), rev_edges.end()), rev_edges.end());
+            }
+    };
+
+    template<bool sorted, bool unique, typename C, typename D = std::vector<Edge<E>>>
+    static GraphOutput<sorted, unique, C,D>
+    makeGraphOutput( std::string file, uint64_t vCount, uint64_t eCount
+                   , C& edges_, D& rev_edges_ = empty_vector())
+    { return GraphOutput<sorted, unique, C,D>(file, vCount, eCount, edges_, rev_edges_); }
+
+    template<bool sorted, bool unique, typename C, typename D = std::vector<Edge<E>>>
+    static GraphOutput<sorted, unique, C,D>
+    makeGraphOutput( std::string file, uint64_t vCount, C& edges_
+                   , D& rev_edges_ = empty_vector())
+    { return GraphOutput<sorted, unique, C,D>(file, vCount, edges_, rev_edges_); }
+
+    template<bool sorted, bool unique, typename C, typename D = std::vector<Edge<E>>>
+    static GraphOutput<sorted, unique, C,D>
+    makeGraphOutput(std::string file, C& edges_ , D& rev_edges_ = empty_vector())
+    { return GraphOutput<sorted, unique, C,D>(file, edges_, rev_edges_); }
+
+
     template<typename C>
     static void writeEdges
         ( uint64_t vertex_count
@@ -783,9 +934,8 @@ class Graph {
           , edge_size
           , vertex_count
           , version)
-      , vertices(raw_vertices, raw_edges)
+      , vertices(raw_vertices, raw_rev_vertices, raw_edges, raw_rev_edges)
       , edges(raw_vertices, raw_edges)
-      , rev_vertices(raw_rev_vertices, raw_rev_edges)
       , rev_edges(raw_rev_vertices, raw_rev_edges)
     {
       size_t checkSize;
@@ -879,9 +1029,8 @@ class Graph {
           , edge_size
           , vertex_count
           , version)
-      , vertices(raw_vertices, raw_edges)
+      , vertices(raw_vertices, raw_rev_vertices, raw_edges, raw_rev_edges)
       , edges(raw_vertices, raw_edges)
-      , rev_vertices(raw_rev_vertices, raw_rev_edges)
       , rev_edges(raw_rev_vertices, raw_rev_edges)
     {
       data[0] = version;
@@ -899,68 +1048,29 @@ class Graph {
     ~Graph()
     { munmap(const_cast<uint32_t*>(data), size); }
 
-    template<typename C, typename D = std::vector<Edge<E>>>
-    static void
-    output(std::string fileName, C& edges, D& rev_edges = empty_vector())
+    template<typename... Args>
+    static void output(Args... args)
+    { output(makeGraphOutput<false,false>(args...)); }
+
+    template<typename... Args>
+    static void outputUniq(Args... args)
+    { output(makeGraphOutput<false,true>(args...)); }
+
+    template<typename... Args>
+    static void outputSorted(Args... args)
+    { output(makeGraphOutput<true,false>(args...)); }
+
+    template<typename... Args>
+    static void outputSortedUniq(Args... args)
+    { output(makeGraphOutput<true,true>(args...)); }
+
+    template<bool sorted, bool uniq, typename C, typename D>
+    static void output(GraphOutput<sorted,uniq,C,D> out)
     {
-        sort(edges.begin(), edges.end());
-        edges.erase(unique(edges.begin(), edges.end()), edges.end());
-
-        sort(rev_edges.begin(), rev_edges.end());
-        rev_edges.erase(unique(rev_edges.begin(), rev_edges.end()), rev_edges.end());
-
-        outputSortedUniq(fileName, edges, rev_edges);
-    }
-
-    template<typename C, typename D = std::vector<Edge<E>>>
-    static void
-    outputUniq(std::string fileName, C& edges, D& rev_edges = empty_vector())
-    {
-        sort(edges.begin(), edges.end());
-        sort(rev_edges.begin(), rev_edges.end());
-        outputSortedUniq(fileName, edges, rev_edges);
-    }
-
-    template<typename C, typename D = std::vector<Edge<E>>>
-    static void
-    outputSorted(std::string fileName, C& edges, D& rev_edges = empty_vector())
-    {
-        edges.erase(unique(edges.begin(), edges.end()), edges.end());
-        rev_edges.erase(unique(rev_edges.begin(), rev_edges.end()), rev_edges.end());
-        outputSortedUniq(fileName, edges, rev_edges);
-    }
-
-    template<typename C, typename D = std::vector<Edge<E>>>
-    static void
-    outputSortedUniq
-        ( std::string fileName
-        , const C& edges
-        , const D& rev_edges = empty_vector())
-    {
-        uint64_t vertex_count = 0;
-        uint64_t edge_count = 0;
-
-        for (auto&& edge : edges) {
-            vertex_count = std::max(vertex_count, std::max(edge.in, edge.out));
-            edge_count++;
-        }
-
-        outputSortedUniq(fileName, vertex_count, edge_count, edges, rev_edges);
-    }
-
-    template<typename C, typename D = std::vector<Edge<E>>>
-    static void
-    outputSortedUniq
-        ( std::string fileName
-        , uint64_t vertex_count
-        , uint64_t edge_count
-        , const C& edges
-        , const D& rev_edges = empty_vector)
-    {
-        bool undirected = rev_edges.empty();
-        Graph graph(fileName, undirected, vertex_count, edge_count);
-        writeEdges(vertex_count, graph.raw_vertices, graph.raw_edges, edges);
-        writeEdges(vertex_count, graph.raw_rev_vertices, graph.raw_rev_edges, rev_edges);
+        bool undirected = out.rev_edges.empty();
+        Graph graph(out.fileName, undirected, out.vertex_count, out.edge_count);
+        writeEdges(out.vertex_count, graph.raw_vertices, graph.raw_edges, out.edges);
+        writeEdges(out.vertex_count, graph.raw_rev_vertices, graph.raw_rev_edges, out.rev_edges);
     }
 
     const bool undirected;
@@ -974,7 +1084,6 @@ class Graph {
 
     Vertices vertices;
     Edges edges;
-    Vertices rev_vertices;
     Edges rev_edges;
 };
 #endif

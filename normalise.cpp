@@ -1,33 +1,26 @@
-#include <fcntl.h>
-#include <unistd.h>
-
-#include <sys/mman.h>
-
-#include <algorithm>
-#include <array>
-#include <cstdlib>
+#include <getopt.h>
 #include <cstring>
+
 #include <fstream>
-#include <iostream>
-#include <limits>
-#include <set>
-#include <stdexcept>
-#include <string>
-#include <unordered_map>
 
 #include "Graph.hpp"
 #include "Util.hpp"
 
 using namespace std;
 
+static const char *execName = "normalise";
+
 static void __attribute__((noreturn))
-usage(const char *name)
+usage(int exitCode = EXIT_FAILURE)
 {
-    cerr << "Usage:" << endl;
-    cerr << name << " normalise <graph> [<graphs>...]" << endl;
-    cerr << name << " lookup <map> <id> ..." << endl;
-    cerr << name << " revlookup <map> <id> ..." << endl;
-    exit(EXIT_FAILURE);
+    ostream& out(exitCode == EXIT_SUCCESS ? cout : cerr);
+    out << "Usage:" << endl;
+    out << execName << " [--help | -h]" << endl;
+    out << execName << " normalise [--directed | -d] [--undirected | -u] "
+        << "<graph> [<graphs>...]" << endl;
+    out << execName << " lookup <map> <id> [<id>...]" << endl;
+    out << execName << " revlookup <map> <id> [<id>...]" << endl;
+    exit(exitCode);
 }
 
 static size_t
@@ -36,9 +29,8 @@ translate(unordered_map<string,uint64_t> &map, uint64_t &unique_id, string key)
     uint64_t result;
     try {
         result = map.at(key);
-    } catch (const out_of_range &oor) {
-        (void) oor;
-        map.insert({key, unique_id});
+    } catch (const out_of_range &) {
+        map.emplace(key, unique_id);
         result = unique_id++;
     }
 
@@ -73,7 +65,7 @@ ignoreLine(std::istream& is)
 }
 
 static void
-normalise(const string path, const string graphName, bool undirected)
+normalise(const string graphName, bool undirected)
 {
     bool cond;
     int next;
@@ -83,8 +75,8 @@ normalise(const string path, const string graphName, bool undirected)
     vector<Edge<uint64_t>> edges;
     unordered_map<string,uint64_t> lookup_map;
 
-    ifstream graph (path + "/raw/" + graphName);
-    ofstream lookup_table (path + "/map/" + graphName);
+    ifstream graph (graphName);
+    ofstream lookup_table (graphName + ".map");
 
     while (!graph.eof()) {
         next = graph.peek();
@@ -103,7 +95,7 @@ normalise(const string path, const string graphName, bool undirected)
         ignoreLine(graph);
     }
 
-    string name(path + graphName + ".graph");
+    string name(graphName + ".graph");
     Graph<uint64_t,uint64_t>::output(name, edges);
 
     lookup_table << unique_id << endl;
@@ -113,22 +105,23 @@ normalise(const string path, const string graphName, bool undirected)
 }
 
 static void
-lookup(ifstream &lookup_table, const bool reverse, int argc, char **argv)
+lookup(const string fileName, const bool reverse, int argc, char **argv)
 {
+    ifstream lookup_table(fileName);
     int count, originalID, newID;
-    unordered_map<int,int> lookup_map;
+    unordered_map<uint64_t,uint64_t> lookup_map;
 
     lookup_table >> count;
     for (int i = 0; i < count; i++) {
         lookup_table >> originalID >> newID;
-        if (reverse) lookup_map.insert({originalID, newID});
-        else lookup_map.insert({newID, originalID});
+        if (reverse) lookup_map.emplace(originalID, newID);
+        else lookup_map.emplace(newID, originalID);
     }
 
     for (int i = 1; i < argc; i++) {
-        int id;
+        uint64_t id;
         try {
-            id = lookup_map.at(stoi(argv[i]));
+            id = lookup_map.at(stoul(argv[i]));
             cout << argv[i] << " -> " << id << endl;
         } catch (...) {
             cout << "Not a valid id: " << argv[i] << endl;
@@ -136,74 +129,62 @@ lookup(ifstream &lookup_table, const bool reverse, int argc, char **argv)
     }
 }
 
-static bool
-isUndirected(string &graph)
-{
-    bool result = false;
-    const string end = string("-undirected");
-
-    if (graph.length() >= end.length() &&
-        0 == graph.compare(graph.length() - end.length(), end.length(), end))
-    {
-        //graph = graph.substr(0, graph.length() - end.length());
-        result = true;
-    }
-
-    return result;
-}
-
-static void
-split(const string file, bool lookup, string &path, string &graphName)
-{
-    size_t pathEnd, nameStart = file.rfind("/");
-    if (nameStart == file.npos) {
-        cerr << "Error parsing graph path." << endl;
-        exit(EXIT_FAILURE);
-    }
-
-    if (lookup) {
-        path = file.substr(0, nameStart);
-        graphName = file.substr(nameStart + 1);
-    } else {
-        pathEnd = file.rfind("/", nameStart - 1);
-        if (pathEnd == file.npos) {
-            path = string("./");
-            graphName = file.substr(nameStart + 1);
-        } else {
-            path = file.substr(0, pathEnd + 1);
-            graphName = file.substr(nameStart + 1);
-        }
-    }
-}
-
 int main(int argc, char **argv)
 {
-    bool undirected;
-    string path;
-    string graphName;
+    int undirected = false;
+    const char *optString = ":dm:uh?";
+    static const struct option longopts[] = {
+        { "directed", no_argument, &undirected, false},
+        { "undirected", no_argument, &undirected, true},
+        { "help", no_argument, nullptr, 'h' },
+        { nullptr, 0, nullptr, 0 },
+    };
 
+    execName = argv[0];
     std::set_new_handler(out_of_memory);
+    std::locale::global(std::locale(""));
+    cout.imbue(std::locale());
 
-    if (argc < 2) usage(argv[0]);
+    for (;;) {
+        int longIndex;
+        int opt = getopt_long(argc, argv, optString, longopts, &longIndex);
+        if (opt == -1) break;
 
-    if (!strcmp(argv[1], "normalise") && argc >= 3) {
-        for (int i = 2; i < argc; i++) {
-            cout << "Normalising " << argv[i] << endl;
-            split(string(argv[i]), false, path, graphName);
-            undirected = isUndirected(graphName);
-            normalise(path, graphName, undirected);
+        switch (opt) {
+            case 'd':
+                undirected = false;
+                break;
+
+            case 'u':
+                undirected = true;
+                break;
+
+            case 'h':
+            case '?':
+                usage(EXIT_SUCCESS);
+
+            case ':':
+                cerr << "Missing option for flag '" << optopt << "'." << endl;
+                [[clang::fallthrough]];
+            default:
+                usage();
         }
-    } else if (!strcmp(argv[1], "lookup") && argc >= 4) {
-        split(string(argv[2]), true, path, graphName);
-        ifstream inputFile(path + "/map/" + graphName);
-        lookup(inputFile, false, argc - 2, &argv[2]);
-    } else if (!strcmp(argv[1], "revlookup") && argc >= 4) {
-        split(string(argv[2]), true, path, graphName);
-        ifstream inputFile(path + "/map/" + graphName);
-        lookup(inputFile, true, argc - 2, &argv[2]);
-    } else {
-        usage(argv[0]);
     }
 
-    return 0;
+    argc -= optind;
+    argv = &argv[optind];
+
+    if (argc >= 2 && !strcmp(argv[0], "normalise")) {
+        for (int i = 1; i < argc; i++) {
+            normalise(argv[i], undirected);
+        }
+    } else if (argc >= 3 && !strcmp(argv[0], "lookup")) {
+        lookup(argv[1], false, argc - 2, &argv[2]);
+    } else if (argc >= 3 && !strcmp(argv[0], "revlookup")) {
+        lookup(argv[1], true, argc - 2, &argv[2]);
+    } else {
+        usage();
+    }
+
+    return EXIT_SUCCESS;
 }

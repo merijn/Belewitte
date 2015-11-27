@@ -18,15 +18,17 @@ using namespace std;
 
 enum class framework { cuda, opencl };
 
+static const char *execName = "main";
+
 static void __attribute__((noreturn))
-usage(const char *name, int exitCode)
+usage(int exitCode = EXIT_FAILURE)
 {
     cout << "Usage:" << endl;
-    cout << name << " [-n <count runs>] [-p <platform id>] [-d <device id>] [-f] [-o <output file>] <graph file>" << endl;
-    cout << name << " list platforms [-v]" << endl;
-    cout << name << " list devices <platform id> [-v]" << endl;
-    cout << name << " query platform <platform id> [-v]" << endl;
-    cout << name << " query device <platform id> <device id> [-v]" << endl;
+    cout << execName << " [-n <count runs>] [-p <platform id>] [-d <device id>] [-f] [-o <output file>] <graph file>" << endl;
+    cout << execName << " list platforms [-v]" << endl;
+    cout << execName << " list devices <platform id> [-v]" << endl;
+    cout << execName << " query platform <platform id> [-v]" << endl;
+    cout << execName << " query device <platform id> <device id> [-v]" << endl;
     exit(exitCode);
 }
 
@@ -40,7 +42,7 @@ run_with_backend
 , int device
 , bool verbose)
 {
-    if (argc < 2) usage(argv[0], EXIT_FAILURE);
+    if (argc < 2) usage();
 
     if (optind < argc && !strcmp(argv[optind], "list")) {
         optind++;
@@ -56,7 +58,7 @@ run_with_backend
             exit(backend.devicesPerPlatform[platform]);
 
         } else {
-            usage(argv[0], EXIT_FAILURE);
+            usage();
         }
 
     } else if (optind < argc && !strcmp(argv[optind], "query")) {
@@ -72,7 +74,7 @@ run_with_backend
             backend.queryDevice(platform, device, verbose);
             exit(EXIT_SUCCESS);
         } else {
-            usage(argv[0], EXIT_FAILURE);
+            usage();
         }
     }
 
@@ -107,6 +109,7 @@ int main(int argc, char **argv)
         { nullptr, 0, nullptr, 0 },
     };
 
+    execName = argv[0];
     std::set_new_handler(out_of_memory);
     std::locale::global(std::locale(""));
     cout.imbue(std::locale());
@@ -159,13 +162,13 @@ int main(int argc, char **argv)
 
             case 'h':
             case '?':
-                usage(argv[0], EXIT_SUCCESS);
+                usage(EXIT_SUCCESS);
 
             case ':':
                 cerr << "Missing option for flag '" << optopt << "'." << endl;
                 [[clang::fallthrough]];
             default:
-                usage(argv[0], EXIT_FAILURE);
+                usage();
         }
     }
 

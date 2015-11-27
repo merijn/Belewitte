@@ -7,5 +7,6 @@ gen-graph
 reorder-graph
 check-degree
 print-graph
+evolve
 *.d
 *.graph

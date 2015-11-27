@@ -1,6 +1,12 @@
+#include <getopt.h>
+
+#include <algorithm>
+#include <cstring>
 #include <functional>
 #include <random>
 #include <unordered_map>
+
+#include <boost/math/distributions/uniform.hpp>
 
 #include "Graph.hpp"
 #include "Util.hpp"
@@ -8,64 +14,13 @@
 using namespace std;
 
 typedef Edge<uint64_t> edge;
+typedef Graph<uint64_t,uint64_t> Graph_t;
 
-static std::vector<edge>
-gen_mutations(uint64_t vertex_count, double mutation_rate)
-{
-    mt19937_64 generator{random_device()()};
-
-    std::vector<edge> mutations;
-    uint64_t edge_count = vertex_count * vertex_count;
-
-    binomial_distribution<uint64_t> num_mutations(edge_count, mutation_rate);
-    uint64_t mutation_count = num_mutations(generator);
-
-    mutations.reserve(mutation_count);
-
-    for (uint64_t i = 0; i < mutation_count; i++) {
-        mutations.emplace_back(i / vertex_count, i % vertex_count);
-    }
-
-    {
-        unordered_map<uint64_t, edge> sparse_array;
-        sparse_array.reserve(mutation_count);
-
-        for (uint64_t i = 0; i < mutation_count; i++) {
-            uniform_int_distribution<uint64_t> mutated_edge(i, edge_count);
-            uint64_t idx = mutated_edge(generator);
-
-            if (idx < mutation_count) {
-                std::swap(mutations[i], mutations[idx]);
-            } else {
-                auto e = edge(idx / vertex_count, idx % vertex_count);
-                std::swap(mutations[i], sparse_array.emplace(idx, e).first->second);
-            }
-        }
-    }
-
-    std::sort(mutations.begin(), mutations.end());
-
-    return mutations;
-}
-
-static std::vector<edge>
-flip_edges(const std::vector<edge>& edges)
-{
-    std::vector<edge> result;
-    result.reserve(edges.size());
-
-    for (auto&& e : edges) {
-        result.emplace_back(e.out, e.in);
-    }
-
-    return result;
-}
-
-template<bool directed>
+template<bool undirected>
 class Crossover {
     const uint64_t seed;
-    const Graph<uint64_t,uint64_t> graph1;
-    const Graph<uint64_t,uint64_t> graph2;
+    const Graph_t graph1;
+    const Graph_t graph2;
     const vector<edge> mutations;
     const vector<edge> rev_mutations;
 
@@ -75,13 +30,13 @@ class Crossover {
         typedef Iterator const_iterator;
         typedef std::reverse_iterator<const_iterator> const_reverse_iterator;
 
-        const Graph<uint64_t,uint64_t>::Edges& edges1;
-        const Graph<uint64_t,uint64_t>::Edges& edges2;
+        const Graph_t::Edges& edges1;
+        const Graph_t::Edges& edges2;
         const vector<edge>& mutations;
         const uint64_t& seed;
 
-        Edges( const Graph<uint64_t,uint64_t>::Edges& e1
-             , const Graph<uint64_t,uint64_t>::Edges& e2
+        Edges( const Graph_t::Edges& e1
+             , const Graph_t::Edges& e2
              , const vector<edge>& muts
              , const uint64_t& s)
              : edges1(e1), edges2(e2), mutations(muts), seed(s)
@@ -205,29 +160,138 @@ class Crossover {
             , double mutation_rate
             )
             : seed(random_device()()), graph1(g1), graph2(g2)
-            , mutations(gen_mutations(graph1.vertex_count, mutation_rate))
-            , rev_mutations(flip_edges(mutations))
+            , mutations(random_edges<uint64_t>(undirected, graph1.vertex_count, mutation_rate))
+            , rev_mutations(reverse_and_sort(mutations))
+            , vertex_count(graph1.vertex_count)
             , edges(graph1.edges, graph2.edges, mutations, seed)
             , rev_edges(graph1.rev_edges, graph2.rev_edges, rev_mutations, seed)
         {
             checkError(graph1.vertex_count == graph2.vertex_count,
                     "Incompatible graphs for crossover!");
+
+            checkError(graph1.undirected == graph1.undirected || !undirected,
+                    "Can't produce undirected crossover of directed graph!");
         }
 
+        const uint64_t vertex_count;
         Edges edges;
         Edges rev_edges;
 };
 
-typedef Crossover<true> DirectedCrossover;
-typedef Crossover<false> UndirectedCrossover;
+typedef Crossover<false> DirectedCrossover;
+typedef Crossover<true> UndirectedCrossover;
+
+static const char *execName = "evolve";
+
+static void
+computeFitness(const string file)
+{
+    Graph_t graph(file);
+    vector<uint64_t> counts;
+    counts.reserve(graph.vertex_count);
+
+    for (auto&& v : graph.vertices) {
+        if (graph.undirected) counts.emplace_back(v.edges.size);
+        else counts.emplace_back(v.edges.size + v.rev_edges.size);
+    }
+
+    boost::math::uniform_distribution<double> dist(0, graph.vertex_count);
+    double Kmax = 0;
+    sort(counts.begin(), counts.end());
+    auto it = counts.begin();
+    while (it != counts.end()) {
+        uint64_t val = *it;
+        it = upper_bound(it, counts.end(), val);
+
+        double density = distance(counts.begin(), it) /
+                         static_cast<double>(counts.size());
+
+        Kmax = max(Kmax, abs(density - boost::math::cdf(dist, val)));
+    }
+
+    cout << "Fitness: " << Kmax << endl;
+}
+
+static void __attribute__((noreturn))
+usage(int exitCode = EXIT_FAILURE)
+{
+    ostream& out(exitCode == EXIT_SUCCESS ? cout : cerr);
+    out << "Usage:" << endl;
+    out << execName << " [--help | -h]" << endl;
+    out << execName << " [--directed | -d] [--undirected | -u] "
+         << "[--mutation-rate <rate> | -m <rate>] crossover <graph 1> "
+         << "<graph 2> <output graph>" << endl;
+    exit(exitCode);
+}
 
 int main(int argc, char **argv)
 {
-    random_device device;
-    checkError(argc == 4, "Wrong number of arguments.");
+    std::string name = argv[0];
+    int undirected = false;
+    double mutation_rate = 0.01;
+    const char *optString = ":dm:uh?";
+    static const struct option longopts[] = {
+        { "directed", no_argument, &undirected, false},
+        { "undirected", no_argument, &undirected, true},
+        { "mutation-rate", required_argument, nullptr, 'm' },
+        { "help", no_argument, nullptr, 'h' },
+        { nullptr, 0, nullptr, 0 },
+    };
 
-    DirectedCrossover crossover(argv[1], argv[2], stod(argv[3]));
-    Graph<uint64_t,uint64_t>::outputSortedUniq("foo.graph", crossover.edges, crossover.rev_edges);
+    execName = argv[0];
+    std::set_new_handler(out_of_memory);
+    std::locale::global(std::locale(""));
+    cout.imbue(std::locale());
+
+    for (;;) {
+        int longIndex;
+        int opt = getopt_long(argc, argv, optString, longopts, &longIndex);
+        if (opt == -1) break;
+
+        switch (opt) {
+            case 'd':
+                undirected = false;
+                break;
+
+            case 'm':
+                mutation_rate = stod(optarg);
+                break;
+
+            case 'u':
+                undirected = true;
+                break;
+
+            case 'h':
+            case '?':
+                usage(EXIT_SUCCESS);
+
+            case ':':
+                cerr << "Missing option for flag '" << optopt << "'." << endl;
+                [[clang::fallthrough]];
+            default:
+                usage();
+        }
+    }
+
+    argc -= optind;
+    argv = &argv[optind];
+
+    if (argc == 4 && !strcmp(argv[0], "crossover")) {
+        if (undirected) {
+            UndirectedCrossover crossover(argv[1], argv[2], mutation_rate);
+            Graph_t::outputSortedUniq(argv[3], crossover.vertex_count,
+                                      crossover.edges);
+        } else {
+            DirectedCrossover crossover(argv[1], argv[2], mutation_rate);
+            Graph_t::outputSortedUniq(argv[3], crossover.vertex_count,
+                    crossover.edges, crossover.rev_edges);
+        }
+        computeFitness(argv[3]);
+    } else if (argc == 2 && !strcmp(argv[0], "fitness")) {
+        computeFitness(argv[1]);
+    } else {
+        usage();
+    }
 
     return 0;
 }

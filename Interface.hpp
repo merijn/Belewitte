@@ -147,8 +147,8 @@ std::tuple
 >
 loadReverseCSR(Backend<Platform> &p, const Graph<V,E> &graph)
 {
-    auto rev_nodes = p.template allocConstant<V>(graph.rev_vertices.size);
-    auto rev_edges = p.template allocConstant<E>(graph.rev_edges.size);
+    auto rev_nodes = p.template allocConstant<V>(graph.raw_rev_vertices.size);
+    auto rev_edges = p.template allocConstant<E>(graph.raw_rev_edges.size);
     auto nodes = p.template allocConstant<V>(graph.vertices.size);
 
     for (size_t i = 0; i < graph.raw_rev_vertices.size; i++) {
