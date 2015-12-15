@@ -80,5 +80,6 @@ double connectivity(Graph_t& graph)
 #else
     (void) graph;
     checkError(true, "Connectivity not implemented!");
+    return 1.0;
 #endif
 }

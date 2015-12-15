@@ -49,7 +49,7 @@ ifeq ($(UNAME),Darwin)
                -Wno-pedantic -Wno-missing-prototypes -Wno-unused-parameter
 
     NVCCFLAGS += --compiler-options "$(NVWFLAGS)" \
-                 -isystem/Developer/NVIDIA/CUDA-7.5/include/
+                 -isystem /Developer/NVIDIA/CUDA-7.5/include/
 
 endif
 ifeq ($(UNAME),Linux)
@@ -101,7 +101,7 @@ check-degree: build/check-degree.o build/Util.o
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
-build/evolve.o: CLFAGS+=-I$(BOOST_PATH) -isystem$(BOOST_PATH)
+build/evolve.o: CFLAGS+=-I$(BOOST_PATH) -isystem$(BOOST_PATH)
 
 evolve: build/evolve.o build/Util.o build/Connectivity.o
 	$(PRINTF) " LD\t$@\n"
