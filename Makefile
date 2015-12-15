@@ -13,13 +13,18 @@ else
     PRINTF := @printf
 endif
 
-CC=clang++
-WFLAGS = -Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic \
+COMMON_CFLAGS=-O3 -MMD -MP -std=c++14 -g
+
+CLANGWFLAGS=-Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic \
          -Wno-documentation-deprecated-sync -Wno-documentation -Wno-padded \
          -Wno-unused-const-variable -Wno-reserved-id-macro
+CLANGFLAGS=$(COMMON_CFLAGS) $(CLANGWFLAGS) -ftrapv
 
-CFLAGS=-O3 -MMD -MP -std=c++14 $(WFLAGS) -g -ftrapv -I$(BOOST_PATH) \
-       -isystem$(BOOST_PATH)
+ICCWFLAGS=-Wall -Wremarks -Wcheck -Werror -diag-disable=869,981,11074,11076
+ICC_CFLAGS=$(COMMON_CFLAGS) $(ICCWFLAGS)
+
+CC=clang++
+CFLAGS=$(if $(findstring clang++, $(CC)), $(CLANGFLAGS), $(ICC_CFLAGS))
 LDFLAGS=-lcudart -ldl -g
 
 LD=$(CC)
@@ -38,24 +43,31 @@ ifeq ($(UNAME),Darwin)
     CFLAGS += -isystem/Developer/NVIDIA/CUDA-7.5/include/
     LDFLAGS += -L/usr/local/cuda/lib -framework opencl
 
-    NVWFLAGS = $(WFLAGS) -Wno-unused-macros -Wno-c++11-long-long \
+    NVWFLAGS = $(CLANGWFLAGS) -Wno-unused-macros -Wno-c++11-long-long \
                -Wno-old-style-cast -Wno-used-but-marked-unused \
                -Wno-unused-function -Wno-missing-variable-declarations \
                -Wno-pedantic -Wno-missing-prototypes -Wno-unused-parameter
 
     NVCCFLAGS += --compiler-options "$(NVWFLAGS)" \
-                 -isystem /Developer/NVIDIA/CUDA-7.5/include/
+                 -isystem/Developer/NVIDIA/CUDA-7.5/include/
 
 endif
 ifeq ($(UNAME),Linux)
-    WFLAGS += -Wno-reserved-id-macro
-    CFLAGS += --gcc-toolchain=$(addsuffix .., $(dir $(shell which gcc))) \
-              -isystem$(CUDA_PATH)/include/
+    CLANGWFLAGS += -Wno-reserved-id-macro
+    CLANGFLAGS += --gcc-toolchain=$(addsuffix .., $(dir $(shell which gcc)))
+
+    CFLAGS += -isystem$(CUDA_PATH)/include/
     LDFLAGS += -L$(CUDA_PATH)/lib64 -lOpenCL
 
     NVWFLAGS =
 
     NVCCFLAGS += --compiler-options "$(NVWFLAGS)"
+
+build/Connectivity.o: CPATH:=$(ICC_CPATH):$(CPATH)
+build/Connectivity.o: CC=icc
+
+evolve: LDFLAGS+=-ltbb
+evolve: LD=icc
 endif
 
 CLEANUP = main normalise build/*.o
@@ -71,35 +83,33 @@ main: build/main.o build/CUDA.o build/OpenCL.o build/Timer.o build/Util.o \
       build/bfs.o build/bfs/libbfs.a build/pagerank.o \
       build/pagerank/libpagerank.a
 	$(PRINTF) " LD\t$@\n"
-	$(AT)$(LD) $(CFLAGS) $(LDFLAGS) $^ -o $@
+	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
 normalise: build/normalise.o build/Util.o
 	$(PRINTF) " LD\t$@\n"
-	$(AT)$(LD) $(CFLAGS) $(LDFLAGS) $^ -o $@
+	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
 gen-graph: build/gen-graph.o build/Util.o
 	$(PRINTF) " LD\t$@\n"
-	$(AT)$(LD) $(CFLAGS) $(LDFLAGS) $^ -o $@
+	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
 reorder-graph: build/reorder-graph.o build/Util.o
 	$(PRINTF) " LD\t$@\n"
-	$(AT)$(LD) $(CFLAGS) $(LDFLAGS) $^ -o $@
+	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
 check-degree: build/check-degree.o build/Util.o
 	$(PRINTF) " LD\t$@\n"
-	$(AT)$(LD) $(CFLAGS) $(LDFLAGS) $^ -o $@
+	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
-evolve: build/evolve.o build/Util.o
+build/evolve.o: CLFAGS+=-I$(BOOST_PATH) -isystem$(BOOST_PATH)
+
+evolve: build/evolve.o build/Util.o build/Connectivity.o
 	$(PRINTF) " LD\t$@\n"
-	$(AT)$(LD) $(CFLAGS) $(LDFLAGS) $^ -o $@
+	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
 print-graph: build/print-graph.o build/Util.o
 	$(PRINTF) " LD\t$@\n"
-	$(AT)$(LD) $(CFLAGS) $(LDFLAGS) $^ -o $@
-
-test: build/test.o build/Util.o
-	$(PRINTF) " LD\t$@\n"
-	$(AT)$(LD) $(CFLAGS) $(LDFLAGS) $^ -o $@
+	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
 build:
 	$(AT)mkdir -p $@

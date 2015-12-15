@@ -8,6 +8,7 @@
 
 #include <boost/math/distributions/uniform.hpp>
 
+#include "Connectivity.hpp"
 #include "Graph.hpp"
 #include "Util.hpp"
 
@@ -188,8 +189,10 @@ computeFitness(const string file)
 {
     Graph_t graph(file);
     vector<uint64_t> counts;
-    counts.reserve(graph.vertex_count);
 
+    double conn_percent = connectivity(graph);
+
+    counts.reserve(graph.vertex_count);
     for (auto&& v : graph.vertices) {
         if (graph.undirected) counts.emplace_back(v.edges.size);
         else counts.emplace_back(v.edges.size + v.rev_edges.size);
@@ -210,6 +213,7 @@ computeFitness(const string file)
     }
 
     cout << "Fitness: " << Kmax << endl;
+    cout << "Connectivity: " << conn_percent << endl;
 }
 
 static void __attribute__((noreturn))

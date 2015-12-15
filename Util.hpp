@@ -7,11 +7,37 @@
 #include <dlfcn.h>
 #include <execinfo.h>
 
+#include <atomic>
 #include <iostream>
 #include <string>
 
+constexpr std::size_t operator "" _sz (unsigned long long int x);
 constexpr std::size_t operator "" _sz (unsigned long long int x)
 { return x; }
+
+template<typename T>
+bool atomic_max(std::atomic<T>& max, T const& val) noexcept;
+
+template<typename T>
+bool atomic_max(std::atomic<T>& max, T const& val) noexcept
+{
+    bool r;
+    T prev = max;
+    while (prev < val && !(r = max.compare_exchange_weak(prev, val)));
+    return r;
+}
+
+template<typename T>
+bool atomic_min(std::atomic<T>& min, T const& val) noexcept;
+
+template<typename T>
+bool atomic_min(std::atomic<T>& min, T const& val) noexcept
+{
+    bool r;
+    T prev = min;
+    while (prev > val && !(r = min.compare_exchange_weak(prev, val)));
+    return r;
+}
 
 void __attribute__((noreturn)) out_of_memory(void);
 void __attribute__((noreturn)) dump_stack_trace(int exit_code);
@@ -57,6 +83,9 @@ class simple_iterator : public C::const_iterator {
         explicit operator bool() const
         { return *this != end; }
 };
+
+template<typename C>
+simple_iterator<C> make_simple_iterator(const C& val);
 
 template<typename C>
 simple_iterator<C> make_simple_iterator(const C& val)

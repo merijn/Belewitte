@@ -42,6 +42,9 @@ struct Edge {
 };
 
 template<typename E>
+Edge<E> triangular_edge(uint64_t idx);
+
+template<typename E>
 Edge<E> triangular_edge(uint64_t idx)
 {
     uint64_t row = static_cast<uint64_t>(floor((sqrt(8*idx + 1) - 1)/2));
@@ -49,6 +52,10 @@ Edge<E> triangular_edge(uint64_t idx)
     uint64_t col = idx - triangular;
     return Edge<E>(row, col);
 }
+
+template<typename E>
+std::vector<Edge<E>>
+random_edges(bool undirected, uint64_t vertex_count, uint64_t edge_count);
 
 template<typename E>
 std::vector<Edge<E>>
@@ -103,6 +110,10 @@ random_edges(bool undirected, uint64_t vertex_count, uint64_t edge_count)
 
 template<typename E>
 std::vector<Edge<E>>
+random_edges(bool undirected, uint64_t vertex_count, double mutation_rate);
+
+template<typename E>
+std::vector<Edge<E>>
 random_edges(bool undirected, uint64_t vertex_count, double mutation_rate)
 {
     std::mt19937_64 generator{std::random_device()()};
@@ -116,6 +127,10 @@ random_edges(bool undirected, uint64_t vertex_count, double mutation_rate)
 
     return random_edges<E>(undirected, vertex_count, mutation_count);
 }
+
+template<typename E>
+std::vector<Edge<E>>
+reverse_and_sort(const std::vector<Edge<E>>& edges);
 
 template<typename E>
 std::vector<Edge<E>>
