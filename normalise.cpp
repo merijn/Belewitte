@@ -73,6 +73,7 @@ normalise(const string graphName, bool undirected)
     string in, out;
     uint64_t unique_id = 0;
     vector<Edge<uint64_t>> edges;
+    vector<Edge<uint64_t>> rev_edges;
     unordered_map<string,uint64_t> lookup_map;
 
     ifstream graph (graphName);
@@ -90,13 +91,14 @@ normalise(const string graphName, bool undirected)
 
             edges.emplace_back(inId, outId);
             if (undirected) edges.emplace_back(outId, inId);
+            else rev_edges.emplace_back(outId, inId);
         }
 
         ignoreLine(graph);
     }
 
     string name(graphName + ".graph");
-    Graph<uint64_t,uint64_t>::output(name, edges);
+    Graph<uint64_t,uint64_t>::output(name, edges, rev_edges);
 
     lookup_table << unique_id << endl;
     for (auto &pair : lookup_map) {

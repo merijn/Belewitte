@@ -232,10 +232,11 @@ class Accessor {
 
       Iterator& operator=(const Iterator& it)
       {
-        acc = it.acc;
+        checkError(acc == it.acc,
+                "Can only assign iterators for same data!");
         offset = it.offset;
         endOffset = it.endOffset;
-        return this;
+        return *this;
       }
 
       Iterator& operator++()
@@ -327,13 +328,13 @@ class Accessor {
       , version(acc.version)
     {}
 
-    bool operator==(const Accessor& acc)
+    bool operator==(const Accessor& acc) const
     {
       return data == acc.data && size == acc.size && valueSize == acc.valueSize
           && maxVal == acc.maxVal && version == acc.version;
     }
 
-    bool operator!=(const Accessor& acc)
+    bool operator!=(const Accessor& acc) const
     { return !operator==(acc); }
 
     Converter operator[](size_t n)
@@ -349,12 +350,12 @@ class Accessor {
     }
 
     iterator begin() { return iterator(*this, false); }
-    const_iterator begin() const { return iterator(*this, false); }
-    const_iterator cbegin() const { return iterator(*this, false); }
+    const_iterator begin() const { return const_iterator(*this, false); }
+    const_iterator cbegin() const { return const_iterator(*this, false); }
 
     iterator end() { return iterator(*this, true); }
-    const_iterator end() const { return iterator(*this, true); }
-    const_iterator cend() const { return iterator(*this, true); }
+    const_iterator end() const { return const_iterator(*this, true); }
+    const_iterator cend() const { return const_iterator(*this, true); }
 
     reverse_iterator rbegin() { return reverse_iterator(end()); }
     const_reverse_iterator rbegin() const
@@ -423,9 +424,10 @@ class Graph {
 
         VertexIterator& operator=(const VertexIterator& it)
         {
-          vertices = it.vertices;
+          checkError(vertices == it.vertices,
+                "Can only assign iterators for same graph!");
           offset = it.offset;
-          return this;
+          return *this;
         }
 
         VertexIterator& operator++()
@@ -831,6 +833,7 @@ class Graph {
                 vertex_count = std::max(vertex_count, std::max(edge.in, edge.out));
                 edge_count++;
             }
+            vertex_count++; // Vertices are zero indexed
         }
 
         private:
