@@ -222,6 +222,7 @@ usage(int exitCode = EXIT_FAILURE)
     ostream& out(exitCode == EXIT_SUCCESS ? cout : cerr);
     out << "Usage:" << endl;
     out << execName << " [--help | -h]" << endl;
+    out << execName << " fitness <graph>" << endl;
     out << execName << " [--directed | -d] [--undirected | -u] "
          << "[--mutation-rate <rate> | -m <rate>] crossover <graph 1> "
          << "<graph 2> <output graph>" << endl;
@@ -271,7 +272,7 @@ int main(int argc, char **argv)
 
             case ':':
                 cerr << "Missing option for flag '" << optopt << "'." << endl;
-                [[clang::fallthrough]];
+                FALLTHROUGH;
             default:
                 usage();
         }

@@ -11,6 +11,12 @@
 #include <iostream>
 #include <string>
 
+#ifdef __clang__
+#define FALLTHROUGH [[clang::fallthrough]]
+#else
+#define FALLTHROUGH
+#endif
+
 constexpr std::size_t operator "" _sz (unsigned long long int x);
 constexpr std::size_t operator "" _sz (unsigned long long int x)
 { return x; }

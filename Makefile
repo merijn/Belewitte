@@ -13,7 +13,7 @@ else
     PRINTF := @printf
 endif
 
-COMMON_CFLAGS=-O3 -MMD -MP -std=c++14 -g
+COMMON_CFLAGS=-O3 -MMD -MP -std=c++14 -g $(EXTRA_CFLAGS)
 
 CLANGWFLAGS=-Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic \
          -Wno-documentation-deprecated-sync -Wno-documentation -Wno-padded \
@@ -21,11 +21,12 @@ CLANGWFLAGS=-Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic \
 CLANGFLAGS=$(COMMON_CFLAGS) $(CLANGWFLAGS) -ftrapv
 
 ICCWFLAGS=-Wall -Wremarks -Wcheck -Werror -diag-disable=869,981,11074,11076
-ICC_CFLAGS=$(COMMON_CFLAGS) $(ICCWFLAGS)
+ICC_CFLAGS=$(COMMON_CFLAGS) $(ICCWFLAGS) -xHost
 
-CC=clang++
-CFLAGS=$(if $(findstring clang++, $(CC)), $(CLANGFLAGS), $(ICC_CFLAGS))
-LDFLAGS=-lcudart -ldl -g
+CC?=clang++
+CFLAGS=$(if $(findstring clang++, $(CC)), $(CLANGFLAGS), \
+            $(if $(findstring icc, $(CC)), $(ICC_CFLAGS), $(COMMON_CFLAGS)))
+LDFLAGS=-lcudart -ldl -g $(EXTRA_LDFLAGS)
 
 LD=$(CC)
 

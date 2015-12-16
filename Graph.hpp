@@ -47,7 +47,8 @@ Edge<E> triangular_edge(uint64_t idx);
 template<typename E>
 Edge<E> triangular_edge(uint64_t idx)
 {
-    uint64_t row = static_cast<uint64_t>(floor((sqrt(8*idx + 1) - 1)/2));
+    double root = sqrt(8*static_cast<double>(idx) + 1);
+    uint64_t row = static_cast<uint64_t>(floor((root - 1)/2));
     uint64_t triangular = (row * (row+1))/2;
     uint64_t col = idx - triangular;
     return Edge<E>(row, col);
@@ -407,7 +408,7 @@ class Graph {
     class VertexIterator : public std::iterator<std::random_access_iterator_tag, Vertex> {
       public:
         typedef typename std::conditional
-            <is_const, const Vertices, Vertices>::type Vertices;
+            <is_const, const Graph::Vertices, Graph::Vertices>::type Vertices;
         typedef std::random_access_iterator_tag iterator_category;
         typedef uint64_t size_type;
         typedef int64_t difference_type;
@@ -513,7 +514,7 @@ class Graph {
     class EdgeIterator : public std::iterator<std::bidirectional_iterator_tag, Edge<E>> {
       public:
         typedef typename std::conditional
-            <is_const, const Edges, Edges>::type Edges;
+            <is_const, const Graph::Edges, Graph::Edges>::type Edges;
         typedef std::bidirectional_iterator_tag iterator_category;
         typedef uint64_t size_type;
         typedef int64_t difference_type;

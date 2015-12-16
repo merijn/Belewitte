@@ -61,7 +61,7 @@ int main(int argc, char **argv)
 
             case ':':
                 cerr << "Missing option for flag '" << optopt << "'." << endl;
-                [[clang::fallthrough]];
+                FALLTHROUGH;
             default:
                 usage();
         }

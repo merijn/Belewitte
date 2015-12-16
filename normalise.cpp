@@ -53,7 +53,7 @@ ignoreLine(std::istream& is)
         switch (sb->sbumpc()) {
             case EOF:
                 is.setstate(ios::eofbit);
-                [[clang::fallthrough]];
+                FALLTHROUGH;
             case '\n':
             case '\r':
             case '\f':
@@ -167,7 +167,7 @@ int main(int argc, char **argv)
 
             case ':':
                 cerr << "Missing option for flag '" << optopt << "'." << endl;
-                [[clang::fallthrough]];
+                FALLTHROUGH;
             default:
                 usage();
         }
@@ -178,6 +178,7 @@ int main(int argc, char **argv)
 
     if (argc >= 2 && !strcmp(argv[0], "normalise")) {
         for (int i = 1; i < argc; i++) {
+            cout << "Normalising: " << argv[i] << endl;
             normalise(argv[i], undirected);
         }
     } else if (argc >= 3 && !strcmp(argv[0], "lookup")) {
