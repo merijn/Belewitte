@@ -44,7 +44,7 @@ class Crossover {
         {}
 
         bool empty() const
-        { return edges1.size == 0 || edges2.size == 0 || mutations.empty(); }
+        { return edges1.size == 0 && edges2.size == 0 && mutations.empty(); }
 
         const_iterator begin() const { return const_iterator(*this, false); }
         const_iterator cbegin() const { return const_iterator(*this, false); }
@@ -212,8 +212,7 @@ computeFitness(const string file)
         Kmax = max(Kmax, abs(density - boost::math::cdf(dist, val)));
     }
 
-    cout << "Fitness: " << Kmax << endl;
-    cout << "Connectivity: " << conn_percent << endl;
+    cout << (1.0 - Kmax) << " " << conn_percent << endl;
 }
 
 static void __attribute__((noreturn))
@@ -282,6 +281,7 @@ int main(int argc, char **argv)
     argv = &argv[optind];
 
     if (argc == 4 && !strcmp(argv[0], "crossover")) {
+        cerr << "crossover " << argv[1] << " " << argv[2] << " " << argv[3] << endl;
         if (undirected) {
             UndirectedCrossover crossover(argv[1], argv[2], mutation_rate);
             Graph_t::outputSortedUniq(argv[3], crossover.vertex_count,
@@ -291,8 +291,10 @@ int main(int argc, char **argv)
             Graph_t::outputSortedUniq(argv[3], crossover.vertex_count,
                     crossover.edges, crossover.rev_edges);
         }
+        cerr << "fitness " << argv[1] << endl;
         computeFitness(argv[3]);
     } else if (argc == 2 && !strcmp(argv[0], "fitness")) {
+        cerr << "fitness " << argv[1] << endl;
         computeFitness(argv[1]);
     } else {
         usage();

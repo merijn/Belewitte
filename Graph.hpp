@@ -838,19 +838,17 @@ class Graph {
         {
             for (auto&& edge : edges) {
                 (void) edge;
+                if (vCount == 0) {
+                    vertex_count = std::max(vertex_count, std::max(edge.in, edge.out));
+                }
                 edge_count++;
             }
+            if (vCount == 0) vertex_count++; // Vertices are zero indexed
         }
 
         GraphOutput(std::string f, C& edges_, D& rev_edges_)
-            : GraphOutput(f, 0, 0, edges_, rev_edges_)
-        {
-            for (auto&& edge : edges) {
-                vertex_count = std::max(vertex_count, std::max(edge.in, edge.out));
-                edge_count++;
-            }
-            vertex_count++; // Vertices are zero indexed
-        }
+            : GraphOutput(f, 0, edges_, rev_edges_)
+        {}
 
         private:
             template<bool SORTED>
@@ -1065,7 +1063,10 @@ class Graph {
     Graph(Graph&& graph) = default;
 
     ~Graph()
-    { munmap(const_cast<uint32_t*>(data), size); }
+    {
+        msync(data, size, MS_SYNC);
+        munmap(data, size);
+    }
 
     template<typename... Args>
     static void output(Args... args)

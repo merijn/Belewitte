@@ -12,6 +12,8 @@
 
 using namespace std;
 
+typedef Graph<uint64_t,uint64_t> Graph_t;
+
 string gen_chain(vector<Edge<uint64_t>>&, bool undirected, size_t);
 string gen_star(vector<Edge<uint64_t>>&, bool undirected, size_t);
 string gen_mesh(vector<Edge<uint64_t>>&, bool undirected, size_t, size_t);
@@ -222,6 +224,7 @@ int main(int argc, char **argv)
     string name;
     int undirected = false;
     bool sorted = false;
+    uint64_t vertex_count = 0;
     vector<Edge<uint64_t>> edges;
 
     const char *optString = ":duh?";
@@ -266,27 +269,31 @@ int main(int argc, char **argv)
     argv = &argv[optind];
 
     if (argc == 2 && !strcmp(argv[0], "chain")) {
-        name = gen_chain(edges, undirected, stoull(argv[1]));
+        vertex_count = stoull(argv[1]);
+        name = gen_chain(edges, undirected, vertex_count);
     } else if (argc == 2 && !strcmp(argv[0], "star")) {
-        name = gen_star(edges, undirected, stoull(argv[1]));
+        vertex_count = stoull(argv[1]);
+        name = gen_star(edges, undirected, vertex_count);
     } else if (argc == 3 && !strcmp(argv[0], "mesh")) {
         name = gen_mesh(edges, undirected, stoull(argv[1]), stoull(argv[2]));
     } else if (argc == 2 && !strcmp(argv[0], "degree4")) {
-        name = gen_degree4(edges, undirected, stoull(argv[1]));
+        vertex_count = stoull(argv[1]);
+        name = gen_degree4(edges, undirected, vertex_count);
     } else if (argc == 2 && !strcmp(argv[0], "degree6")) {
-        name = gen_degree6(edges, undirected, stoull(argv[1]));
+        vertex_count = stoull(argv[1]);
+        name = gen_degree6(edges, undirected, vertex_count);
     } else if (argc == 3 && !strcmp(argv[0], "any")) {
         name = gen_anydegree(edges, undirected, stoull(argv[1]), stoull(argv[2]));
     } else if (argc == 4 && !strcmp(argv[0], "random")) {
         sorted = true;
         name = argv[1];
-        uint64_t vertex_count = stoul(argv[2]);
+        vertex_count = stoul(argv[2]);
         uint64_t edge_count = stoul(argv[3]);
         edges = random_edges<uint64_t>(undirected, vertex_count, edge_count);
     } else if (argc == 4 && !strcmp(argv[0], "random-mutations")) {
         sorted = true;
         name = argv[1];
-        uint64_t vertex_count = stoul(argv[2]);
+        vertex_count = stoul(argv[2]);
         double mutation_rate = stod(argv[3]);
         edges = random_edges<uint64_t>(undirected, vertex_count, mutation_rate);
     } else {
@@ -294,14 +301,15 @@ int main(int argc, char **argv)
     }
 
     if (undirected) {
-        if (sorted) Graph<uint64_t,uint64_t>::outputSortedUniq(name, edges);
-        else Graph<uint64_t,uint64_t>::outputUniq(name, edges);
+        if (sorted) Graph_t::outputSortedUniq(name, vertex_count, edges);
+        else Graph_t::outputUniq(name, vertex_count, edges);
     } else {
         auto rev_edges = reverse_and_sort(edges);
         if (sorted) {
-            Graph<uint64_t,uint64_t>::outputSortedUniq(name, edges, rev_edges);
+            cout << vertex_count << endl;
+            Graph_t::outputSortedUniq(name, vertex_count, edges, rev_edges);
         } else {
-            Graph<uint64_t,uint64_t>::outputUniq(name, edges, rev_edges);
+            Graph_t::outputUniq(name, vertex_count, edges, rev_edges);
         }
     }
 

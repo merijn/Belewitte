@@ -23,7 +23,7 @@ CLANGFLAGS=$(COMMON_CFLAGS) $(CLANGWFLAGS) -ftrapv
 ICCWFLAGS=-Wall -Wremarks -Wcheck -Werror -diag-disable=869,981,11074,11076
 ICC_CFLAGS=$(COMMON_CFLAGS) $(ICCWFLAGS) -xHost
 
-CC?=clang++
+CC=clang++
 CFLAGS=$(if $(findstring clang++, $(CC)), $(CLANGFLAGS), \
             $(if $(findstring icc, $(CC)), $(ICC_CFLAGS), $(COMMON_CFLAGS)))
 LDFLAGS=-lcudart -ldl -g $(EXTRA_LDFLAGS)
