@@ -14,8 +14,55 @@
 
 using namespace std;
 
+#define BIG_CONSTANT(x) (x##LLU)
+
 typedef Edge<uint64_t> edge;
 typedef Graph<uint64_t,uint64_t> Graph_t;
+
+inline uint64_t rotl64(uint64_t x, int8_t r)
+{ return (x << r) | (x >> (64 - r)); }
+
+inline uint64_t fmix64(uint64_t k)
+{
+  k ^= k >> 33;
+  k *= BIG_CONSTANT(0xff51afd7ed558ccd);
+  k ^= k >> 33;
+  k *= BIG_CONSTANT(0xc4ceb9fe1a85ec53);
+  k ^= k >> 33;
+
+  return k;
+}
+
+static inline uint64_t
+murmurhash3(uint64_t seed, uint64_t k1, uint64_t k2)
+{
+    const uint64_t c1 = BIG_CONSTANT(0x87c37b91114253d5);
+    const uint64_t c2 = BIG_CONSTANT(0x4cf5ad432745937f);
+
+    uint64_t h1 = seed;
+    uint64_t h2 = seed;
+
+    k1 *= c1; k1  = rotl64(k1,31); k1 *= c2; h1 ^= k1;
+
+    h1 = rotl64(h1,27); h1 += h2; h1 = h1*5+0x52dce729;
+
+    k2 *= c2; k2  = rotl64(k2,33); k2 *= c1; h2 ^= k2;
+
+    h2 = rotl64(h2,31); h2 += h1; h2 = h2*5+0x38495ab5;
+
+    h1 ^= 2; h2 ^= 2;
+
+    h1 += h2;
+    h2 += h1;
+
+    h1 = fmix64(h1);
+    h2 = fmix64(h2);
+
+    h1 += h2;
+    h2 += h1;
+
+    return h2;
+}
 
 template<bool undirected>
 class Crossover {
@@ -35,12 +82,13 @@ class Crossover {
         const Graph_t::Edges& edges2;
         const vector<edge>& mutations;
         const uint64_t& seed;
+        const bool reversed;
 
         Edges( const Graph_t::Edges& e1
              , const Graph_t::Edges& e2
              , const vector<edge>& muts
-             , const uint64_t& s)
-             : edges1(e1), edges2(e2), mutations(muts), seed(s)
+             , const uint64_t& s, bool rev = false)
+             : edges1(e1), edges2(e2), mutations(muts), seed(s), reversed(rev)
         {}
 
         bool empty() const
@@ -72,21 +120,24 @@ class Crossover {
 
       private:
         bool ended;
-        mt19937_64 generator;
-        uniform_int_distribution<int> crossover;
+        bool reversed;
+        uint64_t seed;
         simple_iterator<Graph<uint64_t,uint64_t>::Edges> edges1;
         simple_iterator<Graph<uint64_t,uint64_t>::Edges> edges2;
         simple_iterator<vector<edge>> mut;
         edge val;
 
+        bool crossover(uint64_t v1, uint64_t v2)
+        {
+            if (reversed) return murmurhash3(seed, v1, v2) & 1;
+            else return murmurhash3(seed, v2, v1) & 1;
+        }
+
       public:
         Iterator(const Edges &f, bool isEnd = false)
-            : ended(isEnd), crossover(0,1), edges1(f.edges1), edges2(f.edges2)
-            , mut(f.mutations) , val(0,0)
-        {
-            generator.seed(f.seed);
-            this->operator++();
-        }
+            : ended(isEnd), reversed(f.reversed), seed(f.seed)
+            , edges1(f.edges1), edges2(f.edges2), mut(f.mutations), val(0,0)
+        { this->operator++(); }
 
         bool operator==(const Iterator& it) const
         { return ended == it.ended; }
@@ -98,7 +149,7 @@ class Crossover {
         {
             bool found = false;
             while (!found && (edges1 || edges2 || mut)) {
-                if (edges1 && edges2 && *edges1 == *edges2) {
+                if (edges1 && edges2 && *edges1 == *edges2 && (!mut || *edges1 <= *mut)) {
                     if (mut && *mut == *edges1) mut++;
                     else {
                         val = *edges1;
@@ -108,7 +159,7 @@ class Crossover {
                     edges1++;
                     edges2++;
                 } else if (edges1 && (!edges2 || *edges1 < *edges2) && (!mut || *edges1 <= *mut)) {
-                    if (crossover(generator)) {
+                    if (crossover(edges1->in, edges1->out)) {
                         if (mut && *mut == *edges1) mut++;
                         else {
                             val = *edges1;
@@ -121,7 +172,7 @@ class Crossover {
                     }
                     edges1++;
                 } else if (edges2 && (!edges1 || *edges2 < *edges1) && (!mut || *edges2 <= *mut)) {
-                    if (crossover(generator)) {
+                    if (crossover(edges2->in, edges2->out)) {
                         if (mut && *mut == *edges2) mut++;
                         else {
                             val = *edges2;
@@ -165,7 +216,7 @@ class Crossover {
             , rev_mutations(reverse_and_sort(mutations))
             , vertex_count(graph1.vertex_count)
             , edges(graph1.edges, graph2.edges, mutations, seed)
-            , rev_edges(graph1.rev_edges, graph2.rev_edges, rev_mutations, seed)
+            , rev_edges(graph1.rev_edges, graph2.rev_edges, rev_mutations, seed, true)
         {
             checkError(graph1.vertex_count == graph2.vertex_count,
                     "Incompatible graphs for crossover!");
@@ -281,7 +332,6 @@ int main(int argc, char **argv)
     argv = &argv[optind];
 
     if (argc == 4 && !strcmp(argv[0], "crossover")) {
-        cerr << "crossover " << argv[1] << " " << argv[2] << " " << argv[3] << endl;
         if (undirected) {
             UndirectedCrossover crossover(argv[1], argv[2], mutation_rate);
             Graph_t::outputSortedUniq(argv[3], crossover.vertex_count,
@@ -291,10 +341,8 @@ int main(int argc, char **argv)
             Graph_t::outputSortedUniq(argv[3], crossover.vertex_count,
                     crossover.edges, crossover.rev_edges);
         }
-        cerr << "fitness " << argv[1] << endl;
         computeFitness(argv[3]);
     } else if (argc == 2 && !strcmp(argv[0], "fitness")) {
-        cerr << "fitness " << argv[1] << endl;
         computeFitness(argv[1]);
     } else {
         usage();

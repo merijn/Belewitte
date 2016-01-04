@@ -528,12 +528,14 @@ class Graph {
         size_type endVertex;
         size_type vertexId;
         size_type edgeId;
+        mutable Edge<E> value;
 
       public:
         EdgeIterator(Edges& e, bool isEnd)
           : edges(e), endVertex(edges.vertices.size - 1)
           , vertexId(isEnd ? endVertex : 0)
           , edgeId(isEnd ? e.size : 0)
+          , value(0,0)
         {
           while ( vertexId < endVertex
               && edges.vertices[vertexId + 1] - edges.vertices[vertexId] == 0)
@@ -544,12 +546,12 @@ class Graph {
 
         EdgeIterator(const EdgeIterator& it)
           : edges(it.edges), endVertex(it.endVertex), vertexId(it.vertexId)
-          , edgeId(it.edgeId)
+          , edgeId(it.edgeId), value(0,0)
         {}
 
         EdgeIterator(EdgeIterator&& it)
           : edges(it.edges), endVertex(it.endVertex), vertexId(it.vertexId)
-          , edgeId(it.edgeId)
+          , edgeId(it.edgeId), value(0,0)
         {}
 
         EdgeIterator& operator=(const EdgeIterator& it)
@@ -591,8 +593,19 @@ class Graph {
           return tmp;
         }
 
-        value_type operator*() const
-        { return Edge<E>(vertexId, edges.edges[edgeId]); }
+        reference operator*() const
+        {
+            value.in = vertexId;
+            value.out = edges.edges[edgeId];
+            return value;
+        }
+
+        pointer operator->() const
+        {
+            value.in = vertexId;
+            value.out = edges.edges[edgeId];
+            return &value;
+        }
 
         bool operator==(const EdgeIterator& it) const
         {
