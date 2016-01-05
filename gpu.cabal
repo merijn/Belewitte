@@ -1,0 +1,44 @@
+Name:                gpu
+Version:             0.1.0
+
+Homepage:            
+Bug-Reports:         
+
+Author:              Merijn Verstraaten
+Maintainer:          Merijn Verstraaten <merijn@inconsistent.nl>
+Copyright:           Copyright © 2015 Merijn Verstraaten
+
+License:             GPL-3
+License-File:        LICENSE
+
+Category:            System
+Cabal-Version:       >= 1.10
+Build-Type:          Simple
+Tested-With:         GHC == 7.10
+
+Synopsis:            
+
+Description:
+
+Executable genetic
+  Default-Language:     Haskell2010
+  GHC-Options:          -O2 -Wall -fno-warn-unused-do-bind
+                        -fno-warn-unticked-promoted-constructors
+  Main-Is:              Genetic.hs
+  Other-Modules:        Genetic
+
+  Build-Depends:        base
+               ,        async == 2.0.2.*
+               ,        containers
+               ,        directory
+               ,        mtl == 2.2.1.*
+               ,        mwc-random == 0.13.3.2.*
+               ,        random-extras == 0.19.*
+               ,        random-fu == 0.2.6.2.*
+               ,        process == 1.4.1.*
+               ,        temporary == 1.2.0.*
+               ,        transformers == 0.4.2.*
+
+Source-Repository head
+  Type:     git
+  Location: git+ssh://github.com:merijn/lambda-except
