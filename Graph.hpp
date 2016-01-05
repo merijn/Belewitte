@@ -797,6 +797,7 @@ class Graph {
 
       if (stat(fileName.c_str(), &statbuf) != 0) {
         perror("stat");
+        std::cerr << "Failed to open graph: " << fileName << std::endl;
         dump_stack_trace(EXIT_FAILURE);
       }
 
