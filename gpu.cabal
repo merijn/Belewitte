@@ -32,12 +32,18 @@ Executable genetic
                ,        containers
                ,        directory
                ,        exceptions == 0.8.0.2.*
+               ,        lens == 4.13.*
                ,        mtl == 2.2.1.*
                ,        mwc-random == 0.13.3.2.*
+               ,        optparse-applicative == 0.12.0.0.*
+               ,        pipes == 4.1.7.*
+               ,        pipes-group == 1.0.3.*
+               ,        pipes-text == 0.0.1.*
                ,        random-extras == 0.19.*
                ,        random-fu == 0.2.6.2.*
                ,        process == 1.4.1.*
                ,        temporary == 1.2.0.*
+               ,        text == 1.2.2.*
                ,        transformers == 0.4.2.*
 
 Source-Repository head

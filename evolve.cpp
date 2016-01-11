@@ -263,7 +263,7 @@ computeFitness(const string file)
         Kmax = max(Kmax, abs(density - boost::math::cdf(dist, val)));
     }
 
-    cout << (1.0 - Kmax) << " " << conn_percent << endl;
+    cout << file << " " << (1.0 - Kmax) << " " << conn_percent << endl;
 }
 
 static void __attribute__((noreturn))
