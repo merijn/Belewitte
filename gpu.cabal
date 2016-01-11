@@ -22,7 +22,7 @@ Description:
 
 Executable genetic
   Default-Language:     Haskell2010
-  GHC-Options:          -O2 -Wall -fno-warn-unused-do-bind
+  GHC-Options:          -O2 -Wall -fno-warn-unused-do-bind -threaded
                         -fno-warn-unticked-promoted-constructors
   Main-Is:              Genetic.hs
   Other-Modules:        Genetic

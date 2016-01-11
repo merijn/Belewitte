@@ -16,6 +16,7 @@ import Data.Ord (comparing)
 import Data.Random hiding (runRVar)
 import qualified Data.Random
 import Data.Random.Shuffle.Weighted
+import GHC.Conc
 import qualified System.Directory (removeFile)
 import System.IO
 import System.Process
@@ -58,9 +59,9 @@ runRVar var = asks gen >>= liftIO . Data.Random.runRVar var
 
 type ProcHandles = (Maybe Handle, Maybe Handle, Maybe Handle)
 
-defaultProc :: CreateProcess
-defaultProc = CreateProcess
-      { cmdspec = ShellCommand "/usr/bin/env true"
+defaultProc :: [String] -> CreateProcess
+defaultProc l = CreateProcess
+      { cmdspec = RawCommand "srun" $ ["-Q", "-c1", "-n1", "--share"] ++ l
       , cwd = Nothing
       , env = Nothing
       , std_in = Inherit
@@ -193,6 +194,8 @@ runEvolution s act = runReaderT (execStateT act []) s
 
 main :: IO ()
 main = do
+    getNumProcessors >>= setNumCapabilities
+
     gen <- createSystemRandom
     let popSize = 100
         numChildren = 100
