@@ -306,7 +306,6 @@ int main(int argc, char **argv)
     } else {
         auto rev_edges = reverse_and_sort(edges);
         if (sorted) {
-            cout << vertex_count << endl;
             Graph_t::outputSortedUniq(name, vertex_count, edges, rev_edges);
         } else {
             Graph_t::outputUniq(name, vertex_count, edges, rev_edges);

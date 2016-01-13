@@ -1,37 +1,31 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 module Main where
 
-import Control.Lens (view)
+import Control.Concurrent.Async (mapConcurrently)
+import Control.Exception (ErrorCall(..))
 import Control.Monad.Catch
-import Control.Monad.Trans
-import Control.Monad.RWS hiding (reader)
+import Control.Monad.Reader
+import Control.Monad.State.Strict
 import qualified Data.Random as Random
 import Data.Random.Shuffle.Weighted
 import Data.Set (Set)
 import qualified Data.Set as S
-import Data.Text (Text)
-import Data.Text.Read (double)
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
+import GHC.Conc
 import Options.Applicative
-import Pipes
-import qualified Pipes.Prelude as P
-import qualified Pipes.Group as P
-import qualified Pipes.Text as P
-import Pipes.Text.IO
 import qualified System.Directory (removeFile)
 import System.IO
 import System.Process
 import System.Random.MWC (createSystemRandom, GenIO)
 
-data EvolveState
-    = EvolveState
+data EvolveConfig
+    = EvolveConfig
     { gen :: GenIO
     , popSize :: Int
     , numChildren :: Int
@@ -40,60 +34,97 @@ data EvolveState
     , mutationRate :: Double
     , keepPercent :: Double
     , numGenerations :: Int
+    , initialPopulation :: [FilePath]
     }
 
-type Batchable t m = (Traversable t, MonadMask m, MonadIO m)
-type EvolveM = RWST EvolveState () (Set (Double, Text)) IO
+type ProcHandles = (Maybe Handle, Maybe Handle, Maybe Handle, ProcessHandle)
+type SlurmJob = ReaderT EvolveConfig (ReaderT Int IO)
+type EvolveM = ReaderT EvolveConfig IO
+type PopulationM = StateT (Set (Double, FilePath)) EvolveM
+type MonadEvolve m = (MonadIO m, MonadReader EvolveConfig m, MonadThrow m)
 
-showText :: Show a => a -> Text
-showText = T.pack . show
-
-allocFile :: MonadIO m => m Text
+allocFile :: MonadIO m => m FilePath
 allocFile = liftIO $ do
     (path, hnd) <- openBinaryTempFile "./" "test.graph"
     hClose hnd
-    return $ T.pack path
+    return path
 
-removeFile :: MonadIO m => Text -> m ()
-removeFile = liftIO . System.Directory.removeFile . T.unpack
+removeFile :: MonadIO m => FilePath -> m ()
+removeFile = liftIO . System.Directory.removeFile
 
-runRVar :: (MonadIO m, MonadReader EvolveState m) => Random.RVar a -> m a
-runRVar var = asks gen >>= liftIO . Random.runRVar var
-
-runBatch :: Batchable t m => (Handle -> IO b) -> Int -> t Text -> m b
-runBatch readOutput n jobs = do
-    bracket launchProc cleanup $ \(hin, hout, _) -> do
-        mapM_ (launchJob hin) jobs
-        liftIO $ do
-            hPutStrLn hin "wait"
-            hClose hin
-            readOutput hout
+withProcess
+    :: (MonadIO m, MonadThrow m)
+    => CreateProcess
+    -> (ProcHandles -> IO b)
+    -> m b
+withProcess process getResult = go (5 :: Int)
   where
-    launchProc = liftIO $ do
-        let process = proc "salloc"
-                ["-Q", "-n", show n, "--ntasks-per-core=1", "--share"]
-        (Just hin, Just hout, Nothing, pid) <- createProcess process
-            { std_in = CreatePipe, std_out = CreatePipe }
-        return (hin, hout, pid)
+    showCmd (ShellCommand s) = s
+    showCmd (RawCommand exe args) = unwords (exe:args)
 
-    cleanup (hin, hout, pid) = liftIO $ do
-        hClose hin
-        hClose hout
+    go 0 = throwM . ErrorCall $ "Failed to run: " ++ showCmd (cmdspec process)
+    go n = do
+        result <- liftIO . try $ bracket (createProcess process) cleanup work
+        case result of
+            Right v -> return v
+            Left (SomeException e) -> do
+                liftIO . hPutStrLn stderr $ show e
+                go (n-1)
+
+    work handles@(_, _, _, pid) = do
+        result <- getResult handles
+        liftIO $ waitForProcess pid
+        return result
+
+    cleanup (hin, hout, herr, pid) = do
+        mapM_ hClose hin
+        mapM_ hClose hout
+        mapM_ hClose herr
+        terminateProcess pid
         waitForProcess pid
 
-    launchJob hin s = liftIO $ do
-        T.hPutStrLn hin $  mconcat
-            [ "srun -Q -N1 -n1 --ntasks-per-core=1 --share --overcommit "
-            , s, " 2> >(grep -v \"srun: cluster configuration lacks support for cpu binding\") &"
-            ]
+execSlurmJob :: EvolveConfig -> Int -> SlurmJob a -> IO a
+execSlurmJob cfg i job = runReaderT (runReaderT job cfg) i
 
-batchRun_ :: Batchable t m => t a -> (a -> m Text) -> m ()
-batchRun_ coll f = mapM f coll >>= runBatch (const $ return ()) (length coll)
+runJob :: (String -> b) -> [String] -> SlurmJob b
+runJob f args = do
+    jid <- lift ask
+    let process = (proc "srun" (srunArgs ++ args)){ std_out = CreatePipe }
+        srunArgs = [ "-Q", "-N1", "-n1", "--ntasks-per-core=1", "--share"
+                   , "--overcommit", "--jobid=" ++ show jid]
+    withProcess process $ \case
+        (_, Just hout, _, _) -> f <$> hGetLine hout
+        _ -> throwM . ErrorCall $ "Could not read stdout"
 
-filterPop :: (Eq a, MonadState (Set a) m) => (a -> m Bool) -> m ()
-filterPop f = get >>= fmap S.fromAscList . filterM f . S.toAscList >>= put
+runJob_ :: [String] -> SlurmJob ()
+runJob_ = runJob (const ())
 
-crossoverPairs :: EvolveM [(Text, Text)]
+getFitness :: String -> (Double, FilePath)
+getFitness s
+    | [path, fitness, connectivity] <- words s = (read fitness * read connectivity, path)
+    | otherwise = error $ "Incorrect output: " ++ s
+
+computeFitness :: FilePath -> SlurmJob (Double, FilePath)
+computeFitness graph = runJob getFitness ["./evolve", "fitness", graph]
+
+genGraph :: SlurmJob (Double, FilePath)
+genGraph = do
+    EvolveConfig{..} <- ask
+    graph <- allocFile
+    runJob_ ["./gen-graph", "random", graph, show vertexCount, show edgeCount]
+    computeFitness graph
+
+crossover :: FilePath -> FilePath -> SlurmJob (Double, FilePath)
+crossover graph1 graph2 = do
+    EvolveConfig{..} <- ask
+    output <- allocFile
+    runJob getFitness [ "./evolve", "crossover", "--mutation-rate"
+                      , show mutationRate, graph1, graph2, output]
+
+runRVar :: Random.RVar a -> PopulationM a
+runRVar var = asks gen >>= liftIO . Random.runRVar var
+
+crossoverPairs :: PopulationM [(FilePath, FilePath)]
 crossoverPairs = do
     n <- asks numChildren
     cdfMap <- cdfMapFromList . S.toList <$> get
@@ -102,30 +133,35 @@ crossoverPairs = do
         (_, y) <- weightedChoiceExtractCDF remainder
         return (x, y)
 
-growPopulation :: Traversable t => t a -> (a -> EvolveM Text) -> EvolveM ()
-growPopulation c f = do
-    jobs <- mapM f c
-    newIndividuals <- runBatch reader (length c) jobs
+growPopulation :: [a] -> (a -> SlurmJob (Double, FilePath)) -> PopulationM ()
+growPopulation jobs _ | null jobs = return ()
+growPopulation jobs f = do
+    config <- ask
+    newIndividuals <- bracket (withProcess salloc getJobId) killAlloc $ \jid ->
+        liftIO $ mapConcurrently (execSlurmJob config jid . f) jobs
+
     modify . S.union . S.fromList $ newIndividuals
   where
-    handleToLines = P.concats . view P.lines . fromHandle
+    salloc = (proc "salloc" sallocArgs){ std_err = CreatePipe }
+    sallocArgs = [ "-n", show (length jobs), "--ntasks-per-core=1", "--share"
+                 , "--no-shell"]
 
-    reader hout = P.toListM $ handleToLines hout >-> P.mapM fitnessResult
+    getJobId :: ProcHandles -> IO Int
+    getJobId (_, _, Just herr, _) = do
+         (_:_:_:_:jid:_) <- words <$> hGetLine herr
+         return $ read jid
+    getJobId _ = throwM . ErrorCall $ "Couldn't read stderr!"
 
-    fitnessResult :: Text -> IO (Double, Text)
-    fitnessResult s
-        | [path, fitness, connectivity] <- T.words s =
-            return (toDouble fitness * toDouble connectivity, path)
+    killAlloc :: (MonadIO m, MonadThrow m) => Int -> m ()
+    killAlloc i = withProcess (proc "scancel" [show i]) $ \(_,_,_,pid) ->
+        void $ waitForProcess pid
 
-        | otherwise = error $ "Shouldn't happen: " ++ show s
-      where
-        toDouble d = case double d of
-            Right (v, _) -> v
-            Left e -> error $ "Shouldn't happen: " ++ e
+filterPop :: (Eq a, MonadState (Set a) m) => (a -> m Bool) -> m ()
+filterPop f = get >>= fmap S.fromAscList . filterM f . S.toAscList >>= put
 
-trimPopulation :: EvolveM ()
+trimPopulation :: PopulationM ()
 trimPopulation = do
-    EvolveState{..} <- ask
+    EvolveConfig{..} <- ask
     let top = round $ fromIntegral popSize * keepPercent
     best <- gets $ map snd . take top . S.toDescList
     remainder <- gets $ drop top . S.toDescList
@@ -144,7 +180,7 @@ data Stats
     , stdDev :: !Double
     } deriving (Show)
 
-analysis :: EvolveM Stats
+analysis :: PopulationM Stats
 analysis = do
     vs@(v:_) <- gets $ map fst . S.toList
     return $! go 0 v v 0 0 0 vs
@@ -158,16 +194,11 @@ analysis = do
          delta = x - m
          nm = m + delta/(n + 1)
 
-runEvolution :: EvolveState -> EvolveM a -> IO (Set (Double, Text))
-runEvolution s act = fst <$> execRWST act s S.empty
+runEvolution :: EvolveConfig -> PopulationM a -> IO (Set (Double, FilePath))
+runEvolution s act = runReaderT (execStateT act S.empty) s
 
-{-
- - showDefault :: Show a => Mod f a Source
- - noArgError :: ParseError -> Mod OptionFields a
- -}
-
-evolveState :: GenIO -> Parser EvolveState
-evolveState gen = EvolveState gen
+evolveConfig :: GenIO -> Parser EvolveConfig
+evolveConfig gen = EvolveConfig gen
     <$> option auto population
     <*> option auto children
     <*> option auto vertices
@@ -175,61 +206,57 @@ evolveState gen = EvolveState gen
     <*> option auto mutations
     <*> option auto topIndividuals
     <*> option auto generations
+    <*> many (strArgument initPopulation)
   where
     population = mconcat
         [ short 'p', long "population", value 100, metavar "SIZE"
-        , help "Size of population" ]
+        , help "Size of population", showDefault ]
     children = mconcat
         [ short 'c', long "children", value 100, metavar "NUM"
-        , help "Number of children each generation" ]
+        , help "Number of children each generation", showDefault ]
     vertices = mconcat
         [ short 'v', long "vertices", metavar "NUM", help "Number of vertices" ]
     edges = mconcat
         [ short 'e', long "edges", metavar "NUM", help "Number of initial edges" ]
     mutations = mconcat
         [ short 'm', long "mutation-rate", value 0.001, metavar "PERCENT"
-        , help "Mutation rate" ]
+        , help "Mutation rate", showDefault ]
     topIndividuals = mconcat
         [ short 't', long "top-percent", value 0.05, metavar "PERCENT"
-        , help "Top individuals" ]
+        , help "Top individuals", showDefault ]
     generations = mconcat
         [ short 'n', long "num-generations", value 1000, metavar "NUM"
-        , help "Number of generations to run" ]
+        , help "Number of generations to run", showDefault ]
+    initPopulation = mconcat
+        [ metavar "GRAPHS", help "Initial population seed" ]
 
-programOpts :: GenIO -> ParserInfo EvolveState
-programOpts gen = info (helper <*> evolveState gen)
+programOpts :: GenIO -> ParserInfo EvolveConfig
+programOpts gen = info (helper <*> evolveConfig gen)
     ( fullDesc
     <> progDesc "Evolve graphs with uniform degree distribution using SLURM"
     <> header "genetic - generate graphs via evolutionary computing" )
 
 main :: IO ()
 main = do
-    config@EvolveState{..} <- createSystemRandom >>= execParser . programOpts
+    getNumProcessors >>= setNumCapabilities
+
+    config@EvolveConfig{..} <- createSystemRandom >>= execParser . programOpts
 
     result <- runEvolution config $ do
-        newGraphs <- replicateM popSize allocFile
+        let newIndividuals = max 0 (popSize - length initialPopulation)
 
-        batchRun_ newGraphs $ \graph -> do
-            return . T.unwords $ [ "./gen-graph", "random", graph
-                                 , showText vertexCount, showText edgeCount]
+        growPopulation initialPopulation $ computeFitness
+        growPopulation [1..newIndividuals] $ const genGraph
+        trimPopulation
 
-        growPopulation newGraphs $ \graph ->
-            return . T.unwords $ ["./evolve", "fitness", graph]
-
-        liftIO $ putStrLn "Generated population!"
         analysis >>= liftIO . print
 
         replicateM_ numGenerations $ do
             pairs <- crossoverPairs
-            growPopulation pairs $ \(graph1, graph2) -> do
-                output <- allocFile
-                return . T.unwords $
-                    ["./evolve", "crossover", "--mutation-rate"]
-                    ++ [showText mutationRate, graph1, graph2, output]
-
+            growPopulation pairs $ uncurry crossover
             trimPopulation
             analysis >>= liftIO . print
 
     forM_ (S.toAscList result) $ \(fitness, path) -> do
-        T.putStr $ path <> ": "
+        putStr $ path <> ": "
         print fitness
