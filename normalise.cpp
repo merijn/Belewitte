@@ -165,6 +165,8 @@ int main(int argc, char **argv)
             case '?':
                 usage(EXIT_SUCCESS);
 
+            case 0: break;
+
             case ':':
                 cerr << "Missing option for flag '" << optopt << "'." << endl;
                 FALLTHROUGH;
