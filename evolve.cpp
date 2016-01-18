@@ -19,54 +19,108 @@ using namespace std;
 typedef Edge<uint64_t> edge;
 typedef Graph<uint64_t,uint64_t> Graph_t;
 
-inline uint64_t rotl64(uint64_t x, int8_t r)
-{ return (x << r) | (x >> (64 - r)); }
+enum class CrossoverType : int {
+    SinglePoint,
+    Pointwise
+};
 
-inline uint64_t fmix64(uint64_t k)
-{
-  k ^= k >> 33;
-  k *= BIG_CONSTANT(0xff51afd7ed558ccd);
-  k ^= k >> 33;
-  k *= BIG_CONSTANT(0xc4ceb9fe1a85ec53);
-  k ^= k >> 33;
+class CrossoverFun {
+    public:
+        virtual ~CrossoverFun();
+        virtual bool operator()(bool, uint64_t, uint64_t) const = 0;
+};
 
-  return k;
-}
+CrossoverFun::~CrossoverFun() {}
 
-static inline uint64_t
-murmurhash3(uint64_t seed, uint64_t k1, uint64_t k2)
-{
-    const uint64_t c1 = BIG_CONSTANT(0x87c37b91114253d5);
-    const uint64_t c2 = BIG_CONSTANT(0x4cf5ad432745937f);
+class SinglePointCrossover : public CrossoverFun {
+    const uint64_t point;
 
-    uint64_t h1 = seed;
-    uint64_t h2 = seed;
+    static uint64_t getCrossoverPoint(uint64_t vertex_count)
+    {
+        random_device rd;
+        mt19937 gen(rd());
+        uniform_int_distribution<uint64_t> distribution(0, vertex_count - 1);
+        return distribution(gen);
+    }
 
-    k1 *= c1; k1  = rotl64(k1,31); k1 *= c2; h1 ^= k1;
+    public:
+        SinglePointCrossover(uint64_t vertex_count)
+        : point(getCrossoverPoint(vertex_count))
+        {}
 
-    h1 = rotl64(h1,27); h1 += h2; h1 = h1*5+0x52dce729;
+        virtual ~SinglePointCrossover();
 
-    k2 *= c2; k2  = rotl64(k2,33); k2 *= c1; h2 ^= k2;
+        bool operator()(bool first, uint64_t in, uint64_t) const override
+        {
+            bool isFirstHalf = in <= point;
+            return first ? isFirstHalf : !isFirstHalf;
+        }
+};
 
-    h2 = rotl64(h2,31); h2 += h1; h2 = h2*5+0x38495ab5;
+SinglePointCrossover::~SinglePointCrossover() {}
 
-    h1 ^= 2; h2 ^= 2;
+class PointwiseCrossover : public CrossoverFun {
+    const uint64_t seed;
 
-    h1 += h2;
-    h2 += h1;
+    static inline uint64_t rotl64(uint64_t x, int8_t r)
+    { return (x << r) | (x >> (64 - r)); }
 
-    h1 = fmix64(h1);
-    h2 = fmix64(h2);
+    static inline uint64_t fmix64(uint64_t k)
+    {
+        k ^= k >> 33;
+        k *= BIG_CONSTANT(0xff51afd7ed558ccd);
+        k ^= k >> 33;
+        k *= BIG_CONSTANT(0xc4ceb9fe1a85ec53);
+        k ^= k >> 33;
 
-    h1 += h2;
-    h2 += h1;
+        return k;
+    }
 
-    return h2;
-}
+    inline uint64_t
+    murmurhash3(uint64_t k1, uint64_t k2) const
+    {
+        const uint64_t c1 = BIG_CONSTANT(0x87c37b91114253d5);
+        const uint64_t c2 = BIG_CONSTANT(0x4cf5ad432745937f);
+
+        uint64_t h1 = seed;
+        uint64_t h2 = seed;
+
+        k1 *= c1; k1  = rotl64(k1,31); k1 *= c2; h1 ^= k1;
+
+        h1 = rotl64(h1,27); h1 += h2; h1 = h1*5+0x52dce729;
+
+        k2 *= c2; k2  = rotl64(k2,33); k2 *= c1; h2 ^= k2;
+
+        h2 = rotl64(h2,31); h2 += h1; h2 = h2*5+0x38495ab5;
+
+        h1 ^= 2; h2 ^= 2;
+
+        h1 += h2;
+        h2 += h1;
+
+        h1 = fmix64(h1);
+        h2 = fmix64(h2);
+
+        h1 += h2;
+        h2 += h1;
+
+        return h2;
+    }
+
+    public:
+        PointwiseCrossover(uint64_t) : seed(random_device()())
+        {}
+
+        virtual ~PointwiseCrossover();
+
+        bool operator()(bool, uint64_t k1, uint64_t k2) const override
+        { return murmurhash3(k1, k2) & 1; }
+};
+
+PointwiseCrossover::~PointwiseCrossover() {}
 
 template<bool undirected>
 class Crossover {
-    const uint64_t seed;
     const Graph_t graph1;
     const Graph_t graph2;
     const vector<edge> mutations;
@@ -74,21 +128,41 @@ class Crossover {
 
     class Iterator;
 
+    class CrossoverSelect {
+        const SinglePointCrossover singlepoint;
+        const PointwiseCrossover pointwise;
+
+        public:
+            CrossoverSelect(uint64_t numVertices)
+            : singlepoint(numVertices)
+            , pointwise(numVertices)
+            {}
+
+            const CrossoverFun& getCrossover(CrossoverType t) const
+            {
+                switch (t) {
+                    case CrossoverType::SinglePoint: return singlepoint; break;
+                    case CrossoverType::Pointwise: return pointwise; break;
+                }
+            }
+    };
+
     struct Edges {
         typedef Iterator const_iterator;
         typedef std::reverse_iterator<const_iterator> const_reverse_iterator;
 
+        const CrossoverFun& crossover;
         const Graph_t::Edges& edges1;
         const Graph_t::Edges& edges2;
         const vector<edge>& mutations;
-        const uint64_t& seed;
         const bool reversed;
 
-        Edges( const Graph_t::Edges& e1
+        Edges( const CrossoverFun &f
+             , const Graph_t::Edges& e1
              , const Graph_t::Edges& e2
              , const vector<edge>& muts
-             , const uint64_t& s, bool rev = false)
-             : edges1(e1), edges2(e2), mutations(muts), seed(s), reversed(rev)
+             , bool rev = false)
+             : crossover(f), edges1(e1), edges2(e2), mutations(muts), reversed(rev)
         {}
 
         bool empty() const
@@ -121,21 +195,21 @@ class Crossover {
       private:
         bool ended;
         bool reversed;
-        uint64_t seed;
+        const CrossoverFun& doCrossover;
         simple_iterator<Graph<uint64_t,uint64_t>::Edges> edges1;
         simple_iterator<Graph<uint64_t,uint64_t>::Edges> edges2;
         simple_iterator<vector<edge>> mut;
         edge val;
 
-        bool crossover(uint64_t v1, uint64_t v2)
+        bool crossover(bool b, uint64_t v1, uint64_t v2)
         {
-            if (reversed) return murmurhash3(seed, v1, v2) & 1;
-            else return murmurhash3(seed, v2, v1) & 1;
+            if (reversed) return doCrossover(b, v1, v2);
+            else return doCrossover(b, v2, v1);
         }
 
       public:
         Iterator(const Edges &f, bool isEnd = false)
-            : ended(isEnd), reversed(f.reversed), seed(f.seed)
+            : ended(isEnd), reversed(f.reversed), doCrossover(f.crossover)
             , edges1(f.edges1), edges2(f.edges2), mut(f.mutations), val(0,0)
         { this->operator++(); }
 
@@ -159,7 +233,7 @@ class Crossover {
                     edges1++;
                     edges2++;
                 } else if (edges1 && (!edges2 || *edges1 < *edges2) && (!mut || *edges1 <= *mut)) {
-                    if (crossover(edges1->in, edges1->out)) {
+                    if (crossover(true, edges1->in, edges1->out)) {
                         if (mut && *mut == *edges1) mut++;
                         else {
                             val = *edges1;
@@ -172,7 +246,7 @@ class Crossover {
                     }
                     edges1++;
                 } else if (edges2 && (!edges1 || *edges2 < *edges1) && (!mut || *edges2 <= *mut)) {
-                    if (crossover(edges2->in, edges2->out)) {
+                    if (crossover(false, edges2->in, edges2->out)) {
                         if (mut && *mut == *edges2) mut++;
                         else {
                             val = *edges2;
@@ -207,16 +281,18 @@ class Crossover {
 
     public:
         Crossover
-            ( std::string g1
+            ( CrossoverType type
+            , std::string g1
             , std::string g2
             , double mutation_rate
             )
-            : seed(random_device()()), graph1(g1), graph2(g2)
+            : graph1(g1), graph2(g2)
             , mutations(random_edges<uint64_t>(undirected, graph1.vertex_count, mutation_rate))
             , rev_mutations(reverse_and_sort(mutations))
             , vertex_count(graph1.vertex_count)
-            , edges(graph1.edges, graph2.edges, mutations, seed)
-            , rev_edges(graph1.rev_edges, graph2.rev_edges, rev_mutations, seed, true)
+            , select(vertex_count)
+            , edges(select.getCrossover(type), graph1.edges, graph2.edges, mutations)
+            , rev_edges(select.getCrossover(type), graph1.rev_edges, graph2.rev_edges, rev_mutations, true)
         {
             checkError(graph1.vertex_count == graph2.vertex_count,
                     "Incompatible graphs for crossover!");
@@ -226,6 +302,7 @@ class Crossover {
         }
 
         const uint64_t vertex_count;
+        const CrossoverSelect select;
         Edges edges;
         Edges rev_edges;
 };
@@ -274,7 +351,8 @@ usage(int exitCode = EXIT_FAILURE)
     out << execName << " [--help | -h]" << endl;
     out << execName << " fitness <graph>" << endl;
     out << execName << " [--directed | -d] [--undirected | -u] "
-         << "[--mutation-rate <rate> | -m <rate>] crossover <graph 1> "
+         << "[--mutation-rate <rate> | -m <rate>] "
+         << "[ --single-point | --pointwise ] crossover <graph 1> "
          << "<graph 2> <output graph>" << endl;
     exit(exitCode);
 }
@@ -284,10 +362,15 @@ int main(int argc, char **argv)
     std::string name = argv[0];
     int undirected = false;
     double mutation_rate = 0.01;
+    CrossoverType crossoverType = CrossoverType::Pointwise;
     const char *optString = ":dm:uh?";
     static const struct option longopts[] = {
         { "directed", no_argument, &undirected, false},
         { "undirected", no_argument, &undirected, true},
+        { "single-point", no_argument, reinterpret_cast<int*>(&crossoverType),
+            static_cast<int>(CrossoverType::SinglePoint)},
+        { "pointwise", no_argument, reinterpret_cast<int*>(&crossoverType),
+            static_cast<int>(CrossoverType::Pointwise)},
         { "mutation-rate", required_argument, nullptr, 'm' },
         { "help", no_argument, nullptr, 'h' },
         { nullptr, 0, nullptr, 0 },
@@ -333,11 +416,11 @@ int main(int argc, char **argv)
 
     if (argc == 4 && !strcmp(argv[0], "crossover")) {
         if (undirected) {
-            UndirectedCrossover crossover(argv[1], argv[2], mutation_rate);
+            UndirectedCrossover crossover(crossoverType, argv[1], argv[2], mutation_rate);
             Graph_t::outputSortedUniq(argv[3], crossover.vertex_count,
                                       crossover.edges);
         } else {
-            DirectedCrossover crossover(argv[1], argv[2], mutation_rate);
+            DirectedCrossover crossover(crossoverType, argv[1], argv[2], mutation_rate);
             Graph_t::outputSortedUniq(argv[3], crossover.vertex_count,
                     crossover.edges, crossover.rev_edges);
         }
