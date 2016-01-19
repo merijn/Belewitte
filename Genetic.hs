@@ -13,6 +13,7 @@ import Control.Exception (ErrorCall(..))
 import Control.Monad.Catch
 import Control.Monad.Reader
 import Control.Monad.State.Strict
+import Data.List (isPrefixOf)
 import qualified Data.Random as Random
 import Data.Random.Shuffle.Weighted
 import Data.Set (Set)
@@ -21,8 +22,21 @@ import GHC.Conc
 import Options.Applicative
 import qualified System.Directory (removeFile)
 import System.IO
+import System.IO.Error (isEOFError)
 import System.Process
 import System.Random.MWC (createSystemRandom, GenIO)
+
+data CrossoverType = SinglePoint | Pointwise
+
+instance Show CrossoverType where
+    show SinglePoint = "single-point"
+    show Pointwise = "pointwise"
+
+instance Read CrossoverType where
+    readsPrec _ s
+        | "pointwise" `isPrefixOf` s = [(Pointwise, drop 9 s)]
+        | "single-point" `isPrefixOf` s = [(Pointwise, drop 12 s)]
+        | otherwise = []
 
 data EvolveConfig
     = EvolveConfig
@@ -34,6 +48,7 @@ data EvolveConfig
     , mutationRate :: Double
     , keepPercent :: Double
     , numGenerations :: Int
+    , crossoverType :: CrossoverType
     , initialPopulation :: [FilePath]
     }
 
@@ -90,10 +105,11 @@ runJob :: (String -> b) -> [String] -> SlurmJob b
 runJob f args = do
     jid <- lift ask
     let process = (proc "srun" (srunArgs ++ args)){ std_out = CreatePipe }
-        srunArgs = [ "-Q", "-N1", "-n1", "--ntasks-per-core=1", "--share"
-                   , "--overcommit", "--jobid=" ++ show jid]
+        srunArgs = [ "-Q", "-N1", "-n1", "--ntasks-per-node=16", "--share"
+                   , "--jobid=" ++ show jid]
     withProcess process $ \case
-        (_, Just hout, _, _) -> f <$> hGetLine hout
+        (_, Just hout, _, _) ->
+            f <$> catchIf isEOFError (hGetLine hout) (const $ return "")
         _ -> throwM . ErrorCall $ "Could not read stdout"
 
 runJob_ :: [String] -> SlurmJob ()
@@ -114,12 +130,13 @@ genGraph = do
     runJob_ ["./gen-graph", "random", graph, show vertexCount, show edgeCount]
     computeFitness graph
 
-crossover :: FilePath -> FilePath -> SlurmJob (Double, FilePath)
-crossover graph1 graph2 = do
+crossover :: CrossoverType -> FilePath -> FilePath -> SlurmJob (Double, FilePath)
+crossover crossType graph1 graph2 = do
     EvolveConfig{..} <- ask
     output <- allocFile
-    runJob getFitness [ "./evolve", "crossover", "--mutation-rate"
-                      , show mutationRate, graph1, graph2, output]
+    runJob getFitness [ "./evolve", "crossover", "--" ++ show crossType
+                      , "--mutation-rate" , show mutationRate, graph1, graph2
+                      , output]
 
 runRVar :: Random.RVar a -> PopulationM a
 runRVar var = asks gen >>= liftIO . Random.runRVar var
@@ -143,7 +160,7 @@ growPopulation jobs f = do
     modify . S.union . S.fromList $ newIndividuals
   where
     salloc = (proc "salloc" sallocArgs){ std_err = CreatePipe }
-    sallocArgs = [ "-n", show (length jobs), "--ntasks-per-core=1", "--share"
+    sallocArgs = [ "-n", show (length jobs), "--ntasks-per-node=16", "--share"
                  , "--no-shell"]
 
     getJobId :: ProcHandles -> IO Int
@@ -206,6 +223,7 @@ evolveConfig gen = EvolveConfig gen
     <*> option auto mutations
     <*> option auto topIndividuals
     <*> option auto generations
+    <*> option auto crossType
     <*> many (strArgument initPopulation)
   where
     population = mconcat
@@ -227,6 +245,9 @@ evolveConfig gen = EvolveConfig gen
     generations = mconcat
         [ short 'n', long "num-generations", value 1000, metavar "NUM"
         , help "Number of generations to run", showDefault ]
+    crossType = mconcat
+        [ long "crossover-type", value Pointwise, metavar "CROSSOVER"
+        , help "Type of crossover to use", showDefault ]
     initPopulation = mconcat
         [ metavar "GRAPHS", help "Initial population seed" ]
 
@@ -249,13 +270,16 @@ main = do
         growPopulation [1..newIndividuals] $ const genGraph
         trimPopulation
 
+        liftIO $ putStr "Generation #0: "
         analysis >>= liftIO . print
 
-        replicateM_ numGenerations $ do
+        forM_ [1..numGenerations] $ \i -> do
             pairs <- crossoverPairs
-            growPopulation pairs $ uncurry crossover
+            growPopulation pairs . uncurry $ crossover crossoverType
             trimPopulation
-            analysis >>= liftIO . print
+            analysis >>= \stats -> liftIO $ do
+                putStr $ "Generation #" ++ show i ++ ": "
+                print stats
 
     forM_ (S.toAscList result) $ \(fitness, path) -> do
         putStr $ path <> ": "
