@@ -21,7 +21,8 @@ typedef Graph<uint64_t,uint64_t> Graph_t;
 
 enum class CrossoverType : int {
     SinglePoint,
-    Pointwise
+    VertexWise,
+    EdgeWise
 };
 
 class CrossoverFun {
@@ -59,65 +60,92 @@ class SinglePointCrossover : public CrossoverFun {
 
 SinglePointCrossover::~SinglePointCrossover() {}
 
-class PointwiseCrossover : public CrossoverFun {
-    const uint64_t seed;
+class MurmurHashCrossover : public CrossoverFun {
+    protected:
+        const uint64_t seed;
 
-    static inline uint64_t rotl64(uint64_t x, int8_t r)
-    { return (x << r) | (x >> (64 - r)); }
+        static inline uint64_t rotl64(uint64_t x, int8_t r)
+        { return (x << r) | (x >> (64 - r)); }
 
-    static inline uint64_t fmix64(uint64_t k)
-    {
-        k ^= k >> 33;
-        k *= BIG_CONSTANT(0xff51afd7ed558ccd);
-        k ^= k >> 33;
-        k *= BIG_CONSTANT(0xc4ceb9fe1a85ec53);
-        k ^= k >> 33;
+        static inline uint64_t fmix64(uint64_t k)
+        {
+            k ^= k >> 33;
+            k *= BIG_CONSTANT(0xff51afd7ed558ccd);
+            k ^= k >> 33;
+            k *= BIG_CONSTANT(0xc4ceb9fe1a85ec53);
+            k ^= k >> 33;
 
-        return k;
-    }
+            return k;
+        }
 
-    inline uint64_t
-    murmurhash3(uint64_t k1, uint64_t k2) const
-    {
-        const uint64_t c1 = BIG_CONSTANT(0x87c37b91114253d5);
-        const uint64_t c2 = BIG_CONSTANT(0x4cf5ad432745937f);
+        inline uint64_t
+        murmurhash3(uint64_t k1, uint64_t k2) const
+        {
+            const uint64_t c1 = BIG_CONSTANT(0x87c37b91114253d5);
+            const uint64_t c2 = BIG_CONSTANT(0x4cf5ad432745937f);
 
-        uint64_t h1 = seed;
-        uint64_t h2 = seed;
+            uint64_t h1 = seed;
+            uint64_t h2 = seed;
 
-        k1 *= c1; k1  = rotl64(k1,31); k1 *= c2; h1 ^= k1;
+            k1 *= c1; k1  = rotl64(k1,31); k1 *= c2; h1 ^= k1;
 
-        h1 = rotl64(h1,27); h1 += h2; h1 = h1*5+0x52dce729;
+            h1 = rotl64(h1,27); h1 += h2; h1 = h1*5+0x52dce729;
 
-        k2 *= c2; k2  = rotl64(k2,33); k2 *= c1; h2 ^= k2;
+            k2 *= c2; k2  = rotl64(k2,33); k2 *= c1; h2 ^= k2;
 
-        h2 = rotl64(h2,31); h2 += h1; h2 = h2*5+0x38495ab5;
+            h2 = rotl64(h2,31); h2 += h1; h2 = h2*5+0x38495ab5;
 
-        h1 ^= 2; h2 ^= 2;
+            h1 ^= 2; h2 ^= 2;
 
-        h1 += h2;
-        h2 += h1;
+            h1 += h2;
+            h2 += h1;
 
-        h1 = fmix64(h1);
-        h2 = fmix64(h2);
+            h1 = fmix64(h1);
+            h2 = fmix64(h2);
 
-        h1 += h2;
-        h2 += h1;
+            h1 += h2;
+            h2 += h1;
 
-        return h2;
-    }
+            return h2;
+        }
 
     public:
-        PointwiseCrossover(uint64_t) : seed(random_device()())
+        MurmurHashCrossover(uint64_t) : seed(random_device()())
         {}
 
-        virtual ~PointwiseCrossover();
+        virtual ~MurmurHashCrossover();
+};
+
+MurmurHashCrossover::~MurmurHashCrossover() {}
+
+class VertexWiseCrossover : public MurmurHashCrossover {
+    const uint64_t seed2;
+
+    public:
+        VertexWiseCrossover(uint64_t x)
+        : MurmurHashCrossover(x), seed2(random_device()())
+        {}
+
+        virtual ~VertexWiseCrossover();
+
+        bool operator()(bool, uint64_t k1, uint64_t) const override
+        { return murmurhash3(k1, seed2) & 1; }
+};
+
+VertexWiseCrossover::~VertexWiseCrossover() {}
+
+class EdgeWiseCrossover : public MurmurHashCrossover {
+    public:
+        EdgeWiseCrossover(uint64_t x) : MurmurHashCrossover(x)
+        {}
+
+        virtual ~EdgeWiseCrossover();
 
         bool operator()(bool, uint64_t k1, uint64_t k2) const override
         { return murmurhash3(k1, k2) & 1; }
 };
 
-PointwiseCrossover::~PointwiseCrossover() {}
+EdgeWiseCrossover::~EdgeWiseCrossover() {}
 
 template<bool undirected>
 class Crossover {
@@ -130,19 +158,22 @@ class Crossover {
 
     class CrossoverSelect {
         const SinglePointCrossover singlepoint;
-        const PointwiseCrossover pointwise;
+        const VertexWiseCrossover vertexwise;
+        const EdgeWiseCrossover edgewise;
 
         public:
             CrossoverSelect(uint64_t numVertices)
             : singlepoint(numVertices)
-            , pointwise(numVertices)
+            , vertexwise(numVertices)
+            , edgewise(numVertices)
             {}
 
             const CrossoverFun& getCrossover(CrossoverType t) const
             {
                 switch (t) {
                     case CrossoverType::SinglePoint: return singlepoint; break;
-                    case CrossoverType::Pointwise: return pointwise; break;
+                    case CrossoverType::VertexWise: return vertexwise; break;
+                    case CrossoverType::EdgeWise: return edgewise; break;
                 }
             }
     };
@@ -362,15 +393,17 @@ int main(int argc, char **argv)
     std::string name = argv[0];
     int undirected = false;
     double mutation_rate = 0.01;
-    CrossoverType crossoverType = CrossoverType::Pointwise;
+    CrossoverType crossoverType = CrossoverType::EdgeWise;
     const char *optString = ":dm:uh?";
     static const struct option longopts[] = {
         { "directed", no_argument, &undirected, false},
         { "undirected", no_argument, &undirected, true},
         { "single-point", no_argument, reinterpret_cast<int*>(&crossoverType),
             static_cast<int>(CrossoverType::SinglePoint)},
-        { "pointwise", no_argument, reinterpret_cast<int*>(&crossoverType),
-            static_cast<int>(CrossoverType::Pointwise)},
+        { "vertexwise", no_argument, reinterpret_cast<int*>(&crossoverType),
+            static_cast<int>(CrossoverType::VertexWise)},
+        { "edgewise", no_argument, reinterpret_cast<int*>(&crossoverType),
+            static_cast<int>(CrossoverType::EdgeWise)},
         { "mutation-rate", required_argument, nullptr, 'm' },
         { "help", no_argument, nullptr, 'h' },
         { nullptr, 0, nullptr, 0 },
@@ -427,8 +460,10 @@ int main(int argc, char **argv)
                     crossover.edges, crossover.rev_edges);
         }
         computeFitness(argv[3]);
-    } else if (argc == 2 && !strcmp(argv[0], "fitness")) {
-        computeFitness(argv[1]);
+    } else if (argc >= 2 && !strcmp(argv[0], "fitness")) {
+        for (ssize_t i = 1; i < argc; i++) {
+            computeFitness(argv[i]);
+        }
     } else {
         usage();
     }

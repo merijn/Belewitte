@@ -13,7 +13,6 @@ import Control.Exception (ErrorCall(..))
 import Control.Monad.Catch
 import Control.Monad.Reader
 import Control.Monad.State.Strict
-import Data.List (isPrefixOf)
 import qualified Data.Random as Random
 import Data.Random.Shuffle.Weighted
 import Data.Set (Set)
@@ -26,17 +25,13 @@ import System.IO.Error (isEOFError)
 import System.Process
 import System.Random.MWC (createSystemRandom, GenIO)
 
-data CrossoverType = SinglePoint | Pointwise
+data CrossoverType = SinglePoint | VertexWise | EdgeWise deriving (Read, Show)
 
-instance Show CrossoverType where
-    show SinglePoint = "single-point"
-    show Pointwise = "pointwise"
-
-instance Read CrossoverType where
-    readsPrec _ s
-        | "pointwise" `isPrefixOf` s = [(Pointwise, drop 9 s)]
-        | "single-point" `isPrefixOf` s = [(Pointwise, drop 12 s)]
-        | otherwise = []
+renderCrossoverFlag :: CrossoverType -> String
+renderCrossoverFlag t = case t of
+    SinglePoint -> "--single-point"
+    VertexWise -> "--vertexwise"
+    EdgeWise -> "--edgewise"
 
 data EvolveConfig
     = EvolveConfig
@@ -134,7 +129,7 @@ crossover :: CrossoverType -> FilePath -> FilePath -> SlurmJob (Double, FilePath
 crossover crossType graph1 graph2 = do
     EvolveConfig{..} <- ask
     output <- allocFile
-    runJob getFitness [ "./evolve", "crossover", "--" ++ show crossType
+    runJob getFitness [ "./evolve", "crossover", renderCrossoverFlag crossType
                       , "--mutation-rate" , show mutationRate, graph1, graph2
                       , output]
 
@@ -246,7 +241,7 @@ evolveConfig gen = EvolveConfig gen
         [ short 'n', long "num-generations", value 1000, metavar "NUM"
         , help "Number of generations to run", showDefault ]
     crossType = mconcat
-        [ long "crossover-type", value Pointwise, metavar "CROSSOVER"
+        [ long "crossover-type", value EdgeWise, metavar "CROSSOVER"
         , help "Type of crossover to use", showDefault ]
     initPopulation = mconcat
         [ metavar "GRAPHS", help "Initial population seed" ]
