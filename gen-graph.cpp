@@ -314,5 +314,7 @@ int main(int argc, char **argv)
         }
     }
 
+    cout << name << endl;
+
     return 0;
 }

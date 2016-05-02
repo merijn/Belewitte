@@ -357,7 +357,7 @@ computeFitness(const string file)
         else counts.emplace_back(v.edges.size + v.rev_edges.size);
     }
 
-    boost::math::uniform_distribution<double> dist(0, graph.vertex_count);
+    boost::math::uniform_distribution<double> dist{0, 100};
     double Kmax = 0;
     sort(counts.begin(), counts.end());
     auto it = counts.begin();
