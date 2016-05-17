@@ -11,7 +11,7 @@ memcpy_SIMD(int warp_offset, int cnt, T *dest, T *src)
 }
 
 template<size_t warp_size, size_t chunk_size> static __device__ void
-warp_bfs_kernel(size_t N, unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, float *pagerank, float *new_pagerank)
+warp_pagerank(size_t N, unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, float *pagerank, float *new_pagerank)
 {
     const int THREAD_ID = (blockIdx.x * blockDim.x) + threadIdx.x;
     const int W_OFF = THREAD_ID % warp_size;
@@ -40,9 +40,7 @@ warp_bfs_kernel(size_t N, unsigned *rev_nodes, unsigned *rev_edges, unsigned *no
 template<size_t warp_size, size_t chunk_size>
 __global__ void
 vertexPullWarp(unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, size_t size, float *pagerank, float *new_pagerank)
-{
-    warp_bfs_kernel<warp_size, chunk_size>(size, rev_nodes, rev_edges, nodes, pagerank, new_pagerank);
-}
+{ warp_pagerank<warp_size, chunk_size>(size, rev_nodes, rev_edges, nodes, pagerank, new_pagerank); }
 
 template<size_t warp, size_t chunk>
 struct VertexPullWarp {

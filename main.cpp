@@ -85,6 +85,7 @@ run_with_backend
 int main(int argc, char **argv)
 {
     int algorithm = 0;
+    int variant = 0;
     size_t warp = 32;
     size_t chunk = 32;
     int verbose = false;
@@ -93,7 +94,7 @@ int main(int argc, char **argv)
     size_t platform = 0, run_count = 1;
     char *outputFile = NULL;
     char *timingsFile = NULL;
-    const char *optString = ":a:d:fn:o:p:t:vh?";
+    const char *optString = ":a:d:fn:o:p:s:t:vh?";
     static const struct option longopts[] = {
         { "algorithm", required_argument, nullptr, 'a' },
         { "device", required_argument, nullptr, 'd' },
@@ -102,6 +103,7 @@ int main(int argc, char **argv)
         { "output", required_argument, nullptr, 'o' },
         { "platform", required_argument, nullptr, 'p' },
         { "timings", required_argument, nullptr, 't' },
+        { "variant", required_argument, nullptr, 's' },
         { "verbose", no_argument, &verbose, 1},
         { "help", no_argument, nullptr, 'h' },
         { "warp", required_argument, nullptr, 'w' },
@@ -142,6 +144,10 @@ int main(int argc, char **argv)
 
             case 'p':
                 platform = static_cast<size_t>(stoi(optarg));
+                break;
+
+            case 's':
+                variant = stoi(optarg);
                 break;
 
             case 't':
@@ -193,11 +199,13 @@ int main(int argc, char **argv)
             CUDA cuda;
             run_with_backend(cuda, argc, argv, platform, device, verbose);
             switch (algorithm) {
-                //case 0:
-                //    bfs(cuda, timers, run_count, argv[optind], outputFile, warp, chunk);
-                //    break;
+                case 0:
+                    bfs(cuda, timers, run_count, argv[optind], outputFile, variant, warp, chunk);
+                    break;
+                case 1:
+                    pagerank(cuda, timers, run_count, argv[optind], outputFile, variant, warp, chunk);
+                    break;
                 default:
-                    pagerank(cuda, timers, run_count, argv[optind], outputFile, algorithm, warp, chunk);
                     break;
             }
             break;

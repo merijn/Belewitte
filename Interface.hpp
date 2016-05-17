@@ -72,9 +72,9 @@ std::tuple
 >
 loadEdgeListCSR(Backend<Platform> &p, const Graph<V,E> &graph)
 {
-    auto vertices = p.template allocConstant<V>(graph.vertices.size);
-    auto edges_in = p.template allocConstant<E>(graph.edges.size);
-    auto edges_out = p.template allocConstant<E>(graph.edges.size);
+    auto vertices = p.template allocConstant<V>(graph.raw_vertices.size);
+    auto edges_in = p.template allocConstant<E>(graph.raw_edges.size);
+    auto edges_out = p.template allocConstant<E>(graph.raw_edges.size);
 
     size_t edge = 0;
 
@@ -99,8 +99,8 @@ std::tuple
 >
 loadStructEdgeListCSR(Backend<Platform> &p, const Graph<V,E> &graph)
 {
-    auto vertices = p.template allocConstant<V>(graph.vertices.size);
-    auto edges = p.template allocConstant<Edge<E>>(graph.edges.size);
+    auto vertices = p.template allocConstant<V>(graph.raw_vertices.size);
+    auto edges = p.template allocConstant<Edge<E>>(graph.raw_edges.size);
 
     size_t edge = 0;
 
@@ -125,8 +125,8 @@ std::tuple
 >
 loadCSR(Backend<Platform> &p, const Graph<V,E> &graph)
 {
-    auto nodes = p.template allocConstant<V>(graph.vertices.size);
-    auto edges = p.template allocConstant<E>(graph.edges.size);
+    auto nodes = p.template allocConstant<V>(graph.raw_vertices.size);
+    auto edges = p.template allocConstant<E>(graph.raw_edges.size);
 
     for (size_t i = 0; i < graph.raw_vertices.size; i++) {
         (*nodes)[i] = graph.raw_vertices[i];
@@ -149,7 +149,7 @@ loadReverseCSR(Backend<Platform> &p, const Graph<V,E> &graph)
 {
     auto rev_nodes = p.template allocConstant<V>(graph.raw_rev_vertices.size);
     auto rev_edges = p.template allocConstant<E>(graph.raw_rev_edges.size);
-    auto nodes = p.template allocConstant<V>(graph.vertices.size);
+    auto nodes = p.template allocConstant<V>(graph.raw_vertices.size);
 
     for (size_t i = 0; i < graph.raw_rev_vertices.size; i++) {
         (*rev_nodes)[i] = graph.raw_rev_vertices[i];

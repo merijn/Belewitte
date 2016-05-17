@@ -5,5 +5,5 @@
 #include "CUDA.hpp"
 #include "Timer.hpp"
 
-void bfs(CUDA&, TimerRegister&, size_t, const std::string, const char *, size_t, size_t);
+void bfs(CUDA&, TimerRegister&, size_t, const std::string, const char *, int, size_t, size_t);
 #endif
