@@ -13,7 +13,7 @@ usage(int exitCode = EXIT_FAILURE)
     ostream& out(exitCode == EXIT_SUCCESS ? cout : cerr);
     out << "Usage:" << endl;
     out << execName << " [--help | -h]" << endl;
-    out << execName << " <graph 1> [<graph 2>...]" << endl;
+    out << execName << " [-v | --verbose] <graph 1> [<graph 2>...]" << endl;
     exit(exitCode);
 }
 

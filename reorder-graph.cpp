@@ -19,6 +19,8 @@
 
 using namespace std;
 
+static const char *execName = "reorder-graph";
+
 enum sort_order {
     in_degree,
     out_degree,
@@ -104,11 +106,21 @@ sortGraph(Graph<uint64_t,uint64_t>& graph, string fileName, sort_order order, bo
     }
 }
 
+static void __attribute__((noreturn))
+usage(int exitCode = EXIT_FAILURE)
+{
+    ostream& out(exitCode == EXIT_SUCCESS ? cout : cerr);
+    out << "Usage:" << endl;
+    out << execName << " <graph 1> [<graph 2>...]" << endl;
+    exit(exitCode);
+}
+
 int main(int argc, char **argv)
 {
     string name;
 
-    checkError(argc >= 2, "Not enough arguments!");
+    if (argc < 2) usage();
+
     for (int i = 1; i < argc; i++) {
         name = string(argv[i]);
         Graph<uint64_t, uint64_t> graph(name);

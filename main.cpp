@@ -11,8 +11,8 @@
 #include "Timer.hpp"
 #include "Util.hpp"
 
-#include "bfs.hpp"
-#include "pagerank.hpp"
+#include "bfs/bfs.hpp"
+#include "pagerank/pagerank.hpp"
 
 using namespace std;
 
@@ -24,11 +24,36 @@ static void __attribute__((noreturn))
 usage(int exitCode = EXIT_FAILURE)
 {
     cout << "Usage:" << endl;
-    cout << execName << " [-n <count runs>] [-p <platform id>] [-d <device id>] [-f] [-o <output file>] <graph file>" << endl;
-    cout << execName << " list platforms [-v]" << endl;
-    cout << execName << " list devices <platform id> [-v]" << endl;
-    cout << execName << " query platform <platform id> [-v]" << endl;
-    cout << execName << " query device <platform id> <device id> [-v]" << endl;
+    cout << execName << " list platforms [-v | --verbose]" << endl;
+    cout << execName << " list devices <platform id> [-v | --verbose]" << endl;
+    cout << execName << " query platform <platform id> [-v | --verbose]" << endl;
+    cout << execName << " query device <platform id> <device id> [-v | --verbose]" << endl;
+    cout << execName << " <graph file>" << endl;
+    cout << "Options:" << endl;
+    cout << "\t" << "-a NUM | --algorithm NUM" << endl;
+    cout << "\t\t" << "Algorithm to use." << endl << endl;
+    cout << "\t" << "-d NUM | --device NUM" << endl;
+    cout << "\t\t" << "Device to use." << endl << endl;
+    cout << "\t" << "-f | --framework" << endl;
+    cout << "\t\t" << "Use OpenCL." << endl << endl;
+    cout << "\t" << "-n NUM | --count NUM" << endl;
+    cout << "\t\t" << "Number of times to run algorithm." << endl << endl;
+    cout << "\t" << "-o FILE | --output FILE" << endl;
+    cout << "\t\t" << "Where to write algorithm output." << endl << endl;
+    cout << "\t" << "-p NUM | --platform NUM" << endl;
+    cout << "\t\t" << "Platform to use." << endl << endl;
+    cout << "\t" << "-t FILE | --timings FILE" << endl;
+    cout << "\t\t" << "Where to write timing output." << endl << endl;
+    cout << "\t" << "-s NUM | --variant NUM" << endl;
+    cout << "\t\t" << "Algorithm variant to run." << endl << endl;
+    cout << "\t" << "-v | --verbose" << endl;
+    cout << "\t\t" << "Verbose output." << endl << endl;
+    cout << "\t" << "-h | --help" << endl;
+    cout << "\t\t" << "This help." << endl << endl;
+    cout << "\t" << "-w NUM | --warp NUM" << endl;
+    cout << "\t\t" << "Virtual warp size for warp variants." << endl << endl;
+    cout << "\t" << "-c NUM | --chunk NUM" << endl;
+    cout << "\t\t" << "Work chunk size for warp variants." << endl;
     exit(exitCode);
 }
 

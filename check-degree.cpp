@@ -22,9 +22,9 @@ usage(int exitCode = EXIT_FAILURE)
     ostream& out(exitCode == EXIT_SUCCESS ? cout : cerr);
     out << "Usage:" << endl;
     out << execName << " [--help | -h]" << endl;
-    out << execName << " [-v] abs <graph1> [<graph2>...]" << endl;
-    out << execName << " [-v] in <graph1> [<graph2>...]" << endl;
-    out << execName << " [-v] out <graph1> [<graph2>...]" << endl;
+    out << execName << " [-v | --verbose] abs <graph1> [<graph2>...]" << endl;
+    out << execName << " [-v | --verbose] in <graph1> [<graph2>...]" << endl;
+    out << execName << " [-v | --verbose] out <graph1> [<graph2>...]" << endl;
     exit(exitCode);
 }
 

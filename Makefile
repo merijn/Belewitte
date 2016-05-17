@@ -81,8 +81,7 @@ DIRS=bfs pagerank
 include $(foreach d, $(DIRS), $d/Makefile)
 
 main: build/main.o build/CUDA.o build/OpenCL.o build/Timer.o build/Util.o \
-      build/bfs.o build/bfs/libbfs.a build/pagerank.o \
-      build/pagerank/libpagerank.a
+      build/bfs/libbfs.a build/pagerank/libpagerank.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
@@ -119,7 +118,7 @@ build/%.o: %.cpp | build/
 	$(PRINTF) " CXX\t$*.cpp\n"
 	$(AT)$(CC) $(CFLAGS) -I. $< -c -o $@
 
-build/%.o: %.cu | build/
+build/%.obj: %.cu | build/
 	$(PRINTF) " NVCC\t$*.cu\n"
 	$(AT)$(NVCC) $(NVCCFLAGS) -M -I. $< -o build/$*.d
 	$(AT)$(NVCC) $(NVCCFLAGS) $(NVCCARCHFLAGS) -I. --device-c $< -o $@

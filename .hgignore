@@ -10,3 +10,4 @@ print-graph
 evolve
 *.d
 *.graph
+*.obj
