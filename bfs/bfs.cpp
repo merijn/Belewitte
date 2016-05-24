@@ -45,7 +45,7 @@ struct BFSImpl {
             for (size_t i = 0; i < run_count; i++) {
                 initResults.start();
                 backend.setWorkSizes(1, {nodeSizes.first}, {nodeSizes.second});
-                backend.runKernel(setArray, results, results->size, -1);
+                backend.runKernel(setArray, results, results->size, std::numeric_limits<int>::max());
 
                 backend.setWorkSizes(1, {1}, {1});
                 backend.runKernel(set_root, results, 0);

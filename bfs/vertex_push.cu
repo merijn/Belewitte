@@ -8,5 +8,6 @@ __global__ void vertexPushBfs(unsigned *nodes, unsigned *edges, size_t size, int
         for (int i = nodes[idx]; i < nodes[idx + 1]; i++) {
             atomicMin(&levels[edges[i]], depth + 1);
         }
+        finished = false;
     }
 }
