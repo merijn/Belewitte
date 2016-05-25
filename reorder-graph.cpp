@@ -124,12 +124,13 @@ int main(int argc, char **argv)
     for (int i = 1; i < argc; i++) {
         name = string(argv[i]);
         Graph<uint64_t, uint64_t> graph(name);
-        sortGraph(graph, name + ".in", in_degree, false);
-        sortGraph(graph, name + ".out", out_degree, false);
-        sortGraph(graph, name + ".abs", abs_degree, false);
-        sortGraph(graph, name + ".in-worst", in_degree, true);
-        sortGraph(graph, name + ".out-worst", out_degree, true);
-        sortGraph(graph, name + ".abs-worst", abs_degree, true);
+        string newName { name.substr(0, name.find_last_of(".")) };
+        sortGraph(graph, newName + ".in.graph", in_degree, false);
+        sortGraph(graph, newName + ".out.graph", out_degree, false);
+        sortGraph(graph, newName + ".abs.graph", abs_degree, false);
+        sortGraph(graph, newName + ".in-worst.graph", in_degree, true);
+        sortGraph(graph, newName + ".out-worst.graph", out_degree, true);
+        sortGraph(graph, newName + ".abs-worst.graph", abs_degree, true);
     }
 
     return 0;

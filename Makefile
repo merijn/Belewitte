@@ -17,7 +17,7 @@ all: main normalise gen-graph reorder-graph check-degree evolve print-graph
 main: build/main.o build/CUDA.o build/OpenCL.o build/Timer.o build/Util.o \
       build/bfs/libbfs.a build/pagerank/libpagerank.a
 	$(PRINTF) " LD\t$@\n"
-	$(AT)$(LD) $(LDFLAGS) $^ -o $@
+	$(AT)$(LD) $(LDFLAGS) -rpath $(CUDA_PATH)/lib/ $^ -o $@
 
 normalise: build/normalise.o build/Util.o
 	$(PRINTF) " LD\t$@\n"
