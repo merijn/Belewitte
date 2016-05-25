@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <cuda_runtime.h>
 
-#include "Graph.hpp"
+#include "../Graph.hpp"
 
 void resetFinished();
 bool getFinished();

@@ -1,10 +1,10 @@
 #include <fstream>
 
-#include "Interface.hpp"
-#include "WarpDispatch.hpp"
+#include "../Interface.hpp"
+#include "../WarpDispatch.hpp"
 
 #include "bfs.hpp"
-#include "bfs/bfs.h"
+#include "bfs.h"
 
 template<typename Platform>
 struct BFSImpl {

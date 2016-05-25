@@ -4,7 +4,7 @@
 #include "WarpDispatch.hpp"
 
 #include "pagerank.hpp"
-#include "pagerank/pagerank.h"
+#include "pagerank.h"
 
 template<typename Platform>
 struct PageRankImpl {

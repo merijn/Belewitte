@@ -1,47 +1,38 @@
-V = 0
-AT_0 := @
-AT_1 :=
-AT = $(AT_$(V))
+SRCDIR := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
 
-ifeq ($(V), 1)
-    PRINTF := @\#
+ifeq ($(SRCDIR),.)
+NAME := $(notdir $(CURDIR))
+DEST := ../build/$(NAME)
+include ../Common.mk
 else
-    PRINTF := @printf
+NAME := $(SRCDIR)
+DEST := build/$(SRCDIR)
 endif
 
-TOP := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
-DEST := build/$(TOP)
+$(NAME)_CUDA_SRCS:=$(notdir $(wildcard $(SRCDIR)/*.cu))
+$(NAME)_CUDA_OBJS:=$(patsubst %.cu, $(DEST)/%.obj, $($(NAME)_CUDA_SRCS))
 
-$(TOP)_CUDA_SRCS=$(wildcard $(TOP)/*.cu)
-$(TOP)_CUDA_OBJS=$(patsubst %.cu, build/%.obj, $($(TOP)_CUDA_SRCS))
+$(NAME)_CPP_SRCS:=$(notdir $(wildcard $(SRCDIR)/*.cpp))
+$(NAME)_CPP_OBJS:=$(patsubst %.cpp, $(DEST)/%.o, $($(NAME)_CPP_SRCS))
 
-$(TOP)_CPP_SRCS=$(wildcard $(TOP)/*.cpp)
-$(TOP)_CPP_OBJS=$(patsubst %.cpp, build/%.o, $($(TOP)_CPP_SRCS))
+-include $(patsubst %.cu, $(DEST)/%.d, $($(NAME)_CUDA_SRCS))
+-include $(patsubst %.cpp, $(DEST)/%.d, $($(NAME)_CPP_SRCS))
+-include $(SRCDIR)/Extra.mk
 
-CLEANUP += $($(TOP)_CUDA_OBJS) $($(TOP)_CPP_OBJS) $(DEST)/lib$(TOP).a
-CLEANUP += $(DEST)/device.o
+all: $(DEST)/lib$(NAME).a
 
--include $(patsubst %.cu, build/%.d, $($(TOP)_CUDA_SRCS))
--include $(patsubst %.cpp, build/%.d, $($(TOP)_CPP_SRCS))
-
-.PHONY: all clean clean-$(TOP)
-
-all: $(DEST)/lib$(TOP).a
-
-$($(TOP)_CUDA_OBJS) $($(TOP)_CPP_OBJS): | $(DEST)/
+$($(NAME)_CUDA_OBJS) $($(NAME)_CPP_OBJS): | $(DEST)/
 
 $(DEST)/:
 	$(AT)mkdir -p $@
 
-$(DEST)/lib$(TOP).a: $($(TOP)_CPP_OBJS) $($(TOP)_CUDA_OBJS) $(DEST)/device.o
+$(DEST)/lib$(NAME).a: $($(NAME)_CPP_OBJS) $($(NAME)_CUDA_OBJS) $(DEST)/device.o
 	$(PRINTF) " NVLINK\t$@\n"
 	$(AT)$(NVLINK) --lib --output-file $@ $^
 
-$(DEST)/device.o: $($(TOP)_CUDA_OBJS)
+$(DEST)/device.o: $($(NAME)_CUDA_OBJS)
 	$(PRINTF) " NVLINK\t$@\n"
 	$(AT)$(NVLINK) $(NVCCFLAGS) --compiler-options "-Wno-deprecated" --device-link $^ --output-file $@
 
-clean-$(TOP):
-	$(AT)rm -rf $(CLEANUP)
-
-clean: clean-$(TOP)
+CLEAN_OBJS+=$($(NAME)_CUDA_OBJS) $($(NAME)_CPP_OBJS) $(DEST)/device.o
+CLEAN_LIBS+=$(DEST)/lib$(NAME).a
