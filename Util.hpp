@@ -9,6 +9,7 @@
 
 #include <atomic>
 #include <iostream>
+#include <memory>
 #include <string>
 
 #ifdef __clang__
@@ -96,4 +97,26 @@ simple_iterator<C> make_simple_iterator(const C& val);
 template<typename C>
 simple_iterator<C> make_simple_iterator(const C& val)
 { return simple_iterator<C>(val); }
+
+template<typename T>
+class shared_array : public std::shared_ptr<void> {
+    public:
+      shared_array(void* data, std::function<void(void*)> deleter)
+      : std::shared_ptr<void>(data, deleter)
+      {}
+
+      template<typename Ptr>
+      shared_array(const shared_array<Ptr>& ptr, void* data)
+      : std::shared_ptr<void>(ptr, data)
+      {}
+
+      T& operator[](size_t n)
+      { return static_cast<T*>(this->get())[n]; }
+
+      const T& operator[](size_t n) const
+      { return static_cast<T*>(this->get())[n]; }
+
+      template<typename Ptr>
+      operator Ptr*() const { return static_cast<Ptr*>(this->get()); }
+};
 #endif

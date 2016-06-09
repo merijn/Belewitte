@@ -82,7 +82,7 @@ int main(int argc, char **argv)
     for (int i = 1; i < argc; i++) {
         name = string(argv[i]);
 
-        const Graph<uint64_t, uint64_t> graph(name);
+        Graph<uint64_t, uint64_t> graph(name);
         map<size_t, size_t> degrees;
 
         for (auto v : graph.vertices) {

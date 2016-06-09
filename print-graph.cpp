@@ -69,12 +69,12 @@ int main(int argc, char **argv)
         if (verbose) {
             for (auto v : graph.vertices) {
                 cout << v.id << endl;
-                for (auto e : v.edges) {
+                for (auto &e : v.edges) {
                     cout << "  -> " << e << endl;
                 }
 
                 if (!graph.undirected) {
-                    for (auto e : v.rev_edges) {
+                    for (auto &e : v.rev_edges) {
                         cout << "  " << e << "  ->" << endl;
                     }
                 }

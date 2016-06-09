@@ -105,7 +105,7 @@ void bfs
     , size_t chunk_size
     )
 {
-    const Graph<unsigned, unsigned> graph_file(filename);
+    Graph<unsigned, unsigned> graph_file(filename);
     auto nodeSizes = backend.computeDivision(graph_file.vertex_count);
     auto edgeSizes = backend.computeDivision(graph_file.edge_count);
 

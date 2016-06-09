@@ -70,7 +70,7 @@ std::tuple
 , std::shared_ptr<alloc_t<E>>
 , std::shared_ptr<alloc_t<E>>
 >
-loadEdgeListCSR(Backend<Platform> &p, const Graph<V,E> &graph)
+loadEdgeListCSR(Backend<Platform> &p, Graph<V,E> &graph)
 {
     auto vertices = p.template allocConstant<V>(graph.raw_vertices.size);
     auto edges_in = p.template allocConstant<E>(graph.raw_edges.size);
@@ -97,7 +97,7 @@ std::tuple
 < std::shared_ptr<alloc_t<V>>
 , std::shared_ptr<alloc_t<Edge<E>>>
 >
-loadStructEdgeListCSR(Backend<Platform> &p, const Graph<V,E> &graph)
+loadStructEdgeListCSR(Backend<Platform> &p, Graph<V,E> &graph)
 {
     auto vertices = p.template allocConstant<V>(graph.raw_vertices.size);
     auto edges = p.template allocConstant<Edge<E>>(graph.raw_edges.size);
@@ -123,7 +123,7 @@ std::tuple
 < std::shared_ptr<alloc_t<V>>
 , std::shared_ptr<alloc_t<E>>
 >
-loadCSR(Backend<Platform> &p, const Graph<V,E> &graph)
+loadCSR(Backend<Platform> &p, Graph<V,E> &graph)
 {
     auto nodes = p.template allocConstant<V>(graph.raw_vertices.size);
     auto edges = p.template allocConstant<E>(graph.raw_edges.size);
@@ -145,7 +145,7 @@ std::tuple
 , std::shared_ptr<alloc_t<E>>
 , std::shared_ptr<alloc_t<V>>
 >
-loadReverseCSR(Backend<Platform> &p, const Graph<V,E> &graph)
+loadReverseCSR(Backend<Platform> &p, Graph<V,E> &graph)
 {
     auto rev_nodes = p.template allocConstant<V>(graph.raw_rev_vertices.size);
     auto rev_edges = p.template allocConstant<E>(graph.raw_rev_edges.size);

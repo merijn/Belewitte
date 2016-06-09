@@ -149,8 +149,8 @@ EdgeWiseCrossover::~EdgeWiseCrossover() {}
 
 template<bool undirected>
 class Crossover {
-    const Graph_t graph1;
-    const Graph_t graph2;
+    Graph_t graph1;
+    Graph_t graph2;
     const vector<edge> mutations;
     const vector<edge> rev_mutations;
 

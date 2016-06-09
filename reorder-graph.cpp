@@ -53,7 +53,8 @@ messupSort(std::vector<Edge<uint64_t>>& vertices)
 static void
 sortGraph(Graph<uint64_t,uint64_t>& graph, string fileName, sort_order order, bool worst)
 {
-    Graph<uint64_t,uint64_t> newGraph(fileName, graph.undirected, graph.vertex_count, graph.edge_count);
+    MutableGraph<uint64_t,uint64_t> newGraph
+        {fileName, graph.undirected, graph.vertex_count, graph.edge_count};
 
     vector<Edge<uint64_t>> newOrder;
     newOrder.reserve(graph.vertex_count);

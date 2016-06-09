@@ -123,8 +123,8 @@ random_edges(bool undirected, uint64_t vertex_count, double mutation_rate)
     if (undirected) max_edges = (vertex_count * (vertex_count + 1))/2;
     else max_edges = vertex_count * vertex_count;
 
-    std::binomial_distribution<uint64_t> num_mutations(max_edges, mutation_rate);
-    uint64_t mutation_count = num_mutations(generator);
+    std::binomial_distribution<uint64_t> num_muts(max_edges, mutation_rate);
+    uint64_t mutation_count = num_muts(generator);
 
     return random_edges<E>(undirected, vertex_count, mutation_count);
 }
@@ -152,23 +152,27 @@ reverse_and_sort(const std::vector<Edge<E>>& edges)
 template<typename T>
 class Accessor {
   template<typename V, typename E>
-  friend class Graph;
+  friend class MutableGraph;
 
   void *end_ptr() const
   { return static_cast<char*>(data) + size * valueSize; }
 
-  void * const data;
+  const shared_array<char> data;
 
   class Converter {
+    friend class Accessor;
+
     const Accessor<T> &a;
-    const size_t idx;
+    size_t idx;
+
+      Converter(const Accessor<T>& a_, size_t i)
+        : a(a_), idx(i)
+      {}
 
     public:
-      Converter(const Accessor<T>& a_, size_t i)
-        : a(a_), idx(i) {}
-
-      Converter(Converter&& c)
-        : a(c.a), idx(c.idx) {}
+      Converter(const Converter&& c)
+        : a(c.a), idx(c.idx)
+      {}
 
       Converter& operator=(T val)
       {
@@ -212,7 +216,7 @@ class Accessor {
   };
 
   template<bool is_const>
-  class Iterator : public std::iterator<std::random_access_iterator_tag, T> {
+  class Iterator : public std::iterator<std::random_access_iterator_tag, Converter> {
     public:
       typedef typename std::conditional
           <is_const, const Accessor<T>, Accessor<T>>::type accessor;
@@ -275,7 +279,7 @@ class Accessor {
         return tmp;
       }
 
-      value_type operator*() const
+      reference operator*() const
       { return acc[offset]; }
 
       bool operator==(const Iterator& it) const
@@ -318,6 +322,8 @@ class Accessor {
       { return *(this + n); }
   };
 
+    mutable Converter value;
+
   public:
     typedef Iterator<false> iterator;
     typedef Iterator<true> const_iterator;
@@ -330,18 +336,25 @@ class Accessor {
     const uint32_t version;
 
     Accessor
-      ( void *ptr
+      ( const shared_array<uint32_t> &graph_data
+      , void *ptr
       , uint64_t n
       , uint32_t vSize
       , uint64_t max
       , uint32_t versionNo)
-      : data(ptr), size(n), valueSize(vSize), maxVal(max), version(versionNo)
+      : data(graph_data, ptr), value(*this, 0), size(n), valueSize(vSize)
+      , maxVal(max), version(versionNo)
     {}
 
     Accessor(Accessor& acc, uint64_t start, uint64_t end_)
-      : data(static_cast<char*>(acc.data) + start * acc.valueSize)
-      , size(end_ - start), valueSize(acc.valueSize), maxVal(acc.maxVal)
-      , version(acc.version)
+      : data(acc.data, static_cast<char*>(acc.data) + start * acc.valueSize)
+      , value(*this, 0), size(end_ - start), valueSize(acc.valueSize)
+      , maxVal(acc.maxVal), version(acc.version)
+    {}
+
+    Accessor(const Accessor& acc)
+      : data(acc.data), value(*this, 0), size(acc.size)
+      , valueSize(acc.valueSize), maxVal(acc.maxVal), version(acc.version)
     {}
 
     bool operator==(const Accessor& acc) const
@@ -353,16 +366,18 @@ class Accessor {
     bool operator!=(const Accessor& acc) const
     { return !operator==(acc); }
 
-    Converter operator[](size_t n)
+    Converter& operator[](size_t n)
     {
       checkError(n < size, "Index too large! Index: ", n, " Max: ", size);
-      return Converter(*this, n);
+      value.idx = n;
+      return value;
     }
 
-    const Converter operator[](size_t n) const
+    const Converter& operator[](size_t n) const
     {
       checkError(n < size, "Index too large! Index: ", n, " Max: ", size);
-      return Converter(*this, n);
+      value.idx = n;
+      return value;
     }
 
     iterator begin() { return iterator(*this, false); }
@@ -387,16 +402,16 @@ class Accessor {
 };
 
 template<typename V, typename E>
-class Graph {
+class MutableGraph {
   public:
     const std::string fileName;
 
     struct Vertex {
-      V id;
-      Accessor<E> edges;
-      Accessor<E> rev_edges;
+      const V id;
+      const Accessor<E> edges;
+      const Accessor<E> rev_edges;
 
-      Vertex(V i, Accessor<E>&& e, Accessor<E>&& r)
+      Vertex(V i, const Accessor<E>&& e, const Accessor<E>&& r)
         : id(i), edges(e), rev_edges(r)
       {}
     };
@@ -408,7 +423,10 @@ class Graph {
     class VertexIterator : public std::iterator<std::random_access_iterator_tag, Vertex> {
       public:
         typedef typename std::conditional
-            <is_const, const Graph::Vertices, Graph::Vertices>::type Vertices;
+            < is_const
+            , const MutableGraph::Vertices
+            , MutableGraph::Vertices>::type Vertices;
+
         typedef std::random_access_iterator_tag iterator_category;
         typedef uint64_t size_type;
         typedef int64_t difference_type;
@@ -514,7 +532,10 @@ class Graph {
     class EdgeIterator : public std::iterator<std::bidirectional_iterator_tag, Edge<E>> {
       public:
         typedef typename std::conditional
-            <is_const, const Graph::Edges, Graph::Edges>::type Edges;
+            < is_const
+            , const MutableGraph::Edges
+            , MutableGraph::Edges>::type Edges;
+
         typedef std::bidirectional_iterator_tag iterator_category;
         typedef uint64_t size_type;
         typedef int64_t difference_type;
@@ -639,6 +660,9 @@ class Graph {
       Accessor<E>& edges;
       Accessor<E>& rev_edges;
 
+      Vertices(Vertices&) = delete;
+      Vertices(Vertices&&) = delete;
+
       public:
         typedef VertexIterator<false> iterator;
         typedef VertexIterator<true> const_iterator;
@@ -699,6 +723,9 @@ class Graph {
       Accessor<V>& vertices;
       Accessor<E>& edges;
 
+      Edges(Edges&) = delete;
+      Edges(Edges&&) = delete;
+
       public:
         typedef EdgeIterator<false> iterator;
         typedef EdgeIterator<true> const_iterator;
@@ -740,14 +767,14 @@ class Graph {
 
   private:
     const size_t size;
-    uint32_t *data;
+    shared_array<uint32_t> data;
     const uint32_t version;
 
     static uint32_t
     smallest_size(size_t val)
     { return val > std::numeric_limits<uint32_t>::max() ? 8 : 4; }
 
-    static uint32_t detectVersion(uint32_t *data)
+    static uint32_t detectVersion(shared_array<uint32_t> data)
     {
       if (data[1] == 0 && data[2] == 0) return data[0];
       return 0;
@@ -768,7 +795,7 @@ class Graph {
       return size;
     }
 
-    static uint32_t *initFile(std::string fileName, size_t size)
+    static shared_array<uint32_t> initFile(std::string fileName, size_t size)
     {
       int fd = open(fileName.c_str(), O_RDWR | O_CREAT | O_TRUNC, 0644);
       if (fd == -1) {
@@ -781,14 +808,16 @@ class Graph {
         dump_stack_trace(EXIT_FAILURE);
       }
 
-      uint32_t *data = static_cast<uint32_t*>(mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0));
-      if (reinterpret_cast<intptr_t>(data) == -1) {
+      void *ptr = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+      close(fd);
+
+      if (reinterpret_cast<intptr_t>(ptr) == -1) {
         perror("mmap");
         dump_stack_trace(EXIT_FAILURE);
       }
-      close(fd);
 
-      return data;
+      auto deleter = [=](void *data_ptr) { munmap(data_ptr, size); };
+      return shared_array<uint32_t>(ptr, deleter);
     }
 
     static size_t getFileSize(std::string fileName)
@@ -806,21 +835,24 @@ class Graph {
       return static_cast<size_t>(statbuf.st_size);
     }
 
-    static uint32_t *getMmap(std::string fileName, size_t size)
+    static shared_array<uint32_t> getMmap(std::string fileName, size_t size)
     {
-      int fd;
-      void *result;
-
-      fd = open(fileName.c_str(), O_RDONLY);
+      int fd = open(fileName.c_str(), O_RDONLY);
       if (fd == -1) {
         perror("open");
         dump_stack_trace(EXIT_FAILURE);
       }
 
-      result = mmap(nullptr, size, PROT_READ, MAP_SHARED, fd, 0);
+      void *ptr = mmap(nullptr, size, PROT_READ, MAP_SHARED, fd, 0);
       close(fd);
 
-      return static_cast<uint32_t*>(result);
+      if (reinterpret_cast<intptr_t>(ptr) == -1) {
+        perror("mmap");
+        dump_stack_trace(EXIT_FAILURE);
+      }
+
+      auto deleter = [=](void *data_ptr) { munmap(data_ptr, size); };
+      return shared_array<uint32_t>(ptr, deleter);
     }
 
     static std::vector<Edge<E>>& empty_vector()
@@ -931,7 +963,7 @@ class Graph {
     }
 
   public:
-    Graph(std::string file)
+    MutableGraph(std::string file)
       : fileName(file)
       , size(getFileSize(fileName))
       , data(getMmap(fileName, size))
@@ -939,28 +971,32 @@ class Graph {
       , undirected(data[version ? 3 : 0])
       , vertex_size(version ? data[4] : 4)
       , edge_size(version ? data[5] : 4)
-      , vertex_count(version ? reinterpret_cast<uint64_t*>(data)[3] : data[1])
-      , edge_count(version ? reinterpret_cast<uint64_t*>(data)[4] : data[2])
+      , vertex_count(version ? static_cast<uint64_t*>(data)[3] : data[1])
+      , edge_count(version ? static_cast<uint64_t*>(data)[4] : data[2])
       , raw_vertices
-          ( &data[version ? 10 : 3]
+          ( data
+          , &data[version ? 10 : 3]
           , vertex_count + 1
           , vertex_size
           , edge_count
           , version)
       , raw_edges
-          ( raw_vertices.end_ptr()
+          ( data
+          , raw_vertices.end_ptr()
           , edge_count
           , edge_size
           , vertex_count
           , version)
       , raw_rev_vertices
-          ( undirected ? raw_vertices.data : raw_edges.end_ptr()
+          ( data
+          , undirected ? raw_vertices.data : raw_edges.end_ptr()
           , vertex_count + 1
           , vertex_size
           , edge_count
           , version)
       , raw_rev_edges
-          ( raw_rev_vertices.end_ptr()
+          ( data
+          , raw_rev_vertices.end_ptr()
           , edge_count
           , edge_size
           , vertex_count
@@ -1021,7 +1057,7 @@ class Graph {
         }
       }
 
-    Graph
+    MutableGraph
       ( std::string file
       , bool undir
       , uint64_t num_vertex
@@ -1037,25 +1073,29 @@ class Graph {
       , vertex_count(num_vertex)
       , edge_count(num_edge)
       , raw_vertices
-          ( &data[10]
+          ( data
+          , &data[10]
           , vertex_count + 1
           , vertex_size
           , edge_count
           , version)
       , raw_edges
-          ( raw_vertices.end_ptr()
+          ( data
+          , raw_vertices.end_ptr()
           , edge_count
           , edge_size
           , vertex_count
           , version)
       , raw_rev_vertices
-          ( undirected ? raw_vertices.data : raw_edges.end_ptr()
+          ( data
+          , undirected ? raw_vertices.data : raw_edges.end_ptr()
           , vertex_count + 1
           , vertex_size
           , edge_count
           , version)
       , raw_rev_edges
-          ( raw_rev_vertices.end_ptr()
+          ( data
+          , raw_rev_vertices.end_ptr()
           , edge_count
           , edge_size
           , vertex_count
@@ -1070,17 +1110,49 @@ class Graph {
       data[3] = undirected;
       data[4] = vertex_size;
       data[5] = edge_size;
-      reinterpret_cast<uint64_t*>(data)[3] = vertex_count;
-      reinterpret_cast<uint64_t*>(data)[4] = edge_count;
+      static_cast<uint64_t*>(data)[3] = vertex_count;
+      static_cast<uint64_t*>(data)[4] = edge_count;
     }
 
-    Graph(Graph&& graph) = default;
+    MutableGraph(const MutableGraph& graph)
+      : fileName(graph.fileName)
+      , size(graph.size)
+      , data(graph.data)
+      , version(graph.version)
+      , undirected(graph.undirected)
+      , vertex_size(graph.vertex_size)
+      , edge_size(graph.edge_size)
+      , vertex_count(graph.vertex_count)
+      , edge_count(graph.edge_count)
+      , raw_vertices(graph.raw_vertices)
+      , raw_edges(graph.raw_edges)
+      , raw_rev_vertices(graph.raw_rev_vertices)
+      , raw_rev_edges(graph.raw_rev_edges)
+      , vertices(raw_vertices, raw_rev_vertices, raw_edges, raw_rev_edges)
+      , edges(raw_vertices, raw_edges)
+      , rev_edges(raw_rev_vertices, raw_rev_edges)
+    {}
 
-    ~Graph()
-    {
-        msync(data, size, MS_SYNC);
-        munmap(data, size);
-    }
+    MutableGraph(MutableGraph&& graph)
+      : fileName(graph.fileName)
+      , size(graph.size)
+      , data(graph.data)
+      , version(graph.version)
+      , undirected(graph.undirected)
+      , vertex_size(graph.vertex_size)
+      , edge_size(graph.edge_size)
+      , vertex_count(graph.vertex_count)
+      , edge_count(graph.edge_count)
+      , raw_vertices(graph.raw_vertices)
+      , raw_edges(graph.raw_edges)
+      , raw_rev_vertices(graph.raw_rev_vertices)
+      , raw_rev_edges(graph.raw_rev_edges)
+      , vertices(raw_vertices, raw_rev_vertices, raw_edges, raw_rev_edges)
+      , edges(raw_vertices, raw_edges)
+      , rev_edges(raw_rev_vertices, raw_rev_edges)
+    {}
+
+    ~MutableGraph() {}
 
     template<typename... Args>
     static void output(Args... args)
@@ -1102,7 +1174,7 @@ class Graph {
     static void output(GraphOutput<sorted,uniq,C,D> out)
     {
         bool undirected = out.rev_edges.empty();
-        Graph graph(out.fileName, undirected, out.vertex_count, out.edge_count);
+        MutableGraph graph(out.fileName, undirected, out.vertex_count, out.edge_count);
         writeEdges(out.vertex_count, graph.raw_vertices, graph.raw_edges, out.edges);
         writeEdges(out.vertex_count, graph.raw_rev_vertices, graph.raw_rev_edges, out.rev_edges);
     }
@@ -1120,4 +1192,7 @@ class Graph {
     Edges edges;
     Edges rev_edges;
 };
+
+template<typename V, typename E>
+using Graph = const MutableGraph<V,E>;
 #endif
