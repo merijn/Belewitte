@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <cuda_runtime.h>
 
-#include "Graph.hpp"
+#include "../Graph.hpp"
 
 const float dampening = 0.85f;
 const float epsilon = 0.001f;

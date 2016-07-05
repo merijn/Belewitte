@@ -85,7 +85,7 @@ int main(int argc, char **argv)
         const Graph<uint64_t, uint64_t> graph(name);
         map<size_t, size_t> degrees;
 
-        for (auto&& v : graph.vertices) {
+        for (auto v : graph.vertices) {
             size_t degree = 0;
 
             if (ordering == out_degree || ordering == abs_degree) {

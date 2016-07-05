@@ -352,7 +352,7 @@ computeFitness(const string file)
     double conn_percent = connectivity(graph);
 
     counts.reserve(graph.vertex_count);
-    for (auto&& v : graph.vertices) {
+    for (auto v : graph.vertices) {
         if (graph.undirected) counts.emplace_back(v.edges.size);
         else counts.emplace_back(v.edges.size + v.rev_edges.size);
     }

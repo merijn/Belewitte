@@ -15,9 +15,9 @@ all: main normalise gen-graph reorder-graph check-degree evolve print-graph
 -include $(foreach d, $(wildcard */), $(d)Makefile)
 
 main: build/main.o build/CUDA.o build/OpenCL.o build/Timer.o build/Util.o \
-      build/bfs/libbfs.a build/pagerank/libpagerank.a
+      build/bfs/libbfs.so build/pagerank/libpagerank.so
 	$(PRINTF) " LD\t$@\n"
-	$(AT)$(LD) $(LDFLAGS) -rpath $(CUDA_PATH)/lib/ $^ -o $@
+	$(AT)$(LD) $(LDFLAGS) -lcudart -rpath $(CUDA_PATH)/lib/ $^ -o $@
 
 normalise: build/normalise.o build/Util.o
 	$(PRINTF) " LD\t$@\n"
@@ -49,3 +49,5 @@ CLEAN_OBJS+=build/*.o
 
 CLEAN_BINS+=main normalise gen-graph reorder-graph check-degree evolve \
             print-graph
+
+CLEAN_DEPS+=build/*.d
