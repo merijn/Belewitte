@@ -1,7 +1,13 @@
 #include "pagerank.h"
 
-#define CUDA_CHK(ans) { cudaAssert((ans), __FILE__, __LINE__); }
-void cudaAssert(const cudaError_t code, const char *file, const int line);
+#define CUDA_CHK(ans) { \
+    cudaError_t code = ans; \
+    if (code != cudaSuccess) { \
+        cudaAssert(code, __FILE__, __LINE__); \
+    } \
+}
+void __attribute__((noreturn))
+cudaAssert(const cudaError_t code, const char *file, const int line);
 
 __device__ float diff = 0.0;
 

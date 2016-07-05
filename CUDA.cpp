@@ -4,6 +4,25 @@ using std::cerr;
 using std::cout;
 using std::endl;
 
+void cudaAssert(const cudaError_t code, const char *file, const int line)
+{
+    cout.flush();
+    cerr << "CUDA error #"
+            << code
+            << " ("
+            << file
+            << ":"
+            << line
+            << "):"
+            << endl
+            << cudaGetErrorString(code)
+            << endl
+            << endl
+            << "Callstack:"
+            << endl;
+    dump_stack_trace(code);
+}
+
 void CUDA::queryPlatform(size_t platform, bool verbose)
 {
     if (platform >= devicesPerPlatform.size()) {
