@@ -38,11 +38,19 @@ __global__ void consolidateRank(size_t size, float *pagerank, float *new_pageran
     }
 }
 
-__global__ void consolidateRankPull(unsigned *nodes, size_t size, float *pagerank, float *new_pagerank)
+__global__ void
+consolidateRankPull
+    ( size_t vertex_count
+    , size_t edge_count
+    , unsigned *rev_nodes
+    , unsigned *rev_edges
+    , unsigned *nodes
+    , float *pagerank
+    , float *new_pagerank)
 {
     int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-    if (idx < size) {
-        float new_rank = ((1 - dampening) / size) + (dampening * new_pagerank[idx]);
+    if (idx < vertex_count) {
+        float new_rank = ((1 - dampening) / vertex_count) + (dampening * new_pagerank[idx]);
         float my_diff = abs(new_rank - pagerank[idx]);
         atomicAdd(&diff, my_diff);
         int degree = nodes[idx+1] - nodes[idx];

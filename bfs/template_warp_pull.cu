@@ -57,13 +57,13 @@ warp_bfs(size_t N, unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, in
 
 template<size_t warp_size, size_t chunk_size>
 __global__ void
-vertexPullWarpBfs(unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, size_t size, int *levels, int depth)
-{ warp_bfs<warp_size, chunk_size>(size, rev_nodes, rev_edges, nodes, levels, depth); }
+vertexPullWarpBfs(size_t vertex_count, size_t edge_count, unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, int *levels, int depth)
+{ warp_bfs<warp_size, chunk_size>(vertex_count, rev_nodes, rev_edges, nodes, levels, depth); }
 
 template<size_t warp, size_t chunk>
 struct VertexPullWarpBfs {
     static void work()
-    { vertexPullWarpBfs<warp, chunk> <<<1, 1, 0 >>>(NULL, NULL, NULL, 0, NULL, 0); }
+    { vertexPullWarpBfs<warp, chunk> <<<1, 1, 0 >>>(0, 0, NULL, NULL, NULL, NULL, 0); }
 };
 
 void dummyPullBfs(size_t warp, size_t chunk)

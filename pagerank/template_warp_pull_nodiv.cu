@@ -38,13 +38,20 @@ warp_pagerank(size_t N, unsigned *rev_nodes, unsigned *rev_edges, unsigned *node
 
 template<size_t warp_size, size_t chunk_size>
 __global__ void
-vertexPullWarpNoDiv(unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, size_t size, float *pagerank, float *new_pagerank)
-{ warp_pagerank<warp_size, chunk_size>(size, rev_nodes, rev_edges, nodes, pagerank, new_pagerank); }
+vertexPullWarpNoDiv
+    ( size_t vertex_count
+    , size_t edge_count
+    , unsigned *rev_nodes
+    , unsigned *rev_edges
+    , unsigned *nodes
+    , float *pagerank
+    , float *new_pagerank)
+{ warp_pagerank<warp_size, chunk_size>(vertex_count, rev_nodes, rev_edges, nodes, pagerank, new_pagerank); }
 
 template<size_t warp, size_t chunk>
 struct VertexPullWarpNoDiv {
     static void work()
-    { vertexPullWarpNoDiv<warp, chunk> <<<1, 1, 0 >>>(NULL, NULL, NULL, static_cast<size_t>(0), NULL, NULL); }
+    { vertexPullWarpNoDiv<warp, chunk> <<<1, 1, 0 >>>(0, 0, NULL, NULL, NULL, NULL, NULL); }
 };
 
 void dummyPullNoDiv(size_t warp, size_t chunk)

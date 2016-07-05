@@ -4,7 +4,15 @@ using std::cerr;
 using std::cout;
 using std::endl;
 
-void CUDA::queryPlatform(size_t platform, bool verbose)
+CUDABackend& CUDA = CUDABackend::get();
+
+CUDABackend& CUDABackend::get()
+{
+    static CUDABackend cuda;
+    return cuda;
+}
+
+void CUDABackend::queryPlatform(size_t platform, bool verbose)
 {
     if (platform >= devicesPerPlatform.size()) {
         cerr << "Non-existent platform #"
@@ -20,7 +28,7 @@ void CUDA::queryPlatform(size_t platform, bool verbose)
     listDevices(platform, verbose);
 }
 
-void CUDA::queryDevice(size_t platform, int dev, bool verbose)
+void CUDABackend::queryDevice(size_t platform, int dev, bool verbose)
 {
     if (platform >= devicesPerPlatform.size()) {
         cerr << "Non-existent platform #"
@@ -117,7 +125,7 @@ void CUDA::queryDevice(size_t platform, int dev, bool verbose)
 #endif
 }
 
-void CUDA::setDevice(size_t platform, int device)
+void CUDABackend::setDevice(size_t platform, int device)
 {
     if (platform >= devicesPerPlatform.size()) {
         cerr << "Non-existent platform #"
@@ -140,21 +148,21 @@ void CUDA::setDevice(size_t platform, int device)
     CUDA_CHK(cudaSetDevice(device));
     prop = props[static_cast<size_t>(device)];
 
-    numComputeUnits = static_cast<size_t>(prop.multiProcessorCount);
-    maxThreadsPerBlock = static_cast<size_t>(prop.maxThreadsPerBlock);
-    maxSharedMem = prop.sharedMemPerBlock;
-    maxBlockSizes = { static_cast<size_t>(prop.maxThreadsDim[0])
+    numComputeUnits_ = static_cast<size_t>(prop.multiProcessorCount);
+    maxThreadsPerBlock_ = static_cast<size_t>(prop.maxThreadsPerBlock);
+    maxSharedMem_ = prop.sharedMemPerBlock;
+    maxBlockSizes_ = { static_cast<size_t>(prop.maxThreadsDim[0])
                     , static_cast<size_t>(prop.maxThreadsDim[1])
                     , static_cast<size_t>(prop.maxThreadsDim[2])
     };
 
-    maxGridSizes = { static_cast<size_t>(prop.maxGridSize[0])
+    maxGridSizes_ = { static_cast<size_t>(prop.maxGridSize[0])
                    , static_cast<size_t>(prop.maxGridSize[1])
                    , static_cast<size_t>(prop.maxGridSize[2])
     };
 }
 
-void CUDA::setWorkSizes
+void CUDABackend::setWorkSizes
 ( size_t dims
 , std::vector<size_t> blockSizes
 , std::vector<size_t> gridSizes

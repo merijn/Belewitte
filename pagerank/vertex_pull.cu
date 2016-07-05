@@ -1,6 +1,14 @@
 #include "pagerank.h"
 
-__global__ void vertexPull(unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, size_t size, float *pagerank, float *new_pagerank)
+__global__ void
+vertexPull
+    ( size_t vertex_count
+    , size_t edge_count
+    , unsigned *rev_nodes
+    , unsigned *rev_edges
+    , unsigned *nodes
+    , float *pagerank
+    , float *new_pagerank)
 {
     int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 
@@ -8,7 +16,7 @@ __global__ void vertexPull(unsigned *rev_nodes, unsigned *rev_edges, unsigned *n
     float incomingRank = 0.0f;
     float newRank = 0.0f;
 
-    if (idx < size) {
+    if (idx < vertex_count) {
         for (int i = rev_nodes[idx]; i < rev_nodes[idx + 1]; i++) {
             degree = nodes[rev_edges[i] + 1] - nodes[rev_edges[i]];
 

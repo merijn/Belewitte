@@ -32,7 +32,7 @@ endif
 
 $(DEST)/lib$(NAME).so: $($(NAME)_CPP_OBJS) $($(NAME)_CUDA_OBJS) $(DEST)/device.o
 	$(PRINTF) " NVLINK\t$@\n"
-	$(AT)$(LD) -shared -o $@ $^
+	$(AT)$(LD) $(DYLIBLDFLAGS) -shared -o $@ $^
 
 $(DEST)/device.o: NVCCHOSTCFLAGS+=-Wno-deprecated
 

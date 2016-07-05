@@ -9,7 +9,16 @@
 using std::endl;
 using namespace std::chrono;
 
-TimerRegister::TimerRegister(bool readable) : human_readable(readable)
+TimerRegister& TimerRegister::get()
+{
+    static TimerRegister timers;
+    return timers;
+}
+
+void TimerRegister::print_results(std::ostream& out, bool readable)
+{ get()._print_results(out, readable); }
+
+TimerRegister::TimerRegister()
 {}
 
 TimerRegister::~TimerRegister()
@@ -151,7 +160,7 @@ print_aligned_times(std::ostream& out, measurements time)
 }
 
 void
-TimerRegister::print_results(std::ostream& out)
+TimerRegister::_print_results(std::ostream& out, bool human_readable)
 {
     if (human_readable) {
         out << "Timer results with precision: " << clock::period::den << endl;
@@ -159,9 +168,7 @@ TimerRegister::print_results(std::ostream& out)
     }
 
     for (auto &timer : timers) {
-        if (timer.timings->size() == 0) {
-            out << timer.name << ": no measurements" << endl;
-        } else {
+        if (timer.timings->size() != 0) {
             measurements result = timer_stats(timer);
             if (human_readable) {
                 out << timer.name << " (" << timer.timings->size() << "): " << endl;
@@ -179,8 +186,8 @@ TimerRegister::print_results(std::ostream& out)
     }
 }
 
-Timer::Timer(TimerRegister &timers, std::string name, size_t count)
-    : timings(timers.register_timer(name, count))
+Timer::Timer(std::string name, size_t count)
+    : timings(TimerRegister::get().register_timer(name, count))
 {}
 
 void

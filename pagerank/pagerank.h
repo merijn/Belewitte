@@ -28,21 +28,21 @@ float getDiff();
 
 __global__ void setArrayFloat(float *array, size_t size, float val);
 __global__ void consolidateRank(size_t, float *pagerank, float *new_pagerank);
-__global__ void consolidateRankPull(unsigned *nodes, size_t size, float *pagerank, float *new_pagerank);
+__global__ void consolidateRankPull(size_t vertex_count, size_t edge_count, unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, float *pagerank, float *new_pagerank);
 
-__global__ void vertexPush(unsigned *nodes, unsigned *edges, size_t size, float *pagerank, float *new_pagerank);
-__global__ void vertexPull(unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, size_t size, float *pagerank, float *new_pagerank);
-__global__ void vertexPullNoDiv(unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, size_t size, float *pagerank, float *new_pagerank);
+__global__ void vertexPush(size_t vertex_count, size_t edge_count, unsigned *nodes, unsigned *edges, float *pagerank, float *new_pagerank);
+__global__ void vertexPull(size_t vertex_count, size_t edge_count, unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, float *pagerank, float *new_pagerank);
+__global__ void vertexPullNoDiv(size_t vertex_count, size_t edge_count, unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, float *pagerank, float *new_pagerank);
 
-
-template<size_t, size_t>
-__global__ void vertexPushWarp(unsigned *nodes, unsigned *edges, size_t size, float *pagerank, float *new_pagerank);
 
 template<size_t, size_t>
-__global__ void vertexPullWarp(unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, size_t size, float *pagerank, float *new_pagerank);
-template<size_t, size_t>
-__global__ void vertexPullWarpNoDiv(unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, size_t size, float *pagerank, float *new_pagerank);
+__global__ void vertexPushWarp(size_t vertex_count, size_t edge_count, unsigned *nodes, unsigned *edges, float *pagerank, float *new_pagerank);
 
-__global__ void updateRankStructEdgeList(unsigned *nodes, struct Edge<unsigned> *, size_t, float *pagerank, float *new_pagerank);
-__global__ void updateRankEdgeList(unsigned *nodes, unsigned *edges_in, unsigned *edges_out, size_t edge_count, float *pagerank, float *new_pagerank);
+template<size_t, size_t>
+__global__ void vertexPullWarp(size_t vertex_count, size_t edge_count, unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, float *pagerank, float *new_pagerank);
+template<size_t, size_t>
+__global__ void vertexPullWarpNoDiv(size_t vertex_count, size_t edge_count, unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, float *pagerank, float *new_pagerank);
+
+__global__ void updateRankStructEdgeList(size_t vertex_count, size_t edge_count, unsigned *nodes, struct Edge<unsigned> *, float *pagerank, float *new_pagerank);
+__global__ void updateRankEdgeList(size_t vertex_count, size_t edge_count, unsigned *nodes, unsigned *edges_in, unsigned *edges_out, float *pagerank, float *new_pagerank);
 #endif

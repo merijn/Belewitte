@@ -15,10 +15,8 @@ expand_bfs_SIMD(unsigned W_OFF, unsigned cnt, const unsigned *edges, int *levels
 {
     for (unsigned IDX = W_OFF; IDX < cnt; IDX += W_SZ) {
         unsigned v = edges[IDX];
-        if (levels[v] == -1) {
-            levels[v] = curr + 1;
-            finished = false;
-        }
+        atomicMin(&levels[v], curr + 1);
+        finished = false;
     }
     __threadfence_block();
 }
@@ -42,19 +40,21 @@ warp_bfs(size_t N, unsigned *nodes, unsigned *edges, int *levels, int depth)
     for (int v = 0; v < end; v++) {
         const unsigned num_nbr = MY->vertices[v+1] - MY->vertices[v];
         const unsigned *nbrs = &edges[MY->vertices[v]];
-        expand_bfs_SIMD<warp_size>(W_OFF, num_nbr, nbrs, levels, depth);
+        if (levels[v] == depth) {
+            expand_bfs_SIMD<warp_size>(W_OFF, num_nbr, nbrs, levels, depth);
+        }
     }
 }
 
 template<size_t warp_size, size_t chunk_size>
 __global__ void
-vertexPushWarpBfs(unsigned *nodes, unsigned *edges, size_t size, int *levels, int depth)
-{ warp_bfs<warp_size, chunk_size>(size, nodes, edges, levels, depth); }
+vertexPushWarpBfs(size_t vertex_count, size_t edge_count, unsigned *nodes, unsigned *edges, int *levels, int depth)
+{ warp_bfs<warp_size, chunk_size>(vertex_count, nodes, edges, levels, depth); }
 
 template<size_t warp, size_t chunk>
 struct VertexPushWarpBfs {
     static void work()
-    { vertexPushWarpBfs<warp, chunk> <<<1, 1, 0 >>>(NULL, NULL, 0, NULL, 0); }
+    { vertexPushWarpBfs<warp, chunk> <<<1, 1, 0 >>>(0, 0, NULL, NULL, NULL, 0); }
 };
 
 void dummyPushBfs(size_t warp, size_t chunk)

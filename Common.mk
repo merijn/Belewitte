@@ -81,6 +81,8 @@ ifeq ($(UNAME),Darwin)
     CFLAGS += -isystem$(CUDA_PATH)/include/
     LDFLAGS += -L$(CUDA_PATH)/lib -framework opencl
 
+    DYLIBLDFLAGS += -flat_namespace -undefined suppress
+
     NVWFLAGS = $(CLANGWFLAGS) -Wno-unused-macros -Wno-c++11-long-long \
                -Wno-old-style-cast -Wno-used-but-marked-unused \
                -Wno-unused-function -Wno-missing-variable-declarations \
@@ -96,6 +98,10 @@ ifeq ($(UNAME),Linux)
 
     CFLAGS += -isystem$(CUDA_PATH)/include/
     LDFLAGS += -L$(CUDA_PATH)/lib64 -lOpenCL
+
+ifeq ($(LD),clang++)
+    LD += --gcc-toolchain=$(addsuffix .., $(dir $(shell which gcc)))
+endif
 
     NVWFLAGS =
 

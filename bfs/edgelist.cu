@@ -1,6 +1,6 @@
 #include "bfs.h"
 
-__global__ void edgeListBfs(unsigned *nodes, unsigned *edges_in, unsigned *edges_out, size_t edge_count, int *levels, int depth)
+__global__ void edgeListBfs(size_t vertex_count, size_t edge_count, unsigned *nodes, unsigned *edges_in, unsigned *edges_out, int *levels, int depth)
 {
     int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 

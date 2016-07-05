@@ -1,6 +1,14 @@
 #include "pagerank.h"
 
-__global__ void updateRankEdgeList(unsigned *nodes, unsigned *edges_in, unsigned *edges_out, size_t edge_count, float *pagerank, float *new_pagerank)
+__global__ void
+updateRankEdgeList
+    ( size_t vertex_count
+    , size_t edge_count
+    , unsigned *nodes
+    , unsigned *edges_in
+    , unsigned *edges_out
+    , float *pagerank
+    , float *new_pagerank)
 {
     int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 

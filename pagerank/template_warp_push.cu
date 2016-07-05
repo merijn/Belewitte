@@ -38,13 +38,19 @@ warp_pagerank(size_t N, unsigned *nodes, unsigned *edges, float *pagerank, float
 
 template<size_t warp_size, size_t chunk_size>
 __global__ void
-vertexPushWarp(unsigned *nodes, unsigned *edges, size_t size, float *pagerank, float *new_pagerank)
-{ warp_pagerank<warp_size, chunk_size>(size, nodes, edges, pagerank, new_pagerank); }
+vertexPushWarp
+    ( size_t vertex_count
+    , size_t edge_count
+    , unsigned *nodes
+    , unsigned *edges
+    , float *pagerank
+    , float *new_pagerank)
+{ warp_pagerank<warp_size, chunk_size>(vertex_count, nodes, edges, pagerank, new_pagerank); }
 
 template<size_t warp, size_t chunk>
 struct VertexPushWarp {
     static void work()
-    { vertexPushWarp<warp, chunk> <<<1, 1, 0 >>>(NULL, NULL, 0, NULL, NULL); }
+    { vertexPushWarp<warp, chunk> <<<1, 1, 0 >>>(0, 0, NULL, NULL, NULL, NULL); }
 };
 
 void dummyPush(size_t warp, size_t chunk)

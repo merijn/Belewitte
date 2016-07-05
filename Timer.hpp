@@ -15,12 +15,16 @@ class TimerRegister {
         using clock = std::chrono::high_resolution_clock;
         using nanoseconds = std::chrono::duration<double, std::nano>;
 
-        TimerRegister(bool readable = true);
-        ~TimerRegister();
-
-        void print_results(std::ostream&);
+        static void print_results(std::ostream&, bool);
 
     private:
+        TimerRegister();
+        ~TimerRegister();
+
+        static TimerRegister& get();
+
+        void _print_results(std::ostream&, bool);
+
         struct timer_state {
             timer_state(std::string timer_name, size_t count)
                 : name(timer_name)
@@ -39,7 +43,6 @@ class TimerRegister {
 
         struct measurements timer_stats(timer_state &timer);
 
-        bool human_readable;
         std::vector<timer_state> timers;
 };
 
@@ -50,7 +53,7 @@ class Timer {
         using clock = TimerRegister::clock;
         using nanoseconds = TimerRegister::nanoseconds;
 
-        Timer(TimerRegister &, std::string, size_t = 10);
+        Timer(std::string, size_t = 10);
 
         void start();
         void stop();

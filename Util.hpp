@@ -9,6 +9,7 @@
 
 #include <atomic>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <string>
 
@@ -17,6 +18,15 @@
 #else
 #define FALLTHROUGH
 #endif
+
+struct AlgorithmConfig;
+class Options;
+
+typedef void kernel_register_t
+    ( std::map<std::string, AlgorithmConfig*>& kernels
+    , const Options&
+    , size_t run_count
+    , std::string outputFile);
 
 constexpr std::size_t operator "" _sz (unsigned long long int x);
 constexpr std::size_t operator "" _sz (unsigned long long int x)
@@ -65,6 +75,14 @@ reportError(Args... args)
 {
     printVals(args...);
     std::cerr << std::endl;
+    exit(EXIT_FAILURE);
+}
+
+template<typename... Args>
+inline void __attribute__((noreturn))
+stackTraceError(Args... args)
+{
+    reportError(args...);
     dump_stack_trace(EXIT_FAILURE);
 }
 

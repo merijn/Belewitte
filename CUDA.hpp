@@ -41,30 +41,35 @@ inline void cudaAssert(const cudaError_t code, const char *file, const int line)
     }
 }
 
-class CUDA;
+class CUDABackend;
+
+extern CUDABackend& CUDA;
 
 template<typename... Args>
-struct kernel<CUDA, Args...> {
+struct kernel<CUDABackend, Args...> {
         template<typename T>
         struct ArgType { typedef T type; };
 
         template<typename T>
-        struct ArgType<std::shared_ptr<alloc_t<T>>> { typedef T* type; };
+        struct ArgType<alloc_t<T>> { typedef T* type; };
 
     using type = __global__ void (*)(typename ArgType<Args>::type...);
 };
 
-class CUDA : public Backend<CUDA> {
+class CUDABackend : public Backend<CUDABackend> {
+    friend class Backend<CUDABackend>;
+
     private:
         template<typename V>
-        class cuda_alloc_t : public alloc_t<V>
+        class cuda_alloc_t : public platform_alloc_t<V>
         {
-            friend CUDA;
+            friend CUDABackend;
 
             V* device;
 
             public:
-                cuda_alloc_t(size_t N, bool readonly) : alloc_t<V>(N, readonly)
+                cuda_alloc_t(size_t N, bool readonly)
+                    : platform_alloc_t<V>(N, readonly)
                 {
                     CUDA_CHK( cudaHostAlloc(&this->host, N * sizeof(V),
                                             cudaHostAllocWriteCombined));
@@ -96,7 +101,7 @@ class CUDA : public Backend<CUDA> {
         void initKernel(size_t) {}
 
         template<typename V, typename... Args>
-        void initKernel(size_t offset, std::shared_ptr<alloc_t<V>> val_, Args... args)
+        void initKernel(size_t offset, alloc_t<V> val_, Args... args)
         {
             auto val = std::dynamic_pointer_cast<cuda_alloc_t<V>>(val_);
             ALIGN_UP(offset, __alignof(val->device));
@@ -113,11 +118,10 @@ class CUDA : public Backend<CUDA> {
             initKernel(offset + sizeof val, args...);
         }
 
-    public:
-        CUDA() : Backend<CUDA>("CUDA")
+        CUDABackend() : Backend<CUDABackend>()
         {
-            devicesPerPlatform.push_back(0);
-            CUDA_CHK( cudaGetDeviceCount(devicesPerPlatform.data()));
+            devicesPerPlatform_.push_back(0);
+            CUDA_CHK( cudaGetDeviceCount(devicesPerPlatform_.data()));
 
             for (int i = 0; i < devicesPerPlatform[0]; i++) {
                 props.emplace_back();
@@ -126,10 +130,13 @@ class CUDA : public Backend<CUDA> {
 
             CUDA_CHK( cudaSetDevice(0));
             prop = props[0];
-            maxDims = 3;
+            maxDims_ = 3;
         }
 
-        ~CUDA() {}
+        ~CUDABackend() {}
+
+    public:
+        static CUDABackend& get();
 
         void queryPlatform(size_t platform, bool verbose) override;
         void queryDevice(size_t platform, int device, bool verbose) override;
@@ -139,7 +146,7 @@ class CUDA : public Backend<CUDA> {
                           size_t sharedMem = 0) override;
 
         template<typename... Args>
-        void runKernel(typename kernel<CUDA, Args...>::type kernel, Args... args)
+        void runKernel(typename kernel<CUDABackend, Args...>::type kernel, Args... args)
         {
             CUDA_CHK(cudaConfigureCall(grid, block, sharedMemSize));
             initKernel(0, args...);
@@ -147,11 +154,11 @@ class CUDA : public Backend<CUDA> {
         }
 
         template<typename V>
-        std::shared_ptr<alloc_t<V>> alloc(size_t count)
+        alloc_t<V> alloc(size_t count)
         { return std::make_shared<cuda_alloc_t<V>>(count, false); }
 
         template<typename V>
-        std::shared_ptr<alloc_t<V>> allocConstant(size_t count)
+        alloc_t<V> allocConstant(size_t count)
         { return std::make_shared<cuda_alloc_t<V>>(count, true); }
 
     private:

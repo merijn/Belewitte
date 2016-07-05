@@ -17,17 +17,19 @@ struct kernel {
 };
 
 template<typename V>
-class alloc_t {
+class platform_alloc_t {
     protected:
         V* host;
 
-        alloc_t(size_t N, bool readonly) : size(N), read_only(readonly) {}
+        platform_alloc_t(size_t N, bool readonly)
+            : size(N), read_only(readonly)
+        {}
 
     public:
         const size_t size;
         const bool read_only;
 
-        virtual ~alloc_t() {}
+        virtual ~platform_alloc_t() {}
 
         virtual void copyHostToDev() = 0;
         virtual void copyDevToHost() = 0;
@@ -41,24 +43,41 @@ class alloc_t {
         }
 };
 
+template<typename T>
+using alloc_t = std::shared_ptr<platform_alloc_t<T>>;
+
 template<typename Platform>
 class Backend {
     protected:
-        Backend(std::string backendName) : name(backendName) {}
+        Backend()
+         : devicesPerPlatform(devicesPerPlatform_)
+         , numComputeUnits(numComputeUnits_)
+         , maxThreadsPerBlock(maxThreadsPerBlock_)
+         , maxDims(maxDims_)
+         , maxSharedMem(maxSharedMem_)
+         , maxBlockSizes(maxBlockSizes_)
+         , maxGridSizes(maxGridSizes_)
+        {}
 
     public:
         virtual ~Backend() {}
 
+        size_t platformCount()
+        { return Platform::devicesPerPlatform.size(); }
+
+        int deviceCount(size_t platform)
+        { return Platform::devicesPerPlatform[platform]; }
+
         void listPlatforms(bool verbose)
         {
-            for (size_t i = 0; i < devicesPerPlatform.size(); i++) {
+            for (size_t i = 0; i < Platform::devicesPerPlatform.size(); i++) {
                 queryPlatform(i, verbose);
             }
         }
 
         void listDevices(size_t platform, bool verbose)
         {
-            for (int i = 0; i < devicesPerPlatform[platform]; i++) {
+            for (int i = 0; i < Platform::devicesPerPlatform[platform]; i++) {
                 queryDevice(platform, i, verbose);
             }
         }
@@ -69,16 +88,16 @@ class Backend {
             size_t i;
             std::pair<size_t,size_t> result;
 
-            result.first = CEIL_DIV(count, numComputeUnits);
+            result.first = CEIL_DIV(count, Platform::numComputeUnits);
 
-            for (i = 1; result.first > maxThreadsPerBlock; i++) {
-                result.first = CEIL_DIV(count, i * numComputeUnits);
+            for (i = 1; result.first > Platform::maxThreadsPerBlock; i++) {
+                result.first = CEIL_DIV(count, i * Platform::numComputeUnits);
             }
 
             size_t adjust = result.first % 32;
             result.first += adjust ? 32 - adjust : 0;
 
-            result.second = std::min(i * numComputeUnits,
+            result.second = std::min(i * Platform::numComputeUnits,
                                      CEIL_DIV(count, result.first));
 
             return result;
@@ -101,21 +120,29 @@ class Backend {
         { self().template runKernel(kernel, args...); }
 
         template<typename V>
-        std::shared_ptr<alloc_t<V>> alloc(size_t count)
+        alloc_t<V> alloc(size_t count)
         { return self().template alloc<V>(count); }
 
         template<typename V>
-        std::shared_ptr<alloc_t<V>> allocConstant(size_t count)
+        alloc_t<V> allocConstant(size_t count)
         { return self().template allocConstant<V>(count); }
 
-        const std::string name;
-        std::vector<int> devicesPerPlatform;
+    protected:
+        std::vector<int> devicesPerPlatform_;
+        size_t numComputeUnits_;
+        size_t maxThreadsPerBlock_;
+        size_t maxDims_;
+        size_t maxSharedMem_;
+        std::vector<size_t> maxBlockSizes_;
+        std::vector<size_t> maxGridSizes_;
 
-        size_t numComputeUnits;
-        size_t maxThreadsPerBlock;
-        size_t maxDims;
-        size_t maxSharedMem;
-        std::vector<size_t> maxBlockSizes;
-        std::vector<size_t> maxGridSizes;
+    public:
+        const std::vector<int> &devicesPerPlatform;
+        const size_t &numComputeUnits;
+        const size_t &maxThreadsPerBlock;
+        const size_t &maxDims;
+        const size_t &maxSharedMem;
+        const std::vector<size_t> &maxBlockSizes;
+        const std::vector<size_t> &maxGridSizes;
 };
 #endif

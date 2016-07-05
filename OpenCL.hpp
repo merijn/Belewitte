@@ -51,22 +51,27 @@ inline void __attribute__((noreturn)) opencl_error_callback(const char *errinfo,
     dump_stack_trace(EXIT_FAILURE);
 }
 
-class OpenCL : public Backend<OpenCL> {
+class OpenCLBackend;
+
+extern OpenCLBackend &OpenCL;
+
+class OpenCLBackend : public Backend<OpenCLBackend> {
+    friend class Backend<OpenCLBackend>;
     private:
         template<typename V>
-        class opencl_alloc_t : public alloc_t<V>
+        class opencl_alloc_t : public platform_alloc_t<V>
         {
             cl_mem device;
 
             public:
-                opencl_alloc_t(OpenCL &backend, size_t N, bool readonly)
-                    : alloc_t<V>(N, readonly)
+                opencl_alloc_t(size_t N, bool readonly)
+                    : platform_alloc_t<V>(N, readonly)
                 {
                     cl_int ret;
                     int type = readonly ? CL_MEM_READ_ONLY : CL_MEM_READ_WRITE;
 
                     this->host = new V[N];
-                    device = clCreateBuffer(backend.ctxt, type,
+                    device = clCreateBuffer(ctxt, type,
                                             N * sizeof(V), nullptr, &ret);
                     OPENCL_CHK(ret);
                 }
@@ -97,8 +102,8 @@ class OpenCL : public Backend<OpenCL> {
         void initKernel(cl_uint) {}
 
         template<typename V, typename... Args>
-        void initKernel(cl_kernel kernel, cl_uint offset, alloc_t<V> val,
-                        Args... args)
+        void initKernel(cl_kernel kernel, cl_uint offset,
+                        platform_alloc_t<V> val, Args... args)
         {
             OPENCL_CHK(clSetKernelArg(kernel, offset, sizeof val.device, val.device));
             initKernel(kernel, offset + 1, args...);
@@ -111,10 +116,7 @@ class OpenCL : public Backend<OpenCL> {
             initKernel(kernel, offset + 1, args...);
         }
 
-    public:
-        typedef cl_kernel kernel_t;
-
-        OpenCL() : Backend<OpenCL>("OpenCL")
+        OpenCLBackend() : Backend<OpenCLBackend>()
         {
             cl_int ret;
             cl_uint platformCount;
@@ -128,7 +130,7 @@ class OpenCL : public Backend<OpenCL> {
                 OPENCL_CHK(
                     clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, 0,
                                     NULL, &deviceCount));
-                devicesPerPlatform.push_back(static_cast<int>(deviceCount));
+                devicesPerPlatform_.push_back(static_cast<int>(deviceCount));
 
                 devices.emplace_back(deviceCount);
                 OPENCL_CHK(
@@ -148,12 +150,17 @@ class OpenCL : public Backend<OpenCL> {
             activeDevice = 0;
         }
 
-        ~OpenCL()
+        ~OpenCLBackend()
         {
             clFinish(queue);
             clReleaseCommandQueue(queue);
             clReleaseContext(ctxt);
         }
+
+    public:
+        typedef cl_kernel kernel_t;
+
+        static OpenCLBackend &get();
 
         void queryPlatform(size_t platform, bool verbose) override;
         void queryDevice(size_t platform, int dev, bool verbose) override;
@@ -165,11 +172,11 @@ class OpenCL : public Backend<OpenCL> {
 
         template<typename V>
         alloc_t<V> alloc(size_t count)
-        { return opencl_alloc_t<V>(this, count, false); }
+        { return std::make_shared<opencl_alloc_t<V>>(count, false); }
 
         template<typename V>
         alloc_t<V> allocConstant(int count)
-        { return opencl_alloc_t<V>(this, count, true); }
+        { return std::make_shared<opencl_alloc_t<V>>(count, true); }
 
         template<size_t N>
         cl_kernel createKernel(const char *kernelName, std::array<const char*, N> files, std::array<size_t, N> sizes)

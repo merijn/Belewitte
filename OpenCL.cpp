@@ -4,6 +4,14 @@ using std::cout;
 using std::cerr;
 using std::endl;
 
+OpenCLBackend &OpenCL = OpenCLBackend::get();
+
+OpenCLBackend& OpenCLBackend::get()
+{
+    static OpenCLBackend opencl;
+    return opencl;
+}
+
 const char *openCLErrorToString(const cl_int error)
 {
     switch (error) {
@@ -130,7 +138,7 @@ static void printSpaceSeperated(char *str, bool deepIndent)
     }
 }
 
-void OpenCL::queryPlatform(size_t platform, bool verbose)
+void OpenCLBackend::queryPlatform(size_t platform, bool verbose)
 {
     char *info;
 
@@ -171,7 +179,7 @@ void OpenCL::queryPlatform(size_t platform, bool verbose)
     listDevices(platform, verbose);
 }
 
-void OpenCL::queryDevice(size_t platform, int dev, bool verbose)
+void OpenCLBackend::queryDevice(size_t platform, int dev, bool verbose)
 {
     char *info;
     size_t *sizeVal;
@@ -279,7 +287,7 @@ void OpenCL::queryDevice(size_t platform, int dev, bool verbose)
     cout << endl;
 }
 
-void OpenCL::setDevice(size_t platform, int device)
+void OpenCLBackend::setDevice(size_t platform, int device)
 {
     cl_int ret;
     cl_uint *uintVal;
@@ -321,31 +329,31 @@ void OpenCL::setDevice(size_t platform, int device)
     activeDevice = devices[platform][idx];
 
     oclQueryDevice(devices[platform][idx], CL_DEVICE_MAX_WORK_ITEM_DIMENSIONS, &uintVal);
-    maxDims = static_cast<size_t>(*uintVal);
+    maxDims_ = static_cast<size_t>(*uintVal);
     delete[] uintVal;
 
     oclQueryDevice(devices[platform][idx], CL_DEVICE_MAX_COMPUTE_UNITS, &uintVal);
-    numComputeUnits = static_cast<size_t>(*uintVal);
+    numComputeUnits_ = static_cast<size_t>(*uintVal);
     delete[] uintVal;
 
     oclQueryDevice(devices[platform][idx], CL_DEVICE_MAX_WORK_GROUP_SIZE, &sizeVal);
-    maxThreadsPerBlock = static_cast<size_t>(*sizeVal);
+    maxThreadsPerBlock_ = static_cast<size_t>(*sizeVal);
     delete[] sizeVal;
 
     oclQueryDevice(devices[platform][idx], CL_DEVICE_LOCAL_MEM_SIZE, &longVal);
-    maxSharedMem = static_cast<size_t>(*longVal);
+    maxSharedMem_ = static_cast<size_t>(*longVal);
     delete[] longVal;
 
     oclQueryDevice(devices[platform][idx], CL_DEVICE_MAX_WORK_ITEM_SIZES, &sizeVal);
-    maxBlockSizes.reserve(maxDims);
+    maxBlockSizes_.reserve(maxDims);
     for (size_t i = 0; i < maxDims; i++) {
-        maxBlockSizes.push_back(sizeVal[i]);
-        maxGridSizes.push_back(maxDims);
+        maxBlockSizes_.push_back(sizeVal[i]);
+        maxGridSizes_.push_back(maxDims);
     }
     delete[] sizeVal;
 }
 
-void OpenCL::runKernel(cl_kernel kernel) const
+void OpenCLBackend::runKernel(cl_kernel kernel) const
 {
     cl_event evt;
     cl_uint *computeUnits;
@@ -363,7 +371,7 @@ void OpenCL::runKernel(cl_kernel kernel) const
     delete[] computeUnits;
 }
 
-void OpenCL::setWorkSizes
+void OpenCLBackend::setWorkSizes
 ( size_t dims
 , std::vector<size_t> blockSizes
 , std::vector<size_t> gridSizes
