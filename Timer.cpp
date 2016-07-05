@@ -32,7 +32,7 @@ TimerRegister::register_timer(std::string name, size_t count)
 }
 
 struct time {
-    hours::rep hours;
+    hours::rep hrs;
     minutes::rep mins;
     seconds::rep secs;
     milliseconds::rep msecs;
@@ -48,7 +48,7 @@ split_time(TimerRegister::nanoseconds time)
 
     result.total_time = duration_cast<nanoseconds>(time).count();
 
-    result.hours = duration_cast<hours>(time).count();
+    result.hrs = duration_cast<hours>(time).count();
     time -= duration_cast<hours>(time);
 
     result.mins = duration_cast<minutes>(time).count();
@@ -111,11 +111,11 @@ print_aligned_times(std::ostream& out, measurements time)
 {
     std::stringstream min, avg, max, std;
 
-    if (time.min.hours || time.avg.hours || time.max.hours || time.std.hours) {
-        min << std::setw(3) << time.min.hours << " h   ";
-        avg << std::setw(3) << time.avg.hours << " h   ";
-        max << std::setw(3) << time.max.hours << " h   ";
-        std << std::setw(3) << time.std.hours << " h   ";
+    if (time.min.hrs || time.avg.hrs || time.max.hrs || time.std.hrs) {
+        min << std::setw(3) << time.min.hrs << " h   ";
+        avg << std::setw(3) << time.avg.hrs << " h   ";
+        max << std::setw(3) << time.max.hrs << " h   ";
+        std << std::setw(3) << time.std.hrs << " h   ";
     }
 
     if (time.min.mins || time.avg.mins || time.max.mins || time.std.mins) {

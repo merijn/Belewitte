@@ -1,14 +1,22 @@
 DEST := build
 include Common.mk
 
-ifeq ($(UNAME),Linux)
+ifeq ($(UNAME),Darwin)
+main: LDFLAGS += -L$(CUDA_PATH)/lib -framework opencl
+else ifeq ($(UNAME),Linux)
 build/Connectivity.o: CPATH:=$(ICC_CPATH):$(CPATH)
-build/Connectivity.o: CC=icc
+build/Connectivity.o: CXX=icc
 
 evolve: LDFLAGS+=-ltbb
 evolve: LD=icc
 
-main: LDFLAGS+=-Xlinker --export-dynamic
+main: LDFLAGS += -Xlinker --export-dynamic -L$(CUDA_PATH)/lib64 -lOpenCL
+endif
+
+ifeq ($(CXX),clang++)
+main: LDFLAGS += -rpath $(CUDA_PATH)/lib/
+else ifeq ($(CXX),g++)
+main: LDFLAGS += -Wl,-rpath -Wl,$(CUDA_PATH)/lib/
 endif
 
 all: main normalise gen-graph reorder-graph check-degree evolve print-graph
@@ -16,12 +24,12 @@ all: main normalise gen-graph reorder-graph check-degree evolve print-graph
 -include $(patsubst %.cpp, build/%.d, $(wildcard *.cpp))
 -include $(foreach d, $(wildcard */), $(d)Makefile)
 
-build/main.o build/evolve.o: CFLAGS+=-I$(BOOST_PATH)/include -isystem$(BOOST_PATH)/include
+build/main.o build/evolve.o: CXXFLAGS+=-I$(BOOST_PATH)/include -isystem$(BOOST_PATH)/include
 
 main: build/main.o build/CUDA.o build/OpenCL.o build/Timer.o build/Util.o \
       build/Options.o
 	$(PRINTF) " LD\t$@\n"
-	$(AT)$(LD) $(LDFLAGS) -L$(BOOST_PATH)/lib/ -lboost_regex -lboost_system -lboost_filesystem -lcudart -rpath $(CUDA_PATH)/lib/ $^ -o $@
+	$(AT)$(LD) $(LDFLAGS) -L$(BOOST_PATH)/lib/ -lboost_regex -lboost_system -lboost_filesystem -lcudart $^ -o $@
 
 normalise: build/normalise.o build/Util.o
 	$(PRINTF) " LD\t$@\n"

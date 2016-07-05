@@ -63,21 +63,21 @@ class Backend {
         virtual ~Backend() {}
 
         size_t platformCount()
-        { return Platform::devicesPerPlatform.size(); }
+        { return devicesPerPlatform.size(); }
 
         int deviceCount(size_t platform)
-        { return Platform::devicesPerPlatform[platform]; }
+        { return devicesPerPlatform[platform]; }
 
         void listPlatforms(bool verbose)
         {
-            for (size_t i = 0; i < Platform::devicesPerPlatform.size(); i++) {
+            for (size_t i = 0; i < devicesPerPlatform.size(); i++) {
                 queryPlatform(i, verbose);
             }
         }
 
         void listDevices(size_t platform, bool verbose)
         {
-            for (int i = 0; i < Platform::devicesPerPlatform[platform]; i++) {
+            for (int i = 0; i < devicesPerPlatform[platform]; i++) {
                 queryDevice(platform, i, verbose);
             }
         }
@@ -88,16 +88,16 @@ class Backend {
             size_t i;
             std::pair<size_t,size_t> result;
 
-            result.first = CEIL_DIV(count, Platform::numComputeUnits);
+            result.first = CEIL_DIV(count, numComputeUnits);
 
-            for (i = 1; result.first > Platform::maxThreadsPerBlock; i++) {
-                result.first = CEIL_DIV(count, i * Platform::numComputeUnits);
+            for (i = 1; result.first > maxThreadsPerBlock; i++) {
+                result.first = CEIL_DIV(count, i * numComputeUnits);
             }
 
             size_t adjust = result.first % 32;
             result.first += adjust ? 32 - adjust : 0;
 
-            result.second = std::min(i * Platform::numComputeUnits,
+            result.second = std::min(i * numComputeUnits,
                                      CEIL_DIV(count, result.first));
 
             return result;

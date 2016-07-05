@@ -40,26 +40,27 @@ else
     PRINTF := @printf
 endif
 
-COMMON_CFLAGS=-O3 -MMD -MP -std=c++14 -g -Wno-global-constructors \
-           -Wno-exit-time-destructors
+COMMON_CXXFLAGS=-O3 -MMD -MP -std=c++14 -g
 
 CLANGWFLAGS=-Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic \
          -Wno-documentation-deprecated-sync -Wno-documentation -Wno-padded \
-         -Wno-unused-const-variable -Wno-reserved-id-macro
-CLANGFLAGS=$(COMMON_CFLAGS) $(CLANGWFLAGS) -ftrapv
+         -Wno-unused-const-variable -Wno-reserved-id-macro \
+         -Wno-global-constructors -Wno-exit-time-destructors
+
+CLANGCXXFLAGS=$(COMMON_CXXFLAGS) $(CLANGWFLAGS) -ftrapv
 
 ICCWFLAGS=-Wall -Wremarks -Wcheck -Werror -diag-disable=869,981,10382,11074,11076
-ICC_CFLAGS=$(COMMON_CFLAGS) $(ICCWFLAGS) -xHost
+ICC_CXXFLAGS=$(COMMON_CXXFLAGS) $(ICCWFLAGS) -xHost
 
-CC=clang++
-CFLAGS=$(if $(findstring clang++, $(CC)), $(CLANGFLAGS), \
-            $(if $(findstring icc, $(CC)), $(ICC_CFLAGS), $(COMMON_CFLAGS)))
+CXX=clang++
+CXXFLAGS=$(if $(findstring clang++, $(CXX)), $(CLANGCXXFLAGS), \
+            $(if $(findstring icc, $(CXX)), $(ICC_CXXFLAGS), $(COMMON_CXXFLAGS)))
 LDFLAGS=-ldl -g
 
-LD=$(CC)
+LD=$(CXX)
 
 NVCC?=nvcc
-NVCCFLAGS=-std=c++11 -O3 -g -G -lineinfo
+NVCCXXFLAGS=-std=c++11 -O3 -g -G -lineinfo
 NVCCARCHFLAGS= \
     -gencode arch=compute_20,code=sm_20 \
     -gencode arch=compute_20,code=sm_21 \
@@ -69,7 +70,7 @@ NVCCARCHFLAGS= \
     -gencode arch=compute_52,code=sm_52 \
     -gencode arch=compute_53,code=sm_53
 
-NVCCHOSTCFLAGS?=
+NVCCHOSTCXXFLAGS?=
 
 NVLINK=$(NVCC)
 SED?=sed
@@ -78,8 +79,7 @@ BOOST_PATH?=$(HOME)/opt/
 
 UNAME := $(shell uname -s)
 ifeq ($(UNAME),Darwin)
-    CFLAGS += -isystem$(CUDA_PATH)/include/
-    LDFLAGS += -L$(CUDA_PATH)/lib -framework opencl
+    CXXFLAGS += -isystem$(CUDA_PATH)/include/
 
     DYLIBLDFLAGS += -flat_namespace -undefined suppress
 
@@ -88,16 +88,15 @@ ifeq ($(UNAME),Darwin)
                -Wno-unused-function -Wno-missing-variable-declarations \
                -Wno-pedantic -Wno-missing-prototypes -Wno-unused-parameter
 
-    NVCCFLAGS += --compiler-options "$(NVWFLAGS) $(NVCCHOSTCFLAGS)" \
+    NVCCXXFLAGS += --compiler-options "$(NVWFLAGS) $(NVCCHOSTCXXFLAGS)" \
                  -isystem $(CUDA_PATH)/include/
 
 endif
 ifeq ($(UNAME),Linux)
     CLANGWFLAGS += -Wno-reserved-id-macro
-    CLANGFLAGS += --gcc-toolchain=$(addsuffix .., $(dir $(shell which gcc)))
+    CLANGCXXFLAGS += --gcc-toolchain=$(addsuffix .., $(dir $(shell which gcc)))
 
-    CFLAGS += -isystem$(CUDA_PATH)/include/
-    LDFLAGS += -L$(CUDA_PATH)/lib64 -lOpenCL
+    CXXFLAGS += -isystem$(CUDA_PATH)/include/
 
 ifeq ($(LD),clang++)
     LD += --gcc-toolchain=$(addsuffix .., $(dir $(shell which gcc)))
@@ -105,7 +104,7 @@ endif
 
     NVWFLAGS =
 
-    NVCCFLAGS += --compiler-options "$(NVWFLAGS) $(NVCCHOSTCFLAGS)"
+    NVCCXXFLAGS += --compiler-options "$(NVWFLAGS) $(NVCCHOSTCXXFLAGS)"
 endif
 
 $(DEST)/:
@@ -113,11 +112,11 @@ $(DEST)/:
 
 $(DEST)/%.o: %.cpp | $(DEST)/
 	$(PRINTF) " CXX\t$*.cpp\n"
-	$(AT)$(CC) $(CFLAGS) -I. $< -c -o $@
+	$(AT)$(CXX) $(CXXFLAGS) -I. $< -c -o $@
 
 $(DEST)/%.obj: %.cu | $(DEST)/
 	$(PRINTF) " NVCC\t$*.cu\n"
-	$(AT)$(NVCC) $(NVCCFLAGS) -M -I. $< -o $(@:.obj=.d)
+	$(AT)$(NVCC) $(NVCCXXFLAGS) -M -I. $< -o $(@:.obj=.d)
 	$(AT)$(SED) -i.bak "s#$(notdir $*).o#$(@)#" $(@:.obj=.d)
 	$(AT)rm -f $(@:.obj=.d).bak
-	$(AT)$(NVCC) $(NVCCFLAGS) $(NVCCARCHFLAGS) -I. --device-c $< -o $@
+	$(AT)$(NVCC) $(NVCCXXFLAGS) $(NVCCARCHFLAGS) -I. --device-c $< -o $@
