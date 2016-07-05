@@ -15,7 +15,7 @@ all: main normalise gen-graph reorder-graph check-degree evolve print-graph
 -include $(foreach d, $(wildcard */), $(d)Makefile)
 
 main: build/main.o build/CUDA.o build/OpenCL.o build/Timer.o build/Util.o \
-      build/bfs/libbfs.so build/pagerank/libpagerank.so
+      build/Options.o build/bfs/libbfs.so build/pagerank/libpagerank.so
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) -lcudart -rpath $(CUDA_PATH)/lib/ $^ -o $@
 
@@ -35,7 +35,7 @@ check-degree: build/check-degree.o build/Util.o
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
-build/evolve.o: CFLAGS+=-I$(BOOST_PATH) -isystem$(BOOST_PATH)
+build/evolve.o: CFLAGS+=-I$(BOOST_PATH)/include -isystem$(BOOST_PATH)/include
 
 evolve: build/evolve.o build/Util.o build/Connectivity.o
 	$(PRINTF) " LD\t$@\n"

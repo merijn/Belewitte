@@ -12,7 +12,7 @@ struct BFSImpl {
         Backend<Platform>& backend;
         TimerRegister &timers;
         size_t run_count;
-        const char *outputFile;
+        std::string outputFile;
         size_t vertex_count;
 
     public:
@@ -20,7 +20,7 @@ struct BFSImpl {
         ( Backend<Platform> &b
         , TimerRegister& ts
         , size_t count
-        , const char *output
+        , std::string output
         , size_t vertices
         ) : backend(b), timers(ts), run_count(count), outputFile(output)
           , vertex_count(vertices)
@@ -67,7 +67,7 @@ struct BFSImpl {
                 resultTransfer.stop();
             }
 
-            if (outputFile) {
+            if (!outputFile.empty()) {
                 std::ofstream output(outputFile);
                 for (size_t i = 0; i < results->size; i++) {
                     output << i << "\t" << (*results)[i] << endl;
@@ -99,7 +99,7 @@ void bfs
     , TimerRegister& timers
     , size_t count
     , const std::string filename
-    , const char *outputFile
+    , std::string outputFile
     , int algorithm
     , size_t warp_size
     , size_t chunk_size

@@ -40,7 +40,8 @@ else
     PRINTF := @printf
 endif
 
-COMMON_CFLAGS=-O3 -MMD -MP -std=c++14 -g
+COMMON_CFLAGS=-O3 -MMD -MP -std=c++14 -g -Wno-global-constructors \
+           -Wno-exit-time-destructors
 
 CLANGWFLAGS=-Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic \
          -Wno-documentation-deprecated-sync -Wno-documentation -Wno-padded \
@@ -71,6 +72,9 @@ NVCCARCHFLAGS= \
 NVCCHOSTCFLAGS?=
 
 NVLINK=$(NVCC)
+SED?=sed
+
+BOOST_PATH?=$(HOME)/opt/
 
 UNAME := $(shell uname -s)
 ifeq ($(UNAME),Darwin)
@@ -108,4 +112,6 @@ $(DEST)/%.o: %.cpp | $(DEST)/
 $(DEST)/%.obj: %.cu | $(DEST)/
 	$(PRINTF) " NVCC\t$*.cu\n"
 	$(AT)$(NVCC) $(NVCCFLAGS) -M -I. $< -o $(@:.obj=.d)
+	$(AT)$(SED) -i.bak "s#$(notdir $*).o#$(@)#" $(@:.obj=.d)
+	$(AT)rm -f $(@:.obj=.d).bak
 	$(AT)$(NVCC) $(NVCCFLAGS) $(NVCCARCHFLAGS) -I. --device-c $< -o $@

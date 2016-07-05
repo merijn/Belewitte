@@ -3,5 +3,3 @@
 -Wno-global-constructors
 -std=c++14
 -Wno-reserved-id-macro
--I/Users/merijn/opt/boost_1_59_0/
--isystem/Users/merijn/opt/boost_1_59_0/

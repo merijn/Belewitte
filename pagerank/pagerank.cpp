@@ -12,7 +12,7 @@ struct PageRankImpl {
         Backend<Platform>& backend;
         TimerRegister& timers;
         size_t run_count;
-        const char *outputFile;
+        std::string outputFile;
         size_t vertex_count;
 
     public:
@@ -20,7 +20,7 @@ struct PageRankImpl {
         ( Backend<Platform> &b
         , TimerRegister& ts
         , size_t count
-        , const char *output
+        , std::string output
         , size_t vertices
         ) : backend(b), timers(ts), run_count(count), outputFile(output)
           , vertex_count(vertices)
@@ -73,7 +73,7 @@ struct PageRankImpl {
                 resultTransfer.stop();
             }
 
-            if (outputFile) {
+            if (!outputFile.empty()) {
                 std::ofstream output(outputFile);
                 for (size_t i = 0; i < pageranks->size; i++) {
                     output << i << "\t" << (*pageranks)[i] << endl;
@@ -114,7 +114,7 @@ void pagerank
     , TimerRegister& timers
     , size_t count
     , const std::string filename
-    , const char *outputFile
+    , std::string outputFile
     , int algorithm
     , size_t warp_size
     , size_t chunk_size

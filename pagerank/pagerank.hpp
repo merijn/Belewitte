@@ -5,5 +5,5 @@
 #include "CUDA.hpp"
 #include "Timer.hpp"
 
-void pagerank(CUDA&, TimerRegister&, size_t, const std::string, const char *, int, size_t, size_t);
+void pagerank(CUDA&, TimerRegister&, size_t, const std::string, std::string, int, size_t, size_t);
 #endif
