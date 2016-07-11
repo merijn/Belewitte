@@ -1,10 +1,12 @@
-.PHONY: all clean clean-objs clean-bins clean-libs clean-deps clean-all
+.PHONY: all clean ptx clean-objs clean-bins clean-libs clean-deps clean-ptx \
+    clean-all
 
 all:
 
-clean: clean-objs
+clean: clean-objs clean-ptx
 
 CLEAN_OBJS:=
+CLEAN_PTXS:=
 CLEAN_BINS:=
 CLEAN_LIBS:=
 CLEAN_DEPS:=
@@ -12,6 +14,10 @@ CLEAN_DEPS:=
 clean-objs:
 	$(PRINTF) "cleaning object files...\n"
 	$(AT)rm -rf $(CLEAN_OBJS)
+
+clean-ptx:
+	$(PRINTF) "cleaning ptx files...\n"
+	$(AT)rm -rf $(CLEAN_PTXS)
 
 clean-libs:
 	$(PRINTF) "cleaning libraries...\n"
@@ -25,7 +31,7 @@ clean-deps:
 	$(PRINTF) "cleaning dependencies...\n"
 	$(AT)rm -rf $(CLEAN_DEPS)
 
-clean-all: clean-objs clean-libs clean-deps clean-deps
+clean-all: clean-objs clean-libs clean-deps clean-deps clean-ptx
 
 .DELETE_ON_ERROR:
 
@@ -60,8 +66,8 @@ LDFLAGS=-ldl -g
 LD=$(CXX)
 
 NVCC?=nvcc
-NVCCXXFLAGS=-std=c++11 -O3 -g -G -lineinfo
-NVCCARCHFLAGS= \
+NVCCXXFLAGS?=-std=c++11 -O3 -g -G -lineinfo
+NVCCARCHFLAGS?= \
     -gencode arch=compute_20,code=sm_20 \
     -gencode arch=compute_20,code=sm_21 \
     -gencode arch=compute_30,code=sm_30 \
@@ -69,6 +75,8 @@ NVCCARCHFLAGS= \
     -gencode arch=compute_50,code=sm_50 \
     -gencode arch=compute_52,code=sm_52 \
     -gencode arch=compute_53,code=sm_53
+
+PTXARCH?=sm_53
 
 NVCCHOSTCXXFLAGS?=
 
@@ -117,6 +125,13 @@ $(DEST)/%.o: %.cpp | $(DEST)/
 $(DEST)/%.obj: %.cu | $(DEST)/
 	$(PRINTF) " NVCC\t$*.cu\n"
 	$(AT)$(NVCC) $(NVCCXXFLAGS) -M -I. $< -o $(@:.obj=.d)
-	$(AT)$(SED) -i.bak "s#$(notdir $*).o#$(@)#" $(@:.obj=.d)
+	$(AT)$(SED) -i.bak "s#$(notdir $*).o#$(@) $*.ptx#" $(@:.obj=.d)
 	$(AT)rm -f $(@:.obj=.d).bak
 	$(AT)$(NVCC) $(NVCCXXFLAGS) $(NVCCARCHFLAGS) -I. --device-c $< -o $@
+
+%.ptx: %.cu
+	$(PRINTF) " PTX\t$*.cu\n"
+	$(AT)$(NVCC) $(NVCCXXFLAGS) -M -I. $< -o $(BUILD)$(@:.ptx=.d)
+	$(AT)$(SED) -i.bak "s#$(notdir $*).o#$(@) $*.ptx#" $(BUILD)$(@:.ptx=.d)
+	$(AT)rm -f $(BUILD)$(@:.ptx=.d).bak
+	$(AT)$(NVCC) $(NVCCXXFLAGS) -arch $(PTXARCH) -I. -src-in-ptx --ptx $< -o $@

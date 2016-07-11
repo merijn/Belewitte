@@ -11,4 +11,5 @@ evolve
 *.d
 *.graph
 *.obj
+*.ptx
 data/*
