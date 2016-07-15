@@ -1,10 +1,10 @@
 #include <fstream>
 
 #include "../CUDA.hpp"
-#include "../Interface.hpp"
+#include "../GraphLoading.hpp"
+#include "../TemplateConfig.hpp"
 #include "../Timer.hpp"
 #include "../Util.hpp"
-#include "../WarpDispatch.hpp"
 
 #include "pagerank.h"
 
@@ -35,15 +35,13 @@ struct pullwarpnodiv {
     }
 };
 
-template<typename Platform, typename Kernel, typename... Graph>
-struct PageRankBase : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph...>
+template<typename Platform, typename Kernel, typename Graph>
+struct PageRankBase : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph>
 {
-    using pair = std::pair<size_t,size_t>;
-    using Config = TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph...>;
+    using Config = TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph>;
     using Config::run_count;
     using Config::backend;
     using Config::nodeDivision;
-    using Config::transferGraph;
     using Config::outputFile;
     using Config::setKernelConfig;
     using Config::vertex_count;
@@ -51,6 +49,9 @@ struct PageRankBase : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Gr
     using Config::kernel;
     using Config::options;
     using typename Config::LoadFun;
+
+    template<typename T>
+    using alloc_t = typename Platform::template alloc_t<T>;
 
     PageRankBase
         ( const Options& opts
@@ -63,7 +64,8 @@ struct PageRankBase : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Gr
     : Config(opts, count, outputFile, l, w, kern)
     {}
 
-    virtual void callConsolidate(alloc_t<float>, alloc_t<float>) = 0;
+    virtual void
+    callConsolidate(const alloc_t<float>&, const alloc_t<float>&) = 0;
 
     virtual void runImplementation() override
     {
@@ -76,9 +78,9 @@ struct PageRankBase : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Gr
 
         for (size_t i = 0; i < run_count; i++) {
             initResults.start();
-            backend.setWorkSizes(1, {nodeDivision.first}, {nodeDivision.second});
-            backend.runKernel(setArrayFloat, pageranks, pageranks->size, 1.0f / vertex_count);
-            backend.runKernel(setArrayFloat, new_pageranks, new_pageranks->size, 0.0f);
+            backend.setWorkSizes(1,{nodeDivision.first},{nodeDivision.second});
+            backend.runKernel(setArrayFloat, pageranks, pageranks.size, 1.0f / vertex_count);
+            backend.runKernel(setArrayFloat, new_pageranks, new_pageranks.size, 0.0f);
             initResults.stop();
 
             pagerankTime.start();
@@ -97,60 +99,68 @@ struct PageRankBase : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Gr
             pagerankTime.stop();
 
             resultTransfer.start();
-            pageranks->copyDevToHost();
+            pageranks.copyDevToHost();
             resultTransfer.stop();
         }
 
         if (!outputFile.empty()) {
             std::ofstream output(outputFile);
-            for (size_t i = 0; i < pageranks->size; i++) {
-                output << i << "\t" << (*pageranks)[i] << std::endl;
+            for (size_t i = 0; i < pageranks.size; i++) {
+                output << i << "\t" << pageranks[i] << std::endl;
             }
         }
     }
 };
 
-template<typename Platform, typename Kernel, typename Consolidate, typename... Graph>
-struct PageRank : public PageRankBase<Platform, Kernel, Graph...> {
+template<typename Platform,typename Kernel,typename Graph,typename Consolidate>
+struct PageRank : public PageRankBase<Platform, Kernel, Graph> {
     PageRank
         ( const Options& opts
         , size_t count
         , std::string outputFile
-        , typename PageRankBase<Platform, Kernel, Graph...>::LoadFun l
+        , typename PageRankBase<Platform, Kernel, Graph>::LoadFun l
         , work_division w
         , Kernel kern
         , Consolidate c
         )
-    : PageRankBase<Platform, Kernel, Graph...>(opts, count, outputFile, l, w, kern), consolidate(c)
+     : PageRankBase<Platform,Kernel,Graph>(opts, count, outputFile, l, w, kern)
+     , consolidate(c)
     {}
 
     Consolidate consolidate;
 
+    template<typename T>
+    using alloc_t = typename Platform::template alloc_t<T>;
+
     void
-    callConsolidate(alloc_t<float> ranks, alloc_t<float> new_ranks) override
+    callConsolidate(const alloc_t<float>& ranks, const alloc_t<float>& new_ranks) override
     {
-        this->backend.setWorkSizes(1, {this->nodeDivision.first}, {this->nodeDivision.second});
+        this->backend.setWorkSizes(1,{this->nodeDivision.first},{this->nodeDivision.second});
         this->backend.runKernel(consolidate, this->vertex_count, ranks, new_ranks);
     }
 };
 
-template<typename Platform, typename Kernel, typename Consolidate, typename... Graph>
-struct PageRankNoDiv : public PageRankBase<Platform, Kernel, Graph...> {
+template<typename Platform,typename Kernel,typename Graph,typename Consolidate>
+struct PageRankNoDiv : public PageRankBase<Platform, Kernel, Graph> {
     PageRankNoDiv
         ( const Options& opts
         , size_t count
         , std::string outputFile
-        , typename PageRankBase<Platform, Kernel, Graph...>::LoadFun l
+        , typename PageRankBase<Platform, Kernel, Graph>::LoadFun l
         , work_division w
         , Kernel kern
         , Consolidate c
         )
-    : PageRankBase<Platform, Kernel, Graph...>(opts, count, outputFile, l, w, kern), consolidate(c)
+     : PageRankBase<Platform,Kernel,Graph>(opts, count, outputFile, l, w, kern)
+     , consolidate(c)
     {}
 
     Consolidate consolidate;
 
-    void callConsolidate(alloc_t<float> ranks, alloc_t<float> new_ranks) override
+    template<typename T>
+    using alloc_t = typename Platform::template alloc_t<T>;
+
+    void callConsolidate(const alloc_t<float>& ranks, const alloc_t<float>& new_ranks) override
     {
         this->backend.setWorkSizes(1, {this->nodeDivision.first}, {this->nodeDivision.second});
         this->runKernel(consolidate, ranks, new_ranks);

@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <cuda_runtime.h>
 
-#include "../Graph.hpp"
+#include "GraphRep.hpp"
 
 const float dampening = 0.85f;
 const float epsilon = 0.001f;
@@ -26,23 +26,40 @@ __device__ size_t size_min(size_t x, size_t y);
 void resetDiff();
 float getDiff();
 
-__global__ void setArrayFloat(float *array, size_t size, float val);
-__global__ void consolidateRank(size_t, float *pagerank, float *new_pagerank);
-__global__ void consolidateRankPull(size_t vertex_count, size_t edge_count, unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, float *pagerank, float *new_pagerank);
+__global__ void
+setArrayFloat(float *array, size_t size, float val);
 
-__global__ void vertexPush(size_t vertex_count, size_t edge_count, unsigned *nodes, unsigned *edges, float *pagerank, float *new_pagerank);
-__global__ void vertexPull(size_t vertex_count, size_t edge_count, unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, float *pagerank, float *new_pagerank);
-__global__ void vertexPullNoDiv(size_t vertex_count, size_t edge_count, unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, float *pagerank, float *new_pagerank);
+__global__ void
+consolidateRank(size_t, float *pagerank, float *new_pagerank);
+
+__global__ void
+consolidateRankPull(ReverseCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
+
+__global__ void
+vertexPush(CSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
+
+__global__ void
+vertexPull(ReverseCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
+
+__global__ void
+vertexPullNoDiv(ReverseCSR<unsigned, unsigned> *graph, float *pagerank, float *new_pagerank);
 
 
 template<size_t, size_t>
-__global__ void vertexPushWarp(size_t vertex_count, size_t edge_count, unsigned *nodes, unsigned *edges, float *pagerank, float *new_pagerank);
+__global__ void
+vertexPushWarp(CSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
 
 template<size_t, size_t>
-__global__ void vertexPullWarp(size_t vertex_count, size_t edge_count, unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, float *pagerank, float *new_pagerank);
-template<size_t, size_t>
-__global__ void vertexPullWarpNoDiv(size_t vertex_count, size_t edge_count, unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, float *pagerank, float *new_pagerank);
+__global__ void
+vertexPullWarp(ReverseCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
 
-__global__ void updateRankStructEdgeList(size_t vertex_count, size_t edge_count, unsigned *nodes, struct Edge<unsigned> *, float *pagerank, float *new_pagerank);
-__global__ void updateRankEdgeList(size_t vertex_count, size_t edge_count, unsigned *nodes, unsigned *edges_in, unsigned *edges_out, float *pagerank, float *new_pagerank);
+template<size_t, size_t>
+__global__ void
+vertexPullWarpNoDiv(ReverseCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
+
+__global__ void
+updateRankStructEdgeList(StructEdgeListCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
+
+__global__ void
+updateRankEdgeList(EdgeListCSR<unsigned,unsigned> *, float *pagerank, float *new_pagerank);
 #endif

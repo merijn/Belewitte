@@ -55,22 +55,24 @@ class OpenCLBackend;
 
 extern OpenCLBackend &OpenCL;
 
-class OpenCLBackend : public Backend<OpenCLBackend> {
-    friend class Backend<OpenCLBackend>;
+class OpenCLBackend : public Backend {
+    friend class Backend;
     private:
         template<typename V>
-        class opencl_alloc_t : public platform_alloc_t<V>
+        class alloc_t : public base_alloc_t<V>
         {
             cl_mem device;
 
             public:
-                opencl_alloc_t(size_t N, bool readonly)
-                    : platform_alloc_t<V>(N, readonly)
+                alloc_t(size_t N, bool readonly)
+                    : base_alloc_t<V>(N, readonly)
                 {
                     cl_int ret;
                     int type = readonly ? CL_MEM_READ_ONLY : CL_MEM_READ_WRITE;
 
-                    this->host = new V[N];
+                    V* result = new V[N];
+                    this->host = std::shared_ptr<V>(result, [] (V* p) { delete[] p; });
+                    //FIXME
                     device = clCreateBuffer(ctxt, type,
                                             N * sizeof(V), nullptr, &ret);
                     OPENCL_CHK(ret);
@@ -103,7 +105,7 @@ class OpenCLBackend : public Backend<OpenCLBackend> {
 
         template<typename V, typename... Args>
         void initKernel(cl_kernel kernel, cl_uint offset,
-                        platform_alloc_t<V> val, Args... args)
+                        alloc_t<V> val, Args... args)
         {
             OPENCL_CHK(clSetKernelArg(kernel, offset, sizeof val.device, val.device));
             initKernel(kernel, offset + 1, args...);
@@ -116,7 +118,7 @@ class OpenCLBackend : public Backend<OpenCLBackend> {
             initKernel(kernel, offset + 1, args...);
         }
 
-        OpenCLBackend() : Backend<OpenCLBackend>()
+        OpenCLBackend()
         {
             cl_int ret;
             cl_uint platformCount;
@@ -158,8 +160,6 @@ class OpenCLBackend : public Backend<OpenCLBackend> {
         }
 
     public:
-        typedef cl_kernel kernel_t;
-
         static OpenCLBackend &get();
 
         void queryPlatform(size_t platform, bool verbose) override;
@@ -172,11 +172,11 @@ class OpenCLBackend : public Backend<OpenCLBackend> {
 
         template<typename V>
         alloc_t<V> alloc(size_t count)
-        { return std::make_shared<opencl_alloc_t<V>>(count, false); }
+        { return alloc_t<V>(count, false); }
 
         template<typename V>
         alloc_t<V> allocConstant(int count)
-        { return std::make_shared<opencl_alloc_t<V>>(count, true); }
+        { return alloc_t<V>(count, true); }
 
         template<size_t N>
         cl_kernel createKernel(const char *kernelName, std::array<const char*, N> files, std::array<size_t, N> sizes)

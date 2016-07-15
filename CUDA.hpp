@@ -32,83 +32,92 @@ class CUDABackend;
 
 extern CUDABackend& CUDA;
 
-template<typename... Args>
-struct kernel<CUDABackend, Args...> {
-        template<typename T>
-        struct ArgType { typedef T type; };
+class CUDABackend : public Backend {
+    friend class Backend;
 
-        template<typename T>
-        struct ArgType<alloc_t<T>> { typedef T* type; };
-
-    using type = __global__ void (*)(typename ArgType<Args>::type...);
-};
-
-class CUDABackend : public Backend<CUDABackend> {
-    friend class Backend<CUDABackend>;
-
-    private:
+    public:
         template<typename V>
-        class cuda_alloc_t : public platform_alloc_t<V>
+        class alloc_t : public base_alloc_t<V>
         {
             friend CUDABackend;
 
-            V* device;
+            std::vector<void*> localAllocs;
 
             public:
-                cuda_alloc_t(size_t N, bool readonly)
-                    : platform_alloc_t<V>(N, readonly)
-                {
-                    CUDA_CHK( cudaHostAlloc(&this->host, N * sizeof(V),
-                                            cudaHostAllocWriteCombined));
+                alloc_t()
+                {}
 
-                    CUDA_CHK( cudaMalloc(&device, N * sizeof(V)));
+                alloc_t(size_t N, bool readonly)
+                    : base_alloc_t<V>(N, readonly)
+                {
+                    CUDA_CHK(cudaMallocManaged(&this->ptr, N * sizeof(V),
+                             cudaMemAttachGlobal));
+                    CUDA_CHK(cudaDeviceSynchronize());
                 }
 
-                void copyHostToDev() override
+                alloc_t(alloc_t&& other)
+                    : base_alloc_t<V>(std::move(other))
+                    , localAllocs(std::move(other.localAllocs))
+                {}
+
+                ~alloc_t()
                 {
-                    CUDA_CHK( cudaMemcpy(device, this->host,
-                                         this->size * sizeof(V),
-                                         cudaMemcpyHostToDevice));
+                    CUDA_CHK(cudaDeviceSynchronize());
+                    for (auto ptr : localAllocs) {
+                        CUDA_CHK(cudaFree(ptr));
+                    }
+                    CUDA_CHK(cudaFree(this->ptr));
                 }
 
-                void copyDevToHost() override
+                alloc_t& operator=(alloc_t&& other)
                 {
-                    CUDA_CHK( cudaMemcpy(this->host, device,
-                                         this->size * sizeof(V),
-                                         cudaMemcpyDeviceToHost));
+                    base_alloc_t<V>::operator=(std::move(other));
+                    localAllocs = std::move(other.localAllocs);
+                    return *this;
                 }
 
-                void free() override
+                void copyHostToDev() const override
+                { CUDA_CHK(cudaDeviceSynchronize()); }
+
+                void copyDevToHost() const override
+                { CUDA_CHK(cudaDeviceSynchronize()); }
+
+                template<typename T>
+                void allocLocal(T **loc, size_t N)
                 {
-                    cudaFreeHost(this->host);
-                    cudaFree(device);
+                    CUDA_CHK(cudaMallocManaged(loc, N * sizeof(T),
+                             cudaMemAttachGlobal));
+                    CUDA_CHK(cudaDeviceSynchronize());
+                    localAllocs.push_back(*loc);
                 }
         };
 
+    private:
         void initKernel(size_t) {}
 
         template<typename V, typename... Args>
-        void initKernel(size_t offset, alloc_t<V> val_, Args... args)
+        void
+        initKernel(size_t offset, const alloc_t<V> &val, const Args&... args)
         {
-            auto val = std::dynamic_pointer_cast<cuda_alloc_t<V>>(val_);
-            ALIGN_UP(offset, __alignof(val->device));
-            CUDA_CHK(cudaSetupArgument(&val->device, sizeof val->device, offset));
-            initKernel(offset + sizeof val->device, args...);
+            ALIGN_UP(offset, __alignof(val.ptr));
+            CUDA_CHK(cudaSetupArgument(&val.ptr, sizeof val.ptr, offset));
+            initKernel(offset + sizeof val.ptr, args...);
         }
 
         template<typename T, typename... Args,
             typename = typename std::enable_if<std::is_fundamental<T>::value>::type>
-        void initKernel(size_t offset, T val, Args... args)
+        void
+        initKernel(size_t offset, const T &val, const Args&... args)
         {
             ALIGN_UP(offset, __alignof(val));
             CUDA_CHK(cudaSetupArgument(&val, sizeof val, offset));
             initKernel(offset + sizeof val, args...);
         }
 
-        CUDABackend() : Backend<CUDABackend>()
+        CUDABackend()
         {
             devicesPerPlatform_.push_back(0);
-            CUDA_CHK( cudaGetDeviceCount(devicesPerPlatform_.data()));
+            CUDA_CHK(cudaGetDeviceCount(devicesPerPlatform_.data()));
 
             for (int i = 0; i < devicesPerPlatform[0]; i++) {
                 props.emplace_back();
@@ -123,6 +132,17 @@ class CUDABackend : public Backend<CUDABackend> {
         ~CUDABackend() {}
 
     public:
+        template<typename... Args>
+        struct kernel {
+                template<typename T>
+                struct ArgType { typedef T type; };
+
+                template<typename T>
+                struct ArgType<alloc_t<T>> { typedef T* type; };
+
+            using type = __global__ void (*)(typename ArgType<Args>::type...);
+        };
+
         static CUDABackend& get();
 
         void queryPlatform(size_t platform, bool verbose) override;
@@ -133,7 +153,8 @@ class CUDABackend : public Backend<CUDABackend> {
                           size_t sharedMem = 0) override;
 
         template<typename... Args>
-        void runKernel(typename kernel<CUDABackend, Args...>::type kernel, Args... args)
+        void
+        runKernel(typename kernel<Args...>::type kernel, const Args&... args)
         {
             CUDA_CHK(cudaConfigureCall(grid, block, sharedMemSize));
             initKernel(0, args...);
@@ -141,12 +162,20 @@ class CUDABackend : public Backend<CUDABackend> {
         }
 
         template<typename V>
+        alloc_t<V> alloc()
+        { return alloc<V>(1); }
+
+        template<typename V>
         alloc_t<V> alloc(size_t count)
-        { return std::make_shared<cuda_alloc_t<V>>(count, false); }
+        { return alloc_t<V>(count, false); }
+
+        template<typename V>
+        alloc_t<V> allocConstant()
+        { return allocConstant<V>(1); }
 
         template<typename V>
         alloc_t<V> allocConstant(size_t count)
-        { return std::make_shared<cuda_alloc_t<V>>(count, true); }
+        { return alloc_t<V>(count, true); }
 
     private:
         cudaDeviceProp prop;

@@ -9,9 +9,9 @@
 #include <boost/filesystem.hpp>
 #include <boost/regex.hpp>
 
+#include "AlgorithmConfig.hpp"
 #include "Backend.hpp"
 #include "CUDA.hpp"
-#include "Interface.hpp"
 #include "OpenCL.hpp"
 #include "Options.hpp"
 #include "Timer.hpp"
@@ -22,8 +22,6 @@ using namespace boost::filesystem;
 
 enum class framework { cuda, opencl };
 enum class listing { nothing, algorithms, implementations };
-
-AlgorithmConfig::~AlgorithmConfig() {}
 
 static const char *exeName = "main";
 static Options options('h', "help", cout, [](ostream& out)
@@ -109,10 +107,9 @@ loadAlgorithms
     return result;
 }
 
-template<typename T>
 static listing
 run_with_backend
-( Backend<T>& backend
+( Backend& backend
 , size_t platform
 , int device
 , bool verbose

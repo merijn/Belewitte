@@ -1,14 +1,7 @@
 #include "pagerank.h"
 
 __global__ void
-vertexPull
-    ( size_t vertex_count
-    , size_t edge_count
-    , unsigned *rev_nodes
-    , unsigned *rev_edges
-    , unsigned *nodes
-    , float *pagerank
-    , float *new_pagerank)
+vertexPull(ReverseCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank)
 {
     int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 
@@ -16,11 +9,11 @@ vertexPull
     float incomingRank = 0.0f;
     float newRank = 0.0f;
 
-    if (idx < vertex_count) {
-        for (int i = rev_nodes[idx]; i < rev_nodes[idx + 1]; i++) {
-            degree = nodes[rev_edges[i] + 1] - nodes[rev_edges[i]];
+    if (idx < graph->vertex_count) {
+        for (int i = graph->reverse_vertices[idx]; i < graph->reverse_vertices[idx + 1]; i++) {
+            degree = graph->vertices[graph->reverse_edges[i] + 1] - graph->vertices[graph->reverse_edges[i]];
 
-            incomingRank = pagerank[rev_edges[i]] / degree;
+            incomingRank = pagerank[graph->reverse_edges[i]] / degree;
             newRank += incomingRank;
         }
     }

@@ -26,8 +26,8 @@ all: main normalise gen-graph reorder-graph check-degree evolve print-graph
 
 build/main.o build/evolve.o: CXXFLAGS+=-I$(BOOST_PATH)/include -isystem$(BOOST_PATH)/include
 
-main: build/main.o build/CUDA.o build/OpenCL.o build/Timer.o build/Util.o \
-      build/Options.o
+main: build/main.o build/AlgorithmConfig.o build/Backend.o build/CUDA.o \
+      build/Options.o build/OpenCL.o build/Timer.o build/Util.o
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) -L$(BOOST_PATH)/lib/ -lboost_regex -lboost_system -lboost_filesystem -lcudart $^ -o $@
 

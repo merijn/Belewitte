@@ -5,6 +5,7 @@ NAME := $(notdir $(CURDIR))
 DEST := ../build/$(NAME)
 BUILD := ../build/
 include ../Common.mk
+CXXFLAGS += -I../
 else
 NAME := $(SRCDIR)
 DEST := build/$(SRCDIR)

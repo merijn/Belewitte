@@ -11,7 +11,9 @@ cudaAssert(const cudaError_t code, const char *file, const int line);
 
 __device__ float diff = 0.0;
 
-__device__ size_t size_min(size_t x, size_t y) { return min(static_cast<unsigned long long>(x), static_cast<unsigned long long>(y)); }
+__device__ size_t
+size_min(size_t x, size_t y)
+{ return min(static_cast<unsigned long long>(x), static_cast<unsigned long long>(y)); }
 
 void resetDiff()
 {
@@ -26,7 +28,8 @@ float getDiff()
     return val;
 }
 
-__global__ void setArrayFloat(float *array, size_t size, float val)
+__global__ void
+setArrayFloat(float *array, size_t size, float val)
 {
     int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
     if (idx < size) array[idx] = val;
@@ -45,21 +48,14 @@ __global__ void consolidateRank(size_t size, float *pagerank, float *new_pageran
 }
 
 __global__ void
-consolidateRankPull
-    ( size_t vertex_count
-    , size_t edge_count
-    , unsigned *rev_nodes
-    , unsigned *rev_edges
-    , unsigned *nodes
-    , float *pagerank
-    , float *new_pagerank)
+consolidateRankPull(ReverseCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank)
 {
     int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-    if (idx < vertex_count) {
-        float new_rank = ((1 - dampening) / vertex_count) + (dampening * new_pagerank[idx]);
+    if (idx < graph->vertex_count) {
+        float new_rank = ((1 - dampening) / graph->vertex_count) + (dampening * new_pagerank[idx]);
         float my_diff = abs(new_rank - pagerank[idx]);
         atomicAdd(&diff, my_diff);
-        int degree = nodes[idx+1] - nodes[idx];
+        int degree = graph->vertices[idx+1] - graph->vertices[idx];
         if (degree != 0) pagerank[idx] = new_rank / degree;
         new_pagerank[idx] = 0.0;
     }

@@ -48,13 +48,13 @@ warp_bfs(size_t N, unsigned *nodes, unsigned *edges, int *levels, int depth)
 
 template<size_t warp_size, size_t chunk_size>
 __global__ void
-vertexPushWarpBfs(size_t vertex_count, size_t edge_count, unsigned *nodes, unsigned *edges, int *levels, int depth)
-{ warp_bfs<warp_size, chunk_size>(vertex_count, nodes, edges, levels, depth); }
+vertexPushWarpBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth)
+{ warp_bfs<warp_size, chunk_size>(graph->vertex_count, graph->vertices, graph->edges, levels, depth); }
 
 template<size_t warp, size_t chunk>
 struct VertexPushWarpBfs {
     static void work()
-    { vertexPushWarpBfs<warp, chunk> <<<1, 1, 0 >>>(0, 0, NULL, NULL, NULL, 0); }
+    { vertexPushWarpBfs<warp, chunk> <<<1, 1, 0 >>>(NULL, NULL, 0); }
 };
 
 void dummyPushBfs(size_t warp, size_t chunk)

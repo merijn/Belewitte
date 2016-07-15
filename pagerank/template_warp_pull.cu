@@ -39,20 +39,13 @@ warp_pagerank(size_t N, unsigned *rev_nodes, unsigned *rev_edges, unsigned *node
 
 template<size_t warp_size, size_t chunk_size>
 __global__ void
-vertexPullWarp
-    ( size_t vertex_count
-    , size_t edge_count
-    , unsigned *rev_nodes
-    , unsigned *rev_edges
-    , unsigned *nodes
-    , float *pagerank
-    , float *new_pagerank)
-{ warp_pagerank<warp_size, chunk_size>(vertex_count, rev_nodes, rev_edges, nodes, pagerank, new_pagerank); }
+vertexPullWarp(ReverseCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank)
+{ warp_pagerank<warp_size, chunk_size>(graph->vertex_count, graph->reverse_vertices, graph->reverse_edges, graph->vertices, pagerank, new_pagerank); }
 
 template<size_t warp, size_t chunk>
 struct VertexPullWarp {
     static void work()
-    { vertexPullWarp<warp, chunk> <<<1, 1, 0 >>>(0, 0, NULL, NULL, NULL, NULL, NULL); }
+    { vertexPullWarp<warp, chunk> <<<1, 1, 0 >>>(NULL, NULL, NULL); }
 };
 
 void dummyPull(size_t warp, size_t chunk)

@@ -1,9 +1,9 @@
 #include <fstream>
 
-#include "../CUDA.hpp"
-#include "../Interface.hpp"
-#include "../Timer.hpp"
-#include "../WarpDispatch.hpp"
+#include "CUDA.hpp"
+#include "GraphLoading.hpp"
+#include "TemplateConfig.hpp"
+#include "Timer.hpp"
 
 #include "bfs.h"
 
@@ -23,15 +23,14 @@ struct pullwarp {
     }
 };
 
-template<typename Platform, typename Kernel, typename... Graph>
-struct BFSConfig : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph...>
+template<typename Platform, typename Kernel, typename Graph>
+struct BFSConfig : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph>
 {
     using pair = std::pair<size_t,size_t>;
-    using Config = TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph...>;
+    using Config = TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph>;
     using Config::run_count;
     using Config::backend;
     using Config::nodeDivision;
-    using Config::transferGraph;
     using Config::outputFile;
     using Config::setKernelConfig;
     using Config::vertex_count;
@@ -67,7 +66,7 @@ struct BFSConfig : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph
         for (size_t i = 0; i < run_count; i++) {
             initResults.start();
             backend.setWorkSizes(1,{nodeDivision.first},{nodeDivision.second});
-            backend.runKernel(setArray, results, results->size,
+            backend.runKernel(setArray, results, results.size,
                               std::numeric_limits<int>::max());
 
             root = 0;
@@ -88,14 +87,14 @@ struct BFSConfig : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph
             bfs.stop();
 
             resultTransfer.start();
-            results->copyDevToHost();
+            results.copyDevToHost();
             resultTransfer.stop();
         }
 
         if (!outputFile.empty()) {
             std::ofstream output(outputFile);
-            for (size_t i = 0; i < results->size; i++) {
-                output << i << "\t" << (*results)[i] << std::endl;
+            for (size_t i = 0; i < results.size; i++) {
+                output << i << "\t" << results[i] << std::endl;
             }
         }
     }
