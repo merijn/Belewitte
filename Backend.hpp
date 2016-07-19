@@ -34,8 +34,8 @@ class Backend {
 
                 virtual ~base_alloc_t() {}
 
-                virtual void copyHostToDev() const = 0;
-                virtual void copyDevToHost() const = 0;
+                virtual void copyHostToDev() = 0;
+                virtual void copyDevToHost() = 0;
 
                 base_alloc_t& operator=(base_alloc_t&& other)
                 {

@@ -58,7 +58,7 @@ struct TemplateConfig : public AlgorithmConfig {
     void transferData() {}
 
     template<typename T, typename... Args>
-    void transferData(const alloc_t<T> &data, const Args&... args)
+    void transferData(alloc_t<T> &data, const Args&... args)
     {
         data.copyHostToDev();
         transferData(args...);

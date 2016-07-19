@@ -92,6 +92,12 @@ void CUDABackend::queryDevice(size_t platform, int dev, bool verbose)
 
     alt = props[idx].streamPrioritiesSupported ? "Yes" : "No";
     cout << "\tStream Priorities: " << alt << endl;
+    alt = props[idx].canMapHostMemory ? "Yes" : "No";
+    cout << "\tCan Map Host Memory: " << alt << endl;
+#if CUDART_VERSION >= 6000
+    alt = props[idx].managedMemory ? "Yes" : "No";
+    cout << "\tManaged Memory: " << alt << endl;
+#endif
 
     cout << endl;
 
