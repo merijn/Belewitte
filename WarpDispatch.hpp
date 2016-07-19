@@ -29,11 +29,12 @@ struct _warp_dispatch {
 template<template<size_t,size_t> class F, size_t multiplier>
 struct _warp_dispatch<F, multiplier, 0, 0> {
     template<typename... Args>
-    static auto work(size_t, size_t, Args... args)
+    static auto work(size_t w, size_t c, Args... args)
         -> decltype((F<1,1>::work(args...)))
     {
-        std::cerr << "non-existent" << std::endl;
-        exit(1);
+        std::cerr << "Warp function not compiled for warp size " << w
+                  << " and chunk size " << c << std::endl;
+        exit(EXIT_FAILURE);
     }
 };
 

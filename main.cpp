@@ -61,7 +61,8 @@ loadAlgorithms
     , vector<const char*> &paths
     , const Options& opts
     , size_t run_count
-    , std::string outputFile)
+    , std::string outputFile
+    , bool warn)
 {
     map<string, string> libs;
     map<string, map<string, AlgorithmConfig*>> result;
@@ -95,12 +96,21 @@ loadAlgorithms
 
     for (auto lib : libs) {
         void *hnd = dlopen(lib.second.c_str(), RTLD_NOW);
-        if (!hnd) continue;
+        if (!hnd) {
+            if (warn) {
+                cerr << "dlopen() failed: " << lib.second << endl
+                     << dlerror() << endl;
+            }
+            continue;
+        }
 
         auto dispatch = reinterpret_cast<kernel_register_t*>(dlsym(hnd, sym));
 
         if (dispatch != nullptr) {
             dispatch(result[lib.first], opts, run_count, outputFile);
+        } else if (warn) {
+            cerr << "dlsym() failed: " << sym << " (" << lib.second << ") "
+                 << endl << dlerror() << endl;
         }
     }
 
@@ -163,6 +173,7 @@ int main(int argc, char **argv)
 {
     listing list;
     bool verbose = false;
+    bool warnings = false;
     framework fw = framework::cuda;
     int device = 0;
     size_t platform = 0, run_count = 1;
@@ -187,7 +198,8 @@ int main(int argc, char **argv)
            .add('p', "platform", "NUM", platform, "Platform to use.")
            .add('t', "timings", "FILE", timingsFile,
                 "Where to write timing output.")
-           .add('v', "verbose", verbose, true, "Verbose output.");
+           .add('v', "verbose", verbose, true, "Verbose output.")
+           .add('W', "warn", warnings, true, "Verbose/debug warnings.");
 
     set_new_handler(out_of_memory);
     locale::global(locale(""));
@@ -202,7 +214,7 @@ int main(int argc, char **argv)
                                     verbose, remainingArgs);
 
             algorithms = loadAlgorithms("openclDispatch", paths, options,
-                                        run_count, outputFile);
+                                        run_count, outputFile, warnings);
             {
                 //array<const char*,1> files {{&_binary_kernel_cl_start}};
                 //array<size_t,1> sizes {{(size_t) &_binary_kernel_cl_size}};
@@ -217,7 +229,7 @@ int main(int argc, char **argv)
                                     verbose, remainingArgs);
 
             algorithms = loadAlgorithms("cudaDispatch", paths, options,
-                                        run_count, outputFile);
+                                        run_count, outputFile, warnings);
             break;
         }
     }
