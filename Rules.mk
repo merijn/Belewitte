@@ -6,6 +6,7 @@ DEST := ../build/$(NAME)
 BUILD := ../build/
 include ../Common.mk
 CXXFLAGS += -I../
+NVCCXXFLAGS += -I../
 else
 NAME := $(SRCDIR)
 DEST := build/$(SRCDIR)

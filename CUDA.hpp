@@ -158,6 +158,10 @@ class CUDABackend : public Backend {
                 }
 
                 template<typename T>
+                void allocLocal(T * __restrict__ *loc, size_t N)
+                { allocLocal(const_cast<T**>(loc), N); }
+
+                template<typename T>
                 void allocLocal(T **loc, size_t N)
                 {
                     if (managed) {
