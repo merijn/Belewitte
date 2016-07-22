@@ -1,14 +1,23 @@
 #include "pagerank.h"
 
 __global__ void
-updateRankStructEdgeList(StructEdgeListCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank)
+updateRankStructEdgeList
+    ( StructEdgeListCSR<unsigned,unsigned> *graph
+    , float *pagerank
+    , float *new_pagerank
+    )
 {
-    int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+    uint64_t idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 
     if (idx < graph->edge_count) {
-        int degree = graph->vertices[graph->edges[idx].in + 1] - graph->vertices[graph->edges[idx].in];
+        edge<unsigned> *edge = &graph->edges[idx];
+        unsigned inEdge = edge->in;
+        unsigned outEdge = edge->out;
+        unsigned *vertices = &graph->vertices[inEdge];
+
+        unsigned degree = vertices[1] - vertices[0];
         float new_rank = 0.0f;
-        if (degree != 0) new_rank = pagerank[graph->edges[idx].in] / degree;
-        atomicAdd(&new_pagerank[graph->edges[idx].out], new_rank);
+        if (degree != 0) new_rank = pagerank[inEdge] / degree;
+        atomicAdd(&new_pagerank[outEdge], new_rank);
     }
 }

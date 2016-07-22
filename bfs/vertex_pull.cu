@@ -3,21 +3,24 @@
 __global__ void
 vertexPullBfs(ReverseCSR<unsigned,unsigned> *graph, int *levels, int depth)
 {
-    bool updated = false;
-    int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+    uint64_t idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 
     if (idx < graph->vertex_count) {
-        for (int i = graph->reverse_vertices[idx]; i < graph->reverse_vertices[idx + 1]; i++) {
-            if (levels[graph->reverse_edges[i]] == depth) {
-                updated = true;
+        unsigned *reverse_vertices = graph->reverse_vertices;
+        unsigned start = reverse_vertices[idx];
+        unsigned end = reverse_vertices[idx + 1];
+
+        unsigned *reverse_edges = graph->reverse_edges;
+
+        for (unsigned i = start; i < end; i++) {
+            if (levels[reverse_edges[i]] == depth) {
+                int newDepth = depth + 1;
+                if (levels[idx] > newDepth) {
+                    levels[idx] = newDepth;
+                    finished = false;
+                }
                 break;
             }
-        }
-
-        int newDepth = depth + 1;
-        if (updated && levels[idx] > newDepth) {
-            levels[idx] = newDepth;
-            finished = false;
         }
     }
 }

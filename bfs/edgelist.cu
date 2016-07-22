@@ -3,7 +3,7 @@
 __global__ void
 edgeListBfs(EdgeListCSR<unsigned,unsigned> *graph, int *levels, int depth)
 {
-    int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+    uint64_t idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 
     if (idx < graph->edge_count && levels[graph->inEdges[idx]] == depth) {
         atomicMin(&levels[graph->outEdges[idx]], depth + 1);

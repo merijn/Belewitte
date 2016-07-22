@@ -21,9 +21,6 @@ struct pull_warp_mem_t {
 
 extern __device__ bool finished;
 
-__device__ size_t
-size_min_bfs(size_t x, size_t y);
-
 __global__ void
 setArray(int *array, size_t size, int val);
 

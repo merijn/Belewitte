@@ -1,7 +1,8 @@
+#include <math_functions.h>
 #include "bfs.h"
 #include "../WarpDispatch.hpp"
 
-template<int warp_size, typename T> static __device__ void
+template<size_t warp_size, typename T> static __device__ void
 memcpy_SIMD(int warp_offset, int cnt, T *dest, T *src)
 {
     for (int i = warp_offset; i < cnt; i += warp_size) {
@@ -21,7 +22,7 @@ expand_bfs_SIMD(unsigned W_OFF, unsigned cnt, const unsigned *edges, int *levels
     __threadfence_block();
 }
 
-template<int warp_size, int chunk_size> static __device__ void
+template<size_t warp_size, size_t chunk_size> static __device__ void
 warp_bfs(size_t N, unsigned *nodes, unsigned *edges, int *levels, int depth)
 {
     const int THREAD_ID = (blockIdx.x * blockDim.x) + threadIdx.x;
@@ -31,8 +32,8 @@ warp_bfs(size_t N, unsigned *nodes, unsigned *edges, int *levels, int depth)
     push_warp_mem_t<chunk_size> *tmp = (push_warp_mem_t<chunk_size>*)(SMEM);
     push_warp_mem_t<chunk_size> *MY = &tmp[threadIdx.x / warp_size];
 
-    const size_t v_ = size_min_bfs(W_ID * chunk_size, N);
-    const size_t end = size_min_bfs(chunk_size, (N - v_));
+    const size_t v_ = min(W_ID * chunk_size, N);
+    const size_t end = min(chunk_size, (N - v_));
 
     memcpy_SIMD<warp_size>(W_OFF, end, MY->levels, &levels[v_]);
     memcpy_SIMD<warp_size>(W_OFF, end + 1, MY->vertices, &nodes[v_]);

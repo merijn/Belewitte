@@ -25,10 +25,6 @@ bool getFinished()
     return val;
 }
 
-__device__ size_t
-size_min_bfs(size_t x, size_t y)
-{ return min(static_cast<unsigned long long>(x), static_cast<unsigned long long>(y)); }
-
 __global__ void setArray(int *array, size_t size, int val)
 {
     int idx = (blockIdx.x * blockDim.x) + threadIdx.x;

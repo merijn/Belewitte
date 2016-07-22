@@ -21,8 +21,6 @@ struct push_warp_mem_t {
     float ranks[chunk_sz];
 };
 
-__device__ size_t size_min(size_t x, size_t y);
-
 void resetDiff();
 float getDiff();
 

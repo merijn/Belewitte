@@ -1,10 +1,10 @@
 #include <fstream>
 
-#include "../CUDA.hpp"
-#include "../GraphLoading.hpp"
-#include "../TemplateConfig.hpp"
-#include "../Timer.hpp"
-#include "../Util.hpp"
+#include "CUDA.hpp"
+#include "GraphLoading.hpp"
+#include "TemplateConfig.hpp"
+#include "Timer.hpp"
+#include "Util.hpp"
 
 #include "pagerank.h"
 

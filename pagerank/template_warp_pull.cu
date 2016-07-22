@@ -1,3 +1,4 @@
+#include <math_functions.h>
 #include "pagerank.h"
 #include "../WarpDispatch.hpp"
 
@@ -20,8 +21,8 @@ warp_pagerank(size_t N, unsigned *rev_nodes, unsigned *rev_edges, unsigned *node
     pull_warp_mem_t<chunk_size> *tmp = (pull_warp_mem_t<chunk_size>*) SMEM;
     pull_warp_mem_t<chunk_size> *MY = &tmp[threadIdx.x / warp_size];
 
-    const size_t v_ = size_min(W_ID * chunk_size, static_cast<unsigned long>(N));
-    const size_t end = size_min(chunk_size, (N - v_));
+    const size_t v_ = min(W_ID * chunk_size, static_cast<unsigned long>(N));
+    const size_t end = min(chunk_size, (N - v_));
 
     memcpy_SIMD<warp_size>(W_OFF, end + 1, MY->vertices, &rev_nodes[v_]);
 
