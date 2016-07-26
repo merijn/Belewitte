@@ -2,7 +2,7 @@
 
 __global__ void
 vertexPullNoDiv
-    ( ReverseCSR<unsigned,unsigned> *graph
+    ( ReversedCSR<unsigned,unsigned> *graph
     , float *pagerank
     , float *new_pagerank
     )

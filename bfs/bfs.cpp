@@ -113,7 +113,7 @@ cudaDispatch
     result = {
     { "edge-list", make_config<BFSConfig>
         ( opts, count, outputFile
-        , loadEdgeListCSR<CUDABackend, unsigned, unsigned>
+        , loadEdgeList<CUDABackend, unsigned, unsigned>
         , work_division::edges
         , edgeListBfs)
     },

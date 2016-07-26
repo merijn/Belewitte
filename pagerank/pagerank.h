@@ -31,16 +31,16 @@ __global__ void
 consolidateRank(size_t, float *pagerank, float *new_pagerank);
 
 __global__ void
-consolidateRankPull(ReverseCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
+consolidateRankPull(ReversedCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
 
 __global__ void
 vertexPush(CSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
 
 __global__ void
-vertexPull(ReverseCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
+vertexPull(ReversedCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
 
 __global__ void
-vertexPullNoDiv(ReverseCSR<unsigned, unsigned> *graph, float *pagerank, float *new_pagerank);
+vertexPullNoDiv(ReversedCSR<unsigned, unsigned> *graph, float *pagerank, float *new_pagerank);
 
 
 template<size_t, size_t>
@@ -49,11 +49,11 @@ vertexPushWarp(CSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagera
 
 template<size_t, size_t>
 __global__ void
-vertexPullWarp(ReverseCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
+vertexPullWarp(ReversedCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
 
 template<size_t, size_t>
 __global__ void
-vertexPullWarpNoDiv(ReverseCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
+vertexPullWarpNoDiv(ReversedCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
 
 __global__ void
 updateRankStructEdgeList(StructEdgeListCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);

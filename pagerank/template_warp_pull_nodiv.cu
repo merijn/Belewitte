@@ -39,7 +39,7 @@ warp_pagerank(size_t N, unsigned *rev_nodes, unsigned *rev_edges, unsigned *node
 
 template<size_t warp_size, size_t chunk_size>
 __global__ void
-vertexPullWarpNoDiv(ReverseCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank)
+vertexPullWarpNoDiv(ReversedCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank)
 { warp_pagerank<warp_size, chunk_size>(graph->vertex_count, graph->reverse_vertices, graph->reverse_edges, graph->vertices, pagerank, new_pagerank); }
 
 template<size_t warp, size_t chunk>

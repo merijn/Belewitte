@@ -1,7 +1,7 @@
 #include "bfs.h"
 
 __global__ void
-edgeListBfs(EdgeListCSR<unsigned,unsigned> *graph, int *levels, int depth)
+edgeListBfs(EdgeList<unsigned> *graph, int *levels, int depth)
 {
     uint64_t idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 

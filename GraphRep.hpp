@@ -15,6 +15,29 @@ struct edge {
 };
 
 #ifndef __OPENCL_VERSION__
+template<typename EDGE>
+#endif
+struct EdgeList {
+    uint64_t vertex_count, edge_count;
+
+    EDGE *inEdges;
+    EDGE *outEdges;
+};
+
+#ifndef __OPENCL_VERSION__
+template<typename EDGE>
+#endif
+struct StructEdgeList {
+    uint64_t vertex_count, edge_count;
+
+#ifdef __OPENCL_VERSION__
+    edge *edges;
+#else
+    edge<EDGE> *edges;
+#endif
+};
+
+#ifndef __OPENCL_VERSION__
 template<typename VERTEX, typename EDGE>
 #endif
 struct EdgeListCSR {
@@ -52,11 +75,11 @@ struct CSR {
 #ifndef __OPENCL_VERSION__
 template<typename VERTEX, typename EDGE>
 #endif
-struct ReverseCSR {
+struct ReversedCSR {
     uint64_t vertex_count, edge_count;
 
-    VERTEX *reverse_vertices;
     VERTEX *vertices;
+    VERTEX *reverse_vertices;
     EDGE *reverse_edges;
 };
 #endif

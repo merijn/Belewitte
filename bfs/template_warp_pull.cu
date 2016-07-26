@@ -25,7 +25,7 @@ expand_bfs_SIMD(unsigned W_OFF, unsigned cnt, unsigned *edges, int *levels, int 
 }
 
 template<size_t warp_size, size_t chunk_size> static __device__ void
-warp_bfs(size_t N, unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, int *levels, int depth)
+warp_bfs(size_t N, unsigned *rev_nodes, unsigned *rev_edges, int *levels, int depth)
 {
     const int THREAD_ID = (blockIdx.x * blockDim.x) + threadIdx.x;
     const int W_OFF = THREAD_ID % warp_size;
@@ -58,8 +58,8 @@ warp_bfs(size_t N, unsigned *rev_nodes, unsigned *rev_edges, unsigned *nodes, in
 
 template<size_t warp_size, size_t chunk_size>
 __global__ void
-vertexPullWarpBfs(ReverseCSR<unsigned,unsigned> *graph, int *levels, int depth)
-{ warp_bfs<warp_size, chunk_size>(graph->vertex_count, graph->reverse_vertices, graph->reverse_edges, graph->vertices, levels, depth); }
+vertexPullWarpBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth)
+{ warp_bfs<warp_size, chunk_size>(graph->vertex_count, graph->vertices, graph->edges, levels, depth); }
 
 template<size_t warp, size_t chunk>
 struct VertexPullWarpBfs {

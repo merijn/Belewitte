@@ -201,7 +201,7 @@ cudaDispatch
     },
     { "vertex-pull", make_config<PageRank>
         ( opts, count, outputFile
-        , loadReverseCSR<CUDABackend, unsigned, unsigned>
+        , loadReversedCSR<CUDABackend, unsigned, unsigned>
         , work_division::nodes
         , vertexPull
         , consolidateRank)
@@ -215,21 +215,21 @@ cudaDispatch
     },
     { "vertex-pull-warp", make_warp_config<PageRank>
         ( opts, count, outputFile
-        , loadReverseCSR<CUDABackend, unsigned, unsigned>
+        , loadReversedCSR<CUDABackend, unsigned, unsigned>
         , work_division::nodes
         , warp_dispatch<pullwarp>()
         , consolidateRank)
     },
     { "vertex-pull-nodiv", make_config<PageRankNoDiv>
         ( opts, count, outputFile
-        , loadReverseCSR<CUDABackend, unsigned, unsigned>
+        , loadReversedCSR<CUDABackend, unsigned, unsigned>
         , work_division::nodes
         , vertexPullNoDiv
         , consolidateRankPull)
     },
     { "vertex-pull-warp-nodiv", make_warp_config<PageRankNoDiv>
         ( opts, count, outputFile
-        , loadReverseCSR<CUDABackend, unsigned, unsigned>
+        , loadReversedCSR<CUDABackend, unsigned, unsigned>
         , work_division::nodes
         , warp_dispatch<pullwarpnodiv>()
         , consolidateRankPull)

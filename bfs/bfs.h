@@ -31,7 +31,7 @@ __global__ void
 vertexPushBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth);
 
 __global__ void
-vertexPullBfs(ReverseCSR<unsigned,unsigned> *graph, int *levels, int depth);
+vertexPullBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth);
 
 template<size_t, size_t>
 __global__ void
@@ -39,8 +39,8 @@ vertexPushWarpBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth);
 
 template<size_t, size_t>
 __global__ void
-vertexPullWarpBfs(ReverseCSR<unsigned,unsigned> *graph, int *levels, int depth);
+vertexPullWarpBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth);
 
 __global__ void
-edgeListBfs(EdgeListCSR<unsigned,unsigned> *graph, int *levels, int depth);
+edgeListBfs(EdgeList<unsigned> *graph, int *levels, int depth);
 #endif

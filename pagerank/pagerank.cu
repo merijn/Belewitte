@@ -61,7 +61,7 @@ consolidateRank(size_t size, float *pagerank, float *new_pagerank)
 
 __global__ void
 consolidateRankPull
-    ( ReverseCSR<unsigned,unsigned> *graph
+    ( ReversedCSR<unsigned,unsigned> *graph
     , float *pagerank
     , float *new_pagerank
     )
