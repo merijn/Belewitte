@@ -59,7 +59,7 @@ struct BFSConfig : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph
     virtual void runImplementation() override
     {
         Timer initResults("initResults", run_count);
-        Timer bfsTime("bfsTime", run_count);
+        Timer bfs("computation", run_count);
         Timer resultTransfer("resultTransfer", run_count);
 
         auto results = backend.template alloc<int>(vertex_count);
@@ -75,7 +75,7 @@ struct BFSConfig : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph
             backend.runKernel(set_root, results, 0);
             initResults.stop();
 
-            bfsTime.start();
+            bfs.start();
 
             setKernelConfig();
             bool val;
@@ -85,7 +85,7 @@ struct BFSConfig : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph
                 runKernel(kernel, results, curr++);
                 val = getFinished();
             } while (!val);
-            bfsTime.stop();
+            bfs.stop();
 
             resultTransfer.start();
             results->copyDevToHost();

@@ -68,7 +68,7 @@ struct PageRankBase : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Gr
     virtual void runImplementation() override
     {
         Timer initResults("initResults", run_count);
-        Timer pagerankTime("pagerank", run_count);
+        Timer pagerankTime("computation", run_count);
         Timer resultTransfer("resultTransfer", run_count);
 
         auto pageranks = backend.template alloc<float>(vertex_count);

@@ -11,3 +11,4 @@ evolve
 *.d
 *.graph
 *.obj
+data/*
