@@ -3,6 +3,8 @@ exe=`basename "$0"`
 
 usage () {
       printf "Options:\n"
+      printf "\t-a | --algorithm\n"
+      printf "\t\tAlgorithm(s) benchmark. (default: all)\n"
       printf "\t-h | --help\n"
       printf "\t\tThis help.\n"
       printf "\t-e EXT | --extension EXT\n"
@@ -18,6 +20,7 @@ usage () {
       exit
 }
 
+algorithms=""
 outputExtension="out"
 n=30
 resultdir="$HOME/results"
@@ -27,6 +30,15 @@ while
   case $1 in
     -h | --help)
       usage
+      ;;
+    -a | --algorithm)
+      [ -z "$2" ] && printf "Missing argument for: $1\n\n" && usage || shift 1
+      if [ -n "$1" ]; then
+          algorithms+="$1 "
+      else
+          printf "Zero length argument not allowed for $1!\n\n"
+          usage
+      fi
       ;;
     -e | --extension)
       [ -z "$2" ] && printf "Missing argument for: $1\n\n" && usage || shift 1
@@ -93,7 +105,12 @@ for gpu in "TitanX"; do
     run () {
         prun -np 1 -native "-C $gpu" CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7,8,9,10" $*
     }
-    for alg in `./main list algorithms`; do
+
+    if [ -z "$algorithms" ]; then
+        algorithms=`./main list algorithms`
+    fi
+
+    for alg in $algorithms; do
         for impl in `./main list implementations -a $alg`; do
             extra_flags=""
             if [ -n "$save" ]; then
