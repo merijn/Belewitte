@@ -44,12 +44,11 @@ struct BFSConfig : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph
     BFSConfig
         ( const Options& opts
         , size_t count
-        , std::string outputFile
         , LoadFun l
         , work_division w
         , Kernel kern
         )
-    : Config(opts, count, outputFile, l, w, kern)
+    : Config(opts, count, l, w, kern)
     {
         options.add('r', "root", "NUM", root,
                     "Starting vertex for BFS.");
@@ -107,30 +106,29 @@ cudaDispatch
     ( std::map<std::string, AlgorithmConfig*>& result
     , const Options& opts
     , size_t count
-    , std::string outputFile
     )
 {
     result = {
     { "edge-list", make_config<BFSConfig>
-        ( opts, count, outputFile
+        ( opts, count
         , loadEdgeList<CUDABackend, unsigned, unsigned>
         , work_division::edges
         , edgeListBfs)
     },
     { "vertex-push", make_config<BFSConfig>
-        ( opts, count, outputFile
+        ( opts, count
         , loadCSR<CUDABackend, unsigned, unsigned>
         , work_division::nodes
         , vertexPushBfs)
     },
     { "vertex-pull", make_config<BFSConfig>
-        ( opts, count, outputFile
+        ( opts, count
         , loadReverseCSR<CUDABackend, unsigned, unsigned>
         , work_division::nodes
         , vertexPullBfs)
     },
     { "vertex-push-warp", make_warp_config<BFSConfig>
-        ( opts, count, outputFile
+        ( opts, count
         , loadCSR<CUDABackend, unsigned, unsigned>
         , work_division::nodes
         , warp_dispatch<pushwarp>())

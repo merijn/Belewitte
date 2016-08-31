@@ -3,10 +3,12 @@
 AlgorithmConfig::~AlgorithmConfig() {}
 
 void
-AlgorithmConfig::operator()(const std::string filename)
+AlgorithmConfig::operator()(const std::string filename, const std::string out)
 {
     transferGraph(filename);
+    outputFile = out;
     runImplementation();
+    outputFile.clear();
 }
 
 void

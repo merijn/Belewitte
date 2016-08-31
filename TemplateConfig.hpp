@@ -45,12 +45,11 @@ struct TemplateConfig : public AlgorithmConfig {
     TemplateConfig
         ( const Options& opts
         , size_t count
-        , std::string outputFile
         , LoadFun loadFun
         , work_division division
         , Kernel kern
         )
-    : AlgorithmConfig(opts, count, outputFile)
+    : AlgorithmConfig(opts, count)
     , getSharedMemSize([](auto) { return 0; }), backend(Platform::get())
     , kernel(kern), load(loadFun), workDivision(division)
     {}
@@ -167,13 +166,12 @@ struct WarpConfig : public BaseConfig<Platform,Kernel,GraphData,Args...> {
     WarpConfig
         ( const Options& opts
         , size_t count
-        , std::string outputFile
         , LoadFun loadFun
         , work_division d
         , warp_dispatch<Warp>
         , Args... args
         )
-    : Config(opts, count, outputFile, loadFun, d, nullptr, args...)
+    : Config(opts, count, loadFun, d, nullptr, args...)
     , warp_size(32), chunk_size(32)
     {
         options.add('w', "warp", "NUM", warp_size,
@@ -207,13 +205,12 @@ template
 Config* make_config
     ( const Options& opts
     , size_t count
-    , std::string outputFile
     , GraphData(*l)(Platform&, Graph<Vertex,Edge>&)
     , work_division w
     , Kernel kern
     , Args... args
     )
-{ return new Config(opts, count, outputFile, l, w, kern, args...); }
+{ return new Config(opts, count, l, w, kern, args...); }
 
 template
 < template<typename, typename, typename, typename...> class Cfg
@@ -229,11 +226,10 @@ template
 Config* make_warp_config
     ( const Options& opts
     , size_t count
-    , std::string outputFile
     , GraphData(*l)(Platform&, Graph<Vertex,Edge>&)
     , work_division w
     , warp_dispatch<Warp> d
     , Args... args
     )
-{ return new Config(opts, count, outputFile, l, w, d, args...); }
+{ return new Config(opts, count, l, w, d, args...); }
 #endif

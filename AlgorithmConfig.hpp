@@ -5,8 +5,8 @@
 
 struct AlgorithmConfig {
   protected:
-    AlgorithmConfig(const Options& opts, size_t count, std::string out)
-     : options(opts, true), run_count(count), outputFile(out)
+    AlgorithmConfig(const Options& opts, size_t count)
+     : options(opts, true), run_count(count)
     {}
 
     AlgorithmConfig(const AlgorithmConfig& o)
@@ -23,7 +23,7 @@ struct AlgorithmConfig {
     virtual void runImplementation() = 0;
 
   public:
-    void operator()(const std::string filename);
+    void operator()(const std::string filename, const std::string outputFile);
     void help(std::ostream& out, std::string prefix);
     std::vector<char*> setup(std::vector<char*> args);
 };

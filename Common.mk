@@ -32,6 +32,8 @@ clean-deps:
 	$(AT)rm -rf $(CLEAN_DEPS)
 
 clean-all: clean-objs clean-libs clean-deps clean-deps clean-ptx
+	$(PRINTF) "removing build directory...\n"
+	$(AT)rm -rf $(BUILD)
 
 .DELETE_ON_ERROR:
 

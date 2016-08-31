@@ -25,8 +25,7 @@ class Options;
 typedef void kernel_register_t
     ( std::map<std::string, AlgorithmConfig*>& kernels
     , const Options&
-    , size_t run_count
-    , std::string outputFile);
+    , size_t run_count);
 
 constexpr std::size_t operator "" _sz (unsigned long long int x);
 constexpr std::size_t operator "" _sz (unsigned long long int x)

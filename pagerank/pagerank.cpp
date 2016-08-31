@@ -56,12 +56,11 @@ struct PageRankBase : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Gr
     PageRankBase
         ( const Options& opts
         , size_t count
-        , std::string outputFile
         , LoadFun l
         , work_division w
         , Kernel kern
         )
-    : Config(opts, count, outputFile, l, w, kern)
+    : Config(opts, count, l, w, kern)
     {}
 
     virtual void
@@ -117,13 +116,12 @@ struct PageRank : public PageRankBase<Platform, Kernel, Graph> {
     PageRank
         ( const Options& opts
         , size_t count
-        , std::string outputFile
         , typename PageRankBase<Platform, Kernel, Graph>::LoadFun l
         , work_division w
         , Kernel kern
         , Consolidate c
         )
-     : PageRankBase<Platform,Kernel,Graph>(opts, count, outputFile, l, w, kern)
+     : PageRankBase<Platform,Kernel,Graph>(opts, count, l, w, kern)
      , consolidate(c)
     {}
 
@@ -145,13 +143,12 @@ struct PageRankNoDiv : public PageRankBase<Platform, Kernel, Graph> {
     PageRankNoDiv
         ( const Options& opts
         , size_t count
-        , std::string outputFile
         , typename PageRankBase<Platform, Kernel, Graph>::LoadFun l
         , work_division w
         , Kernel kern
         , Consolidate c
         )
-     : PageRankBase<Platform,Kernel,Graph>(opts, count, outputFile, l, w, kern)
+     : PageRankBase<Platform,Kernel,Graph>(opts, count, l, w, kern)
      , consolidate(c)
     {}
 
@@ -174,61 +171,60 @@ cudaDispatch
     ( std::map<std::string, AlgorithmConfig*>& result
     , const Options& opts
     , size_t count
-    , std::string outputFile
     )
 {
     result = {
     { "edge-list", make_config<PageRank>
-        ( opts, count, outputFile
+        ( opts, count
         , loadEdgeListCSR<CUDABackend, unsigned, unsigned>
         , work_division::edges
         , updateRankEdgeList
         , consolidateRank)
     },
     { "struct-edge-list", make_config<PageRank>
-        ( opts, count, outputFile
+        ( opts, count
         , loadStructEdgeListCSR<CUDABackend, unsigned, unsigned>
         , work_division::edges
         , updateRankStructEdgeList
         , consolidateRank)
     },
     { "vertex-push", make_config<PageRank>
-        ( opts, count, outputFile
+        ( opts, count
         , loadCSR<CUDABackend, unsigned, unsigned>
         , work_division::nodes
         , vertexPush
         , consolidateRank)
     },
     { "vertex-pull", make_config<PageRank>
-        ( opts, count, outputFile
+        ( opts, count
         , loadReversedCSR<CUDABackend, unsigned, unsigned>
         , work_division::nodes
         , vertexPull
         , consolidateRank)
     },
     { "vertex-push-warp", make_warp_config<PageRank>
-        ( opts, count, outputFile
+        ( opts, count
         , loadCSR<CUDABackend, unsigned, unsigned>
         , work_division::nodes
         , warp_dispatch<pushwarp>()
         , consolidateRank)
     },
     { "vertex-pull-warp", make_warp_config<PageRank>
-        ( opts, count, outputFile
+        ( opts, count
         , loadReversedCSR<CUDABackend, unsigned, unsigned>
         , work_division::nodes
         , warp_dispatch<pullwarp>()
         , consolidateRank)
     },
     { "vertex-pull-nodiv", make_config<PageRankNoDiv>
-        ( opts, count, outputFile
+        ( opts, count
         , loadReversedCSR<CUDABackend, unsigned, unsigned>
         , work_division::nodes
         , vertexPullNoDiv
         , consolidateRankPull)
     },
     { "vertex-pull-warp-nodiv", make_warp_config<PageRankNoDiv>
-        ( opts, count, outputFile
+        ( opts, count
         , loadReversedCSR<CUDABackend, unsigned, unsigned>
         , work_division::nodes
         , warp_dispatch<pullwarpnodiv>()

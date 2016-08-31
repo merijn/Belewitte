@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <sstream>
@@ -15,11 +16,17 @@ TimerRegister& TimerRegister::get()
     return timers;
 }
 
-void TimerRegister::print_results(std::ostream& out, bool readable)
-{ get()._print_results(out, readable); }
+void TimerRegister::start_epoch(const std::string& s)
+{ get()._start_epoch(s); }
 
-TimerRegister::TimerRegister()
-{}
+void TimerRegister::set_output(std::string file, bool readable)
+{ get()._set_output(file, readable); }
+
+void TimerRegister::finalise()
+{ get().print_results(); }
+
+TimerRegister::TimerRegister() : out(nullptr)
+{ out.rdbuf(std::cout.rdbuf()); }
 
 TimerRegister::~TimerRegister()
 {}
@@ -27,7 +34,9 @@ TimerRegister::~TimerRegister()
 std::shared_ptr<std::vector<TimerRegister::nanoseconds>>
 TimerRegister::register_timer(std::string name, size_t count)
 {
-    timers.emplace_back(name, count);
+    std::string prefix = "";
+    if (!epoch_name.empty()) prefix = epoch_name + ":";
+    timers.emplace_back(prefix + name, count);
     return timers.back().timings;
 }
 
@@ -76,24 +85,25 @@ struct measurements {
 measurements
 TimerRegister::timer_stats(timer_state &timer)
 {
+    auto timings = *timer.timings;
     nanoseconds min, max, avg = nanoseconds(0), std = nanoseconds(0);
 
-    min = *std::min_element(timer.timings->begin(), timer.timings->end());
-    max = *std::max_element(timer.timings->begin(), timer.timings->end());
+    min = *std::min_element(timings.begin(), timings.end());
+    max = *std::max_element(timings.begin(), timings.end());
 
-    for (auto time : *timer.timings) {
+    for (auto time : timings) {
         avg += time;
     }
 
-    avg /= timer.timings->size();
+    avg /= timings.size();
 
-    for (auto time : *timer.timings) {
+    for (auto time : timings) {
         nanoseconds diff = time - avg;
         std += nanoseconds(diff.count() * diff.count());
     }
 
-    if (timer.timings->size() > 1) {
-        std *= 1.0 / (timer.timings->size() - 1);
+    if (timings.size() > 1) {
+        std *= 1.0 / (timings.size() - 1);
         std = nanoseconds(std::sqrt(std.count()));
     } else {
         std = nanoseconds(0);
@@ -160,7 +170,7 @@ print_aligned_times(std::ostream& out, measurements time)
 }
 
 void
-TimerRegister::_print_results(std::ostream& out, bool human_readable)
+TimerRegister::print_results()
 {
     if (human_readable) {
         out << "Timer results with precision: " << clock::period::den << endl;
@@ -183,6 +193,23 @@ TimerRegister::_print_results(std::ostream& out, bool human_readable)
                     << result.std.total_time << endl;
             }
         }
+    }
+}
+
+void
+TimerRegister::_start_epoch(const std::string &name)
+{
+    epoch_name = name;
+    print_results();
+}
+
+void TimerRegister::_set_output(std::string file, bool readable)
+{
+    human_readable = readable;
+    if (!file.empty()) {
+        std::filebuf *fileBuffer = new std::filebuf();
+        fileBuffer->open(file.c_str(), std::ios::out | std::ios::app);
+        out.rdbuf(fileBuffer);
     }
 }
 

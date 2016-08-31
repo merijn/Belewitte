@@ -84,13 +84,21 @@ class Backend {
         };
 
         Backend()
-         : devicesPerPlatform(devicesPerPlatform_)
+         : numComputeUnits_(0)
+         , maxThreadsPerBlock_(0)
+         , maxDims_(0)
+         , maxSharedMem_(0)
+         , maxBlockSizes_(0)
+         , maxGridSizes_(0)
+         , initialised_(false)
+         , devicesPerPlatform(devicesPerPlatform_)
          , numComputeUnits(numComputeUnits_)
          , maxThreadsPerBlock(maxThreadsPerBlock_)
          , maxDims(maxDims_)
          , maxSharedMem(maxSharedMem_)
          , maxBlockSizes(maxBlockSizes_)
          , maxGridSizes(maxGridSizes_)
+         , initialised(initialised_)
         {}
 
     public:
@@ -117,6 +125,7 @@ class Backend {
         size_t maxSharedMem_;
         std::vector<size_t> maxBlockSizes_;
         std::vector<size_t> maxGridSizes_;
+        bool initialised_;
 
     public:
         const std::vector<int> &devicesPerPlatform;
@@ -126,5 +135,6 @@ class Backend {
         const size_t &maxSharedMem;
         const std::vector<size_t> &maxBlockSizes;
         const std::vector<size_t> &maxGridSizes;
+        const bool &initialised;
 };
 #endif

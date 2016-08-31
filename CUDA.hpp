@@ -203,8 +203,12 @@ class CUDABackend : public Backend {
 
         CUDABackend()
         {
+            cudaError_t result;
+
             devicesPerPlatform_.push_back(0);
-            CUDA_CHK(cudaGetDeviceCount(devicesPerPlatform_.data()));
+            result = cudaGetDeviceCount(devicesPerPlatform_.data());
+            if (result == cudaErrorNoDevice) return;
+            CUDA_CHK(result);
 
             for (int i = 0; i < devicesPerPlatform[0]; i++) {
                 props.emplace_back();
@@ -214,6 +218,7 @@ class CUDABackend : public Backend {
             CUDA_CHK( cudaSetDevice(0));
             prop = props[0];
             maxDims_ = 3;
+            initialised_ = true;
         }
 
         ~CUDABackend() {}

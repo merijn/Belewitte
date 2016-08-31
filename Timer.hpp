@@ -15,7 +15,9 @@ class TimerRegister {
         using clock = std::chrono::high_resolution_clock;
         using nanoseconds = std::chrono::duration<double, std::nano>;
 
-        static void print_results(std::ostream&, bool);
+        static void start_epoch(const std::string&);
+        static void set_output(std::string, bool);
+        static void finalise();
 
     private:
         TimerRegister();
@@ -23,7 +25,8 @@ class TimerRegister {
 
         static TimerRegister& get();
 
-        void _print_results(std::ostream&, bool);
+        void _start_epoch(const std::string&);
+        void _set_output(std::string, bool);
 
         struct timer_state {
             timer_state(std::string timer_name, size_t count)
@@ -39,11 +42,16 @@ class TimerRegister {
             std::shared_ptr<std::vector<nanoseconds>> timings;
         };
 
-        std::shared_ptr<std::vector<nanoseconds>> register_timer(std::string, size_t);
+        std::shared_ptr<std::vector<nanoseconds>>
+        register_timer(std::string, size_t);
+        void print_results();
 
         struct measurements timer_stats(timer_state &timer);
 
         std::vector<timer_state> timers;
+        std::string epoch_name;
+        std::ostream out;
+        bool human_readable;
 };
 
 class Timer {

@@ -93,17 +93,13 @@ for gpu in "TitanX"; do
     run () {
         prun -np 1 -native "-C $gpu" CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7,8,9,10" $*
     }
-    for alg in `run ./main list algorithms`; do
-        for impl in `run ./main list implementations -a $alg`; do
-            for path in ../graphs/*.graph; do
-                graph=$(basename $path)
-                graph=${graph%.graph}
-                extra_flags=""
-                if [ -n "$save" ]; then
-                    extra_flags+="-o $resultdir/$graph.$alg.$impl.$gpu.$outputExtension"
-                fi
-                run ./main -a $alg -k $impl -n $n -t $resultdir/$graph.$alg.$impl.$gpu.$timingsExtension $path $extra_flags &
-            done
+    for alg in `./main list algorithms`; do
+        for impl in `./main list implementations -a $alg`; do
+            extra_flags=""
+            if [ -n "$save" ]; then
+                extra_flags+="-s $alg.$impl.$gpu.$outputExtension -o $resultdir"
+            fi
+            run ./main -a $alg -k $impl -n $n -t $resultdir/$alg.$impl.$gpu.$timingsExtension ../graphs/*.graph $extra_flags &
         done
     done
     wait

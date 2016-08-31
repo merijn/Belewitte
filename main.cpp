@@ -61,7 +61,6 @@ loadAlgorithms
     , vector<const char*> &paths
     , const Options& opts
     , size_t run_count
-    , std::string outputFile
     , bool warn)
 {
     map<string, string> libs;
@@ -107,7 +106,7 @@ loadAlgorithms
         auto dispatch = reinterpret_cast<kernel_register_t*>(dlsym(hnd, sym));
 
         if (dispatch != nullptr) {
-            dispatch(result[lib.first], opts, run_count, outputFile);
+            dispatch(result[lib.first], opts, run_count);
         } else if (warn) {
             cerr << "dlsym() failed: " << sym << " (" << lib.second << ") "
                  << endl << dlerror() << endl;
@@ -165,6 +164,10 @@ run_with_backend
         }
     }
 
+    if (!backend.initialised) {
+        cerr << "Backend not initialised: No devices?" << endl;
+        exit(EXIT_FAILURE);
+    }
     backend.setDevice(platform, device);
     return listing::nothing;
 }
@@ -174,10 +177,12 @@ int main(int argc, char **argv)
     listing list;
     bool verbose = false;
     bool warnings = false;
+    bool printStdOut = false;
     framework fw = framework::cuda;
     int device = 0;
     size_t platform = 0, run_count = 1;
-    string outputFile;
+    string outputSuffix;
+    string outputDir;
     string timingsFile;
     string algorithmName;
     string kernelName;
@@ -193,9 +198,13 @@ int main(int argc, char **argv)
                 "Search path for algorithm libraries.")
            .add('n', "count", "NUM", run_count,
                 "Number of times to run algorithm.")
-           .add('o', "output", "FILE", outputFile,
-                "Where to write algorithm output.")
+           .add('o', "output-dir", "DIR", outputDir,
+                "Location to use for writing algorithm output.")
+           .add('O', "output", printStdOut, true,
+                "Print result to stdout, inhibits output file creation.")
            .add('p', "platform", "NUM", platform, "Platform to use.")
+           .add('s', "suffix", "EXT", outputSuffix,
+                "Extension to use for writing algorithm output.")
            .add('t', "timings", "FILE", timingsFile,
                 "Where to write timing output.")
            .add('v', "verbose", verbose, true, "Verbose output.")
@@ -214,7 +223,7 @@ int main(int argc, char **argv)
                                     verbose, remainingArgs);
 
             algorithms = loadAlgorithms("openclDispatch", paths, options,
-                                        run_count, outputFile, warnings);
+                                        run_count, warnings);
             {
                 //array<const char*,1> files {{&_binary_kernel_cl_start}};
                 //array<size_t,1> sizes {{(size_t) &_binary_kernel_cl_size}};
@@ -229,7 +238,7 @@ int main(int argc, char **argv)
                                     verbose, remainingArgs);
 
             algorithms = loadAlgorithms("cudaDispatch", paths, options,
-                                        run_count, outputFile, warnings);
+                                        run_count, warnings);
             break;
         }
     }
@@ -255,21 +264,36 @@ int main(int argc, char **argv)
         case listing::nothing: break;
     }
 
-    if (algorithmName == "") {
+    if (algorithmName.empty()) {
         cerr << "Algorithm name not specified!" << endl;
-        usage(EXIT_FAILURE);
-    } else if (kernelName == "") {
+        exit(EXIT_FAILURE);
+    } else if (kernelName.empty()) {
         cerr << "Kernel name not specified!" << endl;
-        usage(EXIT_FAILURE);
+        exit(EXIT_FAILURE);
     } else {
         try {
             auto algorithm = algorithms.at(algorithmName);
             try {
                 AlgorithmConfig &kernel = *algorithm.at(kernelName);
                 remainingArgs = kernel.setup(remainingArgs);
+
+                TimerRegister::set_output(timingsFile, verbose);
+
                 for (auto graph : remainingArgs) {
-                    kernel(graph);
+                    TimerRegister::start_epoch(path(graph).stem().string());
+                    string output;
+                    if (printStdOut) {
+                        output = "/dev/stdout";
+                    } else if (!outputSuffix.empty()) {
+                        auto filename = outputDir / path(graph).filename();
+                        filename.replace_extension(outputSuffix);
+
+                        output = filename.string();
+                    }
+                    kernel(graph, output);
                 }
+
+                TimerRegister::finalise();
             } catch (const out_of_range &) {
                 reportError("No kernel named \"", kernelName,
                             "\" for algorithm \"", algorithmName, "\"!");
@@ -278,13 +302,5 @@ int main(int argc, char **argv)
             reportError("No algorithm named \"", algorithmName, "\"!");
         }
     }
-
-    if (timingsFile.empty()) {
-        TimerRegister::print_results(cout, verbose);
-    } else {
-        ofstream timings(timingsFile);
-        TimerRegister::print_results(timings, verbose);
-    }
-
     return 0;
 }
