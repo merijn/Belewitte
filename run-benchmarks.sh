@@ -3,12 +3,14 @@ exe=`basename "$0"`
 
 usage () {
       printf "Options:\n"
-      printf "\t-a | --algorithm\n"
-      printf "\t\tAlgorithm(s) benchmark. (default: all)\n"
       printf "\t-h | --help\n"
       printf "\t\tThis help.\n"
+      printf "\t-a | --algorithm\n"
+      printf "\t\tAlgorithm(s) benchmark. (default: all)\n"
       printf "\t-e EXT | --extension EXT\n"
       printf "\t\tExtension to use for algorithm output files.\n"
+      printf "\t-g DIR | --graphs DIR\n"
+      printf "\t\tDirectories to read graphs from.\n"
       printf "\t-l NAME | --label NAME\n"
       printf "\t\tName for result set\n"
       printf "\t-n NUM | --count NUM\n"
@@ -23,6 +25,7 @@ usage () {
 }
 
 algorithms=""
+graphdirs=()
 outputExtension="out"
 n=30
 resultdir="data"
@@ -55,6 +58,10 @@ while
           printf "Zero length argument not allowed for $1!\n\n"
           usage
       fi
+      ;;
+    -g | --graphs)
+      [ -z "$2" ] && printf "Missing argument for: $1\n\n" && usage || shift 1
+      graphdirs+=("$1")
       ;;
     -l | --label)
       [ -z "$2" ] && printf "Missing argument for: $1\n\n" && usage || shift 1
@@ -108,6 +115,10 @@ done
 
 mkdir -p "$resultdir/$label"
 
+if [ ${#graphdirs[@]} -eq 0 ]; then
+    graphdirs+=("$HOME/graphs")
+fi
+
 for gpu in "TitanX"; do
     run () {
         prun -np 1 -native "-C $gpu" CUDA_VISIBLE_DEVICES="0,1,2,3,4,5,6,7,8,9,10" $*
@@ -117,16 +128,18 @@ for gpu in "TitanX"; do
         algorithms=`./main list algorithms`
     fi
 
-    for alg in $algorithms; do
-        for impl in `./main list implementations -a $alg`; do
-            extra_flags=""
-            if [ -n "$save" ]; then
-                extra_flags+="-s $alg.$impl.$gpu.$outputExtension "
-                extra_falgs+="-o $resultdir/$label"
-            fi
-            run ./main -a $alg -k $impl -n $n -t $resultdir/$label/$alg.$impl.$gpu.$timingsExtension ../graphs/*.graph $extra_flags &
+    for path in "${graphdirs[@]}"; do
+        for alg in $algorithms; do
+            for impl in `./main list implementations -a $alg`; do
+                extra_flags=""
+                if [ -n "$save" ]; then
+                    extra_flags+="-s $alg.$impl.$gpu.$outputExtension "
+                    extra_falgs+="-o $resultdir/$label"
+                fi
+                run ./main -a $alg -k $impl -n $n -t $resultdir/$label/$alg.$impl.$gpu.$timingsExtension $path/*.graph $extra_flags &
+            done
         done
+        wait
     done
-    wait
 done
 
