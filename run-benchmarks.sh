@@ -9,6 +9,8 @@ usage () {
       printf "\t\tThis help.\n"
       printf "\t-e EXT | --extension EXT\n"
       printf "\t\tExtension to use for algorithm output files.\n"
+      printf "\t-l NAME | --label NAME\n"
+      printf "\t\tName for result set\n"
       printf "\t-n NUM | --count NUM\n"
       printf "\t\tNumber of times to run algorithm.\n"
       printf "\t-r DIR | --result-dir DIR\n"
@@ -23,7 +25,8 @@ usage () {
 algorithms=""
 outputExtension="out"
 n=30
-resultdir="$HOME/results"
+resultdir="data"
+label="results"
 save=""
 timingsExtension="timings"
 while
@@ -52,6 +55,10 @@ while
           printf "Zero length argument not allowed for $1!\n\n"
           usage
       fi
+      ;;
+    -l | --label)
+      [ -z "$2" ] && printf "Missing argument for: $1\n\n" && usage || shift 1
+      label="$1"
       ;;
     -n | --count)
       [ -z "$2" ] && printf "Missing argument for: $1\n\n" && usage || shift 1
@@ -99,7 +106,7 @@ do
     :
 done
 
-mkdir -p "$resultdir"
+mkdir -p "$resultdir/$label"
 
 for gpu in "TitanX"; do
     run () {
@@ -114,9 +121,10 @@ for gpu in "TitanX"; do
         for impl in `./main list implementations -a $alg`; do
             extra_flags=""
             if [ -n "$save" ]; then
-                extra_flags+="-s $alg.$impl.$gpu.$outputExtension -o $resultdir"
+                extra_flags+="-s $alg.$impl.$gpu.$outputExtension "
+                extra_falgs+="-o $resultdir/$label"
             fi
-            run ./main -a $alg -k $impl -n $n -t $resultdir/$alg.$impl.$gpu.$timingsExtension ../graphs/*.graph $extra_flags &
+            run ./main -a $alg -k $impl -n $n -t $resultdir/$label/$alg.$impl.$gpu.$timingsExtension ../graphs/*.graph $extra_flags &
         done
     done
     wait
