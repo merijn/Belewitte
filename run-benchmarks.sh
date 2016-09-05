@@ -134,7 +134,7 @@ for gpu in "TitanX"; do
                 extra_flags=""
                 if [ -n "$save" ]; then
                     extra_flags+="-s $alg.$impl.$gpu.$outputExtension "
-                    extra_falgs+="-o $resultdir/$label"
+                    extra_flags+="-o $resultdir/$label"
                 fi
                 run ./main -a $alg -k $impl -n $n -t $resultdir/$label/$alg.$impl.$gpu.$timingsExtension $path/*.graph $extra_flags &
             done
