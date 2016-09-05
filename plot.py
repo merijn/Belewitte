@@ -21,6 +21,9 @@ def isGenerated(name):
     return (name.startswith("chain") or name.startswith("star")
          or name.startswith("degree") or name.startswith("mesh"))
 
+def isWarp(name):
+    return "warp" in name
+
 locale.setlocale(locale.LC_NUMERIC, "")
 
 params = {'legend.fontsize': 20 }
@@ -186,6 +189,8 @@ common_args.add_argument('-n', '--normalise', action='store_true',
                          help='Normalise runtimes.')
 common_args.add_argument('--filter-generated', action='store_true',
                          help='Filter out generated graphs.')
+common_args.add_argument('--filter-warp', action='store_true',
+                         help='Filter out warp implementations.')
 common_args.add_argument('--filter-real', action='store_true',
                          help='Filter out real graphs.')
 common_args.add_argument('--numeric', action='store_true',
@@ -226,6 +231,9 @@ elif options.filter_generated:
     options.filters['graph'] = isGenerated
 elif options.filter_real:
     options.filters['graph'] = lambda x: not isGenerated(x)
+
+if options.filter_warp:
+    options.filters['implementation'] = isWarp
 
 names['graph'] = names['graph'].map(fn)
 options.func(options)
