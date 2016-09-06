@@ -37,6 +37,11 @@ class View:
         for pos, key in zip(self.transposition, self.keyPrefix):
             self.filters[self.table.mapping.keys()[pos + len(self.idx)]] = key
 
+    def __repr__(self):
+        return ("View {\n\tdims: " + str(self.table.dims()) + "\n\tidx: "
+              + str(self.idx) + "\n\ttransposition: " + str(self.transposition)
+              + "\n\tkey prefix: " + str(self.keyPrefix) + "\n\}\n")
+
     def __iter__(self):
         return self.keys(dim=self.dims()[0])
 
@@ -63,22 +68,28 @@ class View:
         if not isinstance(key, tuple):
             key = (key,)
 
-        if self.transposition:
+        idx = self.idx
+        transposition = self.transposition
+
+        if transposition:
             key = self.keyPrefix + key
 
-            if len(key) == len(self.transposition):
-                key = self.detranspose(key)
-            else:
-                return View(self.table, self.idx, transpose=self.transposition,
-                            prefix=key, transform=self.view,
-                            **self.filters)
-
-        idx = self.idx + key
+            if len(key) == len(transposition):
+                idx += self.detranspose(key)
+                key = ()
+                transposition = []
+        else:
+            idx += key
+            key = ()
 
         if len(idx) > len(self.table.dims()):
             raise TableError("Index too long.")
-
-        return self.view(self.table[idx])
+        elif len(idx) == len(self.table.dims()):
+            return self.view(self.table[idx])
+        else:
+            return View(self.table, idx, transpose=transposition,
+                        prefix=key, transform=self.view,
+                        **self.filters)
 
     def detranspose(self, vals):
         return detranspose(self.transposition, vals)
@@ -142,9 +153,10 @@ class View:
         for k in self.sparsekeys():
             self[k] = fn(self[k])
 
-    def transform(self, fn):
+    def transform(self, f):
         return View(self.table, self.idx, transpose=self.transposition,
-                    prefix=self.keyPrefix, transform=fn, **self.filters)
+                    prefix=self.keyPrefix, transform=lambda x: f(self.view(x)),
+                    **self.filters)
 
     def addDimension(self, dim, defaultKey):
         self.filters[dim] = set()
