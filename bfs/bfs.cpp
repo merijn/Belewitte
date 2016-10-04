@@ -50,6 +50,14 @@ struct BFSConfig : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph
     {
         Timer initResults("initResults", run_count);
         Timer bfs("computation", run_count);
+        std::vector<Timer> levelTimers;
+
+        levelTimers.reserve(1000);
+
+        for (int i = 0; i < 1000; i++) {
+            levelTimers.emplace_back("bfsLevel" + std::to_string(i), run_count);
+        }
+
         Timer resultTransfer("resultTransfer", run_count);
 
         auto results = backend.template alloc<int>(vertex_count);
@@ -69,11 +77,15 @@ struct BFSConfig : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph
 
             setKernelConfig();
             bool val;
+            size_t oldLevel;
             int curr = 0;
             do {
+                oldLevel = static_cast<size_t>(curr);
                 resetFinished();
+                levelTimers[oldLevel].start();
                 runKernel(kernel, results, curr++);
                 val = getFinished();
+                levelTimers[oldLevel].stop();
             } while (!val);
             bfs.stop();
 
