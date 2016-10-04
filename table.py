@@ -45,6 +45,9 @@ class View:
     def __iter__(self):
         return self.keys(dim=self.dims()[0])
 
+    def __contains__(self, key):
+        return self.table.__contains__(key)
+
     def __setitem__(self, key, value):
         if not isinstance(key, tuple):
             key = (key,)
@@ -182,6 +185,18 @@ class View:
         return View(self.table, self.idx, transpose=pos, prefix=self.keyPrefix,
                     transform=self.view, **self.filters)
 
+    def transposeNamedDims(self, *names):
+        dims = self.dims()
+        transpose = []
+        for n in names:
+            try:
+                idx = dims.index(n)
+                transpose.append(idx)
+            except ValueError:
+                raise TableError("Invalid dimension for transposition.")
+
+        return self.transposeDims(*transpose)
+
     def collapseDim(self, dim, defaultKey):
         idx = self.dims().index(dim)
         pos = [idx] + range(0, idx)
@@ -224,6 +239,9 @@ class Table(dict):
 
     def __iter__(self):
         return iter(View(self, ()))
+
+    def __contains__(self, key):
+        return super(Table, self).__contains__(key)
 
     def __getitem__(self, key):
         if not isinstance(key, tuple):

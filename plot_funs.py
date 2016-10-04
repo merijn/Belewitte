@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from __future__ import division
+
 import locale
 
 from collections import defaultdict, OrderedDict
@@ -15,8 +17,8 @@ import numpy as np
 from colorsys import hsv_to_rgb
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
-import matplotlib.markers as marks
 
+from graph_properties import vertexCounts
 from names import Naming, names
 from measurements import Measurement
 from table import Table
@@ -54,18 +56,49 @@ class Plot(object):
 
     def __enter__(self):
         self.fig, self.ax = plt.subplots(figsize=(16, 5), dpi=300)
-        def register(handle, label):
-            self.handles.append(handle)
-            self.labels.append(label)
-        self.ax.register_label = register
+        old_bar = self.ax.bar
+        self.ax.extra_axes = OrderedDict()
+
+        def replaceBar(fn):
+            def newFn(*args, **kwargs):
+                self.labels.append(kwargs['label'])
+                del kwargs['label']
+                result = fn(*args, **kwargs)
+                self.handles.append(result)
+                return result
+            return newFn
+
+        def replaceTwin(fn):
+            def updateTwin(name):
+                newAx = fn()
+                self.ax.extra_axes[name] = newAx
+                newAx.bar = replaceBar(newAx.bar)
+                newAx.twinx = replaceTwin(newAx.twinx)
+                newAx.twiny = replaceTwin(newAx.twiny)
+                return newAx
+            return updateTwin
+
+        self.ax.bar = replaceBar(self.ax.bar)
+        self.ax.twinx = replaceTwin(self.ax.twinx)
+        self.ax.twiny = replaceTwin(self.ax.twiny)
         return self.ax
 
     def __exit__(self, exc_type, exc_value, tb):
+        step = 1.0
         hs, ls = self.ax.get_legend_handles_labels()
+        for name, ax in self.ax.extra_axes.items():
+            h, l = ax.get_legend_handles_labels()
+            hs += h
+            ls += l
+
+            ax.spines['right'].set_position(('axes', step))
+            step += 0.1
+            ax.set_frame_on(True)
+            ax.patch.set_visible(False)
 
         legend = self.ax.legend(hs + self.handles, ls + self.labels,
-                loc='upper left', bbox_to_anchor=(1,1), markerscale=2,
-                numpoints=1, scatterpoints=1)
+                loc='upper center', bbox_to_anchor=(0.5,-0.1), markerscale=2,
+                numpoints=1, scatterpoints=1, ncol=4)
         self.fig.savefig(self.filename + '.pdf', bbox_extra_artists=(legend,),
                          bbox_inches='tight')
         plt.close(self.fig)
@@ -94,8 +127,7 @@ def plotBars(ax, normalise, data, groupNames=Naming(), columnNames=Naming()):
     for i, (column, colour) in enumerate(zip(columns, colours())):
         values = [data[group][column] for group in groups]
 
-        bar = ax.bar(ind + i, values, 1, color=colour)
-        ax.register_label(bar, columnNames[column])
+        ax.bar(ind + i, values, 1, color=colour, label=columnNames[column])
 
     fontsize=25
     if normalise:
@@ -103,7 +135,7 @@ def plotBars(ax, normalise, data, groupNames=Naming(), columnNames=Naming()):
     else:
         ax.set_ylabel('Runtime (ns)', fontsize=fontsize)
 
-    ax.set_xticks(ind + (numBars / 3))
+    ax.set_xticks(ind + (numBars // 3))
     ax.set_xticklabels([groupNames[n] for n in groups], fontsize=fontsize,
             rotation=-35, ha='left', va='top')
     ax.set_yticklabels(ax.get_yticklabels(), fontsize=fontsize)
@@ -115,18 +147,28 @@ def plotBars(ax, normalise, data, groupNames=Naming(), columnNames=Naming()):
     ax.set_ylim(**ySettings)
     ax.set_xlim(xmin = 0, xmax = numBars * numGroups)
 
-def plotPoints(ax, data, marks=('.',), dotNames=Naming()):
-    colouredMarks = ((c,m) for c in colours() for m in marks)
+def plotPoints(ax, data, marks=('.',), dotNames=Naming(), crossProduct=False):
+    if crossProduct:
+        colouredMarks = ((c,m) for c in colours() for m in marks)
+    else:
+        colouredMarks = itertools.izip(colours(), itertools.cycle(marks))
     for k, (colour, mark) in zip(sorted(data), colouredMarks):
         ax.scatter(*zip(*data[k]), marker=mark, s=50, color=colour, label=k)
 
-def plotLines(ax, data, lineNames=Naming()):
+def plotLines(ax, data, lineNames=Naming(), independent=False):
+    currAx = ax
     for k, c in zip(sorted(data), colours()):
+        if independent:
+            currAx = ax.twinx(k)
+            currAx.set_yticks([])
+            currAx.set_ylabel(k, color=c)
+            currAx.tick_params(axis='y', colors=c)
+
         if isinstance(data[k], LineCollection):
             data[k].set(label=k, linewidth=2, color=c)
-            ax.add_collection(data[k])
+            currAx.add_collection(data[k])
         else:
-            ax.plot(*zip(*data[k]), label=k, linewidth=2, color=colour)
+            currAx.plot(*zip(*data[k]), label=k, linewidth=2, color=c)
 
 def plotDataSet(dims, group, column, measurements, normalise):
     def plotHelper(data, order, fileName=''):
@@ -219,47 +261,115 @@ def plotPerformance(opts):
     data = loadData(Measurement, opts.dims, opts.paths, filters=opts.filters)
     plotDataSet(opts.dims, opts.group, opts.column, data, opts.normalise)
 
+def setLabelOffset(data, step, axis):
+    if axis == 'x':
+        idx = 0
+    elif axis == 'y':
+        idx = 1
+    else:
+        raise Exception("Invalid axis.")
+
+    i = step/2
+    offset = dict()
+    for label in sorted(set(v[idx] for l in data.values() for v in l)):
+        offset[label] = i
+        i += step
+
+    for (label, coords) in data.items():
+        data[label] = [v[:idx] + (offset[v[idx]],) + v[idx+1:] for v in coords]
+
+    labels, ticks = zip(*sorted(offset.items(), key=lambda x: x[1]))
+    return ticks, labels
+
+def addColumnOffset(data, step, axis):
+    if axis == 'x':
+        idx = 0
+    elif axis == 'y':
+        idx = 1
+    else:
+        raise Exception("Invalid axis.")
+
+    offset = dict()
+    for i, graph in enumerate(sorted(data)):
+        offset[graph] = i
+
+    offRange = (0.75*step)/2
+    off = offRange/len(offset)
+    for k in offset:
+        offset[k] *= off
+        offset[k] -= offRange/2
+
+    for (label, coords) in data.items():
+        data[label] = [v[:idx] + (v[idx] + offset[label],) + v[idx+1:] for v in coords]
+
+def indices(l, *ind):
+    return [l.index(v) for v in ind]
+
+def computeLines(data):
+    for graph in data:
+        newData = defaultdict(list)
+        runningTotal = 0
+        for s in data[graph]:
+            data[graph][s] = sorted(data[graph][s])
+
+        for depth, frontier in data[graph]['frontier']:
+            newData['cumulative'] += [(depth, runningTotal)]
+            runningTotal += frontier
+
+        data[graph].update(newData)
+
 def plotFrontier(opts):
     runtimeData = loadData(Measurement, opts.dims, opts.paths,
             filters=opts.filters)
 
+    runtimeData = runtimeData.filterKeys(lambda k: not k.startswith("bfsLevel"), dim='timer')
+
     dims = [d for d in opts.dims if d != 'timer'] + ['depth']
 
-    frontierData = loadData(int, dims, opts.paths, ext=".levels",
+    frontierData = loadData(int, dims, opts.paths, ext=".frontier",
+            process_line=process_frontier_line, filters=opts.filters)
+    visitedData = loadData(int, dims, opts.paths, ext=".visited",
             process_line=process_frontier_line, filters=opts.filters)
 
-    plotData = Table(list, "frontier", "implementation", "depth")
-    for k, v in frontierData.sparseitems():
-        m = runtimeData[k]
-        plotData[v, k[5] + "-" + k[0], int(k[6][len("bfsLevel"):])] += [m]
+    lines = defaultdict(lambda: defaultdict(set))
+    plotData = Table(list, "graph", "frontier", "implementation")
+    for k, frontier in frontierData.sparseitems():
+        depth = int(k[6][len("bfsLevel"):])
+        plotData[k[3], depth, k[5] + "-" + k[0]] += [runtimeData[k]]
+        lines[k[3]]['frontier'] |= set([(depth, frontier)])
+        if k[5] == 'vertex-pull':
+            lines[k[3]]['pull-visited'] |= set([(depth, visitedData[k])])
+            lines[k[3]]['pull-visited-fraction'] |= set([(depth, frontier / visitedData[k])])
+        else:
+            lines[k[3]]['visited'] |= set([(depth, visitedData[k])])
+            lines[k[3]]['visited-fraction'] |= set([(depth, frontier / visitedData[k])])
 
-    stddevData = plotData.transform(lambda x: stdDev(x)[1]).filterKeys(lambda x: x < 100 or x > 1000, dim='frontier')
+    computeLines(lines)
+    plotData = plotData.transform(lambda x: stdDev(x)[1])
 
-    prevImpl = None
-    segment = []
-    lines = defaultdict(list)
-    dots = defaultdict(list)
-    for frontier in sorted(stddevData):
-        (impl, graph), time = min(stddevData[frontier].sparseitems(), key=lambda x: x[1])
-        if prevImpl is None:
-            prevImpl = impl
-        elif prevImpl != impl:
-            lines[prevImpl] += [segment + [(frontier, time)]]
-            segment = []
-            prevImpl = impl
+    for graph in plotData:
+        points = defaultdict(list)
+        for depth in plotData[graph]:
+            for (impl,), runtime in plotData[graph, depth].sparseitems():
+                points[impl] += [(depth, runtime)]
 
-        dots[graph] += [(frontier, time)]
-        segment += [(frontier, time)]
-    lines[prevImpl] += [segment]
+        with Plot(graph) as ax:
+            #ticks, labels = setLabelOffset(points, 4, 'y')
+            #addColumnOffset(points, 4, 'y')
 
-    lines = { k:LineCollection(v) for k, v in lines.items() }
-    with Plot("frontier") as ax:
-        plotLines(ax, lines)
-        ms = ['o', 'v', '^', '<', '>', '8', 's', 'p', '*', 'h', 'H', '+', 'x', 'D', 'd', marks.TICKLEFT, marks.TICKRIGHT, marks.TICKUP, marks.TICKDOWN, marks.CARETLEFT, marks.CARETRIGHT, marks.CARETUP, marks.CARETDOWN]
-        plotPoints(ax, dots, marks=ms)
-        ax.autoscale()
-        ax.set_yscale('log')
-        ax.set_xlim(100, 1000)
+            ms = ['o', 'v', '^', '<', '>', '8', 's', 'p', '*', 'h', 'H', '+', 'x', 'D', 'd']
+            plotPoints(ax, points, marks=ms)
+            #mirror = ax.twinx('Sizes')
+            plotLines(ax, lines[graph], independent=True)
+            for axis in ax.extra_axes.values():
+                axis.autoscale()
+                axis.set_yscale('linear')
+
+            #mirror.autoscale()
+            #mirror.set_yscale('log')
+
+            ax.autoscale()
+            ax.set_yscale('log')
 
 measurementDims = OrderedDict()
 measurementDims['paths'] = ''
