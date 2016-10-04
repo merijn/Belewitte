@@ -3,9 +3,11 @@
 __global__ void
 vertexPushBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth)
 {
-    uint64_t idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-
-    if (idx < graph->vertex_count && levels[idx] == depth) {
+    uint64_t size = graph->vertex_count;
+    for (uint64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+         idx < size && levels[idx] == depth;
+         idx += blockDim.x * gridDim.x)
+    {
         unsigned *vertices = graph->vertices;
         unsigned start = vertices[idx];
         unsigned end = vertices[idx + 1];

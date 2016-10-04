@@ -37,10 +37,6 @@ template<size_t, size_t>
 __global__ void
 vertexPushWarpBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth);
 
-template<size_t, size_t>
-__global__ void
-vertexPullWarpBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth);
-
 __global__ void
 edgeListBfs(EdgeList<unsigned> *graph, int *levels, int depth);
 #endif

@@ -15,14 +15,6 @@ struct pushwarp {
     }
 };
 
-template<size_t warp, size_t chunk>
-struct pullwarp {
-    static auto work()
-    { return WarpSettings(vertexPullWarpBfs<warp,chunk>, warp,
-                          sizeof(pull_warp_mem_t<chunk>));
-    }
-};
-
 template<typename Platform, typename Kernel, typename Graph>
 struct BFSConfig : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph>
 {

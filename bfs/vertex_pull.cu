@@ -3,10 +3,13 @@
 __global__ void
 vertexPullBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth)
 {
-    uint64_t idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+    uint64_t size = graph->vertex_count;
     int newDepth = depth + 1;
 
-    if (idx < graph->vertex_count && levels[idx] > newDepth) {
+    for (uint64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
+        idx < size && levels[idx] > newDepth;
+        idx += blockDim.x * gridDim.x)
+    {
         unsigned *reverse_vertices = graph->vertices;
         unsigned start = reverse_vertices[idx];
         unsigned end = reverse_vertices[idx + 1];
