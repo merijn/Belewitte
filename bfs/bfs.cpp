@@ -132,13 +132,6 @@ cudaDispatch
         , loadCSR<CUDABackend, unsigned, unsigned>
         , work_division::nodes
         , warp_dispatch<pushwarp>())
-    }/*, FIXME: kernel broken
-    { "vertex-pull-warp", make_warp_config<BFSConfig>
-        ( count
-        , outputFile
-        , loadReverseCSR<CUDABackend, unsigned, unsigned>
-        , work_division::nodes
-        , warp_dispatch<pullwarp>())
-    }*/
+    }
     };
 }

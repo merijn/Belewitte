@@ -41,7 +41,7 @@ warp_bfs(size_t N, unsigned *nodes, unsigned *edges, int *levels, int depth)
     for (int v = 0; v < end; v++) {
         const unsigned num_nbr = MY->vertices[v+1] - MY->vertices[v];
         const unsigned *nbrs = &edges[MY->vertices[v]];
-        if (levels[v] == depth) {
+        if (MY->levels[v] == depth) {
             expand_bfs_SIMD<warp_size>(W_OFF, num_nbr, nbrs, levels, depth);
         }
     }
