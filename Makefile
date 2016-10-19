@@ -10,7 +10,7 @@ build/Connectivity.o: CXX=icc
 evolve: LDFLAGS+=-ltbb
 evolve: LD=icc
 
-main: LDFLAGS += -Xlinker --export-dynamic -L$(CUDA_PATH)/lib64 -lOpenCL
+main: LDFLAGS += -Xlinker --export-dynamic -L$(OPENCL_LIB) -lOpenCL -L$(CUDA_PATH)/lib64 -lcudart
 endif
 
 ifeq ($(CXX),clang++)
@@ -29,7 +29,7 @@ build/main.o build/evolve.o: CXXFLAGS+=-I$(BOOST_PATH)/include -isystem$(BOOST_P
 main: build/main.o build/AlgorithmConfig.o build/Backend.o build/CUDA.o \
       build/Options.o build/OpenCL.o build/Timer.o build/Util.o
 	$(PRINTF) " LD\t$@\n"
-	$(AT)$(LD) $(LDFLAGS) -L$(BOOST_PATH)/lib/ -lboost_regex -lboost_system -lboost_filesystem -lcudart $^ -o $@
+	$(AT)$(LD) $(LDFLAGS) -L$(BOOST_PATH)/lib/ -lboost_regex -lboost_system -lboost_filesystem $^ -o $@
 
 normalise: build/normalise.o build/Util.o
 	$(PRINTF) " LD\t$@\n"
