@@ -7,9 +7,11 @@ gen-graph
 reorder-graph
 check-degree
 print-graph
+graph-details
 evolve
 *.d
 *.graph
 *.obj
 *.ptx
 data/*
+data

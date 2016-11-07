@@ -19,12 +19,13 @@ else ifeq ($(CXX),g++)
 main: LDFLAGS += -Wl,-rpath -Wl,$(CUDA_PATH)/lib/
 endif
 
-all: main normalise gen-graph reorder-graph check-degree evolve print-graph
+all: main normalise gen-graph reorder-graph check-degree evolve print-graph \
+    graph-details
 
 -include $(patsubst %.cpp, build/%.d, $(wildcard *.cpp))
 -include $(foreach d, $(wildcard */), $(d)Makefile)
 
-build/main.o build/evolve.o: CXXFLAGS+=-I$(BOOST_PATH)/include -isystem$(BOOST_PATH)/include
+build/main.o build/evolve.o build/graph-details.o: CXXFLAGS+=-I$(BOOST_PATH)/include -isystem$(BOOST_PATH)/include
 
 main: build/main.o build/AlgorithmConfig.o build/Backend.o build/CUDA.o \
       build/Options.o build/OpenCL.o build/Timer.o build/Util.o
@@ -54,6 +55,10 @@ evolve: build/evolve.o build/Util.o build/Connectivity.o
 print-graph: build/print-graph.o build/Util.o
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $^ -o $@
+
+graph-details: build/graph-details.o build/Options.o build/Util.o
+	$(PRINTF) " LD\t$@\n"
+	$(AT)$(LD) $(LDFLAGS) -L$(BOOST_PATH)/lib/ -lboost_system -lboost_filesystem $^ -o $@
 
 CLEAN_OBJS+=build/*.o
 

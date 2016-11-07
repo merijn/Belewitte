@@ -15,6 +15,8 @@ from sys import exit
 
 import numpy as np
 from colorsys import hsv_to_rgb
+import matplotlib as mpl
+mpl.use('pdf')
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 
