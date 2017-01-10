@@ -18,7 +18,9 @@ from colorsys import hsv_to_rgb
 import matplotlib as mpl
 mpl.use('pdf')
 import matplotlib.pyplot as plt
-from matplotlib.collections import LineCollection
+from matplotlib.collections import LineCollection, PatchCollection
+from matplotlib.lines import Line2D
+import matplotlib.patches as patches
 
 from graph_properties import vertexCounts
 from names import Naming, names
@@ -63,8 +65,9 @@ class Plot(object):
 
         def replaceBar(fn):
             def newFn(*args, **kwargs):
-                self.labels.append(kwargs['label'])
-                del kwargs['label']
+                if 'label' in kwargs:
+                    self.labels.append(kwargs['label'])
+                    del kwargs['label']
                 result = fn(*args, **kwargs)
                 self.handles.append(result)
                 return result
@@ -80,9 +83,23 @@ class Plot(object):
                 return newAx
             return updateTwin
 
+        def replaceAddCollection(fn):
+            def addCollection(coll, *args, **kwargs):
+                if 'label' in kwargs:
+                    self.labels.append(kwargs['label'])
+                    del kwargs['label']
+                    if 'proxy' in kwargs:
+                        self.handles.append(kwargs['proxy'])
+                        del kwargs['proxy']
+                    else:
+                        self.handles.append(handle)
+                fn(coll, *args, **kwargs)
+            return addCollection
+
         self.ax.bar = replaceBar(self.ax.bar)
         self.ax.twinx = replaceTwin(self.ax.twinx)
         self.ax.twiny = replaceTwin(self.ax.twiny)
+        self.ax.add_collection = replaceAddCollection(self.ax.add_collection)
         return self.ax
 
     def __exit__(self, exc_type, exc_value, tb):
@@ -171,6 +188,34 @@ def plotLines(ax, data, lineNames=Naming(), independent=False):
             currAx.add_collection(data[k])
         else:
             currAx.plot(*zip(*data[k]), label=k, linewidth=2, color=c)
+
+def plotRectangles(ax, data, minCoord, maxCoord, names):
+    ax.set_xlabel(names[0])
+    ax.set_ylabel(names[1])
+
+    xFudge = (maxCoord[0] - minCoord[0]) * 0.05
+    yFudge = (maxCoord[1] - minCoord[1]) * 0.05
+    minCoord = (minCoord[0] - xFudge, minCoord[1] - yFudge)
+    maxCoord = (maxCoord[0] + xFudge, maxCoord[1] + yFudge)
+    def clampInf(val, clampVal):
+        if val == float("-inf") or val == float("inf"):
+            return clampVal
+        else:
+            return val
+
+    for (k, ps), c in zip(sorted(data.items()), colours()):
+        def limitCoords(coords):
+            start = [ clampInf(x, y) for x,y in zip(coords[0], minCoord)]
+            end = [ clampInf(x, y) for x,y in zip(coords[1], maxCoord)]
+            end = [ y - x for x, y in zip(start, end)]
+            result = patches.Rectangle(start, *end)
+            return result
+
+        proxy = Line2D([0], [0], linestyle="none", marker="s", markersize=10, markerfacecolor=c)
+        ax.add_collection(PatchCollection(map(limitCoords, ps), color=c), label=k, proxy=proxy)
+
+    ax.set_xlim(0, maxCoord[0])
+    ax.set_ylim(0, maxCoord[1])
 
 def plotDataSet(dims, group, column, measurements, normalise):
     def plotHelper(data, order, fileName=''):
@@ -382,11 +427,19 @@ measurementDims['sorting'] = 'normal'
 measurementDims['implementation'] = ''
 measurementDims['timer'] = 'computation'
 
-def loadData(default, dims, paths, ext=".timings", process_line=None, filters=dict()):
-    data = Table(default, *dims)
+def loadData(default, dims, paths, ext=".timings", process_line=None, filters=dict(), store_paths=True):
+    dimFilter = lambda d: d != 'paths'
+    if store_paths:
+        dimFilter = lambda x: True
+
+    data = Table(default, *filter(dimFilter, dims))
     for path in paths:
-        path = path.rstrip('/')
-        parseFiles(path, data[path], ext=ext, process_line=process_line)
+        if store_paths:
+            path = path.rstrip('/')
+            view = data[path]
+        else:
+            view = data
+        parseFiles(path, view, ext=ext, process_line=process_line)
 
     for dim in set(filters).intersection(data.dims()):
         data = data.filterKeys(filters[dim], dim=dim)
