@@ -277,7 +277,11 @@ int main(int argc, char **argv)
                 AlgorithmConfig &kernel = *algorithm.at(kernelName);
                 remainingArgs = kernel.setup(remainingArgs);
 
-                TimerRegister::set_output(timingsFile, verbose);
+                if (!timingsFile.empty()) {
+                    TimerRegister::set_output(timingsFile);
+                }
+                TimerRegister::set_human_readable(verbose);
+                TimerRegister::set_direct_printed(true);
 
                 for (auto graph : remainingArgs) {
                     TimerRegister::start_epoch(path(graph).stem().string());
@@ -293,7 +297,7 @@ int main(int argc, char **argv)
                     kernel(graph, output);
                 }
 
-                TimerRegister::finalise();
+                TimerRegister::print_results();
             } catch (const out_of_range &) {
                 reportError("No kernel named \"", kernelName,
                             "\" for algorithm \"", algorithmName, "\"!");
