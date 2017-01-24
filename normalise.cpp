@@ -2,6 +2,7 @@
 #include <cstring>
 
 #include <fstream>
+#include <sstream>
 
 #include "Graph.hpp"
 #include "Util.hpp"
@@ -37,38 +38,9 @@ translate(unordered_map<string,uint64_t> &map, uint64_t &unique_id, string key)
     return result;
 }
 
-static istream&
-ignoreLine(std::istream& is)
-{
-    // The characters in the stream are read one-by-one using a std::streambuf.
-    // That is faster than reading them one-by-one using the std::istream.
-    // Code that uses streambuf this way must be guarded by a sentry object.
-    // The sentry object performs various tasks,
-    // such as thread synchronization and updating the stream state.
-
-    istream::sentry se(is, true);
-    streambuf* sb = is.rdbuf();
-
-    for (;;) {
-        switch (sb->sbumpc()) {
-            case EOF:
-                is.setstate(ios::eofbit);
-                FALLTHROUGH;
-            case '\n':
-            case '\r':
-            case '\f':
-                return is;
-            default:
-                break;
-        }
-    }
-}
-
 static void
 normalise(const string graphName, bool undirected)
 {
-    bool cond;
-    int next;
     uint64_t inId, outId;
     string in, out;
     uint64_t unique_id = 0;
@@ -79,13 +51,23 @@ normalise(const string graphName, bool undirected)
     ifstream graph (graphName);
     ofstream lookup_table (graphName + ".map");
 
-    while (!graph.eof()) {
-        next = graph.peek();
-        cond = next != '#' && next != EOF && next != '\n'
-            && next != '\f' && next != '\r';
+    string line;
+    string format;
+    getline(graph, line);
 
-        if (cond) {
-            graph >> in >> out;
+    if (line[0] == '%') {
+        if (line.find("asym") != string::npos) {
+            undirected = false;
+        } else {
+            undirected = true;
+        }
+    }
+
+    do {
+        istringstream ss(line);
+
+        if (line[0] != '#' && line[0] != '%') {
+            ss >> in >> out;
             inId = translate(lookup_map, unique_id, in);
             outId = translate(lookup_map, unique_id, out);
 
@@ -93,9 +75,7 @@ normalise(const string graphName, bool undirected)
             if (undirected) edges.emplace_back(outId, inId);
             else rev_edges.emplace_back(outId, inId);
         }
-
-        ignoreLine(graph);
-    }
+    } while (getline(graph, line));
 
     string name(graphName + ".graph");
     Graph<uint64_t,uint64_t>::output(name, edges, rev_edges);
