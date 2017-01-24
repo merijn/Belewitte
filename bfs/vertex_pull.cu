@@ -5,6 +5,7 @@ vertexPullBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth)
 {
     uint64_t size = graph->vertex_count;
     int newDepth = depth + 1;
+    unsigned count = 0U;
 
     for (uint64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
         idx < size && levels[idx] > newDepth;
@@ -19,9 +20,10 @@ vertexPullBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth)
         for (unsigned i = start; i < end; i++) {
             if (levels[reverse_edges[i]] == depth) {
                 levels[idx] = newDepth;
-                finished = false;
+                count++;
                 break;
             }
         }
     }
+    updateFrontier(count);
 }

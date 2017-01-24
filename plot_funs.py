@@ -22,7 +22,6 @@ from matplotlib.collections import LineCollection, PatchCollection
 from matplotlib.lines import Line2D
 import matplotlib.patches as patches
 
-from graph_properties import vertexCounts
 from names import Naming, names
 from measurements import Measurement
 from table import Table

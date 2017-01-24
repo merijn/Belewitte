@@ -11,15 +11,19 @@ memcpy_SIMD(int warp_offset, int cnt, T *dest, T *src)
     __threadfence_block();
 }
 
-template<int W_SZ> __device__ void
+template<int W_SZ> __device__ unsigned
 expand_bfs_SIMD(unsigned W_OFF, unsigned cnt, const unsigned *edges, int *levels, int curr)
 {
+    int newDepth = curr + 1;
+    unsigned count = 0;
     for (unsigned IDX = W_OFF; IDX < cnt; IDX += W_SZ) {
         unsigned v = edges[IDX];
-        atomicMin(&levels[v], curr + 1);
-        finished = false;
+        if (atomicMin(&levels[v], newDepth) > newDepth) {
+            count++;
+        }
     }
     __threadfence_block();
+    return count;
 }
 
 template<size_t warp_size, size_t chunk_size> static __device__ void
@@ -38,13 +42,15 @@ warp_bfs(size_t N, unsigned *nodes, unsigned *edges, int *levels, int depth)
     memcpy_SIMD<warp_size>(W_OFF, end, MY->levels, &levels[v_]);
     memcpy_SIMD<warp_size>(W_OFF, end + 1, MY->vertices, &nodes[v_]);
 
+    unsigned count = 0U;
     for (int v = 0; v < end; v++) {
         const unsigned num_nbr = MY->vertices[v+1] - MY->vertices[v];
         const unsigned *nbrs = &edges[MY->vertices[v]];
         if (MY->levels[v] == depth) {
-            expand_bfs_SIMD<warp_size>(W_OFF, num_nbr, nbrs, levels, depth);
+            count += expand_bfs_SIMD<warp_size>(W_OFF, num_nbr, nbrs, levels, depth);
         }
     }
+    updateFrontier(count);
 }
 
 template<size_t warp_size, size_t chunk_size>

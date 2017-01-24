@@ -1,16 +1,16 @@
 #include "bfs.h"
 
 __global__ void
-edgeListBfs(EdgeList<unsigned> *graph, int *levels, int depth)
+revEdgeListBfs(EdgeList<unsigned> *graph, int *levels, int depth)
 {
     uint64_t size = graph->edge_count;
     int newDepth = depth + 1;
 
     for (uint64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-         idx < size && levels[graph->inEdges[idx]] == depth;
+         idx < size && levels[graph->outEdges[idx]] == depth;
          idx += blockDim.x * gridDim.x)
     {
-        if (atomicMin(&levels[graph->outEdges[idx]], newDepth) > newDepth) {
+        if (atomicMin(&levels[graph->inEdges[idx]], newDepth) > newDepth) {
             updateFrontier(1U);
         }
     }

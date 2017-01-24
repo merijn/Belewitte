@@ -10,18 +10,18 @@
 void __attribute__((noreturn))
 cudaAssert(const cudaError_t code, const char *file, const int line);
 
-__device__ bool finished = true;
+__device__ unsigned frontier = 0;
 
-void resetFinished()
+void resetFrontier()
 {
-    const bool val = true;
-    CUDA_CHK(cudaMemcpyToSymbol(finished, &val, sizeof val));
+    const unsigned val = 0;
+    CUDA_CHK(cudaMemcpyToSymbol(frontier, &val, sizeof val));
 }
 
-bool getFinished()
+unsigned getFrontier()
 {
-    bool val;
-    CUDA_CHK(cudaMemcpyFromSymbol(&val, finished, sizeof val));
+    unsigned val;
+    CUDA_CHK(cudaMemcpyFromSymbol(&val, frontier, sizeof val));
     return val;
 }
 
@@ -31,5 +31,5 @@ __global__ void setArray(int *array, size_t size, int val)
     if (idx < size) array[idx] = val;
 }
 
-__global__ void set_root(int *array, int idx)
+__global__ void set_root(int *array, unsigned idx)
 { array[idx] = 0; }

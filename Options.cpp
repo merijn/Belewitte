@@ -67,6 +67,17 @@ Options::parseArgs(int argc, char **argv, bool exitUnknown)
     string shortopts = "-:";
     vector<option> longopts;
 
+    if (hasUsage) {
+        shortopts += usageFlag.shortOption;
+        longopts.push_back(
+            { usageFlag.longOption
+            , no_argument
+            , nullptr
+            , usageFlag.shortOption
+            }
+        );
+    }
+
     for (auto kv : options) {
         auto opt = kv.second;
         if (actions.count(opt.shortOption)) {

@@ -31,7 +31,7 @@ struct BFSConfig : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph
     using Config::options;
     using typename Config::LoadFun;
 
-    int root;
+    unsigned root;
 
     BFSConfig
         ( const Options& opts
@@ -40,7 +40,7 @@ struct BFSConfig : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph
         , work_division w
         , Kernel kern
         )
-    : Config(opts, count, l, w, kern)
+    : Config(opts, count, l, w, kern), root(0)
     {
         options.add('r', "root", "NUM", root,
                     "Starting vertex for BFS.");
@@ -48,14 +48,19 @@ struct BFSConfig : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph
 
     virtual void runImplementation() override
     {
+        if (root >= vertex_count) return;
+
         Timer initResults("initResults", run_count);
         Timer bfs("computation", run_count);
         std::vector<Timer> levelTimers;
+        std::vector<unsigned> frontiers(1000, 0);
 
+        frontiers[0] = 1;
         levelTimers.reserve(1000);
 
+        std::string timerName = std::to_string(root) + ":bfsLevel";
         for (int i = 0; i < 1000; i++) {
-            levelTimers.emplace_back("bfsLevel" + std::to_string(i), run_count);
+            levelTimers.emplace_back(timerName + std::to_string(i), run_count);
         }
 
         Timer resultTransfer("resultTransfer", run_count);
@@ -68,25 +73,25 @@ struct BFSConfig : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph
             backend.runKernel(setArray, results, results.size,
                               std::numeric_limits<int>::max());
 
-            root = 0;
             backend.setWorkSizes(1, {1}, {1});
-            backend.runKernel(set_root, results, 0);
+            backend.runKernel(set_root, results, root);
             initResults.stop();
 
             bfs.start();
 
             setKernelConfig();
-            bool val;
+            unsigned frontier;
             size_t oldLevel;
             int curr = 0;
             do {
                 oldLevel = static_cast<size_t>(curr);
-                resetFinished();
+                resetFrontier();
                 levelTimers[oldLevel].start();
                 runKernel(kernel, results, curr++);
-                val = getFinished();
+                frontier = getFrontier();
                 levelTimers[oldLevel].stop();
-            } while (!val);
+                frontiers[static_cast<size_t>(curr)] = frontier;
+            } while (frontier);
             bfs.stop();
 
             resultTransfer.start();
@@ -98,6 +103,12 @@ struct BFSConfig : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph
             std::ofstream output(outputFile);
             for (size_t i = 0; i < results.size; i++) {
                 output << i << "\t" << results[i] << std::endl;
+            }
+
+            std::ofstream frontierOutput(outputFile + ".frontier");
+            for (size_t i = 0; i < 1000; i++) {
+                if (frontiers[i] == 0) break;
+                frontierOutput << i << "\t" << frontiers[i] << std::endl;
             }
         }
     }
@@ -118,6 +129,12 @@ cudaDispatch
         , loadEdgeList<CUDABackend, unsigned, unsigned>
         , work_division::edges
         , edgeListBfs)
+    },
+    { "rev-edge-list", make_config<BFSConfig>
+        ( opts, count
+        , loadReverseEdgeList<CUDABackend, unsigned, unsigned>
+        , work_division::edges
+        , revEdgeListBfs)
     },
     { "vertex-push", make_config<BFSConfig>
         ( opts, count

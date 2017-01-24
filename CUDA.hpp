@@ -67,8 +67,26 @@ class CUDABackend : public Backend {
             V* dev_ptr;
             std::vector<local_alloc> localAllocs;
 
+            void free()
+            {
+                if (managed) {
+                    CUDA_CHK(cudaDeviceSynchronize());
+                    for (auto alloc : localAllocs) {
+                        CUDA_CHK(cudaFree(alloc.h_ptr));
+                    }
+                    CUDA_CHK(cudaFree(this->ptr));
+                } else {
+                    for (auto alloc : localAllocs) {
+                        CUDA_CHK(cudaFreeHost(alloc.h_ptr));
+                        CUDA_CHK(cudaFree(alloc.d_ptr));
+                    }
+                    CUDA_CHK(cudaFreeHost(this->ptr));
+                    CUDA_CHK(cudaFree(this->dev_ptr));
+                }
+            }
+
             public:
-                alloc_t()
+                alloc_t() : dev_ptr(nullptr)
                 {}
 
                 alloc_t(size_t N, bool readonly, const cudaDeviceProp&)
@@ -94,24 +112,11 @@ class CUDABackend : public Backend {
                 { other.dev_ptr = nullptr; }
 
                 ~alloc_t()
-                {
-                    if (managed) {
-                        CUDA_CHK(cudaDeviceSynchronize());
-                        for (auto alloc : localAllocs) {
-                            CUDA_CHK(cudaFree(alloc.h_ptr));
-                        }
-                        CUDA_CHK(cudaFree(this->ptr));
-                    } else {
-                        for (auto alloc : localAllocs) {
-                            CUDA_CHK(cudaFreeHost(alloc.h_ptr));
-                            CUDA_CHK(cudaFree(alloc.d_ptr));
-                        }
-                        CUDA_CHK(cudaFreeHost(this->ptr));
-                    }
-               }
+                { free(); }
 
                 alloc_t& operator=(alloc_t&& other)
                 {
+                    free();
                     base_alloc_t<V>::operator=(std::move(other));
                     managed = other.managed;
                     dev_ptr = other.dev_ptr;
