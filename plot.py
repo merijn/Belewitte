@@ -31,6 +31,8 @@ common_args.add_argument('--filter-warp', action='store_true',
                         help='Filter out warp implementations.')
 common_args.add_argument('--filter-real', action='store_true',
                         help='Filter out real graphs.')
+common_args.add_argument('--filter-transfers', action='store_true',
+                        help='Filter out transfer times.')
 common_args.add_argument('--numeric', action='store_true',
                         help='Numeric graph labels.')
 common_args.add_argument('paths', metavar='PATH', nargs='+',
@@ -78,6 +80,9 @@ if options.filter_old:
 
 if options.filter_warp:
     options.filters['implementation'] = isWarp
+
+if options.filter_transfers:
+    options.filters['timer'] = lambda name: name in ["graphTransfer", "initResults", "resultTransfer"]
 
 names['graph'] = names['graph'].map(fn)
 options.func(options)

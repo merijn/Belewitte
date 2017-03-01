@@ -40,7 +40,8 @@ class View:
     def __repr__(self):
         return ("View {\n\tdims: " + str(self.table.dims()) + "\n\tidx: "
               + str(self.idx) + "\n\ttransposition: " + str(self.transposition)
-              + "\n\tkey prefix: " + str(self.keyPrefix) + "\n\}\n")
+              + "\n\tkey prefix: " + str(self.keyPrefix) + "\n\tfilters: "
+              + str(self.filters) + "\n}\n")
 
     def __iter__(self):
         return self.keys(dim=self.dims()[0])
@@ -108,7 +109,7 @@ class View:
     def keys(self, dim=None):
         def gen(dimFilter, keys):
             for name, deps in keys.items():
-                if name in dimFilter:
+                if isinstance(dimFilter, set) and name in dimFilter:
                     continue
 
                 for dim in deps:
@@ -194,6 +195,8 @@ class View:
                 transpose.append(idx)
             except ValueError:
                 raise TableError("Invalid dimension for transposition.")
+
+        transpose += [idx for idx, dim in enumerate(dims) if dim not in names]
 
         return self.transposeDims(*transpose)
 

@@ -31,6 +31,13 @@ def isGenerated(name):
     return (name.startswith("chain") or name.startswith("star")
          or name.startswith("degree") or name.startswith("mesh"))
 
+def isint(s):
+    try:
+        s = int(s)
+        return True
+    except ValueError:
+        return False
+
 def isWarp(name):
     return "warp" in name
 
@@ -59,7 +66,7 @@ class Plot(object):
         self.labels = []
 
     def __enter__(self):
-        self.fig, self.ax = plt.subplots(figsize=(16, 5), dpi=300)
+        self.fig, self.ax = plt.subplots(figsize=(24, 5), dpi=300)
         old_bar = self.ax.bar
         self.ax.extra_axes = OrderedDict()
 
@@ -227,7 +234,7 @@ def plotDataSet(dims, group, column, measurements, normalise):
         elif order[0][1] == '':
             for k in data:
                 if fileName:
-                    newFile = fileName + '.' + k
+                    newFile = fileName + '.' + str(k)
                 else:
                     newFile = k
                 plotHelper(data[k], order[1:], fileName=newFile)
@@ -273,7 +280,8 @@ def parseFiles(path, table, ext=".timings", process_line=None):
 
             if process_line is None:
                 def process_line(line, ns):
-                    ns["graph"], ns["timer"], timings = line.strip().split(':')
+                    ns["graph"], root, ns["timer"], timings = line.strip().split(':')
+                    ns["graph"] = ns["graph"] + ":" + root
                     split = ns["graph"].split('.')
                     if len(split) == 1:
                         ns["sorting"] = "normal"
@@ -285,11 +293,14 @@ def parseFiles(path, table, ext=".timings", process_line=None):
             for k, v in zip(["graph"] + basedims, split):
                 namespace[k] = v
 
+            namespace["root"] = 0
             namespace["sorting"] = "normal"
 
         elif len(split) == 5:
-            for k, v in zip(["graph", "sorting"] + basedims, split):
+            for k, v in zip(["graph", "root"] + basedims, split):
                 namespace[k] = v
+            namespace["graph"] = namespace["graph"] + ":" + namespace["root"]
+            namespace["sorting"] = "normal"
 
         else:
             print "Ach mein leben!"

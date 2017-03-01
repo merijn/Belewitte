@@ -6,6 +6,7 @@ import argparse
 from copy import deepcopy
 import locale
 import itertools
+from math import isnan
 import os
 import random
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
@@ -35,11 +36,13 @@ def randomSplit(data, percentage):
 
 class Properties(object):
     implementations = \
-        [ 'edge-list-blockreduce', 'edge-list-frontier'
-        , 'edge-list-warpreduce', 'vertex-pull-blockreduce'
-        , 'vertex-pull-frontier', 'vertex-pull-warpreduce'
-        , 'vertex-push-blockreduce', 'vertex-push-frontier'
-        , 'vertex-push-warp-blockreduce', 'vertex-push-warp-frontier'
+        [ 'edge-list-blockreduce', 'edge-list'
+        , 'edge-list-warpreduce', 'rev-edge-list-blockreduce'
+        , 'rev-edge-list', 'rev-edge-list-warpreduce'
+        , 'vertex-pull-blockreduce'
+        , 'vertex-pull', 'vertex-pull-warpreduce'
+        , 'vertex-push-blockreduce', 'vertex-push'
+        , 'vertex-push-warp-blockreduce', 'vertex-push-warp'
         , 'vertex-push-warp-warpreduce', 'vertex-push-warpreduce']
 
     def __init__(self):
@@ -71,11 +74,15 @@ class Properties(object):
                     graphProps[graph,sort,prop] = float(val.replace(',',''))
 
         def lookupProps(table, k, labels):
-            return lambda graph, _: tuple(table[graph, k, l] for l in labels)
+            def getLookupProps(graph, _):
+                graph = graph.split(':')[0]
+                return tuple(table[graph, k, l] for l in labels)
+            return getLookupProps
 
         def lookupSize(table, k, _):
             def getSize(graph, level):
-                div = 1 if k == 'abs' else graphProps[graph,'abs','vertex-count']
+                tmp = graph.split(':')[0]
+                div = 1 if k == 'abs' else graphProps[tmp,'abs','vertex-count']
                 return (table[graph, level] / div,)
             return getSize
 
@@ -146,6 +153,7 @@ class Properties(object):
                 frontier = self.visited[graph,depth]
                 self.visited[graph,depth] = runningTotal
                 runningTotal += frontier
+
 
     def getterFromParams(self, params):
         propGetters = []
@@ -346,7 +354,7 @@ class Result(object):
         path, fileName = os.path.split(path)
         fileName, ext = os.path.splitext(fileName)
         if ext != ".model":
-            print "Not a model file:", name
+            print "Not a model file:", path
             exit(1)
 
         nameSplit = fileName.split('_')
@@ -391,11 +399,7 @@ class Result(object):
             def lookup(props):
                 raw = predictor.predictor.predict([props])
                 validatePrediction(predictor, props, raw)
-                try:
-                    pred = properties.decode(raw)
-                except:
-                    pred = []
-                return pred
+                return properties.decode(raw)
 
             lookup.params = predictor.params
 
@@ -540,7 +544,8 @@ def loadRuntimes(paths):
             for level in runtimes[graph]:
                 times = runtimes[graph,level].transform(lambda x: x.avg)
                 real = sorted(times.sparseitems(), key=lambda x: x[1])
-                pred = getPrediction(getProps(graph, level))
+                props = getProps(graph, level)
+                pred = getPrediction(props)
                 real = OrderedDict((k[0], v) for k, v in real)
                 task(graph, pred, real)
 
@@ -576,6 +581,7 @@ def runTaskForAll(opts):
 
 def runTaskForSome(opts):
     runPerGraphLevel = loadRuntimes(opts.paths)
+    properties.loadPaths(opts.paths)
 
     predictor = Result.predictorFromFile(opts.model_path, opts.classifier)
     getProps = properties.getterFromParams(predictor.params)
@@ -599,6 +605,7 @@ class Validate(object):
         self.totalCorrect = 0
         self.firstCorrect = 0
         self.errors = 0
+        self.unknown = 0
         self.total = 0
 
     def __enter__(self):
@@ -615,6 +622,11 @@ class Validate(object):
                         self.relErrors[i] += abs(real[p] - real[r])/real[r]
             else:
                 self.errors += 1
+                for i, (p, r) in enumerate(zip(pred, real)):
+                    if p == 'unknown':
+                        self.unknown += 1
+                    else:
+                        self.relErrors[i] += abs(real[p] - real[r])/real[r]
             self.total += 1
         return runTask
 
@@ -628,23 +640,27 @@ class Validate(object):
 
         val = (self.params, self.firstCorrect/self.total)
         val += ([e/self.total for e in self.relErrors],)
+        val += (self.unknown/self.total,)
         if not self.direct:
             val += (self.totalCorrect/self.total,)
         self.ranking.append(val)
 
     @staticmethod
     def finish(opts):
-        direction = False
         ordering = 1
+        rev = False
         if not opts.direct and opts.sorting == 'overall':
             ordering = -1
         elif opts.sorting == 'rel-error':
             ordering = 2
-            direction = True
+            rev = True
+        elif opts.sorting == 'unknown-pred':
+            ordering = 3
+            rev = True
 
-        final = sorted(Validate.ranking, key=lambda k: k[ordering], reverse=direction)
+        final = sorted(Validate.ranking, key=lambda k: k[ordering], reverse=rev)
         for tup in final:
-            params, first, relErrors = tup[0], tup[1], tup[2]
+            params, first, relErrors, unknown = tup[0], tup[1], tup[2], tup[3]
             print "Inputs:", params
             print "First correctness:", first
             if not opts.direct:
@@ -652,10 +668,13 @@ class Validate(object):
             else:
                 relErrors = relErrors[0]
             print "Average Relative Error:\n", relErrors
+            print "Unknown predictions:", tup[3]
 
 class Predict(object):
+    ranking = []
     def __init__(self, params, opts):
         self.params = params
+        self.verbose = opts.verbose
 
     def __enter__(self):
         self.results = defaultdict(lambda: defaultdict(int))
@@ -663,7 +682,10 @@ class Predict(object):
             for impl, time in real.items():
                 self.results[graph][impl] += time
 
-            self.results[graph]['predicted'] += real[pred[0]]
+            if pred[0] == 'unknown':
+                self.results[graph]['predicted'] == float("NaN")
+            else:
+                self.results[graph]['predicted'] += real[pred[0]]
             self.results[graph]['optimal'] += min(real.values())
 
         return runTask
@@ -672,24 +694,59 @@ class Predict(object):
         relError = 0
         relImprovement = 0
         count = 0
-        print "Params:",self.params
+        predictionFailures = 0
+        averagePredicted = 0
+        averageBest = 0
+
+        predictions = dict()
+
         for graph, vals in self.results.items():
-            print "Graph:", graph
-            relError += abs(vals['optimal'] - vals['predicted']) / vals['optimal']
+            if not isnan(vals['predicted']):
+                relError += abs(vals['optimal'] - vals['predicted']) / vals['optimal']
+            else:
+                predictionFailure += 1
+
             count += 1
-            best = vals['optimal']
-            print "\tPredicted:", vals['predicted']/best
+            optimal = vals['optimal']
+            predicted = vals['predicted']
             del vals['optimal']
             del vals['predicted']
             times = sorted(vals.items(), key=lambda k: k[1])
 
-            for k, t in times:
-                print "\t" + k + ":", t/best
-        print "Relative Error:", relError/count
+            if self.verbose:
+                predictions[graph] = (optimal, predicted, times)
+
+            averagePredicted += predicted/optimal
+            averageBest += times[0][1]/optimal
+
+        data = (self.params, predictionFailures/count, relError/count,
+                averagePredicted/count, averageBest/count, predictions)
+        self.ranking.append(data)
 
     @staticmethod
     def finish(opts):
-        pass
+        order = 2
+        if opts.sorting == 'pred-fail':
+            order = 1
+        elif opts.sorting == 'rel-error':
+            order = 2
+        elif opts.sorting == 'avg-pred':
+            order = 3
+
+        final = sorted(Predict.ranking, key=lambda k: k[order], reverse=True)
+        for params, predFailures, relError, avgPred, avgBest, preds in final:
+            print "Params:", params
+            print "Prediction failures:", predFailures
+            print "Relative Error:", relError
+            print "Average prediction:", avgPred
+            print "Average best:", avgBest
+
+            for (graph, (optimal, predicted, times)) in preds.items():
+                print "Graph:", graph
+                print "\tPredicted:", predicted/optimal
+
+                for k, t in times:
+                    print "\t" + k + ":", t/optimal
 
 parser = argparse.ArgumentParser(description='Model validation.',
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -780,6 +837,9 @@ validate.add_argument('--overall', action='store_const', const='overall',
 validate.add_argument('--rel-error', '--relative-error', action='store_const',
                       const='rel-error', dest='sorting',
                       help='Sort by relative error.')
+validate.add_argument('--unknown-predictions', '--unknown-pred', action='store_const',
+                      const='unknown-pred', dest='sorting',
+                      help='Sort by unknown predictions.')
 validate.set_defaults(task=Validate)
 
 validateAll = subparsers.add_parser('validate-all', parents=[model_props, validate])
@@ -791,7 +851,7 @@ validateOne = subparsers.add_parser('validate', parents=[validate])
 validateOne.add_argument('model_path', metavar='MODEL-PATH', help="Path to model.")
 validateOne.add_argument('paths', nargs='+', metavar='PATH',
                       help="Path(s) to read timing results from.")
-# Obsolete below
+# Obsolete classifier flag below
 validateOne.add_argument('--classifier', default=DecisionTreeClassifier,
                          action=SetClassifier, choices=SetClassifier.choices,
                          help='Select classifier to use.')
@@ -799,23 +859,38 @@ validateOne.add_argument('--direct', action='store_true',
                          help='One model instead of one model per implementation.')
 validateOne.set_defaults(func=runTaskForSome)
 
-predictAll = subparsers.add_parser('predict-all', parents=[model_props])
+predict = argparse.ArgumentParser(add_help=False)
+predict.set_defaults(sorting='')
+predict.add_argument('--avg-pred', '--average-pred', '--avg-prediction',
+                     '--average-prediction', action='store_const',
+                     const='avg-pred', dest='sorting',
+                     help='Sort by best average prediction')
+predict.add_argument('--rel-error', '--relative-error', action='store_const',
+                     const='rel-error', dest='sorting',
+                     help='Sort by relative error.')
+predict.add_argument('--pred-fail', '--pred-failures', '--prediction-fail',
+                     '--prediction-failures', action='store_const',
+                     const='pred-fail', dest='sorting',
+                     help='Sort by relative error.')
+predict.add_argument('--verbose', '-v', action='store_true',
+                     help='Print output per graph.')
+predict.set_defaults(task=Predict)
+
+predictAll = subparsers.add_parser('predict-all', parents=[model_props, predict])
 predictAll.add_argument('paths', nargs='+', metavar='PATH',
                         help="Path(s) to read timing results from.")
-predictAll.set_defaults(task=Predict)
 predictAll.set_defaults(func=runTaskForAll)
 
-predict = subparsers.add_parser('predict')
-predict.add_argument('model_path', metavar='MODEL-PATH',
-                     help="Path to model.")
-predict.add_argument('paths', nargs='+', metavar='PATH',
-                     help="Path(s) to read timing results from.")
-# Obsolete below
-predict.add_argument('--classifier', default=DecisionTreeClassifier,
+predictOne = subparsers.add_parser('predict', parents=[predict])
+predictOne.add_argument('model_path', metavar='MODEL-PATH',
+                        help="Path to model.")
+predictOne.add_argument('paths', nargs='+', metavar='PATH',
+                        help="Path(s) to read timing results from.")
+# Obsolete classifier flag below
+predictOne.add_argument('--classifier', default=DecisionTreeClassifier,
                      action=SetClassifier, choices=SetClassifier.choices,
                      help='Select classifier to use.')
-predict.set_defaults(task=Predict)
-predict.set_defaults(func=runTaskForSome)
+predictOne.set_defaults(func=runTaskForSome)
 
 options = parser.parse_args()
 options.func(options)
