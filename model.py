@@ -9,6 +9,7 @@ import itertools
 from math import isnan
 import os
 import random
+import struct
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor, export_graphviz, _tree
 from sklearn.feature_extraction import DictVectorizer
@@ -16,13 +17,25 @@ import joblib
 
 from traceback import print_tb
 
-from sys import exit
+from sys import exit, stderr
 from plot_funs import *
 
 if __name__ != "__main__":
     exit(1)
 
 locale.setlocale(locale.LC_NUMERIC, "")
+
+def depthToNum(s):
+    return int(s[len("bfsLevel"):])
+
+def stringifyTuples(l):
+    return ".".join(str(k) + ":" + str(v) for k,v in l)
+
+def tuplifyString(s):
+    return map(lambda x: x.split(':'), s.split('.'))
+
+def labelFloats(labels, values):
+    return " ".join(l + ": {:.3f}".format(v) for l, v in zip(labels, values))
 
 def randomSplit(data, percentage):
     dataSize = len(data)
@@ -47,7 +60,7 @@ class Properties(object):
 
     def __init__(self):
         self.encoder = DictVectorizer()
-        self.encoder.fit(map(lambda x: dict(algo=x), Properties.implementations))
+        self.encoder.fit(map(lambda x: dict(algo=x), self.implementations))
 
         def createPropTable(table, labels, getGetProps, keys):
             class Content(object):
@@ -81,8 +94,11 @@ class Properties(object):
 
         def lookupSize(table, k, _):
             def getSize(graph, level):
-                tmp = graph.split(':')[0]
-                div = 1 if k == 'abs' else graphProps[tmp,'abs','vertex-count']
+                graphNoRoot = graph.split(':')[0]
+                if k == 'abs':
+                    div = 1
+                else:
+                    div = graphProps[graphNoRoot,'abs','vertex-count']
                 return (table[graph, level] / div,)
             return getSize
 
@@ -132,13 +148,13 @@ class Properties(object):
         dims = [d for d in measurementDims if d != 'timer'] + ['depth']
 
         frontiers = loadData(int, dims, paths, ext=".frontier",
-                            process_line=process_frontier_line,
-                            store_paths=False) \
-                            .filterKeys(lambda k: not k.startswith("bfsLevel"), dim='timer') \
-                            .collapseDim('device', 'TitanX') \
-                            .collapseDim('algorithm', 'bfs') \
-                            .collapseDim('sorting', 'normal') \
-                            .transposeNamedDims('implementation', 'graph')
+                             process_line=process_frontier_line,
+                             store_paths=False) \
+            .filterKeys(lambda k: not k.startswith("bfsLevel"), dim='timer') \
+            .collapseDim('device', 'TitanX') \
+            .collapseDim('algorithm', 'bfs') \
+            .collapseDim('sorting', 'normal') \
+            .transposeNamedDims('implementation', 'graph')
 
         for k, frontier in frontiers.sparseitems():
             self.visited[k[1],k[2]] = frontier
@@ -148,12 +164,10 @@ class Properties(object):
 
         for graph in self.visited:
             runningTotal = 0
-            def depthToNum(s): return int(s[len("bfsLevel"):])
             for depth in sorted(self.visited[graph], key=depthToNum):
                 frontier = self.visited[graph,depth]
                 self.visited[graph,depth] = runningTotal
                 runningTotal += frontier
-
 
     def getterFromParams(self, params):
         propGetters = []
@@ -169,12 +183,6 @@ class Properties(object):
             propGetters.append(propData.getProps)
 
         return getProps
-
-def stringifyTuples(l):
-    return ".".join(str(k) + ":" + str(v) for k,v in l)
-
-def tuplifyString(s):
-    return map(lambda x: x.split(':'), s.split('.'))
 
 class Range(object):
     def __init__(self, name):
@@ -207,28 +215,51 @@ class RangeDict(dict):
         return result
 
 def validatePrediction(result, sample, real):
-    def recurse(tree, node):
+    tree = result.predictor.tree_
+    sample = np.asarray(sample, dtype=np.float32).reshape(1, -1)
+
+    last = 0
+    node = 0
+    while node != _tree.TREE_LEAF:
         left_child = tree.children_left[node]
         right_child = tree.children_right[node]
 
-        if left_child == _tree.TREE_LEAF:
-            value = tree.value[node]
-            proba = value / tree.weighted_n_node_samples[node]
-            pred = np.argmax(proba, axis=1)
-
-            if (pred != real).any():
-                print "Sample:", sample
-                print "Real:", real
-                print "Found:", pred
+        idx = tree.feature[node]
+        last = node
+        if sample[0,idx] <= tree.threshold[node]:
+            node = left_child
         else:
-            idx = tree.feature[node]
+            node = right_child
 
-            if sample[idx] <= tree.threshold[node]:
-                recurse(tree, left_child)
-            else:
-                recurse(tree, right_child)
+    proba = tree.value[last] / tree.weighted_n_node_samples[last]
+    pred = np.argmax(proba, axis=1)
 
-    recurse(result.predictor.tree_, 0)
+    if (pred != real).any():
+        print >> stderr, "Sample:", sample
+        print >> stderr, "Real:", real
+        print >> stderr, "Pred:", pred
+
+def traverseTree(tree, dfsState, leaf, branch):
+    queue = [(0, dfsState)]
+
+    while queue:
+        node, state = queue.pop(0)
+        left_child = tree.children_left[node]
+        right_child = tree.children_right[node]
+
+        featureIdx = tree.feature[node]
+        threshold = tree.threshold[node]
+
+        if left_child == _tree.TREE_LEAF:
+            proba = tree.value[node] / tree.weighted_n_node_samples[node]
+            pred = np.argmax(proba, axis=1)
+            leaf(node, featureIdx, threshold, pred, state)
+        else:
+            leftState, rightState = branch(node, featureIdx, threshold,
+                                           left_child, right_child, state)
+
+            queue.append((left_child, leftState))
+            queue.append((right_child, rightState))
 
 def computeRanges(result):
     feature_names = [
@@ -239,31 +270,172 @@ def computeRanges(result):
 
     ranges = defaultdict(list)
 
-    def recurse(tree, node, state):
-        left_child = tree.children_left[node]
-        right_child = tree.children_right[node]
+    def leaf(node, featureIdx, threshold, pred, state):
+        ranges[pred].append(state)
 
-        if left_child == _tree.TREE_LEAF:
-            value = tree.value[node]
-            proba = value / tree.weighted_n_node_samples[node]
-            proba = tuple(proba[:,1])
-            ranges[proba].append(state)
+    def branch(node, featureIdx, threshold, left_child, right_child, state):
+        name = feature_names[featureIdx]
+        leftState = deepcopy(state)
+        leftState[name].setMax(threshold)
 
-        else:
-            name = feature_names[tree.feature[node]]
-            threshold = tree.threshold[node]
+        rightState = deepcopy(state)
+        rightState[name].setMin(threshold)
 
-            newState = deepcopy(state)
-            newState[name].setMax(threshold)
-            recurse(tree, left_child, newState)
+        return leftState, rightState
 
-            newState = deepcopy(state)
-            newState[name].setMin(threshold)
-            recurse(tree, right_child, newState)
-
-    recurse(result.predictor.tree_, 0, RangeDict(*[n for n in feature_names if n != "undefined!"]))
+    initialState = RangeDict(*[n for n in feature_names if n != "undefined!"])
+    traverseTree(result.predictor.tree_, initialState, leaf, branch)
 
     return ranges
+
+def exportCppModel(result, decode, keepSource):
+    tree = result.predictor.tree_
+    fileName = stringifyTuples(result.params)
+    exportCppModel.count = 0
+    arrayTree = []
+    names = { 'unknown' : 0, 'edge-list' : 0 }
+    translation = { -1 : -1 }
+
+    def leaf(node, featureIdx, threshold, pred, _):
+        translation[node] = exportCppModel.count
+        exportCppModel.count += 1
+        name = names.setdefault(decode(pred)[0], len(names))
+        arrayTree.append((threshold, featureIdx, -1, name))
+
+    def branch(node, featureIdx, threshold, left, right, _):
+        translation[node] = exportCppModel.count
+        exportCppModel.count += 1
+        arrayTree.append((threshold, featureIdx, left, right))
+        return (), ()
+
+    traverseTree(result.predictor.tree_, (), leaf, branch)
+
+    def translate(data):
+        if data[2] != -1:
+            data = data[:2] + (translation[data[2]], translation[data[3]])
+
+        return '{ ' + ', '.join(str(x) for x in data) + ' }'
+
+    arrayTree = [translate(x) for x in arrayTree]
+    del names['unknown']
+    names = sorted(names.items(), key=lambda k: k[1])
+    names = ['"' + name + '"' for name, _ in names]
+
+    source = """#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include "Timer.hpp"
+
+typedef struct {
+    double threshold;
+    int idx, left, right;
+} tree_t;
+
+static const char *names[] = {
+    %s
+};
+
+static tree_t tree[] = {
+    %s
+};
+
+static int lookup(double *params)
+{
+    int node = 0, left;
+
+    while ((left = tree[node].left) != -1) {
+        if (params[tree[node].idx] <= tree[node].threshold) {
+            node = left;
+        } else {
+            node = tree[node].right;
+        }
+    }
+    return tree[node].right;
+}
+
+int main(int argc, char** argv)
+{
+    int numRepeats = 1;
+    if (argc == 2) {
+        numRepeats = std::stoi(argv[1]);
+    }
+
+    int fd = open("%s.binprops", O_RDONLY);
+    if (fd == -1) {
+        perror("open");
+        exit(EXIT_FAILURE);
+    }
+
+    struct stat statbuf;
+    if (fstat(fd, &statbuf) != 0) {
+        perror("stat");
+        exit(EXIT_FAILURE);
+    }
+
+
+    void *ptr = mmap(nullptr, static_cast<size_t>(statbuf.st_size), PROT_READ,
+                     MAP_SHARED, fd, 0);
+    close(fd);
+
+    TimerRegister::set_human_readable(true);
+    Timer timer("lookup", 10000);
+
+    unsigned long long *intData = static_cast<unsigned long long *>(ptr);
+    double *doubleData = static_cast<double*>(ptr);
+    size_t offset = 0;
+    auto numParams = intData[offset++];
+    auto numIndices = intData[offset++];
+    std::vector<unsigned long long> indices;
+    for (size_t i = 0; i < numIndices; i++) {
+        indices.emplace_back(intData[offset++]);
+    }
+
+    double *params = new double[numParams];
+
+    int result = 0;
+    auto numGraphs = intData[offset++];
+    int dataStart = offset;
+
+    for (int a = 0; a < numRepeats; a++) {
+        for (size_t i = 0; i < numGraphs; i++) {
+            auto numLookups = intData[offset++];
+            timer.reserve(numLookups);
+            for (size_t j = 0; j < numParams; j++) {
+                params[j] = doubleData[offset++];
+            }
+
+            while (1) {
+                timer.start();
+                result += lookup(params);
+                timer.stop();
+
+                if (--numLookups == 0) break;
+                for (auto idx : indices) {
+                    params[idx] = doubleData[offset++];
+                }
+            }
+        }
+        offset = dataStart;
+    }
+    delete[] params;
+    TimerRegister::print_results();
+
+    return result;
+}""" % (',\n    '.join(names), ",\n    ".join(arrayTree), fileName)
+
+    with open(fileName + ".cpp", 'w+') as output:
+        output.write(source)
+
+    os.system(
+        "clang++ --gcc-toolchain=/cm/shared/package/gcc/4.9.3/ -march=native" +
+        " -O3 -std=c++14 {0}.cpp Timer.cpp -o {0}".format(fileName))
+
+    if not keepSource:
+        os.remove(fileName + '.cpp')
 
 properties = Properties()
 
@@ -419,9 +591,6 @@ class Result(object):
 
         return Result.genericPredictor(result)
 
-def labelFloats(labels, values):
-    return " ".join(l + ": {:.3f}".format(v) for l, v in zip(labels, values))
-
 def loopProps(paths, props, fun):
     properties.loadPaths(paths)
 
@@ -447,10 +616,10 @@ def genModels(opts):
 
     runtimes = loadData(Measurement, measurementDims, opts.paths,
                         store_paths=False) \
-                       .filterKeys(lambda k: not k.startswith("bfsLevel"), dim='timer') \
-                       .collapseDim('device', 'TitanX') \
-                       .collapseDim('algorithm', 'bfs') \
-                       .collapseDim('sorting', 'normal')
+            .filterKeys(lambda k: not k.startswith("bfsLevel"), dim='timer') \
+            .collapseDim('device', 'TitanX') \
+            .collapseDim('algorithm', 'bfs') \
+            .collapseDim('sorting', 'normal')
 
     if opts.direct:
         runtimes = runtimes.transposeNamedDims('graph', 'timer', 'implementation')
@@ -458,6 +627,9 @@ def genModels(opts):
         def work(params, getProps):
             data = []
             for graph in runtimes:
+                if len(list(runtimes[graph])) <= 15:
+                    continue
+
                 for level in runtimes[graph]:
                     timings = runtimes[graph,level].sparseitems()
                     fastest = sorted(timings, key=lambda k: k[1].avg)
@@ -515,12 +687,61 @@ def plotModelRanges(result, props):
         ax.set_yscale('linear')
         ax.set_xscale('linear')
 
+def dumpProperties(opts):
+    def work(params, getter):
+        labels = ()
+        for k, v in params:
+            labels += properties[k][v].labels
+
+        indices = []
+        for i, k in enumerate(labels):
+            if k.endswith('-visited') or k.endswith('-frontier'):
+                indices.append(i)
+
+        indices.sort()
+
+        with open(stringifyTuples(params) + ".binprops", 'wb+') as output:
+            output.write(struct.pack("QQ", len(labels), len(indices)))
+            for i in indices:
+                output.write(struct.pack("Q", i))
+
+            output.write(struct.pack("Q", len(list(properties.frontiers))))
+            for graph in properties.frontiers:
+                output.write(struct.pack("Q", len(list(properties.frontiers[graph]))))
+                first = True
+                for level in properties.frontiers[graph]:
+                    props = getter(graph,level)
+                    if first:
+                        first = False
+                        for p in props:
+                            output.write(struct.pack("d", p))
+                    else:
+                        for i in indices:
+                            output.write(struct.pack("d", props[i]))
+
+    loopProps([opts.model_path], opts.properties, work)
+
 def exportModels(opts):
+    for path in opts.paths:
+        result = Result.resultsFromFile(path, opts.classifier)
+        exportCppModel(result, properties.decode, opts.keep)
+
+def exportAllModels(opts):
+    def work(params, getProps):
+        result = Result(opts.classifier, opts.model_path, "", params,
+                        None, opts.percent, seed=opts.seed,
+                        unload=opts.unload, cached=False)
+
+        exportCppModel(result, properties.decode, opts.keep)
+
+    loopProps([opts.model_path], opts.properties, work)
+
+def plotModels(opts):
     for path in opts.paths:
         result = Result.resultsFromFile(path, opts.classifier)
         plotModelRanges(result, result.params)
 
-def exportAllModels(opts):
+def plotAllModels(opts):
     def work(params, getProps):
         result = Result(opts.classifier, opts.model_path, "", params,
                         None, opts.percent, seed=opts.seed,
@@ -533,21 +754,22 @@ def exportAllModels(opts):
 def loadRuntimes(paths):
     runtimes = loadData(Measurement, measurementDims, paths,
                         store_paths=False) \
-                       .filterKeys(lambda k: not k.startswith("bfsLevel"), dim='timer') \
-                       .collapseDim('device', 'TitanX') \
-                       .collapseDim('algorithm', 'bfs') \
-                       .collapseDim('sorting', 'normal') \
-                       .transposeNamedDims('graph', 'timer', 'implementation')
+            .filterKeys(lambda k: not k.startswith("bfsLevel"), dim='timer') \
+            .collapseDim('device', 'TitanX') \
+            .collapseDim('algorithm', 'bfs') \
+            .collapseDim('sorting', 'normal') \
+            .transposeNamedDims('graph', 'timer', 'implementation')
 
     def runPerGraphLevel(task, getProps, getPrediction):
         for graph in runtimes:
-            for level in runtimes[graph]:
+            last = 'edge-list'
+            for level in sorted(runtimes[graph], key=depthToNum):
                 times = runtimes[graph,level].transform(lambda x: x.avg)
                 real = sorted(times.sparseitems(), key=lambda x: x[1])
                 props = getProps(graph, level)
                 pred = getPrediction(props)
                 real = OrderedDict((k[0], v) for k, v in real)
-                task(graph, pred, real)
+                last = task(graph, pred, real, last)
 
     return runPerGraphLevel
 
@@ -678,22 +900,37 @@ class Predict(object):
 
     def __enter__(self):
         self.results = defaultdict(lambda: defaultdict(int))
-        def runTask(graph, pred, real):
+        def runTask(graph, pred, real, last):
             for impl, time in real.items():
                 self.results[graph][impl] += time
 
+            self.results[graph]['optimal'] += min(real.values())
+
             if pred[0] == 'unknown':
-                self.results[graph]['predicted'] == float("NaN")
+                if last == 'unknown':
+                    self.results[graph]['predicted'] = float("NaN")
+                else:
+                    self.results[graph]['predicted'] += real[last]
+                return last
             else:
                 self.results[graph]['predicted'] += real[pred[0]]
-            self.results[graph]['optimal'] += min(real.values())
+
+            return pred[0]
 
         return runTask
 
     def __exit__(self, type, value, traceback):
+        if type is not None:
+            print "type:", type
+            print "value:", value
+            print "traceback:"
+            print_tb(traceback)
+            exit(1)
+
         relError = 0
         relImprovement = 0
         count = 0
+        successfulPredictionCount = 0
         predictionFailures = 0
         averagePredicted = 0
         averageBest = 0
@@ -704,7 +941,7 @@ class Predict(object):
             if not isnan(vals['predicted']):
                 relError += abs(vals['optimal'] - vals['predicted']) / vals['optimal']
             else:
-                predictionFailure += 1
+                predictionFailures += 1
 
             count += 1
             optimal = vals['optimal']
@@ -716,11 +953,21 @@ class Predict(object):
             if self.verbose:
                 predictions[graph] = (optimal, predicted, times)
 
-            averagePredicted += predicted/optimal
-            averageBest += times[0][1]/optimal
+            if not isnan(predicted):
+                averagePredicted += predicted/optimal
+                averageBest += times[0][1]/optimal
+                successfulPredictionCount += 1
 
-        data = (self.params, predictionFailures/count, relError/count,
-                averagePredicted/count, averageBest/count, predictions)
+        if successfulPredictionCount != 0:
+            data = (self.params, predictionFailures/count,
+                    relError/successfulPredictionCount,
+                    averagePredicted/successfulPredictionCount,
+                    averageBest/successfulPredictionCount, predictions)
+        else:
+            data = (self.params, predictionFailures/count,
+                    float("inf"),
+                    float("inf"),
+                    float("inf"), predictions)
         self.ranking.append(data)
 
     @staticmethod
@@ -733,7 +980,11 @@ class Predict(object):
         elif opts.sorting == 'avg-pred':
             order = 3
 
-        final = sorted(Predict.ranking, key=lambda k: k[order], reverse=True)
+        def graphToOrder(tup):
+            optimal, predicted, times = tup
+            aeturn (predicted/optimal)
+
+        final = sorted(Predict.ranking, key=lambda k: k[order])
         for params, predFailures, relError, avgPred, avgBest, preds in final:
             print "Params:", params
             print "Prediction failures:", predFailures
@@ -741,7 +992,8 @@ class Predict(object):
             print "Average prediction:", avgPred
             print "Average best:", avgBest
 
-            for (graph, (optimal, predicted, times)) in preds.items():
+            preds = sorted(preds.items(), key=lambda k: graphToOrder(k[1]))
+            for (graph, (optimal, predicted, times)) in reversed(preds):
                 print "Graph:", graph
                 print "\tPredicted:", predicted/optimal
 
@@ -820,6 +1072,8 @@ generate.add_argument('paths', nargs='*', metavar='PATH',
 generate.set_defaults(func=genModels)
 
 exportAll = subparsers.add_parser('export-all', parents=[model_props])
+exportAll.add_argument('--keep', action='store_true',
+                       help='Don\'t remove source.')
 exportAll.set_defaults(func=exportAllModels)
 
 export = subparsers.add_parser('export')
@@ -828,7 +1082,20 @@ export.add_argument('paths', nargs='+', metavar='MODEL-PATH',
 export.add_argument('--classifier', default=DecisionTreeClassifier,
                     action=SetClassifier, choices=SetClassifier.choices,
                     help='Select classifier to use.')
+export.add_argument('--keep', action='store_true',
+                    help='Don\'t remove source.')
 export.set_defaults(func=exportModels)
+
+plotAll = subparsers.add_parser('plot-all', parents=[model_props])
+plotAll.set_defaults(func=plotAllModels)
+
+plot = subparsers.add_parser('plot')
+plot.add_argument('paths', nargs='+', metavar='MODEL-PATH',
+                   help="Model filepaths.")
+plot.add_argument('--classifier', default=DecisionTreeClassifier,
+                  action=SetClassifier, choices=SetClassifier.choices,
+                  help='Select classifier to use.')
+plot.set_defaults(func=plotModels)
 
 validate = argparse.ArgumentParser(add_help=False)
 validate.set_defaults(sorting='')
@@ -891,6 +1158,9 @@ predictOne.add_argument('--classifier', default=DecisionTreeClassifier,
                      action=SetClassifier, choices=SetClassifier.choices,
                      help='Select classifier to use.')
 predictOne.set_defaults(func=runTaskForSome)
+
+dumpProps = subparsers.add_parser('dump-properties', parents=[model_props])
+dumpProps.set_defaults(func=dumpProperties)
 
 options = parser.parse_args()
 options.func(options)
