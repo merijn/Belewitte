@@ -41,12 +41,14 @@ translate(unordered_map<string,uint64_t> &map, uint64_t &unique_id, string key)
 static void
 normalise(const string graphName, bool undirected)
 {
+    bool bipartite = false;
     uint64_t inId, outId;
     string in, out;
     uint64_t unique_id = 0;
     vector<Edge<uint64_t>> edges;
     vector<Edge<uint64_t>> rev_edges;
     unordered_map<string,uint64_t> lookup_map;
+    unordered_map<string,uint64_t> bipartite_lookup_map;
 
     ifstream graph (graphName);
     ofstream lookup_table (graphName + ".map");
@@ -60,8 +62,13 @@ normalise(const string graphName, bool undirected)
             undirected = false;
         } else {
             undirected = true;
+            if (line.find("bip") != string::npos) {
+                bipartite = true;
+            }
         }
     }
+
+    auto &out_lookup_map = bipartite ? bipartite_lookup_map : lookup_map;
 
     do {
         istringstream ss(line);
@@ -69,7 +76,7 @@ normalise(const string graphName, bool undirected)
         if (line[0] != '#' && line[0] != '%') {
             ss >> in >> out;
             inId = translate(lookup_map, unique_id, in);
-            outId = translate(lookup_map, unique_id, out);
+            outId = translate(out_lookup_map, unique_id, out);
 
             edges.emplace_back(inId, outId);
             if (undirected) edges.emplace_back(outId, inId);
