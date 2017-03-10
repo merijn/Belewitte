@@ -154,6 +154,7 @@ class Timer {
 
         void start();
         void stop();
+        void reserve(size_t);
 
     private:
         TimerRegister::clock::time_point begin;

@@ -88,8 +88,11 @@ Timing& Timing::operator/=(const double &time)
     return *this;
 }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wfloat-equal"
 bool Timing::operator==(const Timing &time) const
 { return total_time == time.total_time; }
+#pragma GCC diagnostic pop
 
 bool Timing::operator!=(const Timing &time) const
 { return !this->operator==(time); }
@@ -260,3 +263,10 @@ void
 Timer::stop()
 { timings->push_back(TimerRegister::clock::now() - begin); }
 
+void
+Timer::reserve(size_t count)
+{
+    if (timings->capacity() - timings->size() < count) {
+        timings->reserve(timings->size() + std::max(count, 100UL));
+    }
+}
