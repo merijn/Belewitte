@@ -22,7 +22,7 @@ from matplotlib.collections import LineCollection, PatchCollection
 from matplotlib.lines import Line2D
 import matplotlib.patches as patches
 
-from names import Naming, names
+from names import Naming, names, depthToNum
 from measurements import Measurement
 from table import Table
 
@@ -132,10 +132,10 @@ class Plot(object):
 def plotBars(ax, normalise, data, groupNames=Naming(), columnNames=Naming()):
     dims = data.dims()
 
-    groups = sorted(data.keys(dim=dims[0]))
+    groups = sorted(data.keys(dim=dims[0]), key=lambda k: groupNames[k])
     numGroups = len(groups)
 
-    columns = sorted(data.keys(dim=dims[1]))
+    columns = sorted(data.keys(dim=dims[1]), key=lambda k: columnNames[k])
     numBars = len(columns) + 1
 
     fun = lambda m: m.avg
@@ -152,7 +152,7 @@ def plotBars(ax, normalise, data, groupNames=Naming(), columnNames=Naming()):
     for i, (column, colour) in enumerate(zip(columns, colours())):
         values = [data[group][column] for group in groups]
 
-        ax.bar(ind + i, values, 1, color=colour, label=columnNames[column])
+        ax.bar(ind + i, values, 1, color=colour, label=str(columnNames[column]))
 
     fontsize=25
     if normalise:
@@ -161,7 +161,7 @@ def plotBars(ax, normalise, data, groupNames=Naming(), columnNames=Naming()):
         ax.set_ylabel('Runtime (ns)', fontsize=fontsize)
 
     ax.set_xticks(ind + (numBars // 3))
-    ax.set_xticklabels([groupNames[n] for n in groups], fontsize=fontsize,
+    ax.set_xticklabels([str(groupNames[n]) for n in groups], fontsize=fontsize,
             rotation=-35, ha='left', va='top')
     ax.set_yticklabels(ax.get_yticklabels(), fontsize=fontsize)
 
@@ -258,7 +258,7 @@ def plotDataSet(dims, group, column, measurements, normalise):
 
     plotHelper(measurements, [(k,dims[k]) for _, k in transpose])
 
-def parseFiles(path, table, ext=".timings", process_line=None):
+def parseFiles(path, table, includeRoot, ext=".timings", process_line=None):
     if not path.endswith('/'):
         path += '/'
 
@@ -280,7 +280,9 @@ def parseFiles(path, table, ext=".timings", process_line=None):
             if process_line is None:
                 def process_line(line, ns):
                     ns["graph"], root, ns["timer"], timings = line.strip().split(':')
-                    ns["graph"] = ns["graph"] + ":" + root
+                    if includeRoot:
+                        ns["graph"] = ns["graph"] + ":" + root
+                    ns["root"] = int(root)
                     split = ns["graph"].split('.')
                     if len(split) == 1:
                         ns["sorting"] = "normal"
@@ -315,7 +317,7 @@ def parseFiles(path, table, ext=".timings", process_line=None):
                 table[tuple(ns[k] for k in table.dims())] = result
 
 def plotPerformance(opts):
-    data = loadData(Measurement, opts.dims, opts.paths, filters=opts.filters)
+    data = loadData(Measurement, opts.dims, opts.paths, includeRoot=False, filters=opts.filters)
     plotDataSet(opts.dims, opts.group, opts.column, data, opts.normalise)
 
 def setLabelOffset(data, step, axis):
@@ -437,7 +439,8 @@ measurementDims['sorting'] = 'normal'
 measurementDims['implementation'] = ''
 measurementDims['timer'] = 'computation'
 
-def loadData(default, dims, paths, ext=".timings", process_line=None, filters=dict(), store_paths=True):
+def loadData(default, dims, paths, includeRoot=True, ext=".timings",
+             process_line=None, filters=dict(), store_paths=True):
     dimFilter = lambda d: d != 'paths'
     if store_paths:
         dimFilter = lambda x: True
@@ -449,10 +452,18 @@ def loadData(default, dims, paths, ext=".timings", process_line=None, filters=di
             view = data[path]
         else:
             view = data
-        parseFiles(path, view, ext=ext, process_line=process_line)
+        parseFiles(path, view, includeRoot, ext=ext, process_line=process_line)
 
     for dim in set(filters).intersection(data.dims()):
-        data = data.filterKeys(filters[dim], dim=dim)
+        if isinstance(filters[dim], list):
+            def fun(k):
+                for f in filters[dim]:
+                    if f(k):
+                        return True
+                return False
+        else:
+            fun = filters[dim]
+        data = data.filterKeys(fun, dim=dim)
 
     return data
 

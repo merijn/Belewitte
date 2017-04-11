@@ -25,8 +25,34 @@ if __name__ != "__main__":
 
 locale.setlocale(locale.LC_NUMERIC, "")
 
-def depthToNum(s):
-    return int(s[len("bfsLevel"):])
+def isBipartite(graph):
+    graph, level = graph.split(':')
+    return graph in set(['actor-movie', 'amazon-ratings', 'brunson_revolution',
+        'opsahl-collaboration', 'bibsonomy-2ti', 'bibsonomy-2ui',
+        'bibsonomy-2ut', 'bookcrossing_full-rating', 'bookcrossing_rating',
+        'citeulike-ti', 'citeulike-ui', 'citeulike-ut',
+        'brunson_club-membership', 'brunson_corporate-leadership',
+        'dbpedia-country', 'moreno_crime', 'dblp-author', 'dbpedia-genre',
+        'delicious-ti', 'delicious-ui', 'delicious-ut', 'digg-votes',
+        'discogs_affiliation', 'discogs_genre', 'discogs_style',
+        'discogs_lgenre', 'discogs_lstyle', 'epinions-rating',
+        'flickr-groupmemberships', 'github', 'jester1', 'jester2',
+        'lastfm_band', 'lastfm_song', 'lkml_person-thread',
+        'livejournal-groupmemberships', 'dbpedia-location',
+        'movielens-100k_rating', 'movielens-10m_rating', 'movielens-1m',
+        'movielens-10m_ti', 'movielens-10m_ui', 'movielens-10m_ut',
+        'dbpedia-starring', 'dbpedia-occupation', 'orkut-groupmemberships',
+        'dbpedia-producer', 'dbpedia-recordlabel', 'reuters',
+        'gottron-reuters', 'escorts', 'brunson_south-africa',
+        'opsahl-southernwomen', 'brunson_southern-women',
+        'stackexchange-stackoverflow', 'dbpedia-team', 'gottron-trec',
+        'dbtropes-feature', 'munmun_twitterex_ut', 'opsahl-ucforum',
+        'unicodelang', 'pics_ti', 'pics_ui', 'pics_ut', 'trackers',
+        'edit-enwikibooks', 'edit-frwikibooks', 'edit-enwikinews',
+        'edit-frwikinews', 'edit-dewiki', 'edit-enwiki', 'gottron-excellent',
+        'wiki-en-cat', 'edit-eswiki', 'edit-frwiki', 'edit-itwiki',
+        'edit-enwikiquote', 'edit-dewiktionary', 'edit-enwiktionary',
+        'edit-frwiktionary', 'dbpedia-writer', 'youtube-groupmemberships'])
 
 def stringifyTuples(l):
     return ".".join(str(k) + ":" + str(v) for k,v in l)
@@ -75,16 +101,16 @@ class Properties(object):
                 props['none'] = Content((), lambda graph, level: ())
             return props
 
-        graphProps = Table(float, "graph", "sort", "property")
+        self.graphProps = Table(float, "graph", "sort", "property")
         self.frontiers = Table(int, "graph", "depth")
         self.visited = Table(int, "graph", "depth")
         self.props = dict()
 
-        for path in glob('*.props'):
-            with open(path) as f:
+        for fileName in glob('*.props'):
+            with open(fileName) as f:
                 for line in f:
-                    graph, sort, prop, val = line.strip().split(':')
-                    graphProps[graph,sort,prop] = float(val.replace(',',''))
+                    graph, sort, prop, v = line.strip().split(':')
+                    self.graphProps[graph,sort,prop] = float(v.replace(',',''))
 
         def lookupProps(table, k, labels):
             def getLookupProps(graph, _):
@@ -98,12 +124,13 @@ class Properties(object):
                 if k == 'abs':
                     div = 1
                 else:
-                    div = graphProps[graphNoRoot,'abs','vertex-count']
+                    div = self.graphProps[graphNoRoot,'abs','vertex-count']
                 return (table[graph, level] / div,)
             return getSize
 
+        keys = tuple(self.graphProps.keys(dim='property'))
         self.props['graph-properties'] = \
-            createPropTable(graphProps, tuple(graphProps.keys(dim='property')),
+            createPropTable(self.graphProps, keys,
                             lookupProps, ['abs', 'in', 'out'])
 
         self.props['frontier'] = createPropTable(self.frontiers, ["frontier"],
@@ -220,18 +247,19 @@ def validatePrediction(result, sample, real):
 
     last = 0
     node = 0
-    while node != _tree.TREE_LEAF:
+    while True:
         left_child = tree.children_left[node]
         right_child = tree.children_right[node]
 
         idx = tree.feature[node]
-        last = node
-        if sample[0,idx] <= tree.threshold[node]:
+        if left_child == _tree.TREE_LEAF:
+            break
+        elif sample[0,idx] <= tree.threshold[node]:
             node = left_child
         else:
             node = right_child
 
-    proba = tree.value[last] / tree.weighted_n_node_samples[last]
+    proba = tree.value[node] / tree.weighted_n_node_samples[node]
     pred = np.argmax(proba, axis=1)
 
     if (pred != real).any():
@@ -581,15 +609,19 @@ class Result(object):
     def predictorFromFile(path, estimator, unload=False, cached=True):
         args, kwargs = Result.splitPath(path, estimator)
 
+        labels = []
         if args[2]:
             result = dict()
             for impl in Properties.implementations:
                 args[2] = impl
                 result[impl] = Result(*args, unload=unload, cached=cached, **kwargs)
+                labels = zip(result[impl].labels,
+                             result[impl].feature_importances)
         else:
             result = Result(*args, unload=unload, cached=cached, **kwargs)
+            labels = zip(result.labels, result.feature_importances)
 
-        return Result.genericPredictor(result)
+        return Result.genericPredictor(result), labels
 
 def loopProps(paths, props, fun):
     properties.loadPaths(paths)
@@ -614,9 +646,22 @@ def genModels(opts):
     if not opts.paths:
         opts.paths = [opts.model_path]
 
+    if opts.skipbipartite:
+        filterGraphs = isBipartite
+    elif opts.skipnonbipartite:
+        filterGraphs = lambda k: not isBipartite(k)
+    else:
+        filterGraphs = lambda _: False
+
+    if opts.skiplong:
+        skipGraphs = lambda n: n > 15
+    else:
+        skipGraphs = lambda n: False
+
     runtimes = loadData(Measurement, measurementDims, opts.paths,
                         store_paths=False) \
             .filterKeys(lambda k: not k.startswith("bfsLevel"), dim='timer') \
+            .filterKeys(filterGraphs, dim='graph') \
             .collapseDim('device', 'TitanX') \
             .collapseDim('algorithm', 'bfs') \
             .collapseDim('sorting', 'normal')
@@ -627,7 +672,7 @@ def genModels(opts):
         def work(params, getProps):
             data = []
             for graph in runtimes:
-                if len(list(runtimes[graph])) <= 15:
+                if skipGraphs(len(list(runtimes[graph]))):
                     continue
 
                 for level in runtimes[graph]:
@@ -751,10 +796,11 @@ def plotAllModels(opts):
 
     loopProps([opts.model_path], opts.properties, work)
 
-def loadRuntimes(paths):
+def loadRuntimes(paths, filterGraphs=lambda _: False):
     runtimes = loadData(Measurement, measurementDims, paths,
                         store_paths=False) \
             .filterKeys(lambda k: not k.startswith("bfsLevel"), dim='timer') \
+            .filterKeys(filterGraphs, dim='graph') \
             .collapseDim('device', 'TitanX') \
             .collapseDim('algorithm', 'bfs') \
             .collapseDim('sorting', 'normal') \
@@ -774,14 +820,22 @@ def loadRuntimes(paths):
     return runPerGraphLevel
 
 def runTaskForAll(opts):
-    runPerGraphLevel = loadRuntimes(opts.paths)
+    if opts.skipbipartite:
+        filterGraphs = isBipartite
+    elif opts.skipnonbipartite:
+        filterGraphs = lambda k: not isBipartite(k)
+    else:
+        filterGraphs = lambda _: False
+
+    runPerGraphLevel = loadRuntimes(opts.paths, filterGraphs=filterGraphs)
 
     if opts.direct:
         def getPredictor(params):
             result = Result(opts.classifier, opts.model_path, "", params,
                             None, opts.percent, seed=opts.seed,
                             unload=opts.unload, cached=False)
-            return Result.genericPredictor(result)
+            labels = zip(result.labels, result.feature_importances)
+            return Result.genericPredictor(result), labels
 
     else:
         def getPredictor(params):
@@ -791,37 +845,47 @@ def runTaskForAll(opts):
                                     params, None, opts.percent,
                                     seed=opts.seed, unload=opts.unload,
                                     cached=False)
-            return Result.genericPredictor(results)
+                labels = zip(result[impl].labels,
+                             result[impl].feature_importances)
+            return Result.genericPredictor(results), labels
 
     def work(params, getProps):
-        predictor = getPredictor(params)
-        with opts.task(params, opts) as task:
+        predictor, labels = getPredictor(params)
+        with opts.task(params, labels, opts) as task:
             runPerGraphLevel(task, getProps, predictor)
 
     loopProps(opts.paths, opts.properties, work)
     opts.task.finish(opts)
 
 def runTaskForSome(opts):
-    runPerGraphLevel = loadRuntimes(opts.paths)
+    if opts.skipbipartite:
+        filterGraphs = isBipartite
+    elif opts.skipnonbipartite:
+        filterGraphs = lambda k: not isBipartite(k)
+    else:
+        filterGraphs = lambda _: False
+
+    runPerGraphLevel = loadRuntimes(opts.paths, filterGraphs=filterGraphs)
     properties.loadPaths(opts.paths)
 
-    predictor = Result.predictorFromFile(opts.model_path, opts.classifier)
+    predictor, labels = Result.predictorFromFile(opts.model_path, opts.classifier)
     getProps = properties.getterFromParams(predictor.params)
 
-    with opts.task(predictor.params, opts) as task:
+    with opts.task(predictor.params, labels, opts) as task:
         runPerGraphLevel(task, getProps, predictor)
 
     opts.task.finish(opts)
 
 class Validate(object):
     ranking = []
-    def __init__(self, params, opts):
+    def __init__(self, params, labels, opts):
         if opts.direct:
             length = 1
         else:
             length = len(list(Properties.implementations))
 
         self.params = params
+        self.labels = labels
         self.direct = opts.direct
         self.relErrors = length * [0]
         self.totalCorrect = 0
@@ -894,8 +958,9 @@ class Validate(object):
 
 class Predict(object):
     ranking = []
-    def __init__(self, params, opts):
+    def __init__(self, params, labels, opts):
         self.params = params
+        self.labels = labels
         self.verbose = opts.verbose
 
     def __enter__(self):
@@ -938,16 +1003,17 @@ class Predict(object):
         predictions = dict()
 
         for graph, vals in self.results.items():
-            if not isnan(vals['predicted']):
-                relError += abs(vals['optimal'] - vals['predicted']) / vals['optimal']
-            else:
-                predictionFailures += 1
-
-            count += 1
             optimal = vals['optimal']
             predicted = vals['predicted']
             del vals['optimal']
             del vals['predicted']
+
+            if not isnan(predicted):
+                relError += abs(optimal - predicted) / optimal
+            else:
+                predictionFailures += 1
+
+            count += 1
             times = sorted(vals.items(), key=lambda k: k[1])
 
             if self.verbose:
@@ -959,12 +1025,12 @@ class Predict(object):
                 successfulPredictionCount += 1
 
         if successfulPredictionCount != 0:
-            data = (self.params, predictionFailures/count,
+            data = (self.params, self.labels, predictionFailures/count,
                     relError/successfulPredictionCount,
                     averagePredicted/successfulPredictionCount,
                     averageBest/successfulPredictionCount, predictions)
         else:
-            data = (self.params, predictionFailures/count,
+            data = (self.params, self.labels, predictionFailures/count,
                     float("inf"),
                     float("inf"),
                     float("inf"), predictions)
@@ -972,29 +1038,36 @@ class Predict(object):
 
     @staticmethod
     def finish(opts):
-        order = 2
+        order = 3
         if opts.sorting == 'pred-fail':
             order = 1
-        elif opts.sorting == 'rel-error':
-            order = 2
         elif opts.sorting == 'avg-pred':
             order = 3
 
         def graphToOrder(tup):
             optimal, predicted, times = tup
-            aeturn (predicted/optimal)
+            if opts.verbose_rel_error:
+                return predicted / times.values()[0]
+            return predicted
 
         final = sorted(Predict.ranking, key=lambda k: k[order])
-        for params, predFailures, relError, avgPred, avgBest, preds in final:
+        for params, labels, predFail, relErr, avgPred, avgBest, preds in final:
             print "Params:", params
-            print "Prediction failures:", predFailures
-            print "Relative Error:", relError
+            print "Labels:", sorted(labels, key=lambda k: k[1], reverse=True)
+            print "Prediction failures:", predFail
+            print "Relative Error:", relErr
             print "Average prediction:", avgPred
             print "Average best:", avgBest
 
             preds = sorted(preds.items(), key=lambda k: graphToOrder(k[1]))
-            for (graph, (optimal, predicted, times)) in reversed(preds):
-                print "Graph:", graph
+            for (graphRoot, (optimal, predicted, times)) in reversed(preds):
+                graph = graphRoot.split(':')[0]
+                vertexCount = properties.graphProps[graph,'abs','vertex-count']
+                visitedVertices = properties.visited[graphRoot]
+                lvls = len(list(visitedVertices))
+                visited = max(list(visitedVertices.values())) / vertexCount
+                info = "levels:" + str(lvls) + ", visited:" + str(visited)
+                print "Graph:", graph, "(" + info + ")"
                 print "\tPredicted:", predicted/optimal
 
                 for k, t in times:
@@ -1069,6 +1142,15 @@ subparsers = parser.add_subparsers()
 generate = subparsers.add_parser('generate', parents=[model_props])
 generate.add_argument('paths', nargs='*', metavar='PATH',
                       help="Path(s) to read timing results from.")
+generate.add_argument('--skip-bipartite', action='store_true',
+                      dest='skipbipartite',
+                      help='Skip bipartite graphs.')
+generate.add_argument('--skip-non-bipartite', action='store_true',
+                      dest='skipnonbipartite',
+                      help='Skip nonbipartite graphs.')
+generate.add_argument('--skip-long', action='store_true',
+                      dest='skiplong',
+                      help='Skip graphs with BFS depths greater than 15.')
 generate.set_defaults(func=genModels)
 
 exportAll = subparsers.add_parser('export-all', parents=[model_props])
@@ -1100,13 +1182,20 @@ plot.set_defaults(func=plotModels)
 validate = argparse.ArgumentParser(add_help=False)
 validate.set_defaults(sorting='')
 validate.add_argument('--overall', action='store_const', const='overall',
-                          dest='sorting', help='Total ranking instead of first correct.')
+                      dest='sorting',
+                      help='Total ranking instead of first correct.')
 validate.add_argument('--rel-error', '--relative-error', action='store_const',
                       const='rel-error', dest='sorting',
                       help='Sort by relative error.')
-validate.add_argument('--unknown-predictions', '--unknown-pred', action='store_const',
-                      const='unknown-pred', dest='sorting',
-                      help='Sort by unknown predictions.')
+validate.add_argument('--unknown-predictions', '--unknown-pred',
+                      action='store_const', const='unknown-pred',
+                      dest='sorting', help='Sort by unknown predictions.')
+validate.add_argument('--skip-bipartite', action='store_true',
+                     dest='skipbipartite',
+                     help='Skip bipartite graphs.')
+validate.add_argument('--skip-non-bipartite', action='store_true',
+                      dest='skipnonbipartite',
+                      help='Skip nonbipartite graphs.')
 validate.set_defaults(task=Validate)
 
 validateAll = subparsers.add_parser('validate-all', parents=[model_props, validate])
@@ -1132,15 +1221,22 @@ predict.add_argument('--avg-pred', '--average-pred', '--avg-prediction',
                      '--average-prediction', action='store_const',
                      const='avg-pred', dest='sorting',
                      help='Sort by best average prediction')
-predict.add_argument('--rel-error', '--relative-error', action='store_const',
-                     const='rel-error', dest='sorting',
-                     help='Sort by relative error.')
 predict.add_argument('--pred-fail', '--pred-failures', '--prediction-fail',
                      '--prediction-failures', action='store_const',
                      const='pred-fail', dest='sorting',
                      help='Sort by relative error.')
 predict.add_argument('--verbose', '-v', action='store_true',
                      help='Print output per graph.')
+predict.add_argument('--skip-bipartite', action='store_true',
+                     dest='skipbipartite',
+                     help='Skip bipartite graphs.')
+predict.add_argument('--skip-non-bipartite', action='store_true',
+                     dest='skipnonbipartite',
+                     help='Skip nonbipartite graphs.')
+predict.add_argument('--verbose-relative-error', '--verbose-rel-error',
+                     '--verbose-relative-err', '--verbose-rel-err',
+                     action='store_true', dest='verbose_rel_error',
+                     help='Sort by best average prediction')
 predict.set_defaults(task=Predict)
 
 predictAll = subparsers.add_parser('predict-all', parents=[model_props, predict])

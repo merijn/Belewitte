@@ -1,7 +1,19 @@
 from collections import defaultdict
 
+def depthToNum(s):
+    return int(s[len("bfsLevel"):])
+
 class Naming(dict):
+    def __init__(self, *args, **kwargs):
+        super(Naming, self).__init__(*args, **kwargs)
+        self.transform = lambda k: k
+
     def __missing__(self, key):
+        try:
+            key = self.transform(key)
+        except:
+            pass
+
         return key
 
     def map(self, fn):
@@ -37,6 +49,7 @@ names['algorithm'] = Naming({
 
 names['implementation'] = Naming({
     "edge-list" : "Edge List",
+    "rev-edge-list" : "Reverse Edge List",
     "vertex-push" : "Vertex Push",
     "vertex-pull" : "Vertex Pull",
     "vertex-push-warp" : "Vertex Push Warp",
@@ -44,3 +57,6 @@ names['implementation'] = Naming({
     "vertex-pull-nodiv" : "Vertex Pull NoDiv",
     "vertex-pull-warp-nodiv" : "Vertex Pull Warp NoDiv"
 })
+
+names['timer'] = Naming()
+names['timer'].transform = depthToNum
