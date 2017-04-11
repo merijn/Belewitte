@@ -34,7 +34,7 @@ main: build/main.o build/AlgorithmConfig.o build/Backend.o build/CUDA.o \
 
 normalise: build/normalise.o build/Util.o
 	$(PRINTF) " LD\t$@\n"
-	$(AT)$(LD) $(LDFLAGS) $^ -o $@
+	$(AT)$(LD) $(LDFLAGS) -L$(BOOST_PATH)/lib/ -lboost_system -lboost_filesystem $^ -o $@
 
 gen-graph: build/gen-graph.o build/Util.o
 	$(PRINTF) " LD\t$@\n"

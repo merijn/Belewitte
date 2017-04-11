@@ -4,10 +4,13 @@
 #include <fstream>
 #include <sstream>
 
+#include <boost/filesystem.hpp>
+
 #include "Graph.hpp"
 #include "Util.hpp"
 
 using namespace std;
+using namespace boost::filesystem;
 
 static const char *execName = "normalise";
 
@@ -118,6 +121,39 @@ lookup(const string fileName, const bool reverse, int argc, char **argv)
     }
 }
 
+static void
+convertMatrixMarket(const string graphFile)
+{
+    auto filename = path(graphFile).filename().replace_extension(".mtx");
+    Graph<uint64_t,uint64_t> graph(graphFile);
+    ofstream mtxFile(filename.string());
+    mtxFile.imbue(std::locale("C"));
+    mtxFile << "%%MatrixMarket matrix coordinate pattern general" << endl;
+    mtxFile << graph.vertex_count << " " << graph.vertex_count << " "
+            << graph.edge_count << endl;
+
+    for (auto v : graph.vertices) {
+        for (auto &e : v.edges) {
+            mtxFile << v.id + 1 << "\t" << e + 1 << endl;
+        }
+    }
+}
+
+static void
+convertEdgeList(const string graphFile)
+{
+    auto filename = path(graphFile).filename().replace_extension(".edges");
+    Graph<uint64_t,uint64_t> graph(graphFile);
+    ofstream edgeList(filename.string());
+    edgeList.imbue(std::locale("C"));
+    edgeList << graph.vertex_count << " " << graph.edge_count << endl;
+    for (auto v : graph.vertices) {
+        for (auto &e : v.edges) {
+            edgeList << v.id << "\t" << e << endl;
+        }
+    }
+}
+
 int main(int argc, char **argv)
 {
     int undirected = false;
@@ -169,6 +205,16 @@ int main(int argc, char **argv)
         for (int i = 1; i < argc; i++) {
             cout << "Normalising: " << argv[i] << endl;
             normalise(argv[i], undirected);
+        }
+    } else if (argc >= 2 && !strcmp(argv[0], "mtx")) {
+        for (int i = 1; i < argc; i++) {
+            cout << "Converting to MatrixMarket: " << argv[i] << endl;
+            convertMatrixMarket(argv[i]);
+        }
+    } else if (argc >= 2 && !strcmp(argv[0], "edge-list")) {
+        for (int i = 1; i < argc; i++) {
+            cout << "Converting to edge list: " << argv[i] << endl;
+            convertEdgeList(argv[i]);
         }
     } else if (argc >= 3 && !strcmp(argv[0], "lookup")) {
         lookup(argv[1], false, argc - 2, &argv[2]);

@@ -97,7 +97,7 @@ ifeq ($(UNAME),Darwin)
                -Wno-pedantic -Wno-missing-prototypes -Wno-unused-parameter
 
     NVCCXXFLAGS += --compiler-options "$(NVWFLAGS) $(NVCCHOSTCXXFLAGS)" \
-                 -isystem $(CUDA_PATH)/include/
+                   -isystem $(CUDA_PATH)/include/
 
 endif
 ifeq ($(UNAME),Linux)
@@ -112,7 +112,8 @@ endif
 
     NVWFLAGS =
 
-    NVCCXXFLAGS += --compiler-options "$(NVWFLAGS) $(NVCCHOSTCXXFLAGS)"
+    NVCCXXFLAGS += --compiler-options "$(NVWFLAGS) $(NVCCHOSTCXXFLAGS)" \
+                   -Wno-deprecated-gpu-targets
 endif
 
 $(DEST)/:
