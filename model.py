@@ -24,6 +24,7 @@ if __name__ != "__main__":
     exit(1)
 
 locale.setlocale(locale.LC_NUMERIC, "")
+totalVisited = dict()
 
 def isBipartite(graph):
     graph, level = graph.split(':')
@@ -195,6 +196,7 @@ class Properties(object):
                 frontier = self.visited[graph,depth]
                 self.visited[graph,depth] = runningTotal
                 runningTotal += frontier
+            totalVisited[graph] = runningTotal
 
     def getterFromParams(self, params):
         propGetters = []
@@ -410,8 +412,7 @@ int main(int argc, char** argv)
     close(fd);
 
     TimerRegister::set_human_readable(true);
-    Timer timer("lookup", 10000);
-
+    Timer timer("lookup", 200000);
     unsigned long long *intData = static_cast<unsigned long long *>(ptr);
     double *doubleData = static_cast<double*>(ptr);
     size_t offset = 0;
@@ -733,6 +734,7 @@ def plotModelRanges(result, props):
         ax.set_xscale('linear')
 
 def dumpProperties(opts):
+    properties.loadPaths(["."])
     def work(params, getter):
         labels = ()
         for k, v in params:
@@ -895,7 +897,7 @@ class Validate(object):
         self.total = 0
 
     def __enter__(self):
-        def runTask(graph, pred, real):
+        def runTask(graph, pred, real, last):
             if pred == []:
                 self.errors += 1
             elif pred[0] == list(real)[0]:
@@ -1048,7 +1050,7 @@ class Predict(object):
             optimal, predicted, times = tup
             if opts.verbose_rel_error:
                 return predicted / times.values()[0]
-            return predicted
+            return predicted/optimal
 
         final = sorted(Predict.ranking, key=lambda k: k[order])
         for params, labels, predFail, relErr, avgPred, avgBest, preds in final:
@@ -1061,14 +1063,16 @@ class Predict(object):
 
             preds = sorted(preds.items(), key=lambda k: graphToOrder(k[1]))
             for (graphRoot, (optimal, predicted, times)) in reversed(preds):
-                graph = graphRoot.split(':')[0]
+                graph, root = graphRoot.split(':')
                 vertexCount = properties.graphProps[graph,'abs','vertex-count']
-                visitedVertices = properties.visited[graphRoot]
-                lvls = len(list(visitedVertices))
-                visited = max(list(visitedVertices.values())) / vertexCount
+                lvls = len(list(properties.visited[graph]))
+                visited = totalVisited[graphRoot]
                 info = "levels:" + str(lvls) + ", visited:" + str(visited)
-                print "Graph:", graph, "(" + info + ")"
-                print "\tPredicted:", predicted/optimal
+                info += ", optimal: " + str(optimal) + ", best: "
+                info += str(times[0][1]) + ", predicted: "
+                info += str(predicted)
+                print "Graph:", graphRoot, "(" + info + ")"
+                print "\tPredicted:", predicted/optimal, "(" + str(predicted) +")"
 
                 for k, t in times:
                     print "\t" + k + ":", t/optimal

@@ -65,7 +65,7 @@ class Plot(object):
         self.labels = []
 
     def __enter__(self):
-        self.fig, self.ax = plt.subplots(figsize=(24, 5), dpi=300)
+        self.fig, self.ax = plt.subplots(figsize=(16, 5), dpi=300)
         old_bar = self.ax.bar
         self.ax.extra_axes = OrderedDict()
 
@@ -122,14 +122,14 @@ class Plot(object):
             ax.patch.set_visible(False)
 
         legend = self.ax.legend(hs + self.handles, ls + self.labels,
-                loc='upper center', bbox_to_anchor=(0.5,-0.1), markerscale=2,
-                numpoints=1, scatterpoints=1, ncol=4)
+                loc='lower center', bbox_to_anchor=(0.5,1), markerscale=2,
+                numpoints=1, scatterpoints=1, ncol=5, edgecolor="black")
         self.fig.savefig(self.filename + '.pdf', bbox_extra_artists=(legend,),
                          bbox_inches='tight')
         plt.close(self.fig)
         return None
 
-def plotBars(ax, normalise, data, groupNames=Naming(), columnNames=Naming()):
+def plotBars(ax, normalise, data, group, groupNames=Naming(), columnNames=Naming()):
     dims = data.dims()
 
     groups = sorted(data.keys(dim=dims[0]), key=lambda k: groupNames[k])
@@ -149,10 +149,14 @@ def plotBars(ax, normalise, data, groupNames=Naming(), columnNames=Naming()):
     data = data.transform(fun)
     ind = np.arange(0, numBars * numGroups, numBars)
 
-    for i, (column, colour) in enumerate(zip(columns, colours())):
+    hatching = itertools.cycle(['/','\\','o','*','-','+','|','O','.','x'])
+    #colours = ["#ac9c3d", "#7f63b8", "#56ae6c", "#b84c7d", "#ba543d"]
+    decoratedColumns = zip(columns, colours(), hatching)
+    for i, (column, colour, hatch) in enumerate(decoratedColumns):
         values = [data[group][column] for group in groups]
 
-        ax.bar(ind + i, values, 1, color=colour, label=str(columnNames[column]))
+        ax.bar(ind + i, values, 1, hatch=hatch, edgecolor="black",
+               color=colour, label=str(columnNames[column]))
 
     fontsize=25
     if normalise:
@@ -160,6 +164,7 @@ def plotBars(ax, normalise, data, groupNames=Naming(), columnNames=Naming()):
     else:
         ax.set_ylabel('Runtime (ns)', fontsize=fontsize)
 
+    ax.set_xlabel(names["x-axis"][group], fontsize=fontsize)
     ax.set_xticks(ind + (numBars // 3))
     ax.set_xticklabels([str(groupNames[n]) for n in groups], fontsize=fontsize,
             rotation=-35, ha='left', va='top')
@@ -170,7 +175,6 @@ def plotBars(ax, normalise, data, groupNames=Naming(), columnNames=Naming()):
         ySettings['ymax'] = 1
 
     ax.set_ylim(**ySettings)
-    ax.set_xlim(xmin = 0, xmax = numBars * numGroups)
 
 def plotPoints(ax, data, marks=('.',), dotNames=Naming(), crossProduct=False):
     if crossProduct:
@@ -229,7 +233,7 @@ def plotDataSet(dims, group, column, measurements, normalise):
             groupNames = names[order[0][0]]
             columnNames = names[order[1][0]]
             with Plot(fileName) as ax:
-                plotBars(ax, normalise, data, groupNames, columnNames)
+                plotBars(ax, normalise, data, order[0][0], groupNames, columnNames)
         elif order[0][1] == '':
             for k in data:
                 if fileName:

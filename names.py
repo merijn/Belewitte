@@ -39,7 +39,18 @@ names['graph'] = Naming({
     "twitter_combined" : ("Twitter", 16),
     "web-BerkStan" : ("web-BerkStan", 17),
     "web-Google" : ("web-Google", 18),
-    "wiki-Talk" : ("wiki-Talk", 19)
+    "wiki-Talk" : ("wiki-Talk", 19),
+    'actor-collaboration' : ("", 1),
+    'ca-cit-HepPh' : ("", 2),
+    'cfinder-google' : ("", 3),
+    'dbpedia-starring' : ("", 4),
+    'discogs_affiliation' : ("", 5),
+    'opsahl-ucsocial' : ("", 6),
+    'prosper-loans' : ("", 7),
+    'web-NotreDame' : ("", 8),
+    'wikipedia_link_en' : ("", 9),
+    'wikipedia_link_fr' : ("", 10),
+    'zhishi-hudong-internallink' : ("", 11)
 })
 
 names['algorithm'] = Naming({
@@ -55,8 +66,18 @@ names['implementation'] = Naming({
     "vertex-push-warp" : "Vertex Push Warp",
     "vertex-pull-warp" : "Vertex Pull Warp",
     "vertex-pull-nodiv" : "Vertex Pull NoDiv",
-    "vertex-pull-warp-nodiv" : "Vertex Pull Warp NoDiv"
+    "vertex-pull-warp-nodiv" : "Vertex Pull Warp NoDiv",
+    "optimal" : "Optimal",
+    "predicted" : "Predicted",
+    "best" : "Non-switching Best",
+    "lonestar" : "Lonestar",
+    "gunrock" : "Gunrock"
 })
 
 names['timer'] = Naming()
 names['timer'].transform = depthToNum
+
+names['x-axis'] = Naming({
+    "timer" : "BFS Level"
+})
+names['x-axis'].transform = lambda s: s.capitalize()
