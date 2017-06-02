@@ -4,6 +4,7 @@ __global__ void
 edgeListBfs(EdgeList<unsigned> *graph, int *levels, int depth)
 {
     uint64_t size = graph->edge_count;
+    unsigned count = 1U;
     int newDepth = depth + 1;
 
     for (uint64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -11,7 +12,7 @@ edgeListBfs(EdgeList<unsigned> *graph, int *levels, int depth)
          idx += blockDim.x * gridDim.x)
     {
         if (atomicMin(&levels[graph->outEdges[idx]], newDepth) > newDepth) {
-            updateFrontier(1U);
+            updateFrontier(count);
         }
     }
 }
