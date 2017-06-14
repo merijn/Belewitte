@@ -3,12 +3,12 @@ main
 main.dSYM/*
 normalise
 normalise.dSYM/*
-gen-graph
 reorder-graph
 check-degree
 print-graph
 graph-details
-evolve
+evolve/gen-graph
+evolve/evolve
 *.d
 *.graph
 *.obj
