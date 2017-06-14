@@ -73,7 +73,7 @@ loadAlgorithms
             auto p = entry.path();
             auto filename = p.filename().string();
             p /= ("lib" + filename + ".so");
-            libs.emplace(filename, p.string());
+            if (!access(p.c_str(), F_OK)) libs.emplace(filename, p.string());
         }
     }
 

@@ -1,4 +1,6 @@
+BUILD := build
 DEST := build
+BASE := .
 include Common.mk
 
 ifeq ($(UNAME),Darwin)
@@ -23,46 +25,49 @@ all: main normalise gen-graph reorder-graph check-degree evolve print-graph \
     graph-details
 
 -include $(patsubst %.cpp, build/%.d, $(wildcard *.cpp))
--include $(foreach d, $(wildcard */), $(d)Makefile)
 
-build/main.o build/evolve.o build/graph-details.o: CXXFLAGS+=-I$(BOOST_PATH)/include -isystem$(BOOST_PATH)/include
+$(DEST)/main.o $(DEST)/evolve.o $(DEST)/graph-details.o: \
+    CXXFLAGS+=-I$(BOOST_PATH)/include -isystem$(BOOST_PATH)/include
 
-main: build/main.o build/AlgorithmConfig.o build/Backend.o build/CUDA.o \
-      build/Options.o build/OpenCL.o build/Timer.o build/Util.o
+main: $(DEST)/main.o $(DEST)/AlgorithmConfig.o $(DEST)/Backend.o \
+      $(DEST)/CUDA.o $(DEST)/Options.o $(DEST)/OpenCL.o $(DEST)/Timer.o \
+      $(BUILD)/libutils.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) -L$(BOOST_PATH)/lib/ -lboost_regex -lboost_system -lboost_filesystem $^ -o $@
 
-normalise: build/normalise.o build/Util.o
+normalise: $(DEST)/normalise.o $(BUILD)/libutils.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) -L$(BOOST_PATH)/lib/ -lboost_system -lboost_filesystem $^ -o $@
 
-gen-graph: build/gen-graph.o build/Util.o
+gen-graph: $(DEST)/gen-graph.o $(BUILD)/libutils.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
-reorder-graph: build/reorder-graph.o build/Util.o
+reorder-graph: $(DEST)/reorder-graph.o $(BUILD)/libutils.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
-check-degree: build/check-degree.o build/Util.o
+check-degree: $(DEST)/check-degree.o $(BUILD)/libutils.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
-evolve: build/evolve.o build/Util.o build/Connectivity.o
+evolve: $(DEST)/evolve.o $(BUILD)/libutils.a $(DEST)/Connectivity.o
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
-print-graph: build/print-graph.o build/Util.o
+print-graph: $(DEST)/print-graph.o $(BUILD)/libutils.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
-graph-details: build/graph-details.o build/Options.o build/Util.o
+graph-details: $(DEST)/graph-details.o $(DEST)/Options.o $(BUILD)/libutils.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) -L$(BOOST_PATH)/lib/ -lboost_system -lboost_filesystem $^ -o $@
 
-CLEAN_OBJS+=build/*.o
+CLEAN_OBJS+=$(DEST)/*.o
 
 CLEAN_BINS+=main normalise gen-graph reorder-graph check-degree evolve \
             print-graph
 
-CLEAN_DEPS+=build/*.d
+CLEAN_DEPS+=$(DEST)/*.d
+
+-include $(foreach d, $(wildcard */), $(d)Makefile)

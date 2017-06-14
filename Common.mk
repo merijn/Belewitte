@@ -48,7 +48,7 @@ else
     PRINTF := @printf
 endif
 
-COMMON_CXXFLAGS=-O3 -MMD -MP -std=c++14 -g
+COMMON_CXXFLAGS=-O3 -MMD -MP -std=c++14 -g -I$(BASE)/utils/
 
 CLANGWFLAGS=-Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic \
          -Wno-documentation-deprecated-sync -Wno-documentation -Wno-padded \
