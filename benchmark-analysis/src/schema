@@ -1,0 +1,71 @@
+GPU
+    name Text
+    UniqGPU name
+    deriving Eq Show
+
+Graph
+    name Text
+    tag Text
+    prettyName Text Maybe
+    UniqGraph name tag
+    deriving Eq Show
+
+GraphProp
+    graphId GraphId
+    property Text
+    value Double
+    Primary graphId property
+    deriving Eq Show
+
+Algorithm
+    name Text
+    prettyName Text Maybe
+    UniqAlgorithm name
+    deriving Eq Show
+
+Implementation
+    algorithmId AlgorithmId
+    name Text
+    prettyName Text Maybe
+    UniqImpl algorithmId name
+    deriving Eq Show
+
+Variant
+    graphId GraphId
+    algorithmId AlgorithmId
+    variant Text
+    UniqVariant graphId algorithmId variant
+    deriving Eq Show
+
+TotalTime
+    gpuId GPUId
+    implId ImplementationId
+    variantId VariantId
+    timer Text
+    minRuntime Double
+    avgRuntime Double
+    maxRuntime Double
+    stdDev Double
+    Primary gpuId variantId implId timer
+    deriving Eq Show
+
+StepProp
+    variantId VariantId
+    stepId Int
+    property Text
+    value Double
+    Primary variantId stepId property
+    UniqStepProp variantId stepId property
+    deriving Eq Show
+
+StepTime
+    gpuId GPUId
+    implId ImplementationId
+    variantId VariantId
+    stepId Int
+    minRuntime Double
+    avgRuntime Double
+    maxRuntime Double
+    stdDev Double
+    Primary gpuId variantId stepId implId
+    deriving Eq Show

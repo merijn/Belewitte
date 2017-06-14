@@ -1,0 +1,67 @@
+Name:                benchmark-analysis
+Version:             0.1.0
+
+Homepage:            
+Bug-Reports:         
+
+Author:              Merijn Verstraaten
+Maintainer:          Merijn Verstraaten <merijn@inconsistent.nl>
+Copyright:           Copyright © 2017 Merijn Verstraaten
+
+License:             GPL-3
+License-File:        LICENSE
+
+Category:            System
+Cabal-Version:       >= 1.10
+Build-Type:          Simple
+Tested-With:         GHC == 8.0
+
+Synopsis:            
+
+Description:
+
+Library
+  Default-Language:     Haskell2010
+  GHC-Options:          -O2 -Wall -fno-warn-unused-do-bind
+  GHC-Prof-Options:     -fprof-auto
+  Hs-Source-Dirs:       src
+  Exposed-Modules:      Schema
+
+  Build-Depends:        base
+               ,        bytestring
+               ,        monad-logger == 0.3.24.*
+               ,        persistent == 2.7.*
+               ,        persistent-template == 2.5.2
+               ,        persistent-sqlite == 2.6.2
+               ,        resourcet
+               ,        resource-pool
+               ,        text
+               ,        transformers
+
+
+Executable Ingest
+  Default-Language:     Haskell2010
+  GHC-Options:          -O2 -Wall -fno-warn-unused-do-bind -rtsopts
+  GHC-Prof-Options:     -fprof-auto
+  Main-Is:              Ingest.hs
+
+  Build-Depends:        base
+               ,        benchmark-analysis
+               ,        broadcast-chan
+               ,        attoparsec == 0.13.1.*
+               ,        conduit == 1.2.10.*
+               ,        conduit-combinators == 1.1.1.*
+               ,        conduit-extra == 1.1.*
+               ,        exceptions == 0.8.3.*
+               ,        filepath == 1.4.1.*
+               ,        monad-logger == 0.3.24.*
+               ,        optparse-applicative == 0.13.2.*
+               ,        persistent-sqlite == 2.6.2
+               ,        split == 0.2.3.2.*
+               ,        text
+               ,        unix == 2.7.2.*
+
+Source-Repository head
+  Type:     git
+  Location: git+ssh://github.com:merijn/GPU-benchmarks
+
