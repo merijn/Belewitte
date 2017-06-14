@@ -1,7 +1,9 @@
+SRCDIR := .
 BUILD := build
 DEST := build
 BASE := .
 include Common.mk
+include Rules.mk
 
 ifeq ($(UNAME),Darwin)
 main: LDFLAGS += -L$(CUDA_PATH)/lib -framework opencl
@@ -23,28 +25,28 @@ $(DEST)/main.o $(DEST)/graph-details.o: \
     CXXFLAGS+=-I$(BOOST_PATH)/include -isystem$(BOOST_PATH)/include
 
 main: $(DEST)/main.o $(DEST)/AlgorithmConfig.o $(DEST)/Backend.o \
-      $(DEST)/CUDA.o $(DEST)/Options.o $(DEST)/OpenCL.o $(DEST)/Timer.o \
-      $(BUILD)/libutils.a
+      $(DEST)/CUDA.o $(DEST)/OpenCL.o $(DEST)/Timer.o $(LIBS)/liboptions.a \
+      $(LIBS)/libutils.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) -L$(BOOST_PATH)/lib/ -lboost_regex -lboost_system -lboost_filesystem $^ -o $@
 
-normalise: $(DEST)/normalise.o $(BUILD)/libutils.a
+normalise: $(DEST)/normalise.o $(LIBS)/libutils.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) -L$(BOOST_PATH)/lib/ -lboost_system -lboost_filesystem $^ -o $@
 
-reorder-graph: $(DEST)/reorder-graph.o $(BUILD)/libutils.a
+reorder-graph: $(DEST)/reorder-graph.o $(LIBS)/libutils.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
-check-degree: $(DEST)/check-degree.o $(BUILD)/libutils.a
+check-degree: $(DEST)/check-degree.o $(LIBS)/libutils.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
-print-graph: $(DEST)/print-graph.o $(BUILD)/libutils.a
+print-graph: $(DEST)/print-graph.o $(LIBS)/libutils.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
-graph-details: $(DEST)/graph-details.o $(DEST)/Options.o $(BUILD)/libutils.a
+graph-details: $(DEST)/graph-details.o $(LIBS)/liboptions.a $(BUILD)/libutils.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) -L$(BOOST_PATH)/lib/ -lboost_system -lboost_filesystem $^ -o $@
 

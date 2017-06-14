@@ -1,20 +1,19 @@
 ifeq ($(SRCDIR),.)
-NAME := $(notdir $(CURDIR))
-DEST := ../build/$(NAME)
-BUILD := ../build
-BASE := ..
-include ../Common.mk
-CXXFLAGS += -I../
-NVCCXXFLAGS += -I../
+    NAME := $(notdir $(CURDIR))
+    DEST := ../build/$(NAME)
+    BUILD := ../build
+    BASE := ..
+    include ../Common.mk
+    CXXFLAGS += -I../
+    NVCCXXFLAGS += -I../
 else
-NAME := $(SRCDIR)
-DEST := build/$(SRCDIR)
-BUILD := build
-BASE := .
-
-$(DEST)/:
-	$(AT)mkdir -p $@
+    DIRNAME := $(patsubst ../%,%,$(SRCDIR))
+    NAME := $(DIRNAME)
+    DEST := build/$(DIRNAME)
+    BUILD := build
 endif
+
+include $(BASE)/Rules.mk
 
 $(NAME)_CPP_SRCS:=$(notdir $(wildcard $(SRCDIR)/*.cpp))
 $(NAME)_CPP_OBJS:=$(patsubst %.cpp, $(DEST)/%.o, $($(NAME)_CPP_SRCS))

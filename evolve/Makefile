@@ -10,11 +10,11 @@ $(DEST)/Connectivity.o: CXX=icc
 $(SRCDIR)/evolve: LDFLAGS+=-ltbb
 $(SRCDIR)/evolve: LD=icc
 
-$(SRCDIR)/gen-graph: $(DEST)/gen-graph.o $(BUILD)/libutils.a
+$(SRCDIR)/gen-graph: $(DEST)/gen-graph.o $(LIBS)/libutils.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
-$(SRCDIR)/evolve: $(DEST)/evolve.o $(DEST)/Connectivity.o $(BUILD)/libutils.a
+$(SRCDIR)/evolve: $(DEST)/evolve.o $(DEST)/Connectivity.o $(LIBS)/libutils.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 

@@ -48,7 +48,7 @@ else
     PRINTF := @printf
 endif
 
-COMMON_CXXFLAGS=-O3 -MMD -MP -std=c++14 -g -I$(BASE)/utils/
+COMMON_CXXFLAGS=-O3 -MMD -MP -std=c++14 -g -I$(BASE)/utils/ -I$(BASE)/options/
 
 CLANGWFLAGS=-Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic \
          -Wno-documentation-deprecated-sync -Wno-documentation -Wno-padded \
@@ -85,6 +85,7 @@ SED?=sed
 
 BOOST_PATH?=$(HOME)/opt/
 
+LIBS := $(BUILD)
 UNAME := $(shell uname -s)
 ifeq ($(UNAME),Darwin)
     CXXFLAGS += -isystem$(CUDA_PATH)/include/
@@ -115,26 +116,3 @@ endif
     NVCCXXFLAGS += --compiler-options "$(NVWFLAGS) $(NVCCHOSTCXXFLAGS)" \
                    -Wno-deprecated-gpu-targets
 endif
-
-$(DEST)/:
-	$(AT)mkdir -p $@
-
-$(DEST)/%.o: %.cpp | $(DEST)/
-	$(PRINTF) " CXX\t$*.cpp\n"
-	$(AT)$(CXX) $(CXXFLAGS) -I. $< -c -o $@
-
-$(DEST)/%.obj: %.cu | $(DEST)/
-	$(PRINTF) " NVCC\t$*.cu\n"
-	$(AT)$(NVCC) $(NVCCXXFLAGS) -M -I. $< -o $(@:.obj=.d)
-	$(AT)$(SED) -i.bak "s#$(notdir $*).o#$(@) $*.ptx#" $(@:.obj=.d)
-	$(AT)rm -f $(@:.obj=.d).bak
-	$(AT)$(NVCC) $(NVCCXXFLAGS) $(NVCCARCHFLAGS) -I. --device-c $< -o $@
-
-%.ptx: %.cu
-	$(PRINTF) " PTX\t$*.cu\n"
-	$(AT)$(NVCC) $(NVCCXXFLAGS) -M -I. $< -o $(BUILD)$(@:.ptx=.d)
-	$(AT)$(SED) -i.bak "s#$(notdir $*).o#$(@) $*.ptx#" $(BUILD)$(@:.ptx=.d)
-	$(AT)rm -f $(BUILD)$(@:.ptx=.d).bak
-	$(AT)$(NVCC) $(NVCCXXFLAGS) -arch $(PTXARCH) -I. -src-in-ptx --ptx $< -o $@
-	$(AT)$(SED) -i.bak '1,/^\t\/\/ .globl/ d; /^\t.file\t/,$$ d' $@
-	$(AT) rm -f $@.bak
