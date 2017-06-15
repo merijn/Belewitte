@@ -29,6 +29,7 @@ Library
 
   Build-Depends:        base
                ,        bytestring
+               ,        exceptions == 0.8.3.*
                ,        monad-logger == 0.3.24.*
                ,        persistent == 2.7.*
                ,        persistent-template == 2.5.2
