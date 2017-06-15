@@ -155,7 +155,7 @@ loadGraphProperties graphtag file = do
             decode utf8 .| conduitParse property insertProp
   where
     process :: CreateProcess
-    process = proc  "../graph-details" [file]
+    process = proc  "./graph-details" [file]
 
     name :: Text
     name = T.pack . dropExtension . takeFileName $ file
