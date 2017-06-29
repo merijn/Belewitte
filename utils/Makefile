@@ -9,4 +9,11 @@ $(LIBS)/lib$(NAME).a: $($(NAME)_CPP_OBJS)
 	$(PRINTF) " AR\t$(subst ../$(BUILD)/,,$@)\n"
 	$(AT)$(AR) rcs $@ $^
 
-CLEAN_LIBS+=$(LIBS)/lib$(NAME).a
+.PHONY: clean-$(NAME)-libs
+
+clean-$(NAME)-libs: NAME:=$(NAME)
+clean-$(NAME)-libs:
+	$(PRINTF) "cleaning libs for: $(NAME)\n"
+	$(AT)rm -rf $(LIBS)/lib$(NAME).so
+
+clean-libs: clean-$(NAME)-libs

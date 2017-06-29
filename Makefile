@@ -45,10 +45,24 @@ print-graph: $(DEST)/print-graph.o $(LIBS)/libutils.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
-CLEAN_OBJS+=$(DEST)/*.o
+.PHONY: clean-main-objs clean-main-deps clean-main-bins
 
-CLEAN_BINS+=main normalise reorder-graph check-degree print-graph
+clean-main-objs: DEST:=$(DEST)
+clean-main-objs:
+	$(PRINTF) "cleaning objects for: main\n"
+	$(AT)rm -rf $(DEST)/*.o
 
-CLEAN_DEPS+=$(DEST)/*.d
+clean-main-deps: DEST:=$(DEST)
+clean-main-deps:
+	$(PRINTF) "cleaning dependencies for: main\n"
+	$(AT)rm -rf $(DEST)/*.d
+
+clean-main-bins:
+	$(PRINTF) "cleaning executables for: main\n"
+	$(AT)rm -rf main normalise reorder-graph check-degree print-graph
+
+clean-objs: clean-main-objs
+clean-deps: clean-main-deps
+clean-bins: clean-main-bins
 
 -include $(foreach d, $(wildcard */), $(d)Makefile)

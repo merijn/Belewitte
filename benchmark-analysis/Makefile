@@ -11,7 +11,15 @@ $(SRCDIR)/graph-details: \
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) -L$(BOOST_PATH)/lib/ -lboost_system -lboost_filesystem $^ -o $@
 
-CLEAN_BINS+=$(SRCDIR)/graph-details
+.PHONY: clean-$(NAME)-bins
+
+clean-$(NAME)-bins: SRCDIR:=$(SRCDIR)
+clean-$(NAME)-bins: NAME:=$(NAME)
+clean-$(NAME)-bins:
+	$(PRINTF) "cleaning dependencies for: $(NAME)\n"
+	$(AT)rm -rf $(SRCDIR)/graph-details
+
+clean-bins: clean-$(NAME)-bins
 
 ifeq ($(SRCDIR),.)
 include $(BASE)/options/Makefile

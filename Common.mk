@@ -1,36 +1,14 @@
-.PHONY: all clean ptx clean-objs clean-bins clean-libs clean-deps clean-ptx \
-    clean-all
+.PHONY: all clean ptx clean-%
 
 all:
 
 clean: clean-objs clean-ptx
 
-CLEAN_OBJS:=
-CLEAN_PTXS:=
-CLEAN_BINS:=
-CLEAN_LIBS:=
-CLEAN_DEPS:=
-
 clean-objs:
-	$(PRINTF) "cleaning object files...\n"
-	$(AT)rm -rf $(CLEAN_OBJS)
-
 clean-ptx:
-	$(PRINTF) "cleaning ptx files...\n"
-	$(AT)rm -rf $(CLEAN_PTXS)
-
 clean-libs:
-	$(PRINTF) "cleaning libraries...\n"
-	$(AT)rm -rf $(CLEAN_LIBS)
-
 clean-bins:
-	$(PRINTF) "cleaning executables...\n"
-	$(AT)rm -rf $(CLEAN_BINS)
-
 clean-deps:
-	$(PRINTF) "cleaning dependencies...\n"
-	$(AT)rm -rf $(CLEAN_DEPS)
-
 clean-all: clean-objs clean-libs clean-deps clean-deps clean-ptx
 	$(PRINTF) "removing build directory...\n"
 	$(AT)rm -rf $(BUILD)

@@ -22,5 +22,18 @@ $(NAME)_CPP_OBJS:=$(patsubst %.cpp, $(DEST)/%.o, $($(NAME)_CPP_SRCS))
 
 $($(NAME)_CPP_OBJS): | $(DEST)/
 
-CLEAN_OBJS+=$($(NAME)_CPP_OBJS)
-CLEAN_DEPS+=$(DEST)/*.d
+.PHONY: clean-$(NAME)-objs clean-$(NAME)-deps
+
+clean-$(NAME)-objs: NAME:=$(NAME)
+clean-$(NAME)-objs:
+	$(PRINTF) "cleaning objects for: $(NAME)\n"
+	$(AT)rm -rf $($(NAME)_CPP_OBJS)
+
+clean-$(NAME)-deps: NAME:=$(NAME)
+clean-$(NAME)-deps: DEST:=$(DEST)
+clean-$(NAME)-deps:
+	$(PRINTF) "cleaning dependencies for: $(NAME)\n"
+	$(AT)rm -rf $(DEST)/*.d
+
+clean-objs: clean-$(NAME)-objs
+clean-deps: clean-$(NAME)-deps

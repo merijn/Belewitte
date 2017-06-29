@@ -18,4 +18,12 @@ $(SRCDIR)/evolve: $(DEST)/evolve.o $(DEST)/Connectivity.o $(LIBS)/libutils.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
-CLEAN_BINS+=$(SRCDIR)/gen-graph $(SRCDIR)/evolve
+.PHONY: clean-$(NAME)-bins
+
+clean-$(NAME)-bins: SRCDIR:=$(SRCDIR) NAME:=$(NAME)
+clean-$(NAME)-bins: NAME:=$(NAME)
+clean-$(NAME)-bins:
+	$(PRINTF) "cleaning executables for: $(NAME)\n"
+	$(AT)rm -rf $(SRCDIR)/gen-graph $(SRCDIR)/evolve
+
+clean-bins: clean-$(NAME)-bins
