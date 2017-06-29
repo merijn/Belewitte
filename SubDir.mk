@@ -9,8 +9,8 @@ ifeq ($(SRCDIR),.)
 else
     DIRNAME := $(patsubst ../%,%,$(SRCDIR))
     NAME := $(DIRNAME)
-    DEST := build/$(DIRNAME)
-    BUILD := build
+    DEST := $(findstring ../,$(SRCDIR))build/$(DIRNAME)
+    BUILD := $(findstring ../,$(SRCDIR))build
 endif
 
 include $(BASE)/Rules.mk
