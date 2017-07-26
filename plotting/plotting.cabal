@@ -1,0 +1,38 @@
+Name:                plotting
+Version:             0.1.0
+
+Homepage:            
+Bug-Reports:         
+
+Author:              Merijn Verstraaten
+Maintainer:          Merijn Verstraaten <merijn@inconsistent.nl>
+Copyright:           Copyright © 2017 Merijn Verstraaten
+
+License:             GPL-3
+License-File:        LICENSE
+
+Category:            System
+Cabal-Version:       >= 1.10
+Build-Type:          Simple
+Tested-With:         GHC == 8.0
+
+Synopsis:            
+
+Description:
+
+Executable Plot
+  Default-Language:     Haskell2010
+  GHC-Options:          -O2 -Wall -fno-warn-unused-do-bind -rtsopts
+  GHC-Prof-Options:     -fprof-auto
+  Main-Is:              Plot.hs
+
+  Build-Depends:        base
+               ,        attoparsec == 0.13.1.*
+               ,        bytestring == 0.10.8.*
+               ,        Chart == 1.8.2.*
+               ,        Chart-cairo == 1.8.2.*
+
+Source-Repository head
+  Type:     git
+  Location: git+ssh://github.com:merijn/GPU-benchmarks
+

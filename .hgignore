@@ -18,4 +18,6 @@ data
 evolve/breeding-pool
 evolve/darwin
 benchmark-analysis/Ingest
+plotting/Plot
+plotting/graph-edges
 .build/
