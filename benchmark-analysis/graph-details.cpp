@@ -3,13 +3,10 @@
 #include <iterator>
 #include <set>
 
-#include <boost/filesystem.hpp>
-
 #include "Graph.hpp"
 #include "Options.hpp"
 
 using namespace std;
-using namespace boost::filesystem;
 
 enum sort_order {
     in_degree,

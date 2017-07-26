@@ -13,5 +13,9 @@ evolve/evolve
 *.graph
 *.obj
 *.ptx
-data/*
 data
+.ghc.environment.*
+evolve/breeding-pool
+evolve/darwin
+benchmark-analysis/Ingest
+.build/

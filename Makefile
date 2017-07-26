@@ -1,6 +1,6 @@
 SRCDIR := .
-BUILD := build
-DEST := build
+BUILD := .build
+DEST := .build
 BASE := .
 include Common.mk
 include Rules.mk

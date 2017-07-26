@@ -66,8 +66,8 @@ loadAlgorithms
     map<string, string> libs;
     map<string, map<string, AlgorithmConfig*>> result;
 
-    if (is_directory("./build/")) {
-        for (auto& entry : directory_iterator("./build/")) {
+    if (is_directory("./.build/")) {
+        for (auto& entry : directory_iterator("./.build/")) {
             if (!is_directory(entry)) continue;
 
             auto p = entry.path();

@@ -1,15 +1,13 @@
 SRCDIR := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
 -include SubDir.mk ../SubDir.mk
+-include Cabal.mk ../Cabal.mk
 
 all: $(SRCDIR)/graph-details
-
-$(DEST)/graph-details.o: \
-    CXXFLAGS+=-I$(BOOST_PATH)/include -isystem$(BOOST_PATH)/include
 
 $(SRCDIR)/graph-details: \
     $(DEST)/graph-details.o $(LIBS)/liboptions.a $(LIBS)/libutils.a
 	$(PRINTF) " LD\t$@\n"
-	$(AT)$(LD) $(LDFLAGS) -L$(BOOST_PATH)/lib/ -lboost_system -lboost_filesystem $^ -o $@
+	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
 .PHONY: clean-$(NAME)-bins
 

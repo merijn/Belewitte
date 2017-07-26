@@ -1,7 +1,7 @@
 ifeq ($(SRCDIR),.)
     NAME := $(notdir $(CURDIR))
-    DEST := ../build/$(NAME)
-    BUILD := ../build
+    DEST := ../.build/$(NAME)
+    BUILD := ../.build
     BASE := ..
     include ../Common.mk
     CXXFLAGS += -I../
@@ -9,8 +9,8 @@ ifeq ($(SRCDIR),.)
 else
     DIRNAME := $(patsubst ../%,%,$(SRCDIR))
     NAME := $(DIRNAME)
-    DEST := $(findstring ../,$(SRCDIR))build/$(DIRNAME)
-    BUILD := $(findstring ../,$(SRCDIR))build
+    DEST := $(findstring ../,$(SRCDIR)).build/$(DIRNAME)
+    BUILD := $(findstring ../,$(SRCDIR)).build
 endif
 
 include $(BASE)/Rules.mk

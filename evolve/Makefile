@@ -1,5 +1,6 @@
 SRCDIR := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
 -include SubDir.mk ../SubDir.mk
+-include Cabal.mk ../Cabal.mk
 
 all: $(SRCDIR)/gen-graph $(SRCDIR)/evolve
 
@@ -27,3 +28,7 @@ clean-$(NAME)-bins:
 	$(AT)rm -rf $(SRCDIR)/gen-graph $(SRCDIR)/evolve
 
 clean-bins: clean-$(NAME)-bins
+
+ifeq ($(SRCDIR),.)
+include $(BASE)/utils/Makefile
+endif
