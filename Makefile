@@ -6,7 +6,7 @@ include Common.mk
 include Rules.mk
 
 ifeq ($(UNAME),Darwin)
-main: LDFLAGS += -L$(CUDA_PATH)/lib -framework opencl
+main: LDFLAGS += -L$(CUDA_PATH)/lib -framework opencl -lcudart
 else ifeq ($(UNAME),Linux)
 main: LDFLAGS += -Xlinker --export-dynamic -L$(OPENCL_LIB) -lOpenCL -L$(CUDA_PATH)/lib64 -lcudart
 endif
@@ -21,7 +21,7 @@ all: main normalise reorder-graph check-degree print-graph
 
 -include $(patsubst %.cpp, build/%.d, $(wildcard *.cpp))
 
-$(DEST)/main.o: CXXFLAGS+=-I$(BOOST_PATH)/include -isystem$(BOOST_PATH)/include
+$(DEST)/main.o $(DEST)/normalise.o: CXXFLAGS+=-I$(BOOST_PATH)/include -isystem$(BOOST_PATH)/include
 
 main: $(DEST)/main.o $(DEST)/AlgorithmConfig.o $(DEST)/Backend.o \
       $(DEST)/CUDA.o $(DEST)/OpenCL.o $(DEST)/Timer.o $(LIBS)/liboptions.a \

@@ -46,7 +46,7 @@ LDFLAGS=-ldl -g
 LD=$(CXX)
 
 NVCC?=nvcc
-NVCCXXFLAGS?=-std=c++11 -O3 -g -G -lineinfo
+NVCCXXFLAGS?=-std=c++11 -O3 -g -G -lineinfo -Wno-deprecated-gpu-targets
 NVCCARCHFLAGS?= \
     -gencode arch=compute_30,code=sm_30 \
     -gencode arch=compute_35,code=sm_35 \
@@ -66,14 +66,15 @@ BOOST_PATH?=$(HOME)/opt/
 LIBS := $(BUILD)
 UNAME := $(shell uname -s)
 ifeq ($(UNAME),Darwin)
-    CXXFLAGS += -isystem$(CUDA_PATH)/include/
+    CXXFLAGS += -isystem$(CUDA_PATH)/include/ -Wno-undefined-func-template
 
     DYLIBLDFLAGS += -flat_namespace -undefined suppress
 
     NVWFLAGS = $(CLANGWFLAGS) -Wno-unused-macros -Wno-c++11-long-long \
                -Wno-old-style-cast -Wno-used-but-marked-unused \
                -Wno-unused-function -Wno-missing-variable-declarations \
-               -Wno-pedantic -Wno-missing-prototypes -Wno-unused-parameter
+               -Wno-pedantic -Wno-missing-prototypes -Wno-unused-parameter \
+               -Wno-missing-noreturn
 
     NVCCXXFLAGS += --compiler-options "$(NVWFLAGS) $(NVCCHOSTCXXFLAGS)" \
                    -isystem $(CUDA_PATH)/include/
