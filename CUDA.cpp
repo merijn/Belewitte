@@ -198,6 +198,12 @@ void CUDABackend::setWorkSizes
         exit(EXIT_FAILURE);
     }
 
+    if (sharedMem > maxSharedMem) {
+        cerr << "Insufficient shared memory, " << sharedMem << " request, "
+             << maxSharedMem << " available." << endl;
+        exit(EXIT_FAILURE);
+    }
+
     if (blockSizes.size() != dims) {
         cerr << "Number of block sizes ("
              << blockSizes.size()
