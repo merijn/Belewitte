@@ -1,4 +1,4 @@
-#include "bfs.h"
+#include "bfs.hpp"
 
 __global__ void
 vertexPushBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth)

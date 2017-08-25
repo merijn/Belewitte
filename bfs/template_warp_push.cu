@@ -1,5 +1,5 @@
 #include <math_functions.h>
-#include "bfs.h"
+#include "bfs.hpp"
 #include "../WarpDispatch.hpp"
 
 template<size_t warp_size, typename T> static __device__ void

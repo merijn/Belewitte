@@ -1,4 +1,4 @@
-#include "pagerank.h"
+#include "pagerank.hpp"
 
 #define CUDA_CHK(ans) { \
     cudaError_t code = ans; \

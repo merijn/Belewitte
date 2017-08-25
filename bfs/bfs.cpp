@@ -5,7 +5,7 @@
 #include "TemplateConfig.hpp"
 #include "Timer.hpp"
 
-#include "bfs.h"
+#include "bfs.hpp"
 
 template<size_t warp, size_t chunk>
 struct pushwarp {

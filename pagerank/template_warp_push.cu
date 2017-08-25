@@ -1,5 +1,5 @@
 #include <math_functions.h>
-#include "pagerank.h"
+#include "pagerank.hpp"
 #include "../WarpDispatch.hpp"
 
 template<size_t warp_size, typename T> static __device__ void

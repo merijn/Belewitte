@@ -1,4 +1,4 @@
-#include "pagerank.h"
+#include "pagerank.hpp"
 
 __global__ void
 vertexPullNoDiv

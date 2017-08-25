@@ -6,7 +6,7 @@
 #include "Timer.hpp"
 #include "Util.hpp"
 
-#include "pagerank.h"
+#include "pagerank.hpp"
 
 template<size_t warp, size_t chunk>
 struct pushwarp {
