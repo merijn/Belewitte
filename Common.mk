@@ -68,7 +68,7 @@ LDFLAGS=-ldl -g
 LD=$(CXX)
 
 NVCC?=nvcc
-NVCCXXFLAGS?=-std=c++11 -O3 -g -G -lineinfo
+NVCCXXFLAGS?=-std=c++11 -g -O3 -lineinfo
 NVCCARCHFLAGS?= \
     -gencode arch=compute_30,code=sm_30 \
     -gencode arch=compute_35,code=sm_35 \

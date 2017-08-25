@@ -10,22 +10,21 @@
 #include "AlgorithmConfig.hpp"
 #include "Graph.hpp"
 #include "Timer.hpp"
-#include "WarpDispatch.hpp"
 
 enum class work_division { nodes, edges };
 
 template
 < typename Platform
-, typename Kernel
+, typename KernelType
+, typename GraphData
 , typename V
 , typename E
-, typename GraphData
 >
 struct TemplateConfig : public AlgorithmConfig {
   using Vertex = V;
   using Edge = E;
+  using Kernel = KernelType;
   using LoadFun = std::function<GraphData(Platform&, Graph<V,E>&)>;
-  using SharedMemFun = std::function<size_t(size_t)>;
   using Pair = std::pair<size_t,size_t>;
 
   template<typename T>
@@ -34,7 +33,6 @@ struct TemplateConfig : public AlgorithmConfig {
   protected:
     size_t vertex_count, edge_count;
     Pair nodeDivision, edgeDivision;
-    SharedMemFun getSharedMemSize;
     Platform &backend;
     Kernel kernel;
 
@@ -50,9 +48,12 @@ struct TemplateConfig : public AlgorithmConfig {
         , Kernel kern
         )
     : AlgorithmConfig(opts, count)
-    , getSharedMemSize([](auto) { return 0; }), backend(Platform::get())
-    , kernel(kern), load(loadFun), workDivision(division)
+    , backend(Platform::get()), kernel(kern), load(loadFun)
+    , workDivision(division)
     {}
+
+    virtual size_t getSharedMemSize(size_t) const
+    { return 0; }
 
     void transferData() {}
 
@@ -129,50 +130,35 @@ struct TemplateConfig : public AlgorithmConfig {
     template<typename K, typename... Args>
     void runKernel(K kern, const Args&... args)
     { run(kern, graph, args...); }
+
+    template<typename K, typename... Args>
+    void runNonWarpKernel(K kern, const Args&... args)
+    { run(kern, graph, args...); }
 };
-
-template<typename Kernel>
-struct Warp_Settings {
-    Kernel kernel;
-    std::function<size_t(size_t)> getSharedMemSize;
-
-    Warp_Settings(Kernel k, size_t warpSize, size_t workSize)
-     : kernel(k)
-    , getSharedMemSize([warpSize,workSize](size_t workPerWarp)
-      { return workPerWarp / warpSize * workSize; })
-    {}
-};
-
-template<typename Kernel>
-Warp_Settings<Kernel>
-WarpSettings(Kernel k, size_t warpSize, size_t workSize)
-{ return Warp_Settings<Kernel>(k, warpSize, workSize); }
 
 template
-< template<size_t,size_t> class Warp
-, template<typename,typename,typename,typename...> class BaseConfig
-, typename Platform
+< typename Platform
 , typename Kernel
 , typename GraphData
-, typename... Args
+, typename V
+, typename E
 >
-struct WarpConfig : public BaseConfig<Platform,Kernel,GraphData,Args...> {
-    using Vertex = typename WarpConfig::Vertex;
-    using Edge = typename WarpConfig::Edge;
+struct WarpConfig : public TemplateConfig<Platform,Kernel,GraphData,V,E> {
     using LoadFun = typename WarpConfig::LoadFun;
-    using Config = BaseConfig<Platform,Kernel,GraphData,Args...>;
+    using Config = TemplateConfig<Platform,Kernel,GraphData,V,E>;
     using Config::options;
+    using Config::graph;
 
     WarpConfig
         ( const Options& opts
         , size_t count
         , LoadFun loadFun
         , work_division d
-        , warp_dispatch<Warp>
-        , Args... args
+        , Kernel k
+        , std::function<size_t(size_t)> memFun
         )
-    : Config(opts, count, loadFun, d, nullptr, args...)
-    , warp_size(32), chunk_size(32)
+    : Config(opts, count, loadFun, d, k)
+    , chunkMemory(memFun), warp_size(32), chunk_size(32)
     {
         options.add('w', "warp", "NUM", warp_size,
                     "Virtual warp size for warp variants.")
@@ -180,27 +166,31 @@ struct WarpConfig : public BaseConfig<Platform,Kernel,GraphData,Args...> {
                     "Work chunk size for warp variants.");
     }
 
-    void runImplementation() override
-    {
-        auto warpSettings = warp_dispatch<Warp>::work(warp_size, chunk_size);
-        this->kernel = warpSettings.kernel;
-        this->getSharedMemSize = warpSettings.getSharedMemSize;
-        Config::runImplementation();
-    }
+    size_t getSharedMemSize(size_t workPerWarp) const
+    { return (workPerWarp / this->warp_size) * this->chunkMemory(chunk_size); }
+
+    template<typename K, typename... RunArgs>
+    void runKernel(K kern, const RunArgs&... args)
+    { this->run(kern, warp_size, chunk_size, graph, args...); }
+
+    template<typename K, typename... RunArgs>
+    void runNonWarpKernel(K kern, const RunArgs&... args)
+    { this->run(kern, graph, args...); }
 
   private:
+    std::function<size_t(size_t)> chunkMemory;
     size_t warp_size, chunk_size;
 };
 
 template
-< template<typename, typename, typename, typename...> class Cfg
+< template<typename, typename...> class Cfg
 , typename Platform
 , typename Kernel
-, typename... Args
 , typename GraphData
-, typename Config = Cfg<Platform, Kernel, GraphData, Args...>
-, typename Vertex = typename Config::Vertex
-, typename Edge = typename Config::Edge
+, typename Vertex
+, typename Edge
+, typename... Args
+, typename Config = Cfg<TemplateConfig<Platform,Kernel,GraphData,Vertex,Edge>, Args...>
 >
 Config* make_config
     ( const Options& opts
@@ -210,26 +200,26 @@ Config* make_config
     , Kernel kern
     , Args... args
     )
-{ return new Config(opts, count, l, w, kern, args...); }
+{ return new Config(args..., opts, count, l, w, kern); }
 
 template
-< template<typename, typename, typename, typename...> class Cfg
-, template<size_t,size_t> class Warp
+< template<typename, typename...> class Cfg
 , typename Platform
-, typename... Args
+, typename Kernel
 , typename GraphData
-, typename Kernel = decltype(warp_dispatch<Warp>::work(0,0).kernel)
-, typename Config = WarpConfig<Warp,Cfg,Platform,Kernel,GraphData,Args...>
-, typename Vertex = typename Config::Vertex
-, typename Edge = typename Config::Edge
+, typename Vertex
+, typename Edge
+, typename... Args
+, typename Config = Cfg<WarpConfig<Platform,Kernel,GraphData,Vertex,Edge>,  Args...>
 >
 Config* make_warp_config
     ( const Options& opts
     , size_t count
     , GraphData(*l)(Platform&, Graph<Vertex,Edge>&)
     , work_division w
-    , warp_dispatch<Warp> d
+    , Kernel k
+    , std::function<size_t(size_t)> memFun
     , Args... args
     )
-{ return new Config(opts, count, l, w, d, args...); }
+{ return new Config(args..., opts, count, l, w, k, memFun); }
 #endif

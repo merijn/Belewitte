@@ -8,17 +8,6 @@
 void resetFrontier();
 unsigned getFrontier();
 
-template<size_t chunk_sz>
-struct push_warp_mem_t {
-    int levels[chunk_sz];
-    unsigned vertices[chunk_sz + 1];
-};
-
-template<int chunk_sz>
-struct pull_warp_mem_t {
-    unsigned vertices[chunk_sz + 1];
-};
-
 #ifdef __CUDACC__
 extern __device__ unsigned frontier;
 
@@ -39,9 +28,8 @@ vertexPushBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth);
 __global__ void
 vertexPullBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth);
 
-template<size_t, size_t>
 __global__ void
-vertexPushWarpBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth);
+vertexPushWarpBfs(size_t, size_t, CSR<unsigned,unsigned> *graph, int *levels, int depth);
 
 __global__ void
 edgeListBfs(EdgeList<unsigned> *graph, int *levels, int depth);
