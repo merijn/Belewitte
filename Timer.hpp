@@ -1,5 +1,5 @@
-#ifndef __TIMER_HPP__
-#define __TIMER_HPP__
+#ifndef TIMER_HPP
+#define TIMER_HPP
 
 #include <chrono>
 #include <cmath>

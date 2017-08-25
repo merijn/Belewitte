@@ -1,5 +1,5 @@
-#ifndef __UTIL_HPP__
-#define __UTIL_HPP__
+#ifndef UTIL_HPP
+#define UTIL_HPP
 
 #include <cstdio>
 #include <cstdlib>

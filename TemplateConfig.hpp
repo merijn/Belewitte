@@ -1,5 +1,5 @@
-#ifndef __TEMPLATECONFIG_HPP__
-#define __TEMPLATECONFIG_HPP__
+#ifndef TEMPLATECONFIG_HPP
+#define TEMPLATECONFIG_HPP
 
 #include <memory>
 #include <string>

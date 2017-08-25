@@ -1,5 +1,5 @@
-#ifndef __CUDA_H__
-#define __CUDA_H__
+#ifndef CUDA_HPP
+#define CUDA_HPP
 
 #include <cstdio>
 #include <cstdlib>

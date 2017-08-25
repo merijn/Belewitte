@@ -1,5 +1,5 @@
-#ifndef __ALGORITHMCONFIG_HPP__
-#define __ALGORITHMCONFIG_HPP__
+#ifndef ALGORITHMCONFIG_HPP
+#define ALGORITHMCONFIG_HPP
 
 #include "Options.hpp"
 

@@ -1,5 +1,5 @@
-#ifndef __GRAPHREP_HPP__
-#define __GRAPHREP_HPP__
+#ifndef GRAPHREP_HPP
+#define GRAPHREP_HPP
 
 #include <cstdint>
 

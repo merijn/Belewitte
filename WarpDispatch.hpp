@@ -1,5 +1,5 @@
-#ifndef __WARPDISPATCH_H__
-#define __WARPDISPATCH_H__
+#ifndef WARPDISPATCH_HPP
+#define WARPDISPATCH_HPP
 
 #include <cstring>
 #include <iostream>

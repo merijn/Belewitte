@@ -1,5 +1,5 @@
-#ifndef __PAGERANK_H__
-#define __PAGERANK_H__
+#ifndef PAGERANK_HPP
+#define PAGERANK_HPP
 
 #include <algorithm>
 #include <cuda_runtime.h>

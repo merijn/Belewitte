@@ -1,5 +1,5 @@
-#ifndef __BFS_H__
-#define __BFS_H__
+#ifndef BFS_HPP
+#define BFS_HPP
 
 #include <algorithm>
 #include <cuda_runtime.h>
