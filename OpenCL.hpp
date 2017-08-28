@@ -1,5 +1,5 @@
-#ifndef __OPENCL_H__
-#define __OPENCL_H__
+#ifndef OPENCL_HPP
+#define OPENCL_HPP
 
 #ifdef __APPLE__
 #include <OpenCL/opencl.h>

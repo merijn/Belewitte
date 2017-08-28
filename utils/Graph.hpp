@@ -1,5 +1,5 @@
-#ifndef __GRAPH_HPP__
-#define __GRAPH_HPP__
+#ifndef GRAPH_HPP
+#define GRAPH_HPP
 
 #include <fcntl.h>
 #include <sys/mman.h>

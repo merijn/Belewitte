@@ -5,21 +5,12 @@
 #include "TemplateConfig.hpp"
 #include "Timer.hpp"
 
-#include "bfs.h"
+#include "bfs.hpp"
 
-template<size_t warp, size_t chunk>
-struct pushwarp {
-    static auto work()
-    { return WarpSettings(vertexPushWarpBfs<warp,chunk>, warp,
-                          sizeof(push_warp_mem_t<chunk>));
-    }
-};
-
-template<typename Platform, typename Kernel, typename Graph>
-struct BFSConfig : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph>
+template<typename Config>
+struct BFSConfig : public Config
 {
     using pair = std::pair<size_t,size_t>;
-    using Config = TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph>;
     using Config::run_count;
     using Config::backend;
     using Config::nodeDivision;
@@ -29,18 +20,14 @@ struct BFSConfig : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph
     using Config::runKernel;
     using Config::kernel;
     using Config::options;
+    using typename Config::Kernel;
     using typename Config::LoadFun;
 
     unsigned root;
 
-    BFSConfig
-        ( const Options& opts
-        , size_t count
-        , LoadFun l
-        , work_division w
-        , Kernel kern
-        )
-    : Config(opts, count, l, w, kern), root(0)
+    template<typename... Args>
+    BFSConfig(Args... args)
+    : Config(args...), root(0)
     {
         options.add('r', "root", "NUM", root,
                     "Starting vertex for BFS.");
@@ -114,6 +101,58 @@ struct BFSConfig : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph
     }
 };
 
+template<bfs_variant Variant>
+static inline void
+insertVariant
+    ( std::map<std::string, AlgorithmConfig*>& result
+    , const Options& opts
+    , size_t count
+    )
+{
+    result[std::string("edge-list") + BFS<Variant>::suffix] =
+        make_config<BFSConfig>
+        ( opts, count
+        , loadEdgeList<CUDABackend, unsigned, unsigned>
+        , work_division::edges
+        , edgeListBfs<BFS<normal>>
+        );
+
+    result[std::string("rev-edge-list") + BFS<Variant>::suffix] =
+        make_config<BFSConfig>
+        ( opts, count
+        , loadReverseEdgeList<CUDABackend, unsigned, unsigned>
+        , work_division::edges
+        , revEdgeListBfs<BFS<blockreduce>>
+        );
+
+    result[std::string("vertex-push") + BFS<Variant>::suffix] =
+        make_config<BFSConfig>
+        ( opts, count
+        , loadCSR<CUDABackend, unsigned, unsigned>
+        , work_division::nodes
+        , vertexPushBfs<BFS<blockreduce>>
+        );
+
+    result[std::string("vertex-pull") + BFS<Variant>::suffix] =
+        make_config<BFSConfig>
+        ( opts, count
+        , loadReverseCSR<CUDABackend, unsigned, unsigned>
+        , work_division::nodes
+        , vertexPullBfs<BFS<blockreduce>>
+        );
+
+    result[std::string("vertex-push-warp") + BFS<Variant>::suffix] =
+        make_warp_config<BFSConfig>
+        ( opts, count
+        , loadCSR<CUDABackend, unsigned, unsigned>
+        , work_division::nodes
+        , vertexPushWarpBfs<BFS<blockreduce>>
+        , [](size_t chunkSize) {
+            return chunkSize * sizeof(int) + (chunkSize+1) * sizeof(unsigned);
+        });
+}
+
+
 extern "C" kernel_register_t cudaDispatch;
 extern "C"
 void
@@ -123,36 +162,8 @@ cudaDispatch
     , size_t count
     )
 {
-    result = {
-    { "edge-list", make_config<BFSConfig>
-        ( opts, count
-        , loadEdgeList<CUDABackend, unsigned, unsigned>
-        , work_division::edges
-        , edgeListBfs)
-    },
-    { "rev-edge-list", make_config<BFSConfig>
-        ( opts, count
-        , loadReverseEdgeList<CUDABackend, unsigned, unsigned>
-        , work_division::edges
-        , revEdgeListBfs)
-    },
-    { "vertex-push", make_config<BFSConfig>
-        ( opts, count
-        , loadCSR<CUDABackend, unsigned, unsigned>
-        , work_division::nodes
-        , vertexPushBfs)
-    },
-    { "vertex-pull", make_config<BFSConfig>
-        ( opts, count
-        , loadReverseCSR<CUDABackend, unsigned, unsigned>
-        , work_division::nodes
-        , vertexPullBfs)
-    },
-    { "vertex-push-warp", make_warp_config<BFSConfig>
-        ( opts, count
-        , loadCSR<CUDABackend, unsigned, unsigned>
-        , work_division::nodes
-        , warp_dispatch<pushwarp>())
-    }
-    };
+    insertVariant<normal>(result, opts, count);
+    insertVariant<bulk>(result, opts, count);
+    insertVariant<warpreduce>(result, opts, count);
+    insertVariant<blockreduce>(result, opts, count);
 }

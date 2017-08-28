@@ -1,5 +1,5 @@
-#ifndef __OPTIONS_HPP__
-#define __OPTIONS_HPP__
+#ifndef OPTIONS_HPP
+#define OPTIONS_HPP
 
 #include <functional>
 #include <iostream>

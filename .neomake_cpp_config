@@ -1,5 +1,7 @@
 -isystem/Developer/NVIDIA/CUDA-7.5/include
+-isystem/cm/shared/apps/cuda80/toolkit/8.0.44/include/
 -Wno-exit-time-destructors
 -Wno-global-constructors
--std=c++14
 -Wno-reserved-id-macro
+-I.
+-I..

@@ -1,5 +1,5 @@
-#ifndef __BACKEND_HPP__
-#define __BACKEND_HPP__
+#ifndef BACKEND_HPP
+#define BACKEND_HPP
 
 #include <vector>
 #include "Util.hpp"

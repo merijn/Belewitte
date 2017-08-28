@@ -1,5 +1,5 @@
-#ifndef __GRAPHLOADING_HPP__
-#define __GRAPHLOADING_HPP__
+#ifndef GRAPHLOADING_HPP
+#define GRAPHLOADING_HPP
 
 #include "Graph.hpp"
 #include "GraphRep.hpp"

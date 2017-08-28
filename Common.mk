@@ -46,7 +46,7 @@ LDFLAGS=-ldl -g
 LD=$(CXX)
 
 NVCC?=nvcc
-NVCCXXFLAGS?=-std=c++11 -O3 -g -G -lineinfo -Wno-deprecated-gpu-targets
+NVCCXXFLAGS?=-std=c++11 -O3 -g -lineinfo -Wno-deprecated-gpu-targets
 NVCCARCHFLAGS?= \
     -gencode arch=compute_30,code=sm_30 \
     -gencode arch=compute_35,code=sm_35 \

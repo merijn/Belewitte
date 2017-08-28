@@ -1,5 +1,5 @@
-#ifndef __CONNECTIVITY_HPP__
-#define __CONNECTIVITY_HPP__
+#ifndef CONNECTIVITY_HPP
+#define CONNECTIVITY_HPP
 #include "Graph.hpp"
 
 double connectivity(Graph<uint64_t,uint64_t>& graph);

@@ -1,11 +1,12 @@
-#include "bfs.h"
+#include "bfs.hpp"
 
+template<typename BFSVariant>
 __global__ void
 vertexPullBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth)
 {
     uint64_t size = graph->vertex_count;
     int newDepth = depth + 1;
-    unsigned count = 0U;
+    BFSVariant bfs;
 
     for (uint64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
         idx < size && levels[idx] > newDepth;
@@ -20,10 +21,22 @@ vertexPullBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth)
         for (unsigned i = start; i < end; i++) {
             if (levels[reverse_edges[i]] == depth) {
                 levels[idx] = newDepth;
-                count++;
+                bfs.update();
                 break;
             }
         }
     }
-    updateFrontier(count);
+    bfs.finalise();
 }
+
+template __global__ void
+vertexPullBfs<BFS<normal>>(CSR<unsigned,unsigned> *, int *, int);
+
+template __global__ void
+vertexPullBfs<BFS<bulk>>(CSR<unsigned,unsigned> *, int *, int);
+
+template __global__ void
+vertexPullBfs<BFS<warpreduce>>(CSR<unsigned,unsigned> *, int *, int);
+
+template __global__ void
+vertexPullBfs<BFS<blockreduce>>(CSR<unsigned,unsigned> *, int *, int);

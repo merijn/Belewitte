@@ -1,5 +1,5 @@
 #include <algorithm>
-#include "bfs.h"
+#include "bfs.hpp"
 
 #define CUDA_CHK(ans) { \
     cudaError_t code = ans; \

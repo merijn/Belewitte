@@ -1,5 +1,5 @@
-#ifndef __PAGERANK_H__
-#define __PAGERANK_H__
+#ifndef PAGERANK_HPP
+#define PAGERANK_HPP
 
 #include <algorithm>
 #include <cuda_runtime.h>
@@ -9,17 +9,6 @@
 const float dampening = 0.85f;
 const float epsilon = 0.001f;
 const int max_iterations = 10;
-
-template<int chunk_sz>
-struct pull_warp_mem_t {
-    unsigned vertices[chunk_sz + 1];
-};
-
-template<int chunk_sz>
-struct push_warp_mem_t {
-    unsigned vertices[chunk_sz + 1];
-    float ranks[chunk_sz];
-};
 
 void resetDiff();
 float getDiff();
@@ -43,17 +32,14 @@ __global__ void
 vertexPullNoDiv(ReversedCSR<unsigned, unsigned> *graph, float *pagerank, float *new_pagerank);
 
 
-template<size_t, size_t>
 __global__ void
-vertexPushWarp(CSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
+vertexPushWarp(size_t, size_t, CSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
 
-template<size_t, size_t>
 __global__ void
-vertexPullWarp(ReversedCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
+vertexPullWarp(size_t, size_t, ReversedCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
 
-template<size_t, size_t>
 __global__ void
-vertexPullWarpNoDiv(ReversedCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
+vertexPullWarpNoDiv(size_t, size_t, ReversedCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
 
 __global__ void
 updateRankStructEdgeList(StructEdgeListCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);

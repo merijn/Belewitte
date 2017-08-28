@@ -6,39 +6,11 @@
 #include "Timer.hpp"
 #include "Util.hpp"
 
-#include "pagerank.h"
+#include "pagerank.hpp"
 
-template<size_t warp, size_t chunk>
-struct pushwarp {
-    static auto work()
-    {
-        return WarpSettings(vertexPushWarp<warp,chunk>, warp,
-                            sizeof(push_warp_mem_t<chunk>));
-    }
-};
-
-template<size_t warp, size_t chunk>
-struct pullwarp {
-    static auto work()
-    {
-        return WarpSettings(vertexPullWarp<warp,chunk>, warp,
-                            sizeof(pull_warp_mem_t<chunk>));
-    }
-};
-
-template<size_t warp, size_t chunk>
-struct pullwarpnodiv {
-    static auto work()
-    {
-        return WarpSettings(vertexPullWarpNoDiv<warp,chunk>, warp,
-                            sizeof(pull_warp_mem_t<chunk>));
-    }
-};
-
-template<typename Platform, typename Kernel, typename Graph>
-struct PageRankBase : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph>
+template<typename Config>
+struct PageRankBase : public Config
 {
-    using Config = TemplateConfig<Platform,Kernel,unsigned,unsigned,Graph>;
     using Config::run_count;
     using Config::backend;
     using Config::nodeDivision;
@@ -48,19 +20,15 @@ struct PageRankBase : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Gr
     using Config::runKernel;
     using Config::kernel;
     using Config::options;
+    using typename Config::Kernel;
     using typename Config::LoadFun;
 
     template<typename T>
-    using alloc_t = typename Platform::template alloc_t<T>;
+    using alloc_t = typename Config::template alloc_t<T>;
 
-    PageRankBase
-        ( const Options& opts
-        , size_t count
-        , LoadFun l
-        , work_division w
-        , Kernel kern
-        )
-    : Config(opts, count, l, w, kern)
+    template<typename... Args>
+    PageRankBase(Args... args)
+    : Config(args...)
     {}
 
     virtual void
@@ -111,24 +79,18 @@ struct PageRankBase : public TemplateConfig<Platform,Kernel,unsigned,unsigned,Gr
     }
 };
 
-template<typename Platform,typename Kernel,typename Graph,typename Consolidate>
-struct PageRank : public PageRankBase<Platform, Kernel, Graph> {
-    PageRank
-        ( const Options& opts
-        , size_t count
-        , typename PageRankBase<Platform, Kernel, Graph>::LoadFun l
-        , work_division w
-        , Kernel kern
-        , Consolidate c
-        )
-     : PageRankBase<Platform,Kernel,Graph>(opts, count, l, w, kern)
+template<typename Config, typename Consolidate>
+struct PageRank : public PageRankBase<Config> {
+    template<typename... Args>
+    PageRank(Consolidate c, Args... args)
+     : PageRankBase<Config>(args...)
      , consolidate(c)
     {}
 
     Consolidate consolidate;
 
     template<typename T>
-    using alloc_t = typename Platform::template alloc_t<T>;
+    using alloc_t = typename PageRankBase<Config>::template alloc_t<T>;
 
     void
     callConsolidate(const alloc_t<float>& ranks, const alloc_t<float>& new_ranks) override
@@ -138,29 +100,23 @@ struct PageRank : public PageRankBase<Platform, Kernel, Graph> {
     }
 };
 
-template<typename Platform,typename Kernel,typename Graph,typename Consolidate>
-struct PageRankNoDiv : public PageRankBase<Platform, Kernel, Graph> {
-    PageRankNoDiv
-        ( const Options& opts
-        , size_t count
-        , typename PageRankBase<Platform, Kernel, Graph>::LoadFun l
-        , work_division w
-        , Kernel kern
-        , Consolidate c
-        )
-     : PageRankBase<Platform,Kernel,Graph>(opts, count, l, w, kern)
+template<typename Config,typename Consolidate>
+struct PageRankNoDiv : public PageRankBase<Config> {
+    template<typename... Args>
+    PageRankNoDiv(Consolidate c, Args... args)
+     : PageRankBase<Config>(args...)
      , consolidate(c)
     {}
 
     Consolidate consolidate;
 
     template<typename T>
-    using alloc_t = typename Platform::template alloc_t<T>;
+    using alloc_t = typename PageRankBase<Config>::template alloc_t<T>;
 
     void callConsolidate(const alloc_t<float>& ranks, const alloc_t<float>& new_ranks) override
     {
         this->backend.setWorkSizes(1, {this->nodeDivision.first}, {this->nodeDivision.second});
-        this->runKernel(consolidate, ranks, new_ranks);
+        this->runNonWarpKernel(consolidate, ranks, new_ranks);
     }
 };
 
@@ -206,14 +162,18 @@ cudaDispatch
         ( opts, count
         , loadCSR<CUDABackend, unsigned, unsigned>
         , work_division::nodes
-        , warp_dispatch<pushwarp>()
+        , vertexPushWarp
+        , [](size_t chunkSize) {
+            return chunkSize * sizeof(float) + (1+chunkSize) * sizeof(unsigned);
+        }
         , consolidateRank)
     },
     { "vertex-pull-warp", make_warp_config<PageRank>
         ( opts, count
         , loadReversedCSR<CUDABackend, unsigned, unsigned>
         , work_division::nodes
-        , warp_dispatch<pullwarp>()
+        , vertexPullWarp
+        , [](size_t chunkSize) { return (1 + chunkSize) * sizeof(unsigned); }
         , consolidateRank)
     },
     { "vertex-pull-nodiv", make_config<PageRankNoDiv>
@@ -227,7 +187,8 @@ cudaDispatch
         ( opts, count
         , loadReversedCSR<CUDABackend, unsigned, unsigned>
         , work_division::nodes
-        , warp_dispatch<pullwarpnodiv>()
+        , vertexPullWarpNoDiv
+        , [](size_t chunkSize) { return (1 + chunkSize) * sizeof(unsigned); }
         , consolidateRankPull)
     }
     };
