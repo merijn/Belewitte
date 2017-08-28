@@ -8,13 +8,112 @@
 void resetFrontier();
 unsigned getFrontier();
 
+enum bfs_variant {
+    normal,
+    bulk,
+    warpreduce,
+    blockreduce
+};
+
 #ifdef __CUDACC__
 extern __device__ unsigned frontier;
 
-static __device__ __forceinline__
-void updateFrontier(unsigned val)
-{ atomicAdd(&frontier, val); }
+__device__ __forceinline__
+unsigned warpReduceSum(unsigned val)
+{
+    for (int offset = warpSize/2; offset > 0; offset /= 2) {
+        val += __shfl_down(val, offset);
+     }
+
+    return val;
+}
 #endif
+
+template<bfs_variant variant>
+struct BFS {
+    static constexpr const char * suffix = "";
+    __device__ __forceinline__ void update()
+    {
+#ifdef __CUDACC__
+        atomicAdd(&frontier, 1U);
+#endif
+    }
+
+    __device__ __forceinline__ void finalise() {}
+};
+
+template<>
+struct BFS<bulk> {
+    static constexpr const char * suffix = "-bulk";
+    unsigned count;
+
+    __device__ BFS<bulk>() : count(0U) {}
+
+    __device__ __forceinline__ void update()
+    { count++; }
+
+    __device__ __forceinline__ void finalise()
+    {
+#ifdef __CUDACC__
+        atomicAdd(&frontier, count);
+#endif
+    }
+};
+
+template<>
+struct BFS<warpreduce> {
+    static constexpr const char * suffix = "-warpreduce";
+    unsigned count;
+
+    __device__ BFS<warpreduce>() : count(0U) {}
+
+    __device__ __forceinline__ void update()
+    { count++; }
+
+    __device__ __forceinline__ void finalise()
+    {
+#ifdef __CUDACC__
+        int lane = threadIdx.x % warpSize;
+
+        count = warpReduceSum(count);
+        if (lane == 0) atomicAdd(&frontier, count);
+#endif
+    }
+};
+
+template<>
+struct BFS<blockreduce> {
+    static constexpr const char * suffix = "-blockreduce";
+    unsigned count;
+
+    __device__ BFS<blockreduce>() : count(0U) {}
+
+    __device__ __forceinline__ void update()
+    { count++; }
+
+    __device__ __forceinline__ void finalise()
+    {
+#ifdef __CUDACC__
+        static __shared__ unsigned shared[32]; // Shared mem for 32 partial sums
+        int lane = threadIdx.x % warpSize;
+        int wid = threadIdx.x / warpSize;
+
+        count = warpReduceSum(count);     // Each warp performs partial reduction
+
+        if (lane==0) shared[wid]=count; // Write reduced value to shared memory
+
+        __syncthreads();              // Wait for all partial reductions
+
+        //read from shared memory only if that warp existed
+        count = (threadIdx.x < blockDim.x / warpSize) ? shared[lane] : 0;
+
+        if (wid==0) {
+            count = warpReduceSum(count); //Final reduce within first warp
+            if (lane==0) atomicAdd(&frontier, count);
+        }
+#endif
+    }
+};
 
 __global__ void
 setArray(int *array, size_t size, int val);
@@ -22,18 +121,24 @@ setArray(int *array, size_t size, int val);
 __global__ void
 set_root(int *depths, unsigned root);
 
+template<typename BFSVariant>
 __global__ void
 vertexPushBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth);
 
+template<typename BFSVariant>
 __global__ void
 vertexPullBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth);
 
+template<typename BFSVariant>
 __global__ void
-vertexPushWarpBfs(size_t, size_t, CSR<unsigned,unsigned> *graph, int *levels, int depth);
+vertexPushWarpBfs
+(size_t, size_t, CSR<unsigned,unsigned> *graph, int *levels, int depth);
 
+template<typename BFSVariant>
 __global__ void
 edgeListBfs(EdgeList<unsigned> *graph, int *levels, int depth);
 
+template<typename BFSVariant>
 __global__ void
 revEdgeListBfs(EdgeList<unsigned> *graph, int *levels, int depth);
 #endif
