@@ -213,6 +213,8 @@ class CUDABackend : public Backend {
             devicesPerPlatform_.push_back(0);
             result = cudaGetDeviceCount(devicesPerPlatform_.data());
             if (result == cudaErrorNoDevice) return;
+            /* Working around broken CUDA setup on DAS5 head-node */
+            if (result == cudaErrorUnknown) return;
             CUDA_CHK(result);
 
             for (int i = 0; i < devicesPerPlatform[0]; i++) {
