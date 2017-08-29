@@ -19,7 +19,7 @@ endif
 
 all: main normalise reorder-graph check-degree print-graph
 
--include $(patsubst %.cpp, build/%.d, $(wildcard *.cpp))
+-include $(patsubst %.cpp, .build/%.d, $(wildcard *.cpp))
 
 $(DEST)/main.o $(DEST)/normalise.o: CXXFLAGS+=-I$(BOOST_PATH)/include -isystem$(BOOST_PATH)/include
 
