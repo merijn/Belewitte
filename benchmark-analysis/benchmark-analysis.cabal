@@ -48,7 +48,7 @@ Executable Ingest
 
   Build-Depends:        base
                ,        benchmark-analysis
-               ,        broadcast-chan
+               ,        broadcast-chan > 0.1.0
                ,        attoparsec == 0.13.1.*
                ,        conduit == 1.2.10.*
                ,        conduit-combinators == 1.1.1.*
