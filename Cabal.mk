@@ -20,7 +20,7 @@ $(DEST)/$(NAME).mk: NAME:=$(NAME)
 $(DEST)/$(NAME).mk: SRCDIR:=$(SRCDIR)
 $(DEST)/$(NAME).mk: $($(NAME)_CABAL_FILES) $(BASE)/cabal.awk | $(DEST)/
 	$(PRINTF) " CABAL\t$(NAME) (new-build)\n"
-	$(AT)cd $(SRCDIR); cabal new-build --builddir="$(dir $@)" \
+	$(AT)cd $(SRCDIR); cabal new-build --builddir="$(PWD)/$(dir $@)" \
 	$(if $(AT),>/dev/null,)
 	$(PRINTF) " CABAL\t$(NAME) (dependencies)\n"
 	$(AT)cabal-plan --builddir="$(dir $@)" list-bins \
