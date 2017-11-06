@@ -97,6 +97,10 @@ endif
 endif
 
 $(BASE)/broadcast-chan/:
-	$(PRINTF) " HG\tbroadcast-chan\n"
+	$(PRINTF) " HG clone\tbroadcast-chan\n"
 	$(AT)hg clone https://bitbucket.org/merijnv/broadcast-chan $@ \
-	    $(if $(AT),>/dev/null,)
+	     $(if $(AT),>/dev/null,)
+
+$(BASE)/broadcast-chan/%: | $(BASE)/broadcast-chan/
+	$(PRINTF) " HG update\tbroadcast-chan\n"
+	$(AT)cd $(BASE)/broadcast-chan && hg pull $(if $(AT),>/dev/null,)
