@@ -149,15 +149,9 @@ struct WarpConfig : public TemplateConfig<Platform,Kernel,GraphData,V,E> {
     using Config::options;
     using Config::graph;
 
-    WarpConfig
-        ( const Options& opts
-        , size_t count
-        , LoadFun loadFun
-        , work_division d
-        , Kernel k
-        , std::function<size_t(size_t)> memFun
-        )
-    : Config(opts, count, loadFun, d, k)
+    template<typename... Args>
+    WarpConfig(std::function<size_t(size_t)> memFun, Args... args)
+    : Config(args...)
     , chunkMemory(memFun), warp_size(32), chunk_size(32)
     {
         options.add('w', "warp", "NUM", warp_size,
@@ -221,5 +215,5 @@ Config* make_warp_config
     , std::function<size_t(size_t)> memFun
     , Args... args
     )
-{ return new Config(args..., opts, count, l, w, k, memFun); }
+{ return new Config(args..., memFun, opts, count, l, w, k); }
 #endif
