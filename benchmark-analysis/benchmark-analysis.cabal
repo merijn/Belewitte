@@ -29,6 +29,7 @@ Library
 
   Build-Depends:        base
                ,        bytestring
+               ,        binary >= 0.8.4
                ,        exceptions == 0.8.3.*
                ,        monad-logger == 0.3.24.*
                ,        persistent == 2.7.*
@@ -62,7 +63,35 @@ Executable Ingest
                ,        text
                ,        unix == 2.7.2.*
 
+Executable Model
+  Default-Language:     Haskell2010
+  GHC-Options:          -O2 -Wall -fno-warn-unused-do-bind -rtsopts -threaded
+  GHC-Prof-Options:     -fprof-auto
+  Main-Is:              Model.hs
+
+  Build-Depends:        base
+               ,        benchmark-analysis
+               ,        binary >= 0.8.4
+               ,        broadcast-chan
+               ,        bytestring
+               ,        conduit == 1.2.10.*
+               ,        conduit-combinators == 1.1.1.*
+               ,        conduit-extra == 1.1.*
+               ,        containers == 0.5.7.1
+               ,        esqueleto == 2.5.2.*
+               ,        exceptions == 0.8.3.*
+               ,        interpolate == 0.1.1
+               ,        mmorph == 1.1.0.*
+               ,        monad-logger == 0.3.24.*
+               ,        mtl == 2.2.1
+               ,        optparse-applicative == 0.13.2.*
+               ,        persistent-sqlite == 2.6.2
+               ,        resourcet == 1.1.9
+               ,        streaming-commons == 0.1.18
+               ,        text
+               ,        unix == 2.7.2.*
+               ,        vector == 0.12.0.1
+
 Source-Repository head
   Type:     git
   Location: git+ssh://github.com:merijn/GPU-benchmarks
-

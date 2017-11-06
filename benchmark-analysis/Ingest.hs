@@ -2,20 +2,21 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 module Main where
 
 import Control.Concurrent hiding (yield)
 import Control.Monad (replicateM_, void, when)
-import Control.Monad.Catch (MonadMask, MonadThrow, catchAll, mask_)
+import Control.Monad.Catch (MonadMask, MonadThrow, catchAll, finally, mask_)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Logger
     ( MonadLogger, LogSource, LogLevel(..), filterLogger, logErrorN
     , runChanLoggingT, runStderrLoggingT, unChanLoggingT)
 import Data.Attoparsec.Text
     (Parser, char, decimal, double, endOfLine, takeTill)
-import Data.Conduit (Consumer, Producer, (.|), ($$), runConduit)
+import Data.Conduit (ConduitM, Consumer, Producer, (.|), ($$), runConduit)
 import Data.Conduit.Attoparsec (conduitParser)
 import qualified Data.Conduit.Combinators as C
 import Data.Conduit.List (sourceList)
@@ -69,16 +70,20 @@ data Timing
     } deriving (Show, Eq)
 
 checkedSourceProcessWithConsumer
-    :: (MonadIO m, MonadMask m)
+    :: forall m . (MonadIO m, MonadMask m)
     => CreateProcess
     -> Consumer ByteString m ()
     -> m ()
 checkedSourceProcessWithConsumer cp consumer =
     withCheckedProcessCleanup cp $ handleStdout
   where
+    handleStdout
+        :: ClosedStream
+        -> (ConduitM () ByteString m (), m ())
+        -> ClosedStream
+        -> m ()
     handleStdout ClosedStream (source, close) ClosedStream = do
-        source $$ consumer
-        close
+        (source $$ consumer) `finally` close
 
 runParallel
     :: (MonadLogger m, MonadIO m)
