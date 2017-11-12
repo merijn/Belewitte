@@ -4,6 +4,9 @@ using std::cout;
 using std::cerr;
 using std::endl;
 
+OpenCLBackend::opencl_alloc_t::~opencl_alloc_t()
+{}
+
 OpenCLBackend &OpenCL = OpenCLBackend::get();
 
 OpenCLBackend& OpenCLBackend::get()

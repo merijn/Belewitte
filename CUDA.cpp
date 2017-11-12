@@ -23,6 +23,9 @@ void cudaAssert(const cudaError_t code, const char *file, const int line)
     dump_stack_trace(code);
 }
 
+CUDABackend::cuda_alloc_t::~cuda_alloc_t()
+{}
+
 CUDABackend& CUDA = CUDABackend::get();
 
 CUDABackend& CUDABackend::get()

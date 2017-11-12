@@ -2,6 +2,29 @@
 
 #define CEIL_DIV(x, y)          (((x) + ((y) - 1)) / (y))
 
+Backend::base_alloc_t::~base_alloc_t()
+{}
+
+void
+Backend::base_alloc_t::copyHostToDev()
+{ copyHostToDevImpl(); }
+
+void
+Backend::base_alloc_t::copyDevToHost()
+{
+    copyDevToHostImpl();
+    if (associatedPtr) *associatedPtr = hostPtr.get();
+}
+
+void
+Backend::base_alloc_t::free()
+{
+    hostPtr.reset();
+    byteSize = 0;
+    read_only = true;
+    associatedPtr = nullptr;
+}
+
 Backend::~Backend()
 {}
 
