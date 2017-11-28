@@ -53,8 +53,8 @@ normalise(const string graphName, bool undirected)
     unordered_map<string,uint64_t> lookup_map;
     unordered_map<string,uint64_t> bipartite_lookup_map;
 
-    ifstream graph (graphName);
-    ofstream lookup_table (graphName + ".map");
+    std::ifstream graph (graphName);
+    std::ofstream lookup_table (graphName + ".map");
 
     string line;
     string format;
@@ -99,7 +99,7 @@ normalise(const string graphName, bool undirected)
 static void
 lookup(const string fileName, const bool reverse, int argc, char **argv)
 {
-    ifstream lookup_table(fileName);
+    std::ifstream lookup_table(fileName);
     int count, originalID, newID;
     unordered_map<uint64_t,uint64_t> lookup_map;
 
@@ -126,7 +126,7 @@ convertMatrixMarket(const string graphFile)
 {
     auto filename = path(graphFile).filename().replace_extension(".mtx");
     Graph<uint64_t,uint64_t> graph(graphFile);
-    ofstream mtxFile(filename.string());
+    std::ofstream mtxFile(filename.string());
     mtxFile.imbue(std::locale("C"));
     mtxFile << "%%MatrixMarket matrix coordinate pattern general" << endl;
     mtxFile << graph.vertex_count << " " << graph.vertex_count << " "
@@ -144,7 +144,7 @@ convertEdgeList(const string graphFile)
 {
     auto filename = path(graphFile).filename().replace_extension(".edges");
     Graph<uint64_t,uint64_t> graph(graphFile);
-    ofstream edgeList(filename.string());
+    std::ofstream edgeList(filename.string());
     edgeList.imbue(std::locale("C"));
     edgeList << graph.vertex_count << " " << graph.edge_count << endl;
     for (auto v : graph.vertices) {
