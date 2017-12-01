@@ -10,7 +10,7 @@
 #include <cuda_runtime.h>
 
 #include "Backend.hpp"
-#include "Util.hpp"
+#include "utils/Util.hpp"
 
 #define ALIGN_UP(offset, alignment) \
    (offset) = ((offset) + (alignment)-1) & ~((alignment)-1)

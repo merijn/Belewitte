@@ -1,7 +1,7 @@
 #ifndef GRAPHLOADING_HPP
 #define GRAPHLOADING_HPP
 
-#include "Graph.hpp"
+#include "utils/Graph.hpp"
 #include "GraphRep.hpp"
 
 namespace details {

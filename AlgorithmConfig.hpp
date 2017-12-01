@@ -1,7 +1,7 @@
 #ifndef ALGORITHMCONFIG_HPP
 #define ALGORITHMCONFIG_HPP
 
-#include "Options.hpp"
+#include "options/Options.hpp"
 
 struct AlgorithmConfig {
   protected:

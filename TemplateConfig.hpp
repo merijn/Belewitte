@@ -8,7 +8,7 @@
 #include <vector>
 
 #include "AlgorithmConfig.hpp"
-#include "Graph.hpp"
+#include "utils/Graph.hpp"
 #include "Timer.hpp"
 
 enum class work_division { nodes, edges };
