@@ -180,7 +180,7 @@ cudaDispatch
         , loadReversedCSR<CUDABackend, unsigned, unsigned>
         , work_division::nodes
         , vertexPullNoDiv
-        , consolidateRankPull)
+        , consolidateRankNoDiv)
     },
     { "vertex-pull-warp-nodiv", make_warp_config<PageRankNoDiv>
         ( opts, count
@@ -188,7 +188,7 @@ cudaDispatch
         , work_division::nodes
         , vertexPullWarpNoDiv
         , [](size_t chunkSize) { return (1 + chunkSize) * sizeof(unsigned); }
-        , consolidateRankPull)
+        , consolidateRankNoDiv)
     }
     };
 }

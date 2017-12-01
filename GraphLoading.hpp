@@ -143,26 +143,26 @@ template
 < typename Platform, typename V, typename E
 , template<typename> class alloc_t = Platform::template alloc_t
 >
-alloc_t<ReversedCSR<V,E>>
+alloc_t<InverseVertexCSR<V,E>>
 reversedCSR(Platform &p, const Accessor<V> &vertices, const Accessor<V> &rev_vertices, const Accessor<E> &rev_edges)
 {
-    auto result = p.template allocConstant<ReversedCSR<V,E>>();
+    auto result = p.template allocConstant<InverseVertexCSR<V,E>>();
     result->vertex_count = vertices.size - 1;
     result->edge_count = rev_edges.size;
-    result.allocLocal(&result->vertices, vertices.size);
-    result.allocLocal(&result->reverse_vertices, rev_vertices.size);
-    result.allocLocal(&result->reverse_edges, rev_edges.size);
+    result.allocLocal(&result->inverse_vertices, vertices.size);
+    result.allocLocal(&result->vertices, rev_vertices.size);
+    result.allocLocal(&result->edges, rev_edges.size);
 
     for (size_t i = 0; i < vertices.size; i++) {
-        result->vertices[i] = vertices[i];
+        result->inverse_vertices[i] = vertices[i];
     }
 
     for (size_t i = 0; i < rev_vertices.size; i++) {
-        result->reverse_vertices[i] = rev_vertices[i];
+        result->vertices[i] = rev_vertices[i];
     }
 
     for (size_t i = 0; i < rev_edges.size; i++) {
-        result->reverse_edges[i] = rev_edges[i];
+        result->edges[i] = rev_edges[i];
     }
 
     return result;

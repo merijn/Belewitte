@@ -75,11 +75,11 @@ struct CSR {
 #ifndef __OPENCL_VERSION__
 template<typename VERTEX, typename EDGE>
 #endif
-struct ReversedCSR {
+struct InverseVertexCSR {
     uint64_t vertex_count, edge_count;
 
     VERTEX *vertices;
-    VERTEX *reverse_vertices;
-    EDGE *reverse_edges;
+    VERTEX *inverse_vertices;
+    EDGE *edges;
 };
 #endif

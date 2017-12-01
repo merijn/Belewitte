@@ -13,7 +13,7 @@ memcpy_SIMD(size_t warp_size, int warp_offset, int cnt, T *dest, T *src)
 
 __global__ void
 vertexPullWarp(size_t warp_size, size_t chunk_size,
-               ReversedCSR<unsigned,unsigned> *graph, float *pagerank,
+               InverseVertexCSR<unsigned,unsigned> *graph, float *pagerank,
                float *new_pagerank)
 {
     const size_t vertex_count = graph->vertex_count;
@@ -26,10 +26,10 @@ vertexPullWarp(size_t warp_size, size_t chunk_size,
     const size_t v_ = min(W_ID * chunk_size, vertex_count);
     const size_t end = min(chunk_size, (vertex_count - v_));
 
-    memcpy_SIMD(warp_size, W_OFF, end + 1, myVertices, &graph->reverse_vertices[v_]);
+    memcpy_SIMD(warp_size, W_OFF, end + 1, myVertices, &graph->vertices[v_]);
 
-    const unsigned * const rev_edges = graph->reverse_edges;
-    const unsigned * const vertices = graph->vertices;
+    const unsigned * const rev_edges = graph->edges;
+    const unsigned * const vertices = graph->inverse_vertices;
     for (int v = 0; v < end; v++) {
         float my_new_rank = 0;
         const unsigned num_nbr = myVertices[v+1] - myVertices[v];

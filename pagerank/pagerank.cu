@@ -60,8 +60,8 @@ consolidateRank(size_t size, float *pagerank, float *new_pagerank)
 }
 
 __global__ void
-consolidateRankPull
-    ( ReversedCSR<unsigned,unsigned> *graph
+consolidateRankNoDiv
+    ( InverseVertexCSR<unsigned,unsigned> *graph
     , float *pagerank
     , float *new_pagerank
     )
@@ -70,13 +70,13 @@ consolidateRankPull
     uint64_t vertex_count = graph->vertex_count;
 
     if (idx < vertex_count) {
-        unsigned *vertices = &graph->vertices[idx];
+        unsigned *outgoing_vertices = &graph->inverse_vertices[idx];
 
         float new_rank = ((1 - dampening) / vertex_count) + (dampening * new_pagerank[idx]);
         float my_diff = fabsf(new_rank - pagerank[idx]);
 
-        unsigned start = vertices[0];
-        unsigned end = vertices[1];
+        unsigned start = outgoing_vertices[0];
+        unsigned end = outgoing_vertices[1];
         unsigned degree = end - start;
 
         if (degree != 0) pagerank[idx] = new_rank / degree;
