@@ -130,7 +130,7 @@ class CUDABackend : public Backend {
          , devPtr(std::move(o.devPtr)), localAllocs(std::move(o.localAllocs))
         {}
 
-        ~cuda_alloc_t();
+        ~cuda_alloc_t() override;
 
         cuda_alloc_t& operator=(cuda_alloc_t&& other)
         {
@@ -224,7 +224,7 @@ class CUDABackend : public Backend {
         initialised_ = true;
     }
 
-    ~CUDABackend() {}
+    ~CUDABackend() override {}
 
   public:
     template<typename T>

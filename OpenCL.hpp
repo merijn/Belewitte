@@ -104,7 +104,7 @@ class OpenCLBackend : public Backend {
          , localAllocs(std::move(o.localAllocs))
         {}
 
-        ~opencl_alloc_t();
+        ~opencl_alloc_t() override;
 
         opencl_alloc_t& operator=(opencl_alloc_t&& other)
         {
@@ -209,35 +209,35 @@ class OpenCLBackend : public Backend {
         cl_uint platformCount;
         cl_uint deviceCount;
 
-        OPENCL_CHK(clGetPlatformIDs(0, NULL, &platformCount));
+        OPENCL_CHK(clGetPlatformIDs(0, nullptr, &platformCount));
         platforms.resize(platformCount);
-        OPENCL_CHK(clGetPlatformIDs(platformCount, platforms.data(), NULL));
+        OPENCL_CHK(clGetPlatformIDs(platformCount, platforms.data(), nullptr));
 
         for (size_t i = 0; i < platformCount; i++) {
             OPENCL_CHK(
                 clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, 0,
-                                NULL, &deviceCount));
+                               nullptr, &deviceCount));
             devicesPerPlatform_.push_back(static_cast<int>(deviceCount));
 
             devices.emplace_back(deviceCount);
             OPENCL_CHK(
                 clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL,
-                                deviceCount, devices.back().data(), NULL));
+                                deviceCount, devices.back().data(), nullptr));
         }
 
-        ctxt = clCreateContext(NULL, static_cast<cl_uint>(devices[0].size()),
+        ctxt = clCreateContext(nullptr, static_cast<cl_uint>(devices[0].size()),
                                 devices[0].data(), opencl_error_callback,
-                                NULL, &ret);
+                                nullptr, &ret);
         OPENCL_CHK(ret);
 
         queue = clCreateCommandQueue(ctxt, devices[0][0], 0, &ret);
         OPENCL_CHK(ret);
 
-        activePlatform = 0;
-        activeDevice = 0;
+        activePlatform = nullptr;
+        activeDevice = nullptr;
     }
 
-    ~OpenCLBackend()
+    ~OpenCLBackend() override
     {
         clFinish(queue);
         clReleaseCommandQueue(queue);
@@ -272,16 +272,16 @@ class OpenCLBackend : public Backend {
         program = clCreateProgramWithSource(ctxt, N, files.data(), sizes.data(), &ret);
         OPENCL_CHK(ret);
 
-        ret = clBuildProgram(program, 1, &activeDevice, NULL, NULL, NULL);
+        ret = clBuildProgram(program, 1, &activeDevice, nullptr, nullptr, nullptr);
         if (ret != CL_SUCCESS) {
             char *buildLog;
             size_t logSize;
 
             OPENCL_CHK(clGetProgramBuildInfo(program, activeDevice,
-                                                CL_PROGRAM_BUILD_LOG, 0, NULL, &logSize));
+                                                CL_PROGRAM_BUILD_LOG, 0, nullptr, &logSize));
             buildLog = new char[logSize+1];
             OPENCL_CHK(clGetProgramBuildInfo(program, activeDevice,
-                                                CL_PROGRAM_BUILD_LOG, logSize, buildLog, NULL));
+                                                CL_PROGRAM_BUILD_LOG, logSize, buildLog, nullptr));
             buildLog[logSize] = '\0';
             cerr << "OpenCL Build Error:" << endl << buildLog << endl;
             OPENCL_CHK(ret);

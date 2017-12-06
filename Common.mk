@@ -26,7 +26,7 @@ else
     PRINTF := @printf
 endif
 
-COMMON_CXXFLAGS=-O3 -MMD -MP -std=c++14 -g -I$(BASE)/utils/ -I$(BASE)/options/
+COMMON_CXXFLAGS=-O3 -MMD -MP -std=c++17 -g -I$(BASE)/utils/ -I$(BASE)/options/
 
 CLANGWFLAGS=-Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic \
          -Wno-documentation-deprecated-sync -Wno-documentation -Wno-padded \
@@ -82,12 +82,12 @@ ifeq ($(UNAME),Darwin)
 endif
 ifeq ($(UNAME),Linux)
     CLANGWFLAGS += -Wno-reserved-id-macro
-    CLANGCXXFLAGS += --gcc-toolchain=$(addsuffix .., $(dir $(shell which gcc)))
+    CLANGCXXFLAGS += -stdlib=libc++
 
     CXXFLAGS += -isystem$(CUDA_PATH)/include/
 
 ifeq ($(LD),clang++)
-    LD += --gcc-toolchain=$(addsuffix .., $(dir $(shell which gcc)))
+    LD += -stdlib=libc++
 endif
 
     NVWFLAGS =

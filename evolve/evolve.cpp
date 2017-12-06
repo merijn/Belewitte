@@ -9,8 +9,7 @@
 #include <boost/math/distributions/uniform.hpp>
 
 #include "Connectivity.hpp"
-#include "Graph.hpp"
-#include "Util.hpp"
+#include "../utils/Util.hpp"
 
 using namespace std;
 
@@ -49,7 +48,7 @@ class SinglePointCrossover : public CrossoverFun {
         : point(getCrossoverPoint(vertex_count))
         {}
 
-        virtual ~SinglePointCrossover();
+        virtual ~SinglePointCrossover() override;
 
         bool operator()(bool first, uint64_t in, uint64_t) const override
         {
@@ -126,7 +125,7 @@ class VertexWiseCrossover : public MurmurHashCrossover {
         : MurmurHashCrossover(x), seed2(random_device()())
         {}
 
-        virtual ~VertexWiseCrossover();
+        virtual ~VertexWiseCrossover() override;
 
         bool operator()(bool, uint64_t k1, uint64_t) const override
         { return murmurhash3(k1, seed2) & 1; }
@@ -139,7 +138,7 @@ class EdgeWiseCrossover : public MurmurHashCrossover {
         EdgeWiseCrossover(uint64_t x) : MurmurHashCrossover(x)
         {}
 
-        virtual ~EdgeWiseCrossover();
+        virtual ~EdgeWiseCrossover() override;
 
         bool operator()(bool, uint64_t k1, uint64_t k2) const override
         { return murmurhash3(k1, k2) & 1; }

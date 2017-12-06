@@ -102,9 +102,9 @@ static void oclQueryPlatform(cl_platform_id platform, cl_platform_info info, T *
 {
     size_t size;
 
-    OPENCL_CHK(clGetPlatformInfo(platform, info, 0, NULL, &size));
+    OPENCL_CHK(clGetPlatformInfo(platform, info, 0, nullptr, &size));
     *result = new T[size / sizeof (T)];
-    OPENCL_CHK(clGetPlatformInfo(platform, info, size, *result, NULL));
+    OPENCL_CHK(clGetPlatformInfo(platform, info, size, *result, nullptr));
 }
 
 template<typename T>
@@ -112,9 +112,9 @@ static void oclQueryDevice(cl_device_id device, cl_device_info info, T **result)
 {
     size_t size;
 
-    OPENCL_CHK(clGetDeviceInfo(device, info, 0, NULL, &size));
+    OPENCL_CHK(clGetDeviceInfo(device, info, 0, nullptr, &size));
     *result = new T[size / sizeof (T)];
-    OPENCL_CHK(clGetDeviceInfo(device, info, size, *result, NULL));
+    OPENCL_CHK(clGetDeviceInfo(device, info, size, *result, nullptr));
 }
 
 template<typename T>
@@ -122,9 +122,9 @@ static void oclQueryKernel(cl_kernel kernel, cl_device_id dev, cl_kernel_work_gr
 {
     size_t size;
 
-    OPENCL_CHK(clGetKernelWorkGroupInfo(kernel, dev, info, 0, NULL, &size));
+    OPENCL_CHK(clGetKernelWorkGroupInfo(kernel, dev, info, 0, nullptr, &size));
     *result = new T[size];
-    OPENCL_CHK(clGetKernelWorkGroupInfo(kernel, dev, info, size, *result, NULL));
+    OPENCL_CHK(clGetKernelWorkGroupInfo(kernel, dev, info, size, *result, nullptr));
 }
 
 static void printSpaceSeperated(char *str, bool deepIndent)
@@ -321,9 +321,9 @@ void OpenCLBackend::setDevice(size_t platform, int device)
     clReleaseCommandQueue(queue);
     clReleaseContext(ctxt);
 
-    ctxt = clCreateContext(NULL, static_cast<cl_uint>(devicesPerPlatform[platform]),
+    ctxt = clCreateContext(nullptr, static_cast<cl_uint>(devicesPerPlatform[platform]),
                            devices[platform].data(), opencl_error_callback,
-                           NULL, &ret);
+                           nullptr, &ret);
     OPENCL_CHK(ret);
     queue = clCreateCommandQueue(ctxt, devices[platform][idx], 0, &ret);
     OPENCL_CHK(ret);
@@ -367,7 +367,7 @@ void OpenCLBackend::runKernel(cl_kernel kernel) const
     oclQueryKernel(kernel, activeDevice, CL_KERNEL_WORK_GROUP_SIZE, &workgroupSize);
     globalSize = *computeUnits * *workgroupSize;
 
-    OPENCL_CHK(clEnqueueNDRangeKernel(queue, kernel, 1, NULL, &globalSize, workgroupSize, 0, NULL, &evt));
+    OPENCL_CHK(clEnqueueNDRangeKernel(queue, kernel, 1, nullptr, &globalSize, workgroupSize, 0, nullptr, &evt));
     OPENCL_CHK(clWaitForEvents(1, &evt));
 
     delete[] workgroupSize;

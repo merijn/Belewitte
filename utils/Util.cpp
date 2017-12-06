@@ -16,15 +16,16 @@ dump_stack_trace(int exit_code)
 
     for (int i = 1; i < frame_count; i++) {
         if (dladdr(callstack[i], &info) && info.dli_sname) {
-            char *demangled = NULL;
+            char *demangled = nullptr;
             int status = -1;
 
             if (info.dli_sname[0] == '_')
-                demangled = abi::__cxa_demangle(info.dli_sname, NULL, 0, &status);
+                demangled = abi::__cxa_demangle(info.dli_sname, nullptr,
+                                                nullptr, &status);
 
             fprintf(stderr,"%-3d %s\n", i,
-                    status == 0 ? demangled :
-                        info.dli_sname == 0 ? symbols[i] : info.dli_sname);
+                status == 0 ? demangled :
+                    info.dli_sname == nullptr ? symbols[i] : info.dli_sname);
 
             free(demangled);
         } else {
