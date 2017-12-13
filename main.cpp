@@ -13,9 +13,9 @@
 #include "Backend.hpp"
 #include "CUDA.hpp"
 #include "OpenCL.hpp"
-#include "Options.hpp"
+#include "options/Options.hpp"
 #include "Timer.hpp"
-#include "Util.hpp"
+#include "utils/Util.hpp"
 
 using namespace std;
 using namespace boost::filesystem;
