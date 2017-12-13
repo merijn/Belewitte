@@ -675,17 +675,18 @@ class MutableGraph {
           : vertices(v), rev_vertices(rv), edges(e), rev_edges(re), size(v.size - 1)
         {}
 
-        Vertex operator[](V n)
+        Vertex operator[](uint64_t n)
         {
           checkError(n < size , "Index too large! Index: ", n, " Max: ", size);
           return Vertex(n, Accessor<E>(edges, vertices[n], vertices[n+1]),
                   Accessor<E>(rev_edges, rev_vertices[n], rev_vertices[n+1]));
         }
 
-        const Vertex operator[](V n) const
+        const Vertex operator[](uint64_t n) const
         {
           checkError(n < size, "Index too large! Index: ", n, " Max: ", size);
-          return Vertex(n, Accessor<E>(edges, vertices[n], vertices[n+1]),
+          return Vertex(static_cast<V>(n),
+                  Accessor<E>(edges, vertices[n], vertices[n+1]),
                   Accessor<E>(rev_edges, rev_vertices[n], rev_vertices[n+1]));
         }
 
