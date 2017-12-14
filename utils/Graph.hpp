@@ -16,6 +16,8 @@
 
 #include "Util.hpp"
 
+enum class Degrees { in, out, abs };
+
 template<typename E>
 struct Edge {
   E in, out;
@@ -1178,6 +1180,28 @@ class MutableGraph {
         MutableGraph graph(out.fileName, undirected, out.vertex_count, out.edge_count);
         writeEdges(out.vertex_count, graph.raw_vertices, graph.raw_edges, out.edges);
         writeEdges(out.vertex_count, graph.raw_rev_vertices, graph.raw_rev_edges, out.rev_edges);
+    }
+
+    FiveDigitSummary
+    degreeStatistics(Degrees d) const
+    {
+        std::vector<size_t> degrees;
+        degrees.reserve(vertex_count);
+
+        for (auto v : vertices) {
+            size_t degree = 0;
+
+            if (d == Degrees::out || d == Degrees::abs) {
+                degree += v.edges.size;
+            }
+
+            if (d == Degrees::in || (d == Degrees::abs && !undirected)) {
+                degree += v.rev_edges.size;
+            }
+
+            degrees.emplace_back(degree);
+        }
+        return FiveDigitSummary(std::move(degrees));
     }
 
     const bool undirected;

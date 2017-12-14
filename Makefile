@@ -17,11 +17,12 @@ else ifeq ($(CXX),g++)
 main: LDFLAGS += -Wl,-rpath -Wl,$(CUDA_PATH)/lib/
 endif
 
-all: main normalise reorder-graph check-degree print-graph
+all: main normalise reorder-graph check-degree print-graph graph-details
 
 -include $(patsubst %.cpp, .build/%.d, $(wildcard *.cpp))
 
-$(DEST)/main.o $(DEST)/normalise.o: CXXFLAGS+=-I$(BOOST_PATH)/include -isystem$(BOOST_PATH)/include
+$(DEST)/main.o $(DEST)/normalise.o $(DEST)/graph-details.o: \
+    CXXFLAGS+=-I$(BOOST_PATH)/include -isystem$(BOOST_PATH)/include
 
 main: $(DEST)/main.o $(DEST)/AlgorithmConfig.o $(DEST)/Backend.o \
       $(DEST)/CUDA.o $(DEST)/OpenCL.o $(DEST)/Timer.o $(LIBS)/liboptions.a \
@@ -44,6 +45,10 @@ check-degree: $(DEST)/check-degree.o $(LIBS)/libutils.a
 print-graph: $(DEST)/print-graph.o $(LIBS)/libutils.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $^ -o $@
+
+graph-details: $(DEST)/graph-details.o $(LIBS)/libutils.a $(LIBS)/liboptions.a
+	$(PRINTF) " LD\t$@\n"
+	$(AT)$(LD) $(LDFLAGS) -L$(BOOST_PATH)/lib/ -lboost_system -lboost_filesystem $^ -o $@
 
 .PHONY: clean-main-objs clean-main-deps clean-main-bins
 
