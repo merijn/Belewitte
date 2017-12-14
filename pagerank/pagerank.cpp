@@ -12,15 +12,11 @@ struct PageRankBase : public Config
 {
     using Config::run_count;
     using Config::backend;
-    using Config::nodeDivision;
     using Config::outputFile;
     using Config::setKernelConfig;
     using Config::vertex_count;
-    using Config::runKernel;
     using Config::kernel;
     using Config::options;
-    using typename Config::Kernel;
-    using typename Config::LoadFun;
 
     template<typename T>
     using alloc_t = typename Config::template alloc_t<T>;
@@ -44,7 +40,7 @@ struct PageRankBase : public Config
 
         for (size_t i = 0; i < run_count; i++) {
             initResults.start();
-            backend.setWorkSizes(1,{nodeDivision.first},{nodeDivision.second});
+            setKernelConfig(work_division::vertex);
             backend.runKernel(setArrayFloat, pageranks, pageranks.size, 1.0f / vertex_count);
             backend.runKernel(setArrayFloat, new_pageranks, new_pageranks.size, 0.0f);
             initResults.stop();
@@ -56,8 +52,8 @@ struct PageRankBase : public Config
             do {
                 j++;
                 resetDiff();
-                setKernelConfig();
-                runKernel(kernel, pageranks, new_pageranks);
+                setKernelConfig(kernel);
+                kernel->run(this->loader, pageranks, new_pageranks);
                 callConsolidate(pageranks, new_pageranks);
 
                 diff = getDiff();
@@ -80,6 +76,8 @@ struct PageRankBase : public Config
 
 template<typename Config, typename Consolidate>
 struct PageRank : public PageRankBase<Config> {
+    using PageRankBase<Config>::backend;
+
     template<typename... Args>
     PageRank(Consolidate c, Args... args)
      : PageRankBase<Config>(args...)
@@ -94,13 +92,16 @@ struct PageRank : public PageRankBase<Config> {
     void
     callConsolidate(const alloc_t<float>& ranks, const alloc_t<float>& new_ranks) override
     {
-        this->backend.setWorkSizes(1,{this->nodeDivision.first},{this->nodeDivision.second});
-        this->backend.runKernel(consolidate, this->vertex_count, ranks, new_ranks);
+        this->setKernelConfig(work_division::vertex);
+        backend.runKernel(consolidate, this->vertex_count, ranks, new_ranks);
     }
 };
 
 template<typename Config,typename Consolidate>
 struct PageRankNoDiv : public PageRankBase<Config> {
+    using PageRankBase<Config>::backend;
+    using PageRankBase<Config>::kernel;
+
     template<typename... Args>
     PageRankNoDiv(Consolidate c, Args... args)
      : PageRankBase<Config>(args...)
@@ -114,8 +115,8 @@ struct PageRankNoDiv : public PageRankBase<Config> {
 
     void callConsolidate(const alloc_t<float>& ranks, const alloc_t<float>& new_ranks) override
     {
-        this->backend.setWorkSizes(1, {this->nodeDivision.first}, {this->nodeDivision.second});
-        this->runNonWarpKernel(consolidate, ranks, new_ranks);
+        this->setKernelConfig(work_division::vertex);
+        backend.runKernel(consolidate, this->loader.template getGraph<Rep::InverseVertexCSR,Dir::Reverse>(), ranks, new_ranks);
     }
 };
 
@@ -128,67 +129,46 @@ cudaDispatch
     , size_t count
     )
 {
-    result = {
-    { "edge-list", make_config<PageRank>
-        ( opts, count
-        , loadEdgeListCSR<CUDABackend, unsigned, unsigned>
-        , work_division::edges
-        , updateRankEdgeList
-        , consolidateRank)
-    },
-    { "struct-edge-list", make_config<PageRank>
-        ( opts, count
-        , loadStructEdgeListCSR<CUDABackend, unsigned, unsigned>
-        , work_division::edges
-        , updateRankStructEdgeList
-        , consolidateRank)
-    },
-    { "vertex-push", make_config<PageRank>
-        ( opts, count
-        , loadCSR<CUDABackend, unsigned, unsigned>
-        , work_division::nodes
-        , vertexPush
-        , consolidateRank)
-    },
-    { "vertex-pull", make_config<PageRank>
-        ( opts, count
-        , loadReversedCSR<CUDABackend, unsigned, unsigned>
-        , work_division::nodes
-        , vertexPull
-        , consolidateRank)
-    },
-    { "vertex-push-warp", make_warp_config<PageRank>
-        ( opts, count
-        , loadCSR<CUDABackend, unsigned, unsigned>
-        , work_division::nodes
-        , vertexPushWarp
+    auto prMap = make_kernel_map<CUDABackend,unsigned,unsigned>
+                        (&updateRankEdgeList);
+
+    prMap.insert_kernel<Rep::EdgeListCSR>
+        ("edge-list", updateRankEdgeList, work_division::edge);
+
+    prMap.insert_kernel<Rep::StructEdgeListCSR>
+        ("struct-edge-list", updateRankStructEdgeList, work_division::edge);
+
+    prMap.insert_kernel<Rep::CSR>
+        ("vertex-push", vertexPush, work_division::vertex);
+
+    prMap.insert_kernel<Rep::InverseVertexCSR, Dir::Reverse>
+        ("vertex-pull", vertexPull, work_division::vertex);
+
+    prMap.insert_warp_kernel<Rep::CSR>
+        ("vertex-push-warp", vertexPushWarp, work_division::vertex
         , [](size_t chunkSize) {
             return chunkSize * sizeof(float) + (1+chunkSize) * sizeof(unsigned);
-        }
-        , consolidateRank)
-    },
-    { "vertex-pull-warp", make_warp_config<PageRank>
-        ( opts, count
-        , loadReversedCSR<CUDABackend, unsigned, unsigned>
-        , work_division::nodes
-        , vertexPullWarp
-        , [](size_t chunkSize) { return (1 + chunkSize) * sizeof(unsigned); }
-        , consolidateRank)
-    },
-    { "vertex-pull-nodiv", make_config<PageRankNoDiv>
-        ( opts, count
-        , loadReversedCSR<CUDABackend, unsigned, unsigned>
-        , work_division::nodes
-        , vertexPullNoDiv
-        , consolidateRankNoDiv)
-    },
-    { "vertex-pull-warp-nodiv", make_warp_config<PageRankNoDiv>
-        ( opts, count
-        , loadReversedCSR<CUDABackend, unsigned, unsigned>
-        , work_division::nodes
-        , vertexPullWarpNoDiv
-        , [](size_t chunkSize) { return (1 + chunkSize) * sizeof(unsigned); }
-        , consolidateRankNoDiv)
+        });
+
+    prMap.insert_warp_kernel<Rep::InverseVertexCSR, Dir::Reverse>
+        ("vertex-pull-warp", vertexPullWarp, work_division::vertex
+        , [](size_t chunkSize) { return (1 + chunkSize) * sizeof(unsigned); });
+
+    for (auto& pair : prMap) {
+        result[pair.first] = make_config<PageRank>(opts, count, pair.second, consolidateRank);
     }
-    };
+
+    auto prNoDivMap = make_kernel_map<CUDABackend,unsigned,unsigned>
+                        (vertexPullNoDiv);
+
+    prNoDivMap.insert_kernel<Rep::InverseVertexCSR, Dir::Reverse>
+        ("vertex-pull-nodiv", vertexPullNoDiv, work_division::vertex);
+
+    prNoDivMap.insert_warp_kernel<Rep::InverseVertexCSR, Dir::Reverse>
+        ("vertex-pull-warp-nodiv", vertexPullWarpNoDiv, work_division::vertex
+        , [](size_t chunkSize) { return (1 + chunkSize) * sizeof(unsigned); });
+
+    for (auto& pair : prNoDivMap) {
+        result[pair.first] = make_config<PageRankNoDiv>(opts, count, pair.second, consolidateRankNoDiv);
+    }
 }

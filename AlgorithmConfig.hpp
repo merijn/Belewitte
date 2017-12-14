@@ -19,7 +19,7 @@ struct AlgorithmConfig {
     size_t run_count;
     std::string outputFile;
 
-    virtual void transferGraph(const std::string) = 0;
+    virtual void loadGraph(const std::string) = 0;
     virtual void runImplementation() = 0;
 
   public:

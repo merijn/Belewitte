@@ -10,18 +10,14 @@
 template<typename Config>
 struct BFSConfig : public Config
 {
-    using pair = std::pair<size_t,size_t>;
     using Config::run_count;
     using Config::backend;
-    using Config::nodeDivision;
     using Config::outputFile;
+    using Config::loader;
     using Config::setKernelConfig;
     using Config::vertex_count;
-    using Config::runKernel;
     using Config::kernel;
     using Config::options;
-    using typename Config::Kernel;
-    using typename Config::LoadFun;
 
     unsigned root;
 
@@ -56,7 +52,7 @@ struct BFSConfig : public Config
 
         for (size_t i = 0; i < run_count; i++) {
             initResults.start();
-            backend.setWorkSizes(1,{nodeDivision.first},{nodeDivision.second});
+            setKernelConfig(work_division::vertex);
             backend.runKernel(setArray, results, results.size,
                               std::numeric_limits<int>::max());
 
@@ -66,15 +62,15 @@ struct BFSConfig : public Config
 
             bfs.start();
 
-            setKernelConfig();
-            unsigned frontier;
+            setKernelConfig(kernel);
+            unsigned frontier = 1;
             size_t oldLevel;
             int curr = 0;
             do {
                 oldLevel = static_cast<size_t>(curr);
                 resetFrontier();
                 levelTimers[oldLevel].start();
-                runKernel(kernel, results, curr++);
+                kernel->run(loader, results, curr++);
                 frontier = getFrontier();
                 levelTimers[oldLevel].stop();
                 frontiers[static_cast<size_t>(curr)] = frontier;
@@ -101,57 +97,34 @@ struct BFSConfig : public Config
     }
 };
 
-template<bfs_variant Variant>
+template<bfs_variant Variant, typename T>
 static inline void
-insertVariant
-    ( std::map<std::string, AlgorithmConfig*>& result
-    , const Options& opts
-    , size_t count
-    )
+insertVariant(T& kernelMap)
 {
-    result[std::string("edge-list") + BFS<Variant>::suffix] =
-        make_config<BFSConfig>
-        ( opts, count
-        , loadEdgeList<CUDABackend, unsigned, unsigned>
-        , work_division::edges
-        , edgeListBfs<BFS<normal>>
-        );
+    kernelMap.template insert_kernel<Rep::EdgeList>
+        ( std::string("edge-list") + BFS<Variant>::suffix
+        , edgeListBfs<BFS<Variant>>, work_division::edge);
 
-    result[std::string("rev-edge-list") + BFS<Variant>::suffix] =
-        make_config<BFSConfig>
-        ( opts, count
-        , loadReverseEdgeList<CUDABackend, unsigned, unsigned>
-        , work_division::edges
-        , revEdgeListBfs<BFS<blockreduce>>
-        );
+    kernelMap.template insert_kernel<Rep::EdgeList,Dir::Reverse>
+        ( std::string("rev-edge-list") + BFS<Variant>::suffix
+        , revEdgeListBfs<BFS<Variant>>, work_division::edge);
 
-    result[std::string("vertex-push") + BFS<Variant>::suffix] =
-        make_config<BFSConfig>
-        ( opts, count
-        , loadCSR<CUDABackend, unsigned, unsigned>
-        , work_division::nodes
-        , vertexPushBfs<BFS<blockreduce>>
-        );
+    kernelMap.template insert_kernel<Rep::CSR>
+        ( std::string("vertex-push") + BFS<Variant>::suffix
+        , vertexPushBfs<BFS<Variant>>, work_division::vertex);
 
-    result[std::string("vertex-pull") + BFS<Variant>::suffix] =
-        make_config<BFSConfig>
-        ( opts, count
-        , loadReverseCSR<CUDABackend, unsigned, unsigned>
-        , work_division::nodes
-        , vertexPullBfs<BFS<blockreduce>>
-        );
+    kernelMap.template insert_kernel<Rep::CSR,Dir::Reverse>
+        ( std::string("vertex-pull") + BFS<Variant>::suffix
+        , vertexPullBfs<BFS<Variant>>, work_division::vertex);
 
-    result[std::string("vertex-push-warp") + BFS<Variant>::suffix] =
-        make_warp_config<BFSConfig>
-        ( opts, count
-        , loadCSR<CUDABackend, unsigned, unsigned>
-        , work_division::nodes
-        , vertexPushWarpBfs<BFS<blockreduce>>
+    kernelMap.template insert_warp_kernel<Rep::CSR>
+        ( std::string("vertex-push-warp") + BFS<Variant>::suffix
+        , vertexPushWarpBfs<BFS<Variant>>
+        , work_division::vertex
         , [](size_t chunkSize) {
             return chunkSize * sizeof(int) + (chunkSize+1) * sizeof(unsigned);
         });
 }
-
 
 extern "C" kernel_register_t cudaDispatch;
 extern "C"
@@ -162,8 +135,15 @@ cudaDispatch
     , size_t count
     )
 {
-    insertVariant<normal>(result, opts, count);
-    insertVariant<bulk>(result, opts, count);
-    insertVariant<warpreduce>(result, opts, count);
-    insertVariant<blockreduce>(result, opts, count);
+    auto kernelMap = make_kernel_map<CUDABackend,unsigned,unsigned>
+                        (edgeListBfs<BFS<normal>>);
+
+    insertVariant<normal>(kernelMap);
+    insertVariant<bulk>(kernelMap);
+    insertVariant<warpreduce>(kernelMap);
+    insertVariant<blockreduce>(kernelMap);
+
+    for (auto& pair : kernelMap) {
+        result[pair.first] = make_config<BFSConfig>(opts, count, pair.second);
+    }
 }
