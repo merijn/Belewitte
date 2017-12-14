@@ -62,4 +62,3 @@ insertUniq record = do
 
 share [mkPersist sqlSettings, mkMigrate "migrateAll"]
     $(persistFileWith upperCaseSettings "src/schema")
-

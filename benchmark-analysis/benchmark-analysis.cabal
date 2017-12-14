@@ -25,13 +25,19 @@ Library
   GHC-Options:          -O2 -Wall -fno-warn-unused-do-bind
   GHC-Prof-Options:     -fprof-auto
   Hs-Source-Dirs:       src
-  Exposed-Modules:      Schema
+  Exposed-Modules:      Model
+                        Query
+                        Schema
 
   Build-Depends:        base
                ,        bytestring
                ,        binary >= 0.8.4
+               ,        conduit == 1.2.10.*
+               ,        containers == 0.5.10.*
                ,        exceptions == 0.8.3.*
+               ,        interpolate == 0.1.1
                ,        monad-logger == 0.3.24.*
+               ,        mtl == 2.2.1
                ,        persistent == 2.7.*
                ,        persistent-template == 2.5.2
                ,        persistent-sqlite == 2.6.2
@@ -39,6 +45,7 @@ Library
                ,        resource-pool
                ,        text
                ,        transformers
+               ,        vector == 0.12.0.1
 
 
 Executable Ingest
@@ -67,23 +74,22 @@ Executable Model
   Default-Language:     Haskell2010
   GHC-Options:          -O2 -Wall -fno-warn-unused-do-bind -rtsopts -threaded
   GHC-Prof-Options:     -fprof-auto
-  Main-Is:              Model.hs
+  Main-Is:              ExportModel.hs
 
   Build-Depends:        base
                ,        benchmark-analysis
                ,        binary >= 0.8.4
+               ,        binary-conduit == 1.2.*
                ,        broadcast-chan
                ,        bytestring
                ,        conduit == 1.2.10.*
                ,        conduit-combinators == 1.1.1.*
                ,        conduit-extra == 1.1.*
-               ,        containers == 0.5.7.1
-               ,        esqueleto == 2.5.2.*
+               ,        containers == 0.5.10.*
                ,        exceptions == 0.8.3.*
                ,        interpolate == 0.1.1
                ,        mmorph == 1.1.0.*
                ,        monad-logger == 0.3.24.*
-               ,        mtl == 2.2.1
                ,        optparse-applicative == 0.13.2.*
                ,        persistent-sqlite == 2.6.2
                ,        resourcet == 1.1.9
