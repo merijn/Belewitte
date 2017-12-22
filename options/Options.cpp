@@ -2,7 +2,7 @@
 #include <map>
 
 #include "Options.hpp"
-#include "Util.hpp"
+#include "utils/Util.hpp"
 
 using namespace std;
 
@@ -27,6 +27,20 @@ Options::add(char so, const char *lo, string arg, string &var, string help)
     auto action = [&](auto s) { var = s; };
     auto opt = Option(so, lo, action, arg, help);
     opt.defaultVal = var;
+    opt.hasArg = true;
+    return add(opt);
+}
+
+Options&
+Options::add
+( char so
+, const char *lo
+, std::string arg
+, std::string help
+, std::function<void(const char *)> action
+)
+{
+    auto opt = Option(so, lo, action, arg, help);
     opt.hasArg = true;
     return add(opt);
 }

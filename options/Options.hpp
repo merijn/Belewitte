@@ -101,12 +101,12 @@ class Options {
 
     template<typename T>
     Options& add
-        ( char so
-        , const char *lo
-        , std::string arg
-        , T& var
-        , std::string help
-        , typename std::enable_if<std::is_integral<T>::value>::type* = nullptr)
+    ( char so
+    , const char *lo
+    , std::string arg
+    , T& var
+    , std::string help
+    , typename std::enable_if<std::is_integral<T>::value>::type* = nullptr)
     {
         auto action = [&](auto s) { var = static_cast<T>(std::stoi(s)); };
         auto opt = Option(so, lo, action, arg, help);
@@ -114,6 +114,14 @@ class Options {
         opt.hasArg = true;
         return add(opt);
     }
+
+    Options& add
+    ( char so
+    , const char *lo
+    , std::string arg
+    , std::string help
+    , std::function<void(const char *)> action
+    );
 
     template<typename T>
     Options& add
