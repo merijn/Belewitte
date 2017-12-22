@@ -9,9 +9,8 @@ struct AlgorithmConfig {
      : options(opts, true), run_count(count)
     {}
 
-    AlgorithmConfig(const AlgorithmConfig& o)
-     : options(o.options), run_count(o.run_count), outputFile(o.outputFile)
-    {}
+    AlgorithmConfig(const AlgorithmConfig&) = delete;
+    void operator=(const AlgorithmConfig&) = delete;
 
     virtual ~AlgorithmConfig();
 
