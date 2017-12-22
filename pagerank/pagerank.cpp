@@ -10,6 +10,7 @@
 template<typename Config>
 struct PageRankBase : public Config
 {
+    using typename Config::ConfigArg;
     using Config::run_count;
     using Config::backend;
     using Config::outputFile;
@@ -21,9 +22,7 @@ struct PageRankBase : public Config
     template<typename T>
     using alloc_t = typename Config::template alloc_t<T>;
 
-    template<typename... Args>
-    PageRankBase(Args... args)
-    : Config(args...)
+    PageRankBase(ConfigArg k) : Config(k)
     {}
 
     virtual void
@@ -76,12 +75,11 @@ struct PageRankBase : public Config
 
 template<typename Config, typename Consolidate>
 struct PageRank : public PageRankBase<Config> {
+    using typename PageRankBase<Config>::ConfigArg;
     using PageRankBase<Config>::backend;
 
-    template<typename... Args>
-    PageRank(Consolidate c, Args... args)
-     : PageRankBase<Config>(args...)
-     , consolidate(c)
+    PageRank(ConfigArg k, Consolidate c)
+     : PageRankBase<Config>(k), consolidate(c)
     {}
 
     Consolidate consolidate;
@@ -99,13 +97,12 @@ struct PageRank : public PageRankBase<Config> {
 
 template<typename Config,typename Consolidate>
 struct PageRankNoDiv : public PageRankBase<Config> {
+    using typename PageRankBase<Config>::ConfigArg;
     using PageRankBase<Config>::backend;
     using PageRankBase<Config>::kernel;
 
-    template<typename... Args>
-    PageRankNoDiv(Consolidate c, Args... args)
-     : PageRankBase<Config>(args...)
-     , consolidate(c)
+    PageRankNoDiv(ConfigArg k, Consolidate c)
+     : PageRankBase<Config>(k), consolidate(c)
     {}
 
     Consolidate consolidate;

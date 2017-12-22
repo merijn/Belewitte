@@ -10,6 +10,7 @@
 template<typename Config>
 struct BFSConfig : public Config
 {
+    using typename Config::ConfigArg;
     using Config::run_count;
     using Config::backend;
     using Config::outputFile;
@@ -24,9 +25,8 @@ struct BFSConfig : public Config
 
     prop_ref frontierSize;
 
-    template<typename... Args>
-    BFSConfig(Args... args)
-    : Config(args...), root(0), frontierSize("frontier", *this)
+    BFSConfig(ConfigArg k)
+    : Config(k), root(0), frontierSize("frontier", *this)
     { options.add('r', "root", "NUM", root, "Starting vertex for BFS."); }
 
     inline void setProps(unsigned frontier)

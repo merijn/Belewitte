@@ -169,6 +169,7 @@ struct TemplateConfig : public AlgorithmConfig {
   using Vertex = V;
   using Edge = E;
   using KernelType = GraphKernel<Platform,V,E,Args...>;
+  using ConfigArg = std::shared_ptr<KernelType>;
 
   template<typename T>
   using alloc_t = typename Platform::template alloc_t<T>;
@@ -182,7 +183,7 @@ struct TemplateConfig : public AlgorithmConfig {
 
     Loader<Platform,V,E> loader;
 
-    TemplateConfig(std::shared_ptr<KernelType> kern)
+    TemplateConfig(ConfigArg kern)
     : backend(Platform::get()), kernel(kern)
     {}
 
@@ -240,10 +241,11 @@ struct WarpConfig : public TemplateConfig<Platform,V,E,Args...>
 {
     using Config = TemplateConfig<Platform,V,E,Args...>;
     using Config::options;
+    using KernelType = WarpKernel<Platform,V,E,Args...>;
+    using ConfigArg = std::shared_ptr<KernelType>;
 
-    template<typename... ParentArgs>
-    WarpConfig(ParentArgs... args)
-    : Config(args...), warp_size(32), chunk_size(32)
+    WarpConfig(ConfigArg k)
+    : Config(k), warp_size(32), chunk_size(32)
     {
         options.add('w', "warp", "NUM", warp_size,
                     "Virtual warp size for warp variants.")
@@ -273,12 +275,11 @@ AlgorithmConfig* make_config
     )
 {
     typedef WarpKernel<Platform,Vertex,Edge,KernelArgs...> WarpKernel;
-    typedef std::shared_ptr<WarpKernel> WarpKernelPtr;
 
-    if (auto kern = std::dynamic_pointer_cast<WarpKernelPtr>(k)) {
-        return new WarpConfig(args..., k);
+    if (auto kern = std::dynamic_pointer_cast<WarpKernel>(k)) {
+        return new WarpConfig(kern, args...);
     } else {
-        return new Config(args..., k);
+        return new Config(k, args...);
     }
 }
 
@@ -323,6 +324,7 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
 {
     using Config = TemplateConfig<Platform,V,E,Args...>;
     using KernelType = typename Config::KernelType;
+    using ConfigArg = std::map<std::string,std::shared_ptr<KernelType>>;
     using Config::kernel;
     using Config::loader;
     using Config::options;
@@ -553,6 +555,7 @@ template
 , typename Config = Cfg<Base,Args...>
 >
 AlgorithmConfig* make_switch_config
-(std::map<std::string,std::shared_ptr<GraphKernel<Platform,Vertex,Edge,KernelArgs...>>> ks)
-{ return new Config(ks); }
+    ( std::map<std::string,std::shared_ptr<GraphKernel<Platform,Vertex,Edge,KernelArgs...>>> ks
+    , Args... args)
+{ return new Config(ks, args...); }
 #endif
