@@ -18,16 +18,19 @@ struct BFSConfig : public Config
     using Config::vertex_count;
     using Config::kernel;
     using Config::options;
+    using Config::isSwitching;
 
     unsigned root;
 
+    prop_ref frontierSize;
+
     template<typename... Args>
     BFSConfig(Args... args)
-    : Config(args...), root(0)
-    {
-        options.add('r', "root", "NUM", root,
-                    "Starting vertex for BFS.");
-    }
+    : Config(args...), root(0), frontierSize("frontier", *this)
+    { options.add('r', "root", "NUM", root, "Starting vertex for BFS."); }
+
+    inline void setProps(unsigned frontier)
+    { frontierSize = frontier; }
 
     virtual void runImplementation() override
     {
@@ -36,9 +39,6 @@ struct BFSConfig : public Config
         Timer initResults("initResults", run_count);
         Timer bfs("computation", run_count);
         std::vector<Timer> levelTimers;
-        std::vector<unsigned> frontiers(1000, 0);
-
-        frontiers[0] = 1;
         levelTimers.reserve(1000);
 
         std::string timerName = std::to_string(root) + ":bfsLevel";
@@ -62,18 +62,28 @@ struct BFSConfig : public Config
 
             bfs.start();
 
-            setKernelConfig(kernel);
             unsigned frontier = 1;
-            size_t oldLevel;
             int curr = 0;
+
+            if constexpr (isSwitching) {
+                setProps(frontier);
+                this->predictInitial();
+            } else {
+                setKernelConfig(kernel);
+            }
+
             do {
-                oldLevel = static_cast<size_t>(curr);
+                auto& levelTimer = levelTimers[static_cast<size_t>(curr)];
                 resetFrontier();
-                levelTimers[oldLevel].start();
+                levelTimer.start();
                 kernel->run(loader, results, curr++);
                 frontier = getFrontier();
-                levelTimers[oldLevel].stop();
-                frontiers[static_cast<size_t>(curr)] = frontier;
+                levelTimer.stop();
+
+                if constexpr (isSwitching) {
+                    setProps(frontier);
+                    this->predict();
+                }
             } while (frontier);
             bfs.stop();
 
@@ -86,12 +96,6 @@ struct BFSConfig : public Config
             std::ofstream output(outputFile);
             for (size_t i = 0; i < results.size; i++) {
                 output << i << "\t" << results[i] << std::endl;
-            }
-
-            std::ofstream frontierOutput(outputFile + ".frontier");
-            for (size_t i = 0; i < 1000; i++) {
-                if (frontiers[i] == 0) break;
-                frontierOutput << i << "\t" << frontiers[i] << std::endl;
             }
         }
     }
@@ -146,4 +150,6 @@ cudaDispatch
     for (auto& pair : kernelMap) {
         result[pair.first] = make_config<BFSConfig>(opts, count, pair.second);
     }
+
+    result["switch"] = make_switch_config<BFSConfig>(opts, count, kernelMap);
 }

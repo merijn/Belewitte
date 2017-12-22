@@ -1,6 +1,8 @@
 #ifndef TEMPLATECONFIG_HPP
 #define TEMPLATECONFIG_HPP
 
+#include <fstream>
+
 #include "AlgorithmConfig.hpp"
 #include "GraphLoading.hpp"
 #include "Timer.hpp"
@@ -13,6 +15,10 @@ struct GraphKernel
     template<typename, typename, typename, typename...>
     friend struct TemplateConfig;
 
+  protected:
+    Platform &backend;
+
+  public:
     virtual void run(Loader<Platform,V,E>&, const Args&...) = 0;
 
     GraphKernel(GraphRep rep, work_division w)
@@ -27,8 +33,6 @@ struct GraphKernel
     virtual size_t getSharedMemSize(size_t)
     { return 0; }
 
-  protected:
-    Platform &backend;
     const GraphRep representation;
     const work_division workDivision;
 };
@@ -169,6 +173,8 @@ struct TemplateConfig : public AlgorithmConfig {
   template<typename T>
   using alloc_t = typename Platform::template alloc_t<T>;
 
+  static constexpr bool isSwitching = false;
+
   protected:
     Platform& backend;
     size_t vertex_count, edge_count;
@@ -236,7 +242,8 @@ struct TemplateConfig : public AlgorithmConfig {
 };
 
 template<typename Platform, typename V, typename E, typename... Args>
-struct WarpConfig : public TemplateConfig<Platform,V,E,Args...> {
+struct WarpConfig : public TemplateConfig<Platform,V,E,Args...>
+{
     using Config = TemplateConfig<Platform,V,E,Args...>;
     using Config::options;
 
@@ -282,4 +289,285 @@ AlgorithmConfig* make_config
         return new Config(args..., opts, count, k);
     }
 }
+
+template<typename Platform, typename V, typename E, typename... Args>
+struct SwitchConfig;
+
+class prop_ref : public std::reference_wrapper<double>
+{
+    static double dummyProp;
+
+  public:
+    prop_ref(prop_ref&&) = delete;
+    prop_ref(const prop_ref&) = delete;
+
+    prop_ref(const std::string&, AlgorithmConfig&)
+     : std::reference_wrapper<double>(dummyProp)
+    {}
+
+    template<typename Platform, typename V, typename E, typename... Args>
+    prop_ref
+        ( const std::string& name
+        , SwitchConfig<Platform,V,E,Args...>& cfg
+        , bool graphProp = false
+        )
+        : std::reference_wrapper<double>(dummyProp)
+    {
+        if (graphProp) cfg.graphProperties.emplace(name, std::ref(*this));
+        else cfg.algorithmProperties.emplace(name, std::ref(*this));
+    }
+
+    prop_ref& operator=(const std::reference_wrapper<double>& val)
+    { std::reference_wrapper<double>::operator=(val); return *this; }
+
+    double& operator=(const double& val)
+    { return this->get() = val; }
+};
+
+double prop_ref::dummyProp;
+
+template<typename Platform, typename V, typename E, typename... Args>
+struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
+{
+    using Config = TemplateConfig<Platform,V,E,Args...>;
+    using KernelType = typename Config::KernelType;
+    using Config::kernel;
+    using Config::loader;
+    using Config::options;
+    using Config::setKernelConfig;
+
+    static constexpr bool isSwitching = true;
+
+    class graph_prop
+    {
+        graph_prop(graph_prop&&) = delete;
+        graph_prop(const graph_prop&) = delete;
+
+        prop_ref absProp, inProp, outProp;
+
+      public:
+        graph_prop(std::string prefix, std::string suffix, SwitchConfig& cfg)
+         : absProp(prefix + "abs" + suffix, cfg, true)
+         , inProp(prefix + "in" + suffix, cfg, true)
+         , outProp(prefix + "out" + suffix, cfg, true)
+        {}
+
+        prop_ref& operator[](Degrees deg)
+        {
+            switch (deg) {
+                case Degrees::abs: return absProp;
+                case Degrees::in: return inProp;
+                case Degrees::out: return outProp;
+            }
+        }
+    };
+
+    SwitchConfig
+        ( std::map<std::string,std::shared_ptr<KernelType>> ks
+        , const Options& opts
+        , size_t count
+        )
+    : Config(opts, count, ks.begin()->second)
+    , logFile("/dev/null")
+    , defaultKernel(0)
+    , lastKernel(-1)
+    , logGraphProps([](){})
+    , logAlgorithmProps([](){})
+    , kernelMap(ks)
+    , vertices("vertex count", *this, true)
+    , edges("edge count", *this, true)
+    , min("min ", " degree", *this)
+    , lowerQuantile("lower quantile ", " degree", *this)
+    , mean("mean ", " degree", *this)
+    , median("median ", " degree", *this)
+    , upperQuantile("upper quantile ", " degree", *this)
+    , max("max ", " degree", *this)
+    , stdDev("stddev ", " degree", *this)
+    {
+        auto action = [&](const char *modelName) {
+            setupKernels(modelName);
+        };
+
+        auto logAction = [&](const char *logName) {
+            setupPropertyLogging(logName);
+        };
+
+        options.add('m', "model", "FILE", "Prediction model to use.", action);
+        options.add('l', "log", "FILE", "Where to log properties.", logAction);
+    }
+
+    virtual void loadGraph(const Graph<V,E>& graph) override
+    {
+        vertices = graph.vertex_count;
+        edges = graph.edge_count;
+
+        for (const auto& type : { Degrees::abs, Degrees::in, Degrees::out }) {
+            auto summary = graph.degreeStatistics(type);
+
+            min[type] = summary.min;
+            lowerQuantile[type] = summary.lowerQuantile;
+            mean[type] = summary.mean;
+            median[type] = summary.median;
+            upperQuantile[type] = summary.upperQuantile;
+            max[type] = summary.max;
+            stdDev[type] = summary.stdDev;
+        }
+
+        std::vector<GraphRep> reps;
+        for (auto k : kernels) {
+            reps.push_back(k->representation);
+        }
+        loader.loadGraph(graph, reps);
+    }
+
+    virtual void transferGraph() override
+    { for (auto k : kernels) loader.transferGraph(k->representation); }
+
+    void setupKernels(const char * const modelName)
+    {
+        typedef std::reference_wrapper<double> double_ref;
+        typedef const std::map<std::string,size_t> implementations;
+        typedef const std::map<std::string,double_ref> properties;
+
+        logGraphProps = [](){};
+        logAlgorithmProps = [](){};
+
+        void *hnd = dlopen(modelName, RTLD_NOW);
+        if (!hnd) reportError("dlopen() failed: ", modelName, "\n", dlerror());
+
+        lookup = safe_dlsym<int32_t()>(hnd, "lookup");
+        auto implPtr = safe_dlsym<implementations>(hnd, "implNames");
+        auto paramPtr = safe_dlsym<properties>(hnd, "propNames");
+
+        bool missing = false;
+        for (auto &[name, prop] : *paramPtr) {
+            try {
+                graphProperties[name] = prop;
+            } catch (const std::out_of_range&) {
+                try {
+                    algorithmProperties[name] = prop;
+                } catch (const std::out_of_range&) {
+                    std::cerr << "Missing property: " << name << std::endl;
+                    missing = true;
+                }
+            }
+        }
+
+        kernels.resize(implPtr->size());
+        for (auto &[name, idx] : *implPtr) {
+            if (name == "edge-list") defaultKernel = static_cast<int32_t>(idx);
+
+            try {
+                kernels[idx] = kernelMap.at(name);
+            } catch (const std::out_of_range&) {
+                std::cerr << "Missing implementation: " << name << std::endl;
+                missing = true;
+            }
+        }
+
+        if (missing) reportError("Missing properties/implementations!");
+    }
+
+    void setupPropertyLogging(const char * const str)
+    {
+        logFile = std::ofstream(str);
+        lookup = []() { return -1; };
+
+        std::vector<std::pair<std::string,double>> graphProps;
+        graphProps.reserve(graphProperties.size());
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-variable"
+        for (auto& [name, ref] : graphProperties) {
+            graphProps.emplace_back(name, 0);
+            ref.get() = std::ref(graphProps.back().second);
+        }
+
+        logGraphProps = [&,props{std::move(graphProps)}]() {
+            for (auto& [name, ref] : graphProperties) {
+                logFile << name << " : " << ref.get() << std::endl;
+            }
+        };
+
+        std::vector<std::pair<std::string,double>> algoProps;
+        algoProps.reserve(algorithmProperties.size());
+
+        for (auto& [name, ref] : algorithmProperties) {
+            algoProps.emplace_back(name, 0);
+            ref.get() = std::ref(algoProps.back().second);
+        }
+
+        logAlgorithmProps = [&,props{std::move(algoProps)}]() {
+            for (auto& [name, ref] : algorithmProperties) {
+                logFile << name << " : " << ref.get() << std::endl;
+            }
+        };
+#pragma clang diagnostic pop
+
+        std::shared_ptr<KernelType> kernel;
+        try {
+            kernel = kernelMap.at("edge-list");
+        } catch (const std::out_of_range&) {
+            kernel = kernelMap.begin()->second;
+        }
+
+        kernels.emplace_back(kernel);
+    }
+
+    void predictInitial()
+    {
+        logGraphProps();
+        logAlgorithmProps();
+
+        lastKernel = lookup();
+        if (lastKernel == -1) lastKernel = defaultKernel;
+
+        kernel = kernels[static_cast<size_t>(lastKernel)];
+        setKernelConfig(kernel);
+    }
+
+    void predict()
+    {
+        logAlgorithmProps();
+
+        int32_t result = lookup();
+        if (result != -1 && result != lastKernel) {
+            kernel = kernels[static_cast<size_t>(result)];
+            setKernelConfig(kernel);
+            lastKernel = result;
+        }
+    }
+
+    std::ofstream logFile;
+    int32_t defaultKernel;
+    int32_t lastKernel;
+    std::function<int32_t()> lookup;
+    std::function<void()> logGraphProps;
+    std::function<void()> logAlgorithmProps;
+
+    std::vector<std::shared_ptr<KernelType>> kernels;
+    std::map<std::string,std::shared_ptr<KernelType>> kernelMap;
+    refmap<std::string,prop_ref> graphProperties;
+    refmap<std::string,prop_ref> algorithmProperties;
+
+    prop_ref vertices, edges;
+    graph_prop min, lowerQuantile, mean, median, upperQuantile, max, stdDev;
+};
+
+template
+< template<typename, typename...> class Cfg
+, typename Platform
+, typename Vertex
+, typename Edge
+, typename... KernelArgs
+, typename... Args
+, typename Base = SwitchConfig<Platform,Vertex,Edge,KernelArgs...>
+, typename Config = Cfg<Base,Args...>
+>
+AlgorithmConfig* make_switch_config
+    ( const Options& opts
+    , size_t count
+    , std::map<std::string,std::shared_ptr<GraphKernel<Platform,Vertex,Edge,KernelArgs...>>> ks
+    )
+{ return new Config(ks, opts, count); }
 #endif
