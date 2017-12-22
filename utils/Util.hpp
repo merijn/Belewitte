@@ -202,4 +202,15 @@ struct FiveDigitSummary
     size_t max;
     double stdDev;
 };
+
+template<typename Key, typename Val>
+class refmap : public std::map<Key,std::reference_wrapper<Val>>
+{
+  public:
+    Val& operator[](const Key& key)
+    { return this->at(key).get(); }
+
+    Val& operator[](Key&& key)
+    { return this->operator[](key); }
+};
 #endif
