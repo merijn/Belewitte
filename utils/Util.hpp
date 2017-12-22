@@ -94,6 +94,17 @@ checkError(bool cond, Args... args)
     reportError(args...);
 }
 
+template<typename T>
+T* safe_dlsym(void *hnd, const std::string& name)
+{
+    void* result = dlsym(hnd, name.c_str());
+    if (result == nullptr) {
+        reportError("dlsym failed to find '", name, "': ", dlerror());
+    }
+
+    return reinterpret_cast<T*>(result);
+}
+
 template<typename C>
 class simple_iterator : public C::const_iterator {
     typedef typename C::const_iterator parent_type;
