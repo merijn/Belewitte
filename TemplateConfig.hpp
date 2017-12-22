@@ -182,14 +182,8 @@ struct TemplateConfig : public AlgorithmConfig {
 
     Loader<Platform,V,E> loader;
 
-    TemplateConfig
-        ( const Options& opts
-        , size_t count
-        , std::shared_ptr<KernelType> kern
-        )
-    : AlgorithmConfig(opts, count)
-    , backend(Platform::get())
-    , kernel(kern)
+    TemplateConfig(std::shared_ptr<KernelType> kern)
+    : backend(Platform::get()), kernel(kern)
     {}
 
     void setKernelConfig(std::shared_ptr<KernelType> k)
@@ -274,9 +268,7 @@ template
 , typename WarpConfig = Cfg<WarpBase,Args...>
 >
 AlgorithmConfig* make_config
-    ( const Options& opts
-    , size_t count
-    , std::shared_ptr<GraphKernel<Platform,Vertex,Edge,KernelArgs...>> k
+    ( std::shared_ptr<GraphKernel<Platform,Vertex,Edge,KernelArgs...>> k
     , Args... args
     )
 {
@@ -284,9 +276,9 @@ AlgorithmConfig* make_config
     typedef std::shared_ptr<WarpKernel> WarpKernelPtr;
 
     if (auto kern = std::dynamic_pointer_cast<WarpKernelPtr>(k)) {
-        return new WarpConfig(args..., opts, count, k);
+        return new WarpConfig(args..., k);
     } else {
-        return new Config(args..., opts, count, k);
+        return new Config(args..., k);
     }
 }
 
@@ -362,12 +354,8 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
         }
     };
 
-    SwitchConfig
-        ( std::map<std::string,std::shared_ptr<KernelType>> ks
-        , const Options& opts
-        , size_t count
-        )
-    : Config(opts, count, ks.begin()->second)
+    SwitchConfig(std::map<std::string,std::shared_ptr<KernelType>> ks)
+    : Config(ks.begin()->second)
     , logFile("/dev/null")
     , defaultKernel(0)
     , lastKernel(-1)
@@ -565,9 +553,6 @@ template
 , typename Config = Cfg<Base,Args...>
 >
 AlgorithmConfig* make_switch_config
-    ( const Options& opts
-    , size_t count
-    , std::map<std::string,std::shared_ptr<GraphKernel<Platform,Vertex,Edge,KernelArgs...>>> ks
-    )
-{ return new Config(ks, opts, count); }
+(std::map<std::string,std::shared_ptr<GraphKernel<Platform,Vertex,Edge,KernelArgs...>>> ks)
+{ return new Config(ks); }
 #endif

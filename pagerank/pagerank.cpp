@@ -123,11 +123,7 @@ struct PageRankNoDiv : public PageRankBase<Config> {
 extern "C" kernel_register_t cudaDispatch;
 extern "C"
 void
-cudaDispatch
-    ( std::map<std::string, AlgorithmConfig*>& result
-    , const Options& opts
-    , size_t count
-    )
+cudaDispatch(std::map<std::string, AlgorithmConfig*>& result)
 {
     auto prMap = make_kernel_map<CUDABackend,unsigned,unsigned>
                         (&updateRankEdgeList);
@@ -155,7 +151,7 @@ cudaDispatch
         , [](size_t chunkSize) { return (1 + chunkSize) * sizeof(unsigned); });
 
     for (auto& pair : prMap) {
-        result[pair.first] = make_config<PageRank>(opts, count, pair.second, consolidateRank);
+        result[pair.first] = make_config<PageRank>(pair.second, consolidateRank);
     }
 
     auto prNoDivMap = make_kernel_map<CUDABackend,unsigned,unsigned>
@@ -169,6 +165,6 @@ cudaDispatch
         , [](size_t chunkSize) { return (1 + chunkSize) * sizeof(unsigned); });
 
     for (auto& pair : prNoDivMap) {
-        result[pair.first] = make_config<PageRankNoDiv>(opts, count, pair.second, consolidateRankNoDiv);
+        result[pair.first] = make_config<PageRankNoDiv>(pair.second, consolidateRankNoDiv);
     }
 }

@@ -5,9 +5,11 @@
 
 struct AlgorithmConfig {
   protected:
-    AlgorithmConfig(const Options& opts, size_t count)
-     : options(opts, true), run_count(count)
-    {}
+    AlgorithmConfig() : run_count(1)
+    {
+        options.add('n', "count", "NUM", run_count,
+                    "Number of times to run algorithm.");
+    }
 
     AlgorithmConfig(const AlgorithmConfig&) = delete;
     void operator=(const AlgorithmConfig&) = delete;

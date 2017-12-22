@@ -133,11 +133,7 @@ insertVariant(T& kernelMap)
 extern "C" kernel_register_t cudaDispatch;
 extern "C"
 void
-cudaDispatch
-    ( std::map<std::string, AlgorithmConfig*>& result
-    , const Options& opts
-    , size_t count
-    )
+cudaDispatch(std::map<std::string, AlgorithmConfig*>& result)
 {
     auto kernelMap = make_kernel_map<CUDABackend,unsigned,unsigned>
                         (edgeListBfs<BFS<normal>>);
@@ -148,8 +144,8 @@ cudaDispatch
     insertVariant<blockreduce>(kernelMap);
 
     for (auto& pair : kernelMap) {
-        result[pair.first] = make_config<BFSConfig>(opts, count, pair.second);
+        result[pair.first] = make_config<BFSConfig>(pair.second);
     }
 
-    result["switch"] = make_switch_config<BFSConfig>(opts, count, kernelMap);
+    result["switch"] = make_switch_config<BFSConfig>(kernelMap);
 }

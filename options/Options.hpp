@@ -36,61 +36,36 @@ class Options {
         {}
     };
 
+    static std::set<char> globalReservedShort;
+    static std::set<std::string> globalReservedLong;
+
     std::set<char> reservedShort;
     std::set<std::string> reservedLong;
 
     std::ostream &usageOutput;
     std::function<void(std::ostream&)> usagePreamble;
     Option usageFlag;
-    bool hasUsage;
+    bool hasUsage, isGlobal;
 
     std::map<int, Option> options;
 
     std::vector<char *> parseArgs(int, char **, bool);
 
-    void setReserved(const Options& other)
-    {
-        reservedShort = other.reservedShort;
-        reservedLong = other.reservedLong;
-
-        for (auto kv : other.options) {
-            auto opt = kv.second;
-            reservedShort.emplace(opt.shortOption);
-            reservedLong.emplace(opt.longOption);
-        }
-    }
-
   public:
-    Options() : usageOutput(std::cerr), hasUsage(false)
+    Options() : usageOutput(std::cerr), hasUsage(false), isGlobal(false)
     {}
-
-    Options(const Options& other, bool dontDefaultConstruct)
-     : usageOutput(std::cerr), hasUsage(false)
-    {
-        (void) dontDefaultConstruct;
-        setReserved(other);
-    }
 
     Options
     ( char c
     , const char *l
     , std::ostream &out
     , std::function<void(std::ostream&)> f
-    ) : usageOutput(out), usagePreamble(f), hasUsage(true)
+    ) : usageOutput(out), usagePreamble(f), hasUsage(true), isGlobal(true)
     {
         usageFlag.shortOption = c;
         usageFlag.longOption = l;
         usageFlag.helpString = "This help.";
     }
-
-    Options
-    ( const Options& other
-    , char c
-    , const char *l
-    , std::ostream &out
-    , std::function<void(std::ostream&)> f
-    ) : Options(c, l, out, f)
-    { setReserved(other); }
 
     Options& add(Option o);
     Options& add(char, const char *, std::string, std::string &, std::string);

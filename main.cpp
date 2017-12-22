@@ -56,12 +56,7 @@ usage(int exitCode = EXIT_FAILURE)
 }
 
 static map<string, map<string, AlgorithmConfig*>>
-loadAlgorithms
-    ( const char *sym
-    , vector<const char*> &paths
-    , const Options& opts
-    , size_t run_count
-    , bool warn)
+loadAlgorithms(const char *sym, vector<const char*> &paths, bool warn)
 {
     map<string, string> libs;
     map<string, map<string, AlgorithmConfig*>> result;
@@ -105,9 +100,8 @@ loadAlgorithms
 
         auto dispatch = reinterpret_cast<kernel_register_t*>(dlsym(hnd, sym));
 
-        if (dispatch != nullptr) {
-            dispatch(result[lib.first], opts, run_count);
-        } else if (warn) {
+        if (dispatch != nullptr) dispatch(result[lib.first]);
+        else if (warn) {
             cerr << "dlsym() failed: " << sym << " (" << lib.second << ") "
                  << endl << dlerror() << endl;
         }
@@ -180,7 +174,7 @@ int main(int argc, char **argv)
     bool printStdOut = false;
     framework fw = framework::cuda;
     int device = 0;
-    size_t platform = 0, run_count = 1;
+    size_t platform = 0;
     string outputSuffix;
     string outputDir;
     string timingsFile;
@@ -196,8 +190,6 @@ int main(int argc, char **argv)
                 "Which algorithm implementation to use.")
            .add('L', "lib", "PATH", paths, "\".\"",
                 "Search path for algorithm libraries.")
-           .add('n', "count", "NUM", run_count,
-                "Number of times to run algorithm.")
            .add('o', "output-dir", "DIR", outputDir,
                 "Location to use for writing algorithm output.")
            .add('O', "output", printStdOut, true,
@@ -222,8 +214,7 @@ int main(int argc, char **argv)
             list = run_with_backend(OpenCL, platform, device,
                                     verbose, remainingArgs);
 
-            algorithms = loadAlgorithms("openclDispatch", paths, options,
-                                        run_count, warnings);
+            algorithms = loadAlgorithms("openclDispatch", paths, warnings);
             {
                 //array<const char*,1> files {{&_binary_kernel_cl_start}};
                 //array<size_t,1> sizes {{(size_t) &_binary_kernel_cl_size}};
@@ -237,8 +228,7 @@ int main(int argc, char **argv)
             list = run_with_backend(CUDA, platform, device,
                                     verbose, remainingArgs);
 
-            algorithms = loadAlgorithms("cudaDispatch", paths, options,
-                                        run_count, warnings);
+            algorithms = loadAlgorithms("cudaDispatch", paths, warnings);
             break;
         }
     }

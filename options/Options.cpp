@@ -6,18 +6,32 @@
 
 using namespace std;
 
+set<char> Options::globalReservedShort;
+set<string> Options::globalReservedLong;
+
 Options&
 Options::add(Option o)
 {
-    if (options.count(o.shortOption) || reservedShort.count(o.shortOption)) {
+    set<char> shortUnion(globalReservedShort);
+    set<string> longUnion(globalReservedLong);
+
+    shortUnion.insert(reservedShort.begin(), reservedShort.end());
+    longUnion.insert(reservedLong.begin(), reservedLong.end());
+
+    if (options.count(o.shortOption) || shortUnion.count(o.shortOption)) {
         reportError("Flag '-", o.shortOption, "' is already reserved.");
-    } else if (reservedLong.count(o.longOption)) {
+    } else if (longUnion.count(o.longOption)) {
         reportError("Flag '--", o.longOption, "' is already reserved.");
     }
 
     options.emplace(o.shortOption, o);
-    reservedShort.emplace(o.shortOption);
-    reservedLong.emplace(o.longOption);
+    if (isGlobal) {
+        globalReservedShort.emplace(o.shortOption);
+        globalReservedLong.emplace(o.longOption);
+    } else {
+        reservedShort.emplace(o.shortOption);
+        reservedLong.emplace(o.longOption);
+    }
     return *this;
 }
 
