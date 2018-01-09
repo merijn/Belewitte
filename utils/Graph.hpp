@@ -15,6 +15,7 @@
 #include <vector>
 
 #include "Util.hpp"
+#include "StatisticalSummary.hpp"
 
 enum class Degrees { in, out, abs };
 
@@ -1182,10 +1183,10 @@ class MutableGraph {
         writeEdges(out.vertex_count, graph.raw_rev_vertices, graph.raw_rev_edges, out.rev_edges);
     }
 
-    FiveDigitSummary
+    StatisticalSummary<double>
     degreeStatistics(Degrees d) const
     {
-        std::vector<size_t> degrees;
+        std::vector<double> degrees;
         degrees.reserve(vertex_count);
 
         for (auto v : vertices) {
@@ -1201,7 +1202,7 @@ class MutableGraph {
 
             degrees.emplace_back(degree);
         }
-        return FiveDigitSummary(std::move(degrees));
+        return StatisticalSummary<double>(std::move(degrees));
     }
 
     const bool undirected;
