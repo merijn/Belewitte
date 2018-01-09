@@ -166,6 +166,26 @@ run_with_backend
     return listing::nothing;
 }
 
+static AlgorithmConfig&
+getConfig
+( map<string, map<string, AlgorithmConfig*>>& algorithms
+, string algorithmName
+, string kernelName)
+{
+    try {
+        auto algorithm = algorithms.at(algorithmName);
+        try {
+            return *algorithm.at(kernelName);
+        } catch (const out_of_range &) {
+            reportError("No kernel named \"", kernelName,
+                        "\" for algorithm \"", algorithmName, "\"!");
+        }
+    } catch (const out_of_range &) {
+        reportError("No algorithm named \"", algorithmName, "\"!");
+    }
+}
+
+
 int main(int argc, char **argv)
 {
     listing list;
@@ -183,11 +203,8 @@ int main(int argc, char **argv)
     vector<const char*> paths = { "." };
     vector<char*> remainingArgs;
 
-    options.add('a', "algorithm", "NAME", algorithmName, "Algorithm to use.")
-           .add('d', "device", "NUM", device, "Device to use.")
+    options.add('d', "device", "NUM", device, "Device to use.")
            .add('f', "framework", fw, framework::opencl, "Use OpenCL.")
-           .add('k', "kernel", "NAME", kernelName,
-                "Which algorithm implementation to use.")
            .add('L', "lib", "PATH", paths, "\".\"",
                 "Search path for algorithm libraries.")
            .add('o', "output-dir", "DIR", outputDir,
@@ -201,6 +218,13 @@ int main(int argc, char **argv)
                 "Where to write timing output.")
            .add('v', "verbose", verbose, true, "Verbose output.")
            .add('W', "warn", warnings, true, "Verbose/debug warnings.");
+
+    Options kernelParser(options);
+
+    kernelParser.add('a', "algorithm", "NAME", algorithmName,
+                     "Algorithm to use.")
+                .add('k', "kernel", "NAME", kernelName,
+                     "Which algorithm implementation to use.");
 
     set_new_handler(out_of_memory);
     locale::global(locale(""));
@@ -255,46 +279,34 @@ int main(int argc, char **argv)
     }
 
     if (algorithmName.empty()) {
-        cerr << "Algorithm name not specified!" << endl;
-        exit(EXIT_FAILURE);
+        reportError("Algorithm name not specified!");
     } else if (kernelName.empty()) {
-        cerr << "Kernel name not specified!" << endl;
-        exit(EXIT_FAILURE);
+        reportError("Kernel name not specified!");
     } else {
-        try {
-            auto algorithm = algorithms.at(algorithmName);
-            try {
-                AlgorithmConfig &kernel = *algorithm.at(kernelName);
-                remainingArgs = kernel.setup(remainingArgs);
+        auto& kernel = getConfig(algorithms, algorithmName, kernelName);
+        remainingArgs = kernel.setup(remainingArgs);
 
-                if (!timingsFile.empty()) {
-                    TimerRegister::set_output(timingsFile);
-                }
-                TimerRegister::set_human_readable(verbose);
-                TimerRegister::set_direct_printed(true);
-
-                for (auto graph : remainingArgs) {
-                    TimerRegister::start_epoch(path(graph).stem().string());
-                    string output;
-                    if (printStdOut) {
-                        output = "/dev/stdout";
-                    } else if (!outputSuffix.empty()) {
-                        auto filename = outputDir / path(graph).filename();
-                        filename.replace_extension(outputSuffix);
-
-                        output = filename.string();
-                    }
-                    kernel(graph, output);
-                }
-
-                TimerRegister::print_results();
-            } catch (const out_of_range &) {
-                reportError("No kernel named \"", kernelName,
-                            "\" for algorithm \"", algorithmName, "\"!");
-            }
-        } catch (const out_of_range &) {
-            reportError("No algorithm named \"", algorithmName, "\"!");
+        if (!timingsFile.empty()) {
+            TimerRegister::set_output(timingsFile);
         }
+        TimerRegister::set_human_readable(verbose);
+        TimerRegister::set_direct_printed(true);
+
+        for (auto graph : remainingArgs) {
+            TimerRegister::start_epoch(path(graph).stem().string());
+            string output;
+            if (printStdOut) {
+                output = "/dev/stdout";
+            } else if (!outputSuffix.empty()) {
+                auto filename = outputDir / path(graph).filename();
+                filename.replace_extension(outputSuffix);
+
+                output = filename.string();
+            }
+            kernel(graph, output);
+        }
+
+        TimerRegister::print_results();
     }
     return 0;
 }
