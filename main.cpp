@@ -110,13 +110,40 @@ loadAlgorithms(const char *sym, vector<const char*> &paths, bool warn)
     return result;
 }
 
-static listing
-run_with_backend
-( Backend& backend
-, size_t platform
-, int device
-, bool verbose
-, vector<char*> args)
+static AlgorithmConfig&
+getConfig
+( map<string, map<string, AlgorithmConfig*>>& algorithms
+, string algorithmName
+, string kernelName)
+{
+    try {
+        auto algorithm = algorithms.at(algorithmName);
+        try {
+            return *algorithm.at(kernelName);
+        } catch (const out_of_range &) {
+            reportError("No kernel named \"", kernelName,
+                        "\" for algorithm \"", algorithmName, "\"!");
+        }
+    } catch (const out_of_range &) {
+        reportError("No algorithm named \"", algorithmName, "\"!");
+    }
+}
+
+static listing listOptions;
+static bool verbose = false;
+static bool warnings = false;
+static bool printStdOut = false;
+static framework fw = framework::cuda;
+static int device = 0;
+static size_t platform = 0;
+static string outputSuffix;
+static string outputDir;
+static string timingsFile;
+static string algorithmName;
+static string kernelName;
+static vector<const char*> paths = { "." };
+
+static listing run_with_backend(Backend& backend, const vector<char*>& args)
 {
     if (args.size() < 1) usage();
 
@@ -166,41 +193,8 @@ run_with_backend
     return listing::nothing;
 }
 
-static AlgorithmConfig&
-getConfig
-( map<string, map<string, AlgorithmConfig*>>& algorithms
-, string algorithmName
-, string kernelName)
-{
-    try {
-        auto algorithm = algorithms.at(algorithmName);
-        try {
-            return *algorithm.at(kernelName);
-        } catch (const out_of_range &) {
-            reportError("No kernel named \"", kernelName,
-                        "\" for algorithm \"", algorithmName, "\"!");
-        }
-    } catch (const out_of_range &) {
-        reportError("No algorithm named \"", algorithmName, "\"!");
-    }
-}
-
-
 int main(int argc, char **argv)
 {
-    listing list;
-    bool verbose = false;
-    bool warnings = false;
-    bool printStdOut = false;
-    framework fw = framework::cuda;
-    int device = 0;
-    size_t platform = 0;
-    string outputSuffix;
-    string outputDir;
-    string timingsFile;
-    string algorithmName;
-    string kernelName;
-    vector<const char*> paths = { "." };
     vector<char*> remainingArgs;
 
     options.add('d', "device", "NUM", device, "Device to use.")
@@ -235,9 +229,7 @@ int main(int argc, char **argv)
     map<string, map<string, AlgorithmConfig*>> algorithms;
     switch (fw) {
         case framework::opencl: {
-            list = run_with_backend(OpenCL, platform, device,
-                                    verbose, remainingArgs);
-
+            listOptions = run_with_backend(OpenCL, remainingArgs);
             algorithms = loadAlgorithms("openclDispatch", paths, warnings);
             {
                 //array<const char*,1> files {{&_binary_kernel_cl_start}};
@@ -249,15 +241,13 @@ int main(int argc, char **argv)
             break;
         }
         case framework::cuda: {
-            list = run_with_backend(CUDA, platform, device,
-                                    verbose, remainingArgs);
-
+            listOptions = run_with_backend(CUDA, remainingArgs);
             algorithms = loadAlgorithms("cudaDispatch", paths, warnings);
             break;
         }
     }
 
-    switch (list) {
+    switch (listOptions) {
         case listing::algorithms:
             for (auto algorithm : algorithms) {
                 cout << algorithm.first << endl;
