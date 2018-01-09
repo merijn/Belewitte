@@ -286,14 +286,13 @@ int main(int argc, char **argv)
         auto& kernel = getConfig(algorithms, algorithmName, kernelName);
         remainingArgs = kernel.setup(remainingArgs);
 
-        if (!timingsFile.empty()) {
-            TimerRegister::set_output(timingsFile);
-        }
-        TimerRegister::set_human_readable(verbose);
-        TimerRegister::set_direct_printed(true);
-
         for (auto graph : remainingArgs) {
-            TimerRegister::start_epoch(path(graph).stem().string());
+            Epoch epoch(path(graph).stem().string(), verbose);
+
+            if (!timingsFile.empty()) {
+                epoch.set_output(timingsFile);
+            }
+
             string output;
             if (printStdOut) {
                 output = "/dev/stdout";
@@ -304,9 +303,11 @@ int main(int argc, char **argv)
                 output = filename.string();
             }
             kernel(graph, output);
-        }
 
-        TimerRegister::print_results();
+            if (timingsFile.empty()) {
+                epoch.print_results(std::cout, verbose);
+            }
+        }
     }
     return 0;
 }

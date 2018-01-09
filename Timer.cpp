@@ -1,9 +1,17 @@
 #include <algorithm>
 #include <cmath>
 #include <fstream>
+#include <iomanip>
 #include <iostream>
+#include <sstream>
 
 #include "Timer.hpp"
+
+template<> template<>
+double
+StatisticalSummary<TimerRegister::Timing>::toDouble
+(const TimerRegister::nanoseconds& v)
+{ return static_cast<double>(v.count()); }
 
 namespace TimerRegister {
 using namespace std;
@@ -31,6 +39,9 @@ struct EpochState {
         : name(id), printed(false)
     {}
 };
+
+Timing::Timing() : Timing::Timing(nanoseconds(0))
+{}
 
 Timing::Timing(nanoseconds time)
 {
@@ -70,160 +81,96 @@ Timing::operator string() const
     return result.str();
 }
 
-Timing& Timing::operator+=(const nanoseconds &time)
+Timing& Timing::operator=(const double &time)
+{ return operator=(Timing(nanoseconds(time))); }
+
+vector<string>
+Timing::align_timings(const vector<pair<string,Timing>> &data)
 {
-    *this = Timing(nanoseconds(total_time) + time);
-    return *this;
-}
+    size_t labelLen = 0;
+    bool hrs = false, mins = false, secs = false, msecs = false,
+        usecs = false, nsecs = false;
 
-Timing& Timing::operator*=(const double &time)
-{
-    *this = Timing(nanoseconds(total_time) * time);
-    return *this;
-}
+    vector<string> labels;
+    vector<Timing> timings;
+    vector<stringstream> outputs(data.size());
 
-Timing& Timing::operator/=(const double &time)
-{
-    *this = Timing(nanoseconds(total_time) / time);
-    return *this;
-}
+    labels.reserve(data.size());
+    timings.reserve(data.size());
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wfloat-equal"
-bool Timing::operator==(const Timing &time) const
-{ return total_time == time.total_time; }
-#pragma GCC diagnostic pop
-
-bool Timing::operator!=(const Timing &time) const
-{ return !this->operator==(time); }
-
-bool Timing::operator<(const Timing &time) const
-{ return total_time < time.total_time; }
-
-bool Timing::operator<=(const Timing &time) const
-{ return total_time <= time.total_time; }
-
-bool Timing::operator>(const Timing &time) const
-{ return total_time > time.total_time; }
-
-bool Timing::operator>=(const Timing &time) const
-{ return total_time >= time.total_time; }
-
-Measurements::Measurements(const vector<nanoseconds> &timings)
-    : min(nanoseconds(0)), avg(nanoseconds(0)), max(nanoseconds(0))
-    , std(nanoseconds(0))
-{
-    min = *min_element(timings.begin(), timings.end());
-    max = *max_element(timings.begin(), timings.end());
-
-    for (auto time : timings) {
-        avg += time;
+    for (auto &elem : data) {
+        labelLen = max(elem.first.length(), labelLen);
+        if (elem.second.hrs) hrs = true;
+        if (elem.second.mins) mins = true;
+        if (elem.second.secs) secs = true;
+        if (elem.second.msecs) msecs = true;
+        if (elem.second.usecs) usecs = true;
+        if (elem.second.nsecs != 0.0) nsecs = true;
+        labels.emplace_back(elem.first);
+        timings.emplace_back(elem.second);
     }
 
-    avg /= timings.size();
-
-    for (auto time : timings) {
-        nanoseconds diff = time - nanoseconds(avg);
-        std += nanoseconds(diff.count() * diff.count());
+    for (size_t i = 0; i < labels.size(); i++) {
+        string label = labels[i] + ":";
+        outputs[i] << left << setfill(' ')
+                    << setw(static_cast<int>(labelLen + 1)) << label
+                    << right;
     }
 
-    if (timings.size() > 1) {
-        std *= 1.0 / (timings.size() - 1);
-        std = nanoseconds(sqrt(std.total_time));
-    } else {
-        std = nanoseconds(0);
+    labels.clear();
+    labels.shrink_to_fit();
+
+    for (size_t i = 0; hrs && i < timings.size(); i++) {
+        outputs[i] << setw(3) << timings[i].hrs << " h";
     }
+
+    for (size_t i = 0; mins && i < timings.size(); i++) {
+        outputs[i] << "   " << setw(2) << timings[i].mins << " m";
+    }
+
+    for (size_t i = 0; secs && i < timings.size(); i++) {
+        outputs[i] << "   " << setw(3) << timings[i].secs << " s";
+    }
+
+    for (size_t i = 0; msecs && i < timings.size(); i++) {
+        outputs[i] << "   " << setw(3) << timings[i].msecs << " ms";
+    }
+
+    for (size_t i = 0; usecs && i < timings.size(); i++) {
+        outputs[i] << "   " << setw(3) << timings[i].usecs << " us";
+    }
+
+    for (size_t i = 0; nsecs && i < timings.size(); i++) {
+        outputs[i] << "   " << setw(3) << lrint(timings[i].nsecs)
+                    << " ns";
+    }
+
+    timings.clear();
+    timings.shrink_to_fit();
+
+    vector<string> result;
+    result.reserve(outputs.size());
+    for (auto &stream : outputs) {
+        result.emplace_back(stream.str());
+    }
+
+    return result;
 }
 
-Epoch::TimerData::TimerData(string id, Measurements m)
+Epoch::TimerData::TimerData(const string& id, StatisticalSummary<Timing> m)
     : name(id), results(m)
 {}
 
-Epoch::Epoch(string id, vector<TimerData>&& timer_data)
+Epoch::Epoch(const string& id, vector<TimerData>&& timer_data)
     : name(id), data(timer_data)
 {}
 
-static vector<EpochState> epochs = { {""} };
-static ostream out(cout.rdbuf());
-static bool human_readable = true;
-static bool direct_printed_epoch = true;
+static vector<EpochState> epochs;
 
-static void reportPrecision()
+static void reportPrecision(std::ostream& out)
 {
-    static bool printed = false;
-    if (!printed) {
-        out << "Timer results with precision: " << clock::period::den
-            << endl << endl;
-        printed = true;
-    }
-}
-
-void
-start_epoch(const string &name)
-{
-    if (direct_printed_epoch && !epochs.empty()) {
-        print_results();
-    }
-
-    epochs.emplace_back(name);
-}
-
-void set_output(string file)
-{
-    filebuf *fileBuffer = new filebuf();
-    fileBuffer->open(file.c_str(), ios::out | ios::app);
-    out.rdbuf(fileBuffer);
-}
-
-void set_output(ostream &file)
-{ out.rdbuf(file.rdbuf()); }
-
-void set_human_readable(bool b)
-{ human_readable = b; }
-
-void set_direct_printed(bool b)
-{
-    if (human_readable) reportPrecision();
-    direct_printed_epoch = b;
-}
-
-void print_results()
-{
-    if (human_readable) reportPrecision();
-
-    for (auto &epoch : epochs) {
-        if (epoch.printed) continue;
-
-        for (auto &timer : epoch.timers) {
-            if (timer.timings->size() != 0) {
-                Measurements result(*timer.timings);
-                if (human_readable) {
-                    auto output = Timing::align_timings(
-                        { { "Min", result.min }
-                        , { "Avg", result.avg }
-                        , { "Max", result.max }
-                        , { "Std", result.std }
-                    });
-
-                    out << epoch.name << ":" << timer.name << " ("
-                        << timer.timings->size() << "): " << endl;
-                    for (auto &str : output) {
-                        out << str << endl;
-                    }
-                    out << endl;
-                } else {
-                    out.imbue(locale("C"));
-                    out << epoch.name << ":" << timer.name << ":"
-                        << result.min.total_time << " "
-                        << result.avg.total_time << " "
-                        << result.max.total_time << " "
-                        << result.std.total_time << endl;
-                }
-            }
-        }
-
-        epoch.printed = true;
-    }
+    out << "Timer results with precision: " << clock::period::den
+        << endl << endl;
 }
 
 static shared_ptr<vector<nanoseconds>>
@@ -242,7 +189,7 @@ vector<Epoch> get_epochs()
         if (state.timers.empty()) continue;
         vector<Epoch::TimerData> timer_data;
         for (auto data : state.timers) {
-            timer_data.emplace_back(data.name, Measurements(*data.timings));
+            timer_data.emplace_back(data.name, StatisticalSummary<Timing>(*data.timings));
         }
         result.emplace_back(state.name, move(timer_data));
     }
@@ -251,7 +198,102 @@ vector<Epoch> get_epochs()
 }
 };
 
-Timer::Timer(std::string name, size_t count)
+static size_t
+registerEpoch(const std::string& name)
+{
+    size_t result = TimerRegister::epochs.size();
+    TimerRegister::epochs.emplace_back(name);
+    return result;
+}
+
+Epoch::Epoch(bool humanReadable, const std::string& name)
+    : direct_printed(false), human_readable(humanReadable)
+    , output("/dev/null"), index(registerEpoch(name))
+{}
+
+Epoch::Epoch
+    ( std::ofstream&& timingFile
+    , bool humanReadable
+    , const std::string& name)
+    : direct_printed(true), human_readable(humanReadable)
+    , output(std::move(timingFile)), index(registerEpoch(name))
+{}
+
+Epoch::Epoch
+    ( std::ofstream&& timingFile
+    , const std::string& name
+    , bool humanReadable)
+    : Epoch(std::move(timingFile), humanReadable, name)
+{}
+
+Epoch::Epoch
+    ( const std::string& timingFile
+    , const std::string& name
+    , bool humanReadable)
+    : Epoch(std::ofstream(timingFile), humanReadable, name)
+{}
+
+Epoch::Epoch
+    ( const std::string& timingFile
+    , bool humanReadable
+    , const std::string& name)
+    : Epoch(timingFile, name, humanReadable)
+{}
+
+Epoch::~Epoch()
+{ if (direct_printed) print_results(output, human_readable); }
+
+void
+Epoch::set_output(const std::string& fileName)
+{ output = std::ofstream(fileName); }
+
+void
+Epoch::set_output(std::ofstream&& fileStream)
+{ output = std::move(fileStream); }
+
+void
+Epoch::print_results(std::ostream& out, bool humanReadable)
+{
+    typedef TimerRegister::Timing Timing;
+
+    auto& epoch = TimerRegister::epochs[index];
+
+    if (humanReadable) TimerRegister::reportPrecision(output);
+
+    for (auto &timer : epoch.timers) {
+        if (timer.timings->size() != 0) {
+            StatisticalSummary<Timing> result(*timer.timings);
+            if (!epoch.name.empty() && epoch.name != "") {
+                out << epoch.name << ":";
+            }
+
+            if (humanReadable) {
+                auto times = Timing::align_timings(
+                    { { "Min", result.min }
+                    , { "Avg", result.mean }
+                    , { "Max", result.max }
+                    , { "Std", result.stdDev }
+                });
+
+                out << timer.name << " (" << timer.timings->size() << "): "
+                    << std::endl;
+
+                for (auto &str : times) {
+                    out << str << std::endl;
+                }
+                out << std::endl;
+            } else {
+                out.imbue(std::locale("C"));
+                out << timer.name << ":" << result.min.total_time << " "
+                    << result.mean.total_time << " "
+                    << result.max.total_time << " "
+                    << result.stdDev.total_time << std::endl;
+            }
+        }
+    }
+}
+
+Timer::Timer(const std::string& name, size_t count)
     : timings(TimerRegister::register_timer(name, count))
 {}
 
