@@ -39,6 +39,7 @@ class Options {
     static std::set<char> globalReservedShort;
     static std::set<std::string> globalReservedLong;
 
+    Options* parent;
     std::set<char> reservedShort;
     std::set<std::string> reservedLong;
 
@@ -52,7 +53,8 @@ class Options {
     std::vector<char *> parseArgs(int, char **, bool);
 
   public:
-    Options() : usageOutput(std::cerr), hasUsage(false), isGlobal(false)
+    Options()
+    : parent(nullptr), usageOutput(std::cerr), hasUsage(false), isGlobal(false)
     {}
 
     Options
@@ -60,12 +62,17 @@ class Options {
     , const char *l
     , std::ostream &out
     , std::function<void(std::ostream&)> f
-    ) : usageOutput(out), usagePreamble(f), hasUsage(true), isGlobal(true)
+    ) : parent(nullptr), usageOutput(out), usagePreamble(f), hasUsage(true)
+      , isGlobal(true)
     {
         usageFlag.shortOption = c;
         usageFlag.longOption = l;
         usageFlag.helpString = "This help.";
     }
+
+    Options(Options& o)
+     : parent(&o), usageOutput(std::cerr), hasUsage(false), isGlobal(false)
+    {}
 
     Options& add(Option o);
     Options& add(char, const char *, std::string, std::string &, std::string);

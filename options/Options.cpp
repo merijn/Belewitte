@@ -32,6 +32,8 @@ Options::add(Option o)
         reservedShort.emplace(o.shortOption);
         reservedLong.emplace(o.longOption);
     }
+
+    if (parent) parent->add(o);
     return *this;
 }
 
@@ -162,7 +164,7 @@ Options::parseArgs(int argc, char **argv, bool exitUnknown)
             case 0: break;
 
             case ':':
-                cerr << "Missing option for flag '" << optopt << "'." << endl;
+                cerr << "Missing option for flag '" << static_cast<char>(optopt) << "'." << endl;
                 usage(usageOutput);
                 exit(EXIT_FAILURE);
 
