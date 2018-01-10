@@ -4,7 +4,7 @@
 #include <fstream>
 
 #include "AlgorithmConfig.hpp"
-#include "GraphLoading.hpp"
+#include "GraphLoader.hpp"
 #include "Timer.hpp"
 
 enum class work_division { vertex, edge };
@@ -19,7 +19,7 @@ struct GraphKernel
     Platform &backend;
 
   public:
-    virtual void run(Loader<Platform,V,E>&, const Args&...) = 0;
+    virtual void run(GraphLoader<Platform,V,E>&, const Args&...) = 0;
 
     GraphKernel(GraphRep rep, work_division w)
      : backend(Platform::get())
@@ -79,12 +79,12 @@ struct DerivedKernel : KernelType
     {}
 
     virtual void
-    run(Loader<Platform,V,E>& loader, const KernelArgs&... args) override
+    run(GraphLoader<Platform,V,E>& loader, const KernelArgs&... args) override
     { doRun(loader, args...); }
 
     template<class Parent = KernelType>
     typename std::enable_if<std::is_same<WarpKernel,Parent>::value,void>::type
-    doRun(Loader<Platform,V,E>& loader, const KernelArgs&... args)
+    doRun(GraphLoader<Platform,V,E>& loader, const KernelArgs&... args)
     {
         const auto& graph = loader.template getGraph<rep,dir>();
         backend.runKernel(kernel, this->warp_size, this->chunk_size, graph,
@@ -93,7 +93,7 @@ struct DerivedKernel : KernelType
 
     template<class Parent = KernelType>
     typename std::enable_if<std::is_same<GraphKernel,Parent>::value,void>::type
-    doRun(Loader<Platform,V,E>& loader, const KernelArgs&... args)
+    doRun(GraphLoader<Platform,V,E>& loader, const KernelArgs&... args)
     {
         const auto& graph = loader.template getGraph<rep,dir>();
         backend.runKernel(kernel, graph, args...);
@@ -106,7 +106,7 @@ using KernelType = std::shared_ptr<GraphKernel<Platform,V,E,Args...>>;
 template<typename Platform, typename V, typename E, typename... Args>
 class KernelMap : public std::map<std::string,KernelType<Platform,V,E,Args...>>
 {
-    using Loader = Loader<Platform,V,E>;
+    using Loader = GraphLoader<Platform,V,E>;
 
     template<Rep rep, Dir dir, typename Kernel, typename Parent>
     using Base = DerivedKernel<Platform,V,E,rep,dir,Kernel,Parent,Args...>;
@@ -181,7 +181,7 @@ struct TemplateConfig : public AlgorithmConfig {
     size_t vertex_count, edge_count;
     std::shared_ptr<GraphKernel<Platform,V,E,Args...>> kernel;
 
-    Loader<Platform,V,E> loader;
+    GraphLoader<Platform,V,E> loader;
 
     TemplateConfig(ConfigArg kern)
     : backend(Platform::get()), kernel(kern)

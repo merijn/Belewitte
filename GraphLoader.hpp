@@ -1,5 +1,5 @@
-#ifndef GRAPHLOADING_HPP
-#define GRAPHLOADING_HPP
+#ifndef GRAPHLOADER_HPP
+#define GRAPHLOADER_HPP
 
 #include "utils/Graph.hpp"
 #include "GraphRep.hpp"
@@ -27,7 +27,7 @@ struct LoaderRep;
 
 template
 <typename Platform, typename V, typename E>
-class Loader
+class GraphLoader
 {
     template<Rep, typename, typename, typename>
     friend struct LoaderRep;
@@ -182,14 +182,14 @@ class Loader
     template<Rep rep>
     struct LoadGraph
     {
-        static void call(Dir dir, Loader& loader, RawData& data)
+        static void call(Dir dir, GraphLoader& loader, RawData& data)
         { data.load(get(loader.*LoaderRep<rep>::field, dir), dir); }
     };
 
     template<Rep rep>
     struct TransferGraph
     {
-        static void call(Dir dir, Loader& loader)
+        static void call(Dir dir, GraphLoader& loader)
         { get(loader.*LoaderRep<rep>::field, dir).copyHostToDev(); }
     };
 
@@ -202,11 +202,11 @@ class Loader
     struct GraphType;
 
     template<typename T>
-    struct GraphType<T Loader::*>
+    struct GraphType<T GraphLoader::*>
     { typedef decltype(get(std::declval<T>(), Dir::Forward)) type; };
 
   public:
-    Loader() {}
+    GraphLoader() {}
 
     template<Rep rep, Dir dir>
     typename LoaderRep<rep>::GraphType&
@@ -230,6 +230,22 @@ class Loader
     void transferGraph(GraphRep rep)
     { runWithGraphRep<TransferGraph>(rep, *this); }
 
+    void freeGraph()
+    {
+        std::get<0>(edgeList).free();
+        std::get<1>(edgeList).free();
+        std::get<0>(structEdgeList).free();
+        std::get<1>(structEdgeList).free();
+        std::get<0>(edgeListCSR).free();
+        std::get<1>(edgeListCSR).free();
+        std::get<0>(structEdgeListCSR).free();
+        std::get<1>(structEdgeListCSR).free();
+        std::get<0>(csr).free();
+        std::get<1>(csr).free();
+        std::get<0>(inverseVertexCSR).free();
+        std::get<1>(inverseVertexCSR).free();
+    }
+
   private:
     pair<alloc_t<EdgeList<E>>> edgeList;
     pair<alloc_t<StructEdgeList<E>>> structEdgeList;
@@ -242,7 +258,7 @@ class Loader
 template<typename Platform, typename V, typename E>
 struct LoaderRep<Rep::EdgeList, Platform, V, E>
 {
-    using Loader = Loader<Platform,V,E>;
+    using Loader = GraphLoader<Platform,V,E>;
     static constexpr auto Loader::* field = &Loader::edgeList;
     typedef decltype(std::get<0>(std::declval<Loader>().*field)) GraphType;
 };
@@ -250,7 +266,7 @@ struct LoaderRep<Rep::EdgeList, Platform, V, E>
 template<typename Platform, typename V, typename E>
 struct LoaderRep<Rep::StructEdgeList, Platform, V, E>
 {
-    using Loader = Loader<Platform,V,E>;
+    using Loader = GraphLoader<Platform,V,E>;
     static constexpr auto Loader::* field = &Loader::structEdgeList;
     typedef decltype(std::get<0>(std::declval<Loader>().*field)) GraphType;
 };
@@ -258,7 +274,7 @@ struct LoaderRep<Rep::StructEdgeList, Platform, V, E>
 template<typename Platform, typename V, typename E>
 struct LoaderRep<Rep::EdgeListCSR, Platform, V, E>
 {
-    using Loader = Loader<Platform,V,E>;
+    using Loader = GraphLoader<Platform,V,E>;
     static constexpr auto Loader::* field = &Loader::edgeListCSR;
     typedef decltype(std::get<0>(std::declval<Loader>().*field)) GraphType;
 };
@@ -266,7 +282,7 @@ struct LoaderRep<Rep::EdgeListCSR, Platform, V, E>
 template<typename Platform, typename V, typename E>
 struct LoaderRep<Rep::StructEdgeListCSR, Platform, V, E>
 {
-    using Loader = Loader<Platform,V,E>;
+    using Loader = GraphLoader<Platform,V,E>;
     static constexpr auto Loader::* field = &Loader::structEdgeListCSR;
     typedef decltype(std::get<0>(std::declval<Loader>().*field)) GraphType;
 };
@@ -274,7 +290,7 @@ struct LoaderRep<Rep::StructEdgeListCSR, Platform, V, E>
 template<typename Platform, typename V, typename E>
 struct LoaderRep<Rep::CSR, Platform, V, E>
 {
-    using Loader = Loader<Platform,V,E>;
+    using Loader = GraphLoader<Platform,V,E>;
     static constexpr auto Loader::* field = &Loader::csr;
     typedef decltype(std::get<0>(std::declval<Loader>().*field)) GraphType;
 };
@@ -282,7 +298,7 @@ struct LoaderRep<Rep::CSR, Platform, V, E>
 template<typename Platform, typename V, typename E>
 struct LoaderRep<Rep::InverseVertexCSR, Platform, V, E>
 {
-    using Loader = Loader<Platform,V,E>;
+    using Loader = GraphLoader<Platform,V,E>;
     static constexpr auto Loader::* field = &Loader::inverseVertexCSR;
     typedef decltype(std::get<0>(std::declval<Loader>().*field)) GraphType;
 };

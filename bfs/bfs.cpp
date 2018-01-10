@@ -1,7 +1,6 @@
 #include <fstream>
 
 #include "CUDA.hpp"
-#include "GraphLoading.hpp"
 #include "TemplateConfig.hpp"
 #include "Timer.hpp"
 
