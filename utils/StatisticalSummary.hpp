@@ -28,13 +28,22 @@ struct StatisticalSummary
     template<typename V>
     StatisticalSummary(std::vector<V>&& values)
     {
-        size_t half = values.size()/2;
-        std::pair<size_t,size_t> medianPair = medianIndices(values.size());
-        std::pair<size_t,size_t> lower = medianIndices(half);
-        std::pair<size_t,size_t> upper = lower;
+        std::pair<size_t,size_t> medianPair, lower, upper;
 
-        upper.first += half + (values.size() % 2);
-        upper.second += half + (values.size() % 2);
+        size_t half = values.size()/2;
+
+        if (values.empty()) {
+            throw std::domain_error("Empty vector has no summary!");
+        } else if (values.size() > 1) {
+            medianPair = medianIndices(values.size());
+            lower = medianIndices(half);
+            upper = lower;
+
+            upper.first += half + (values.size() % 2);
+            upper.second += half + (values.size() % 2);
+        } else {
+            medianPair = lower = upper = {0, 0};
+        }
 
         std::sort(values.begin(), values.end());
 

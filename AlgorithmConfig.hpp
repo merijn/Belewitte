@@ -14,8 +14,6 @@ struct AlgorithmConfig {
     AlgorithmConfig(const AlgorithmConfig&) = delete;
     void operator=(const AlgorithmConfig&) = delete;
 
-    virtual ~AlgorithmConfig();
-
     Options options;
     size_t run_count;
     std::string outputFile;
@@ -27,5 +25,7 @@ struct AlgorithmConfig {
     void operator()(const std::string filename, const std::string outputFile);
     void help(std::ostream& out, std::string prefix);
     std::vector<char*> setup(std::vector<char*> args);
+
+    virtual ~AlgorithmConfig();
 };
 #endif

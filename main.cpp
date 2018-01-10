@@ -299,5 +299,11 @@ int main(int argc, char **argv)
             }
         }
     }
+
+    for (auto& [key, kvmap] : algorithms) {
+        for (auto& [key, val] : kvmap) {
+            delete val;
+        }
+    }
     return 0;
 }
