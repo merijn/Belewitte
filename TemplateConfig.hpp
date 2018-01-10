@@ -362,7 +362,7 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
     , defaultKernel(0)
     , lastKernel(-1)
     , logGraphProps([](){})
-    , logAlgorithmProps([](){})
+    , logAlgorithmProps([](size_t){})
     , kernelMap(ks)
     , vertices("vertex count", *this, true)
     , edges("edge count", *this, true)
@@ -420,7 +420,7 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
         typedef const std::map<std::string,double_ref> properties;
 
         logGraphProps = [](){};
-        logAlgorithmProps = [](){};
+        logAlgorithmProps = [](size_t){};
 
         void *hnd = dlopen(modelName, RTLD_NOW);
         if (!hnd) reportError("dlopen() failed: ", modelName, "\n", dlerror());
@@ -474,8 +474,8 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
         }
 
         logGraphProps = [&,props{std::move(graphProps)}]() {
-            for (auto& [name, ref] : graphProperties) {
-                logFile << name << " : " << ref.get() << std::endl;
+            for (auto& [name, val] : props) {
+                logFile << "graph : " << name << " : " << val << std::endl;
             }
         };
 
@@ -487,9 +487,10 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
             ref.get() = std::ref(algoProps.back().second);
         }
 
-        logAlgorithmProps = [&,props{std::move(algoProps)}]() {
-            for (auto& [name, ref] : algorithmProperties) {
-                logFile << name << " : " << ref.get() << std::endl;
+        logAlgorithmProps = [&,props{std::move(algoProps)}](size_t step) {
+            for (auto& [name, val] : props) {
+                logFile << "step : " << step << " : " << name << " : "
+                        << val << std::endl;
             }
         };
 #pragma clang diagnostic pop
@@ -506,8 +507,9 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
 
     void predictInitial()
     {
+        stepNum = 0;
         logGraphProps();
-        logAlgorithmProps();
+        logAlgorithmProps(stepNum++);
 
         lastKernel = lookup();
         if (lastKernel == -1) lastKernel = defaultKernel;
@@ -518,7 +520,7 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
 
     void predict()
     {
-        logAlgorithmProps();
+        logAlgorithmProps(stepNum++);
 
         int32_t result = lookup();
         if (result != -1 && result != lastKernel) {
@@ -533,7 +535,7 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
     int32_t lastKernel;
     std::function<int32_t()> lookup;
     std::function<void()> logGraphProps;
-    std::function<void()> logAlgorithmProps;
+    std::function<void(size_t)> logAlgorithmProps;
 
     std::vector<std::shared_ptr<KernelType>> kernels;
     std::map<std::string,std::shared_ptr<KernelType>> kernelMap;
@@ -542,6 +544,7 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
 
     prop_ref vertices, edges;
     graph_prop min, lowerQuantile, mean, median, upperQuantile, max, stdDev;
+    size_t stepNum;
 };
 
 template
