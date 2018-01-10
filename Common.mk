@@ -26,7 +26,7 @@ else
     PRINTF := @printf
 endif
 
-COMMON_CXXFLAGS=-O3 -MMD -MP -std=c++17 -g -I$(BASE)/utils/ -I$(BASE)/options/
+COMMON_CXXFLAGS=-O3 -MMD -MP -std=c++17 -g -I$(BASE)
 
 CLANGWFLAGS=-Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic \
          -Wno-documentation-deprecated-sync -Wno-documentation -Wno-padded \

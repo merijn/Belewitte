@@ -3,8 +3,8 @@
 #include <iterator>
 #include <set>
 
-#include "Graph.hpp"
-#include "Options.hpp"
+#include "utils/Graph.hpp"
+#include "options/Options.hpp"
 
 using namespace std;
 

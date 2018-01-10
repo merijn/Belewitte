@@ -2,7 +2,7 @@
 #include <memory>
 
 #include "Connectivity.hpp"
-#include "Graph.hpp"
+#include "utils/Graph.hpp"
 
 typedef Graph<uint64_t,uint64_t> Graph_t;
 typedef Graph_t::Vertices Vertices;

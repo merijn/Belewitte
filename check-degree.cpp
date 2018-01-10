@@ -4,7 +4,7 @@
 #include <iostream>
 #include <map>
 
-#include "Graph.hpp"
+#include "utils/Graph.hpp"
 
 using namespace std;
 

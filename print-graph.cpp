@@ -1,7 +1,7 @@
 #include <getopt.h>
 
-#include "Graph.hpp"
-#include "Util.hpp"
+#include "utils/Graph.hpp"
+#include "utils/Util.hpp"
 
 using namespace std;
 
