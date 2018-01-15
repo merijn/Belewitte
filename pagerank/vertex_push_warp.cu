@@ -20,10 +20,12 @@ vertexPushWarp(size_t warp_size, size_t chunk_size,
     const int THREAD_ID = (blockIdx.x * blockDim.x) + threadIdx.x;
     const int W_OFF = THREAD_ID % warp_size;
     const size_t W_ID = THREAD_ID / warp_size;
+    const size_t BLOCK_W_ID = threadIdx.x / warp_size;
+
     extern __shared__ float MEM[];
-    float *myRanks = &MEM[W_ID * chunk_size];
+    float *myRanks = &MEM[BLOCK_W_ID * chunk_size];
     unsigned *vertices = (unsigned*) &MEM[(blockDim.x/warp_size) * chunk_size];
-    unsigned *myVertices = &vertices[(1+chunk_size) * W_ID];
+    unsigned *myVertices = &vertices[(1+chunk_size) * BLOCK_W_ID];
 
     const size_t v_ = min(W_ID * chunk_size, vertex_count);
     const size_t end = min(chunk_size, (vertex_count - v_));

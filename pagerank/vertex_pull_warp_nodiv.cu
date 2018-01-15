@@ -20,8 +20,10 @@ vertexPullWarpNoDiv(size_t warp_size, size_t chunk_size,
     const int THREAD_ID = (blockIdx.x * blockDim.x) + threadIdx.x;
     const int W_OFF = THREAD_ID % warp_size;
     const size_t W_ID = THREAD_ID / warp_size;
+    const size_t BLOCK_W_ID = threadIdx.x / warp_size;
+
     extern __shared__ unsigned MEM[];
-    unsigned *myVertices = &MEM[W_ID * (1+chunk_size)];
+    unsigned *myVertices = &MEM[BLOCK_W_ID * (1+chunk_size)];
 
     const size_t v_ = min(W_ID * chunk_size, vertex_count);
     const size_t end = min(chunk_size, (vertex_count - v_));
