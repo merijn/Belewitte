@@ -36,10 +36,14 @@ class Options {
         {}
     };
 
+    Options(const Options&) = delete;
+    void operator=(const Options&) = delete;
+
     static std::set<char> globalReservedShort;
     static std::set<std::string> globalReservedLong;
 
     Options* parent;
+    std::set<Options*> children;
     std::set<char> reservedShort;
     std::set<std::string> reservedLong;
 
@@ -72,7 +76,10 @@ class Options {
 
     Options(Options& o)
      : parent(&o), usageOutput(std::cerr), hasUsage(false), isGlobal(false)
-    {}
+    { if (parent) parent->children.insert(this); }
+
+    ~Options()
+    { if (parent) parent->children.erase(this); }
 
     Options& add(Option o);
     Options& add(char, const char *, std::string, std::string &, std::string);
