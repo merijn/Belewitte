@@ -223,6 +223,9 @@ struct TemplateConfig : public AlgorithmConfig {
         graphTransfer.stop();
     }
 
+    void freeGraph() override final
+    { loader.freeGraph(); }
+
   private:
     std::pair<size_t,size_t> vertexDivision, edgeDivision;
 

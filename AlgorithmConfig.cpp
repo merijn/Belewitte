@@ -1,15 +1,24 @@
+#include <fstream>
+
 #include "AlgorithmConfig.hpp"
+
+using namespace std;
 
 AlgorithmConfig::~AlgorithmConfig() {}
 
 void
-AlgorithmConfig::operator()(const std::string filename, const std::string out)
+AlgorithmConfig::operator()(const std::string& filename, ofstream&& outputFile)
 {
     loadGraph(filename);
-    outputFile = out;
-    runImplementation();
-    outputFile.clear();
+    prepareRun();
+    runImplementation(outputFile);
+    cleanupRun();
+    freeGraph();
 }
+
+void
+AlgorithmConfig::operator()(const string& filename, const string& outputFile)
+{ operator()(filename, ofstream(outputFile)); }
 
 void
 AlgorithmConfig::help(std::ostream& out, std::string prefix)

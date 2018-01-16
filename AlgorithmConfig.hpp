@@ -16,13 +16,16 @@ struct AlgorithmConfig {
 
     Options options;
     size_t run_count;
-    std::string outputFile;
 
     virtual void loadGraph(const std::string) = 0;
-    virtual void runImplementation() = 0;
+    virtual void prepareRun() {}
+    virtual void runImplementation(std::ofstream&) = 0;
+    virtual void cleanupRun() {}
+    virtual void freeGraph() = 0;
 
   public:
-    void operator()(const std::string filename, const std::string outputFile);
+    void operator()(const std::string& graphFile, std::ofstream&& output);
+    void operator()(const std::string& graphFile, const std::string& output);
     void help(std::ostream& out, std::string prefix);
     std::vector<char*> setup(std::vector<char*> args);
 

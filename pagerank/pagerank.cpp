@@ -12,7 +12,6 @@ struct PageRankBase : public Config
     using typename Config::ConfigArg;
     using Config::run_count;
     using Config::backend;
-    using Config::outputFile;
     using Config::setKernelConfig;
     using Config::vertex_count;
     using Config::kernel;
@@ -27,7 +26,7 @@ struct PageRankBase : public Config
     virtual void
     callConsolidate(const alloc_t<float>&, const alloc_t<float>&) = 0;
 
-    virtual void runImplementation() override
+    virtual void runImplementation(std::ofstream& outputFile) override
     {
         Timer initResults("initResults", run_count);
         Timer pagerankTime("computation", run_count);
@@ -63,11 +62,8 @@ struct PageRankBase : public Config
             resultTransfer.stop();
         }
 
-        if (!outputFile.empty()) {
-            std::ofstream output(outputFile);
-            for (size_t i = 0; i < pageranks.size; i++) {
-                output << i << "\t" << pageranks[i] << std::endl;
-            }
+        for (size_t i = 0; i < pageranks.size; i++) {
+            outputFile << i << "\t" << pageranks[i] << std::endl;
         }
     }
 };

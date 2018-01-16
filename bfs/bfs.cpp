@@ -12,7 +12,6 @@ struct BFSConfig : public Config
     using typename Config::ConfigArg;
     using Config::run_count;
     using Config::backend;
-    using Config::outputFile;
     using Config::loader;
     using Config::setKernelConfig;
     using Config::vertex_count;
@@ -31,7 +30,7 @@ struct BFSConfig : public Config
     inline void setProps(unsigned frontier)
     { frontierSize = frontier; }
 
-    virtual void runImplementation() override
+    virtual void runImplementation(std::ofstream& outputFile) override
     {
         if (root >= vertex_count) return;
 
@@ -91,11 +90,8 @@ struct BFSConfig : public Config
             resultTransfer.stop();
         }
 
-        if (!outputFile.empty()) {
-            std::ofstream output(outputFile);
-            for (size_t i = 0; i < results.size; i++) {
-                output << i << "\t" << results[i] << std::endl;
-            }
+        for (size_t i = 0; i < results.size; i++) {
+            outputFile << i << "\t" << results[i] << std::endl;
         }
     }
 };
