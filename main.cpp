@@ -3,6 +3,7 @@
 #include <cstring>
 #include <stdexcept>
 #include <getopt.h>
+#include <wordexp.h>
 
 #include <dlfcn.h>
 
@@ -133,55 +134,56 @@ static listing listOptions;
 static bool verbose = false;
 static bool warnings = false;
 static bool printStdOut = false;
+static bool fromStdin = false;
 static framework fw = framework::cuda;
 static int device = 0;
 static size_t platform = 0;
-static string outputSuffix;
-static string outputDir;
-static string timingsFile;
+static string outputDir(".");
 static string algorithmName;
 static string kernelName;
 static vector<const char*> paths = { "." };
 
 static listing run_with_backend(Backend& backend, const vector<char*>& args)
 {
-    if (args.size() < 1) usage();
+    if (!fromStdin) {
+        if (args.size() < 1) usage();
 
-    if (!strcmp(args[0], "list")) {
-        if (args.size() < 2) {
-            usage();
-        } else if (!strcmp(args[1], "platforms")) {
+        if (!strcmp(args[0], "list")) {
+            if (args.size() < 2) {
+                usage();
+            } else if (!strcmp(args[1], "platforms")) {
 
-            backend.listPlatforms(verbose);
-            exit(static_cast<int>(backend.platformCount()));
+                backend.listPlatforms(verbose);
+                exit(static_cast<int>(backend.platformCount()));
 
-        } else if (!strcmp(args[1], "devices")) {
+            } else if (!strcmp(args[1], "devices")) {
 
-            backend.listDevices(platform, verbose);
-            exit(backend.deviceCount(platform));
+                backend.listDevices(platform, verbose);
+                exit(backend.deviceCount(platform));
 
-        } else if (!strcmp(args[1], "algorithms")) {
-            return listing::algorithms;
-        } else if (!strcmp(args[1], "implementations")) {
-            return listing::implementations;
-        } else {
-            usage();
-        }
+            } else if (!strcmp(args[1], "algorithms")) {
+                return listing::algorithms;
+            } else if (!strcmp(args[1], "implementations")) {
+                return listing::implementations;
+            } else {
+                usage();
+            }
 
-    } else if (!strcmp(args[0], "query")) {
-        if (args.size() < 2) {
-            usage();
-        } else if (!strcmp(args[1], "platform")) {
+        } else if (!strcmp(args[0], "query")) {
+            if (args.size() < 2) {
+                usage();
+            } else if (!strcmp(args[1], "platform")) {
 
-            backend.queryPlatform(platform, verbose);
-            exit(backend.deviceCount(platform));
+                backend.queryPlatform(platform, verbose);
+                exit(backend.deviceCount(platform));
 
-        } else if (!strcmp(args[1], "device")) {
+            } else if (!strcmp(args[1], "device")) {
 
-            backend.queryDevice(platform, device, verbose);
-            exit(EXIT_SUCCESS);
-        } else {
-            usage();
+                backend.queryDevice(platform, device, verbose);
+                exit(EXIT_SUCCESS);
+            } else {
+                usage();
+            }
         }
     }
 
@@ -191,6 +193,32 @@ static listing run_with_backend(Backend& backend, const vector<char*>& args)
     }
     backend.setDevice(platform, device);
     return listing::nothing;
+}
+
+static void
+runJob
+(AlgorithmConfig& kernel, vector<char*> args, const string& tag = string())
+{
+    auto graphs = kernel.setup(args);
+
+    if (!tag.empty() && graphs.size() > 1) {
+        reportError("Tagged output with more than 1 graph!");
+    }
+
+    for (auto graph : graphs) {
+        auto label = tag.empty() ? path(graph).stem().string() : tag;
+        auto basePath = outputDir / path(label);
+        auto timeFile = basePath.replace_extension("timings");
+        auto outputFile = basePath.replace_extension("output");
+
+        {
+            Epoch epoch(timeFile.string(), verbose);
+            if (printStdOut) outputFile = path("/dev/stdout");
+            kernel(graph, outputFile.string());
+        }
+
+        cout << label << endl;
+    }
 }
 
 int main(int argc, char **argv)
@@ -206,12 +234,9 @@ int main(int argc, char **argv)
            .add('O', "output", printStdOut, true,
                 "Print result to stdout, inhibits output file creation.")
            .add('p', "platform", "NUM", platform, "Platform to use.")
-           .add('s', "suffix", "EXT", outputSuffix,
-                "Extension to use for writing algorithm output.")
-           .add('t', "timings", "FILE", timingsFile,
-                "Where to write timing output.")
            .add('v', "verbose", verbose, true, "Verbose output.")
-           .add('W', "warn", warnings, true, "Verbose/debug warnings.");
+           .add('W', "warn", warnings, true, "Verbose/debug warnings.")
+           .add('S', "stdin", fromStdin, true, "Read work from stdin.");
 
     Options kernelParser(options);
 
@@ -268,36 +293,31 @@ int main(int argc, char **argv)
         case listing::nothing: break;
     }
 
-    if (algorithmName.empty()) {
+    if (fromStdin) {
+        string line;
+        wordexp_t newArgv;
+
+        while (getline(cin, line)) {
+            if (wordexp(line.c_str(), &newArgv, WRDE_NOCMD | WRDE_UNDEF)) {
+                reportError("Failed to expand commandline with wordexp(3)!");
+            }
+
+            remainingArgs = kernelParser.parseArgs
+                    (static_cast<int>(newArgv.we_wordc), newArgv.we_wordv);
+
+            auto& kernel = getConfig(algorithms, algorithmName, kernelName);
+            runJob(kernel, remainingArgs, string(newArgv.we_wordv[0]));
+
+            wordfree(&newArgv);
+            kernelParser.reset();
+        }
+    } else if (algorithmName.empty()) {
         reportError("Algorithm name not specified!");
     } else if (kernelName.empty()) {
         reportError("Kernel name not specified!");
     } else {
         auto& kernel = getConfig(algorithms, algorithmName, kernelName);
-        remainingArgs = kernel.setup(remainingArgs);
-
-        for (auto graph : remainingArgs) {
-            Epoch epoch(path(graph).stem().string(), verbose);
-
-            if (!timingsFile.empty()) {
-                epoch.set_output(timingsFile);
-            }
-
-            string output;
-            if (printStdOut) {
-                output = "/dev/stdout";
-            } else if (!outputSuffix.empty()) {
-                auto filename = outputDir / path(graph).filename();
-                filename.replace_extension(outputSuffix);
-
-                output = filename.string();
-            }
-            kernel(graph, output);
-
-            if (timingsFile.empty()) {
-                epoch.print_results(std::cout, verbose);
-            }
-        }
+        runJob(kernel, remainingArgs);
     }
 
     for (auto& [key, kvmap] : algorithms) {
