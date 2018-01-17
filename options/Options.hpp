@@ -15,6 +15,7 @@ class Options {
         char shortOption;
         const char *longOption;
         std::function<void(const char *)> action;
+        std::function<void()> resetAction;
         std::string argName;
         std::string helpString;
         std::string defaultVal;
@@ -22,18 +23,23 @@ class Options {
         bool hasArg;
         bool multiFlag;
 
-        Option() : Option('\0', "", [](auto){}, "", "")
+        Option() : Option('\0', "", [](auto){}, [](){}, "", "")
         {}
 
         Option
         ( char shortOpt
         , const char *longOpt
         , std::function<void(const char *)> act
+        , std::function<void()> resetAct
         , std::string arg
         , std::string help
-        ) : shortOption(shortOpt), longOption(longOpt), action(act), argName(arg)
-        , helpString(help), defaultVal(""), hasArg(false), multiFlag(false)
+        ) : shortOption(shortOpt), longOption(longOpt), action(act)
+          , resetAction(resetAct), argName(arg), helpString(help)
+          , defaultVal(""), hasArg(false), multiFlag(false)
         {}
+
+        void reset()
+        { if (resetAction != nullptr) resetAction(); }
     };
 
     Options(const Options&) = delete;
@@ -86,7 +92,10 @@ class Options {
 
     template<typename T>
     Options& add(char so, const char *lo, T& var, T val, std::string help)
-    { return add(Option(so, lo, [&,val](auto) { var = val; }, "", help)); }
+    {
+        auto action = [&,val](auto) { var = val; };
+        auto reset = [&,initial{var}]() { var = initial; };
+        return add(Option(so, lo, action, reset, "", help)); }
 
     template<typename T>
     Options& add
@@ -98,19 +107,12 @@ class Options {
     , typename std::enable_if<std::is_integral<T>::value>::type* = nullptr)
     {
         auto action = [&](auto s) { var = static_cast<T>(std::stoi(s)); };
-        auto opt = Option(so, lo, action, arg, help);
+        auto reset = [&,initial{var}]() { var = initial; };
+        auto opt = Option(so, lo, action, reset, arg, help);
         opt.defaultVal = std::to_string(var);
         opt.hasArg = true;
         return add(opt);
     }
-
-    Options& add
-    ( char so
-    , const char *lo
-    , std::string arg
-    , std::string help
-    , std::function<void(const char *)> action
-    );
 
     template<typename T>
     Options& add
@@ -124,7 +126,8 @@ class Options {
     )
     {
         auto action = [&](auto s) { var.push_back(fun(s)); };
-        auto opt = Option(so, lo, action, arg, help);
+        auto reset = [&]() { var.clear(); };
+        auto opt = Option(so, lo, action, reset, arg, help);
         opt.defaultVal = def;
         opt.hasArg = true;
         opt.multiFlag = true;
@@ -138,5 +141,7 @@ class Options {
     std::vector<char *> parseArgsFinal(int, char **);
 
     void usage(std::ostream&, std::string = "");
+
+    void reset();
 };
 #endif

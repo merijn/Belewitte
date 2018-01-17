@@ -318,6 +318,9 @@ class prop_ref : public std::reference_wrapper<double>
 
     double& operator=(const double& val)
     { return this->get() = val; }
+
+    void reset()
+    { operator=(std::ref(dummyProp)); }
 };
 
 double prop_ref::dummyProp;
@@ -332,6 +335,10 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
     using Config::loader;
     using Config::options;
     using Config::setKernelConfig;
+
+    typedef std::set<std::string> prop_set;
+
+    friend prop_ref;
 
     static constexpr bool isSwitching = true;
 
@@ -361,11 +368,6 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
 
     SwitchConfig(std::map<std::string,std::shared_ptr<KernelType>> ks)
     : Config(ks.begin()->second)
-    , logFile("/dev/null")
-    , defaultKernel(0)
-    , lastKernel(-1)
-    , logGraphProps([](){})
-    , logAlgorithmProps([](size_t){})
     , kernelMap(ks)
     , vertices("vertex count", *this, true)
     , edges("edge count", *this, true)
@@ -377,16 +379,8 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
     , max("max ", " degree", *this)
     , stdDev("stddev ", " degree", *this)
     {
-        auto action = [&](const char *modelName) {
-            setupKernels(modelName);
-        };
-
-        auto logAction = [&](const char *logName) {
-            setupPropertyLogging(logName);
-        };
-
-        options.add('m', "model", "FILE", "Prediction model to use.", action);
-        options.add('l', "log", "FILE", "Where to log properties.", logAction);
+        options.add('m', "model", "FILE", model, "Prediction model to use.");
+        options.add('l', "log", "FILE", logFile, "Where to log properties.");
     }
 
     virtual void loadGraph(const Graph<V,E>& graph) override
@@ -416,114 +410,24 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
     virtual void transferGraph() override
     { for (auto k : kernels) loader.transferGraph(k->representation); }
 
-    void setupKernels(const char * const modelName)
-    {
-        typedef std::reference_wrapper<double> double_ref;
-        typedef const std::map<std::string,size_t> implementations;
-        typedef const std::map<std::string,double_ref> properties;
-
-        logGraphProps = [](){};
-        logAlgorithmProps = [](size_t){};
-
-        void *hnd = dlopen(modelName, RTLD_NOW);
-        if (!hnd) reportError("dlopen() failed: ", modelName, "\n", dlerror());
-
-        lookup = safe_dlsym<int32_t()>(hnd, "lookup");
-        auto implPtr = safe_dlsym<implementations>(hnd, "implNames");
-        auto paramPtr = safe_dlsym<properties>(hnd, "propNames");
-
-        bool missing = false;
-        for (auto &[name, prop] : *paramPtr) {
-            try {
-                graphProperties[name] = prop;
-            } catch (const std::out_of_range&) {
-                try {
-                    algorithmProperties[name] = prop;
-                } catch (const std::out_of_range&) {
-                    std::cerr << "Missing property: " << name << std::endl;
-                    missing = true;
-                }
-            }
-        }
-
-        kernels.resize(implPtr->size());
-        for (auto &[name, idx] : *implPtr) {
-            if (name == "edge-list") defaultKernel = static_cast<int32_t>(idx);
-
-            try {
-                kernels[idx] = kernelMap.at(name);
-            } catch (const std::out_of_range&) {
-                std::cerr << "Missing implementation: " << name << std::endl;
-                missing = true;
-            }
-        }
-
-        if (missing) reportError("Missing properties/implementations!");
-    }
-
-    void setupPropertyLogging(const char * const str)
-    {
-        logFile = std::ofstream(str);
-        lookup = []() { return -1; };
-
-        std::vector<std::pair<std::string,double>> graphProps;
-        graphProps.reserve(graphProperties.size());
-
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunused-variable"
-        for (auto& [name, ref] : graphProperties) {
-            graphProps.emplace_back(name, 0);
-            ref.get() = std::ref(graphProps.back().second);
-        }
-
-        logGraphProps = [&,props{std::move(graphProps)}]() {
-            for (auto& [name, val] : props) {
-                logFile << "graph : " << name << " : " << val << std::endl;
-            }
-        };
-
-        std::vector<std::pair<std::string,double>> algoProps;
-        algoProps.reserve(algorithmProperties.size());
-
-        for (auto& [name, ref] : algorithmProperties) {
-            algoProps.emplace_back(name, 0);
-            ref.get() = std::ref(algoProps.back().second);
-        }
-
-        logAlgorithmProps = [&,props{std::move(algoProps)}](size_t step) {
-            for (auto& [name, val] : props) {
-                logFile << "step : " << step << " : " << name << " : "
-                        << val << std::endl;
-            }
-        };
-#pragma clang diagnostic pop
-
-        std::shared_ptr<KernelType> kernel;
-        try {
-            kernel = kernelMap.at("edge-list");
-        } catch (const std::out_of_range&) {
-            kernel = kernelMap.begin()->second;
-        }
-
-        kernels.emplace_back(kernel);
-    }
-
+  protected:
     void predictInitial()
     {
         stepNum = 0;
         logGraphProps();
-        logAlgorithmProps(stepNum++);
+        logAlgorithmProps();
 
         lastKernel = lookup();
-        if (lastKernel == -1) lastKernel = defaultKernel;
-
-        kernel = kernels[static_cast<size_t>(lastKernel)];
+        if (lastKernel != -1) {
+            kernel = kernels[static_cast<size_t>(lastKernel)];
+        }
         setKernelConfig(kernel);
     }
 
     void predict()
     {
-        logAlgorithmProps(stepNum++);
+        ++stepNum;
+        logAlgorithmProps();
 
         int32_t result = lookup();
         if (result != -1 && result != lastKernel) {
@@ -533,12 +437,171 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
         }
     }
 
-    std::ofstream logFile;
-    int32_t defaultKernel;
-    int32_t lastKernel;
+    virtual void prepareRun() override final
+    {
+        prop_set missingGraphProps;
+        prop_set missingAlgoProps;
+
+        for (auto& pair : graphProperties) {
+            auto& [name, val] = pair;
+            missingGraphProps.insert(name);
+        }
+
+        for (auto& pair : algorithmProperties) {
+            auto& [name, val] = pair;
+            missingAlgoProps.insert(name);
+        }
+
+        if (!model.empty()) {
+            setupPredictor(model.c_str(), missingGraphProps, missingAlgoProps);
+        } else {
+            lookup = []() { return -1; };
+
+            try {
+                auto edgeKernel = kernelMap.at("edge-list");
+                kernel = edgeKernel;
+            } catch (const std::out_of_range&) {
+                kernel = kernelMap.begin()->second;
+            }
+
+            kernels.push_back(kernel);
+        }
+
+        if (!logFile.empty()) {
+            setupLogging(missingGraphProps, missingAlgoProps);
+        } else {
+            logGraphProps = [](){};
+            logAlgorithmProps = [](){};
+        }
+    }
+
+    virtual void cleanupRun() override final
+    {
+        kernels.clear();
+
+        if (modelHandle) {
+            int result = dlclose(modelHandle);
+            if (result) reportError("dlclose() failed!\n", dlerror());
+            modelHandle = nullptr;
+        }
+
+        if (!logFile.empty()) propLog = std::ofstream();
+
+        for (auto& pair : graphProperties) {
+            auto& [name, prop] = pair;
+            prop.get().reset();
+        }
+
+        for (auto& pair : algorithmProperties) {
+            auto& [name, prop] = pair;
+            prop.get().reset();
+        }
+    }
+
+  private:
+    void
+    setupPredictor
+    (const char * const lib, prop_set& graphProps, prop_set& algoProps)
+    {
+        typedef std::reference_wrapper<double> double_ref;
+        typedef const std::map<std::string,size_t> implementations;
+        typedef const std::map<std::string,double_ref> properties;
+
+        modelHandle = dlopen(lib, RTLD_NOW);
+        if (!modelHandle) {
+            reportError("dlopen() failed: ", lib, "\n", dlerror());
+        }
+
+        lookup = safe_dlsym<int32_t()>(modelHandle, "lookup");
+        auto& impls = *safe_dlsym<implementations>(modelHandle, "implNames");
+        auto& params = *safe_dlsym<properties>(modelHandle, "propNames");
+
+        bool missing = false;
+        for (auto& pair : params) {
+            auto& [name, prop] = pair;
+            try {
+                graphProperties[name] = prop;
+                graphProps.erase(name);
+            } catch (const std::out_of_range&) {
+                try {
+                    algorithmProperties[name] = prop;
+                    algoProps.erase(name);
+                } catch (const std::out_of_range&) {
+                    std::cerr << "Missing property: " << name << std::endl;
+                    missing = true;
+                }
+            }
+        }
+
+        kernels.resize(impls.size());
+        for (auto& pair : impls) {
+            auto& [name, idx] = pair;
+            try {
+                kernels[idx] = kernelMap.at(name);
+                if (name == "edge-list") kernel = kernels[idx];
+            } catch (const std::out_of_range&) {
+                std::cerr << "Missing implementation: " << name << std::endl;
+                missing = true;
+            }
+        }
+
+        if (missing) reportError("Missing properties/implementations!");
+    }
+
+    void setupLogging(prop_set& missingGraphProps, prop_set& missingAlgoProps)
+    {
+        propLog = std::ofstream(logFile);
+        lookup = [this,oldPredictor{lookup}]() {
+            int32_t result = oldPredictor();
+            propLog << "prediction : " << stepNum << " : " << result
+                    << std::endl;
+            return result;
+        };
+
+        std::vector<std::pair<std::string,double>> graphProps;
+        graphProps.reserve(missingGraphProps.size());
+
+        for (auto& name : missingGraphProps) {
+            graphProps.emplace_back(name, 0);
+            graphProperties[name] = std::ref(graphProps.back().second);
+        }
+
+        logGraphProps = [this,props{std::move(graphProps)}]() {
+            for (auto& pair : graphProperties) {
+                auto& [name, ref] = pair;
+                propLog << "graph : " << name << " : " << ref.get()
+                        << std::endl;
+            }
+        };
+
+        std::vector<std::pair<std::string,double>> algoProps;
+        algoProps.reserve(missingAlgoProps.size());
+
+        for (auto& name : missingAlgoProps) {
+            algoProps.emplace_back(name, 0);
+            algorithmProperties[name] = std::ref(algoProps.back().second);
+        }
+
+        logAlgorithmProps = [this,props{std::move(algoProps)}]() {
+            for (auto& pair : algorithmProperties) {
+                auto& [name, ref] = pair;
+                propLog << "step : " << stepNum << " : " << name << " : "
+                        << ref.get() << std::endl;
+            }
+        };
+    }
+
+    std::string logFile;
+    std::string model;
+
+    void *modelHandle;
     std::function<int32_t()> lookup;
+
+    std::ofstream propLog;
     std::function<void()> logGraphProps;
-    std::function<void(size_t)> logAlgorithmProps;
+    std::function<void()> logAlgorithmProps;
+
+    int32_t lastKernel;
 
     std::vector<std::shared_ptr<KernelType>> kernels;
     std::map<std::string,std::shared_ptr<KernelType>> kernelMap;

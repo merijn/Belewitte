@@ -9,11 +9,12 @@ AlgorithmConfig::~AlgorithmConfig() {}
 void
 AlgorithmConfig::operator()(const std::string& filename, ofstream&& outputFile)
 {
-    loadGraph(filename);
     prepareRun();
+    loadGraph(filename);
     runImplementation(outputFile);
-    cleanupRun();
     freeGraph();
+    cleanupRun();
+    options.reset();
 }
 
 void
