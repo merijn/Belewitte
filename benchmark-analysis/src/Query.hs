@@ -76,7 +76,7 @@ FROM Variant
      INNER JOIN
      ( SELECT variantId, stepId, implId
        FROM StepTime
-       WHERE gpuId = #{fromSqlKey gpuId} AND (implId = 1 OR implId = 4)
+       WHERE gpuId = #{fromSqlKey gpuId}
        GROUP BY variantId, stepId
        HAVING avgRuntime = MIN(avgRuntime)) AS Impl
      ON Variant.id = Impl.variantId AND Step.stepId = Impl.stepId

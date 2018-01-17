@@ -16,10 +16,11 @@ import Data.Ord (comparing)
 import Data.String.Interpolate.IsString
 import Data.Set (Set)
 import qualified Data.Set as S
+import qualified Data.Text as T
 import Data.Text.Lazy.Builder
 import Data.Text.Lazy.Builder.Int
 import Data.Text.Lazy.Builder.RealFloat
-import qualified Data.Text.Lazy.IO as T
+import qualified Data.Text.Lazy.IO as LT
 import qualified Data.Vector.Storable as VS
 import qualified Data.Vector.Unboxed as VU
 
@@ -51,10 +52,13 @@ dumpCppModel
     -> IntMap Implementation
     -> m ()
 dumpCppModel name (Model tree) graphProps stepProps implNames =
-  liftIO . T.writeFile name . toLazyText $ [i|#include <functional>
+  liftIO . LT.writeFile name . toLazyText $ [i|#include <functional>
 #include <map>
 #include <string>
+#include <vector>
 #include <sys/types.h>
+
+using namespace std;
 
 struct tree_t {
     double threshold;
@@ -66,14 +70,16 @@ static tree_t tree[] = {
 
 static double properties[#{numProps}];
 
-const std::map<std::string,size_t> implNames = {
+extern "C" const vector<tuple<string,size_t,size_t,size_t>>
+implNames = {
 |] <> nameTable newLabels <> [i|};
 
-const std::map<std::string,std::reference_wrapper<double>> propNames = {
+extern "C" const std::map<std::string,std::reference_wrapper<double>>
+propNames = {
 |] <> propEntries <> [i|};
 
-int32_t lookup();
-int32_t lookup()
+extern "C" int32_t lookup();
+extern "C" int32_t lookup()
 {
     int node = 0, left;
 
@@ -84,7 +90,7 @@ int32_t lookup()
             node = tree[node].right;
         }
     }
-    return static_cast<size_t>(tree[node].right);
+    return tree[node].right;
 }
 |]
   where
@@ -101,10 +107,16 @@ int32_t lookup()
             swap :: (a, b) -> (b, a)
             swap (x, y) = (y, x)
 
+        warpConfig :: Text -> Builder
+        warpConfig implName
+            | "-warp-" `T.isInfixOf` implName = "32, 32"
+            | otherwise = "0, 0"
+
         lookupName :: (Int, Int) -> Builder
         lookupName (new, original) = case implNames IM.! original of
             Implementation _ implName _ -> mconcat
-                [ "    { \"", fromText implName, "\", ", decimal new, " },\n" ]
+                [ "    { \"" , fromText implName , "\", " , decimal new
+                , ", ", warpConfig implName, " },\n" ]
 
     propEntries :: Builder
     propEntries = foldMap propEntry . zip [0..] $ props

@@ -10,10 +10,15 @@
 enum class work_division { vertex, edge };
 
 template<typename Platform, typename V, typename E, typename... Args>
+struct WarpKernel;
+
+template<typename Platform, typename V, typename E, typename... Args>
 struct GraphKernel
 {
     template<typename, typename, typename, typename...>
     friend struct TemplateConfig;
+
+    using WarpVersion = WarpKernel<Platform,V,E,Args...>;
 
   protected:
     Platform &backend;
@@ -42,17 +47,24 @@ struct WarpKernel : GraphKernel<Platform,V,E,Args...>
 {
     using GraphKernel<Platform,V,E,Args...>::backend;
 
+    static size_t dummy;
+
     WarpKernel(GraphRep r, work_division w, std::function<size_t(size_t)> mem)
-     : GraphKernel<Platform,V,E,Args...>(r, w), chunkMemory(mem)
+     : GraphKernel<Platform,V,E,Args...>(r, w)
+     , warp_size(dummy), chunk_size(dummy), chunkMemory(mem)
     {}
+
+    std::reference_wrapper<size_t> warp_size, chunk_size;
 
   protected:
     virtual size_t getSharedMemSize(size_t blockSize) override
-    { return (blockSize / warp_size) * chunkMemory(chunk_size); }
+    { return (blockSize / warp_size.get()) * chunkMemory(chunk_size.get()); }
 
     std::function<size_t(size_t)> chunkMemory;
-    size_t warp_size, chunk_size;
 };
+
+template<typename Platform, typename V, typename E, typename... Args>
+size_t WarpKernel<Platform,V,E,Args...>::dummy = 0;
 
 template
 < typename Platform
@@ -87,8 +99,9 @@ struct DerivedKernel : KernelType
     doRun(GraphLoader<Platform,V,E>& loader, const KernelArgs&... args)
     {
         const auto& graph = loader.template getGraph<rep,dir>();
-        backend.runKernel(kernel, this->warp_size, this->chunk_size, graph,
-                          args...);
+        backend.runKernel
+            ( kernel, this->warp_size.get(), this->chunk_size.get()
+            , graph, args...);
     }
 
     template<class Parent = KernelType>
@@ -247,16 +260,26 @@ struct WarpConfig : public TemplateConfig<Platform,V,E,Args...>
     using KernelType = WarpKernel<Platform,V,E,Args...>;
     using ConfigArg = std::shared_ptr<KernelType>;
 
-    WarpConfig(ConfigArg k)
-    : Config(k), warp_size(32), chunk_size(32)
+    std::function<void()> setWarpConfig;
+
+    WarpConfig(ConfigArg kernel)
+    : Config(kernel), warp_size(32), chunk_size(32)
     {
         options.add('w', "warp", "NUM", warp_size,
                     "Virtual warp size for warp variants.")
                .add('c', "chunk", "NUM", chunk_size,
                     "Work chunk size for warp variants.");
+
+        setWarpConfig = [kernel,this]() {
+            kernel->warp_size = std::ref(warp_size);
+            kernel->chunk_size = std::ref(chunk_size);
+        };
     }
 
   private:
+    virtual void prepareRun() override final
+    { setWarpConfig(); }
+
     size_t warp_size, chunk_size;
 };
 
@@ -323,13 +346,14 @@ class prop_ref : public std::reference_wrapper<double>
     { operator=(std::ref(dummyProp)); }
 };
 
-double prop_ref::dummyProp;
+double prop_ref::dummyProp = 0;
 
 template<typename Platform, typename V, typename E, typename... Args>
 struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
 {
     using Config = TemplateConfig<Platform,V,E,Args...>;
     using KernelType = typename Config::KernelType;
+    using WarpKernelType = typename Config::KernelType::WarpVersion;
     using ConfigArg = std::map<std::string,std::shared_ptr<KernelType>>;
     using Config::kernel;
     using Config::loader;
@@ -366,8 +390,22 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
         }
     };
 
+    struct implementation
+    {
+        implementation() : kernel(nullptr), warp_size(32), chunk_size(32)
+        {}
+
+        implementation(std::shared_ptr<KernelType> k, size_t w, size_t c)
+         : kernel(k), warp_size(w), chunk_size(c)
+        {}
+
+        std::shared_ptr<KernelType> kernel;
+        size_t warp_size;
+        size_t chunk_size;
+    };
+
     SwitchConfig(std::map<std::string,std::shared_ptr<KernelType>> ks)
-    : Config(ks.begin()->second)
+    : Config(nullptr)
     , kernelMap(ks)
     , vertices("vertex count", *this, true)
     , edges("edge count", *this, true)
@@ -377,7 +415,7 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
     , median("median ", " degree", *this)
     , upperQuantile("upper quantile ", " degree", *this)
     , max("max ", " degree", *this)
-    , stdDev("stddev ", " degree", *this)
+    , stdDev("stddev ", " degree", *this), warp_size(32), chunk_size(32)
     {
         options.add('m', "model", "FILE", model, "Prediction model to use.");
         options.add('l', "log", "FILE", logFile, "Where to log properties.");
@@ -401,14 +439,18 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
         }
 
         std::vector<GraphRep> reps;
-        for (auto k : kernels) {
-            reps.push_back(k->representation);
+        for (auto& impl : implementations) {
+            reps.push_back(impl.kernel->representation);
         }
         loader.loadGraph(graph, reps);
     }
 
     virtual void transferGraph() override
-    { for (auto k : kernels) loader.transferGraph(k->representation); }
+    {
+        for (auto& impl : implementations) {
+            loader.transferGraph(impl.kernel->representation);
+        }
+    }
 
   protected:
     void predictInitial()
@@ -419,7 +461,10 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
 
         lastKernel = lookup();
         if (lastKernel != -1) {
-            kernel = kernels[static_cast<size_t>(lastKernel)];
+            auto& impl = implementations[static_cast<size_t>(lastKernel)];
+            kernel = impl.kernel;
+            warp_size = impl.warp_size;
+            chunk_size = impl.chunk_size;
         }
         setKernelConfig(kernel);
     }
@@ -431,7 +476,10 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
 
         int32_t result = lookup();
         if (result != -1 && result != lastKernel) {
-            kernel = kernels[static_cast<size_t>(result)];
+            auto& impl = implementations[static_cast<size_t>(result)];
+            kernel = impl.kernel;
+            warp_size = impl.warp_size;
+            chunk_size = impl.chunk_size;
             setKernelConfig(kernel);
             lastKernel = result;
         }
@@ -458,13 +506,11 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
             lookup = []() { return -1; };
 
             try {
-                auto edgeKernel = kernelMap.at("edge-list");
-                kernel = edgeKernel;
+                kernel = kernelMap.at("edge-list");
             } catch (const std::out_of_range&) {
-                kernel = kernelMap.begin()->second;
             }
 
-            kernels.push_back(kernel);
+            implementations.emplace_back(kernel, 0, 0);
         }
 
         if (!logFile.empty()) {
@@ -473,11 +519,15 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
             logGraphProps = [](){};
             logAlgorithmProps = [](){};
         }
+
+        if (kernel == nullptr) {
+            reportError("No edge list implementation found!");
+        }
     }
 
     virtual void cleanupRun() override final
     {
-        kernels.clear();
+        implementations.clear();
 
         if (modelHandle) {
             int result = dlclose(modelHandle);
@@ -503,8 +553,9 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
     setupPredictor
     (const char * const lib, prop_set& graphProps, prop_set& algoProps)
     {
+        typedef std::tuple<std::string,size_t,size_t,size_t> impl_tuple;
         typedef std::reference_wrapper<double> double_ref;
-        typedef const std::map<std::string,size_t> implementations;
+        typedef const std::vector<impl_tuple> implementations_t;
         typedef const std::map<std::string,double_ref> properties;
 
         modelHandle = dlopen(lib, RTLD_NOW);
@@ -513,7 +564,7 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
         }
 
         lookup = safe_dlsym<int32_t()>(modelHandle, "lookup");
-        auto& impls = *safe_dlsym<implementations>(modelHandle, "implNames");
+        auto& impls = *safe_dlsym<implementations_t>(modelHandle, "implNames");
         auto& params = *safe_dlsym<properties>(modelHandle, "propNames");
 
         bool missing = false;
@@ -533,12 +584,16 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
             }
         }
 
-        kernels.resize(impls.size());
-        for (auto& pair : impls) {
-            auto& [name, idx] = pair;
+        implementations.resize(impls.size());
+        for (auto& data : impls) {
+            auto& [ name, idx, warp, chunk ] = data;
             try {
-                kernels[idx] = kernelMap.at(name);
-                if (name == "edge-list") kernel = kernels[idx];
+                implementations[idx] = { kernelMap.at(name), warp, chunk };
+                if (auto kern = std::dynamic_pointer_cast<WarpKernelType>(implementations[idx].kernel)) {
+                    kern->warp_size = std::ref(warp_size);
+                    kern->chunk_size = std::ref(chunk_size);
+                }
+                if (name == "edge-list") kernel = implementations[idx].kernel;
             } catch (const std::out_of_range&) {
                 std::cerr << "Missing implementation: " << name << std::endl;
                 missing = true;
@@ -603,14 +658,15 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
 
     int32_t lastKernel;
 
-    std::vector<std::shared_ptr<KernelType>> kernels;
+    std::vector<implementation> implementations;
     std::map<std::string,std::shared_ptr<KernelType>> kernelMap;
+
     refmap<std::string,prop_ref> graphProperties;
     refmap<std::string,prop_ref> algorithmProperties;
 
     prop_ref vertices, edges;
     graph_prop min, lowerQuantile, mean, median, upperQuantile, max, stdDev;
-    size_t stepNum;
+    size_t stepNum, warp_size, chunk_size;
 };
 
 template
