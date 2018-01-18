@@ -71,15 +71,14 @@ propertyQuery gpuId graphProps stepProps = Query{..}
 SELECT #{str}
 FROM Variant
      INNER JOIN Graph ON Variant.graphId = Graph.id
-     INNER JOIN StepProp AS Step ON Variant.id = Step.variantId
-#{genClauses joinClause}
      INNER JOIN
      ( SELECT variantId, stepId, implId
        FROM StepTime
        WHERE gpuId = #{fromSqlKey gpuId}
        GROUP BY variantId, stepId
-       HAVING avgRuntime = MIN(avgRuntime)) AS Impl
-     ON Variant.id = Impl.variantId AND Step.stepId = Impl.stepId
+       HAVING avgRuntime = MIN(avgRuntime)) AS Step
+     ON Variant.id = Step.variantId
+#{genClauses joinClause}
 WHERE #{mconcat . intersperse " AND " $ genClauses whereClause}
 ORDER BY Graph.name, Variant.variant, Step.stepId ASC|]
 
@@ -97,7 +96,7 @@ ORDER BY Graph.name, Variant.variant, Step.stepId ASC|]
         go _ _ _ = throwM . Error $ "Unexpect value!"
 
     selectClause :: Text
-    selectClause = genClauses select <> "Impl.implId"
+    selectClause = genClauses select <> "Step.implId"
 
     genClauses :: Monoid m => (Text -> (Word, Text) -> m) -> m
     genClauses f =
