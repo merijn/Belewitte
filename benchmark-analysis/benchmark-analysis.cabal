@@ -73,6 +73,7 @@ Executable Ingest
 Executable Model
   Default-Language:     Haskell2010
   GHC-Options:          -O2 -Wall -fno-warn-unused-do-bind -rtsopts -threaded
+                        -with-rtsopts=-qg
   GHC-Prof-Options:     -fprof-auto
   Main-Is:              ExportModel.hs
 
