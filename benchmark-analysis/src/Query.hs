@@ -9,12 +9,13 @@ module Query
     , Query(Query,columnCount)
     , runSqlQueryCount
     , runSqlQuery
+    , runSqlQueryRandom
     , propertyQuery
     ) where
 
 import Control.Exception (Exception)
 import Control.Monad ((>=>))
-import Control.Monad.Trans (lift)
+import Control.Monad.Trans (MonadIO, lift)
 import Control.Monad.Trans.Resource
 import Data.Acquire (allocateAcquire)
 import Data.Conduit
@@ -38,9 +39,8 @@ data Query r =
   Query
     { columnCount :: Int
     , params :: [PersistValue]
-    , selectClause :: Text
-    , convert :: forall m . MonadThrow m => [PersistValue] -> m r
-    , query :: Text -> Text
+    , convert :: forall m . (MonadIO m, MonadThrow m) => [PersistValue] -> m r
+    , query :: Text
     }
 
 instance Functor Query where
@@ -50,15 +50,30 @@ data Error = Error Text deriving (Show)
 instance Exception Error
 
 runSqlQueryCount :: Query r -> SqlM Int
-runSqlQueryCount Query{params,query} = runSql $ do
-    result <- withRawQuery (query "COUNT(*)") params await
+runSqlQueryCount Query{params,query} = do
+    result <- runSql $ withRawQuery countQuery params await
     case result of
         Just [PersistInt64 n] -> return $ fromIntegral n
         _ -> throwM $ Error "Error computing count!"
+  where
+    countQuery = "SELECT COUNT(*) FROM (" <> query <> ")"
+
+runSqlQueryRandom :: Double -> Query r -> Source SqlM r
+runSqlQueryRandom fraction q = do
+    num <- lift $ runSqlQueryCount q
+
+    let trainingSize :: Integer
+        trainingSize = round (fraction * fromIntegral num)
+
+        queryLimit = [i|LIMIT #{trainingSize}|]
+
+        randomizedQuery = [i|SELECT * FROM (#{query q}) ORDER BY random() |]
+
+    runSqlQuery q{ query = randomizedQuery <> queryLimit }
 
 runSqlQuery :: Query r -> Source SqlM r
 runSqlQuery Query{..} = do
-    srcRes <- lift . runSql $ rawQueryRes (query selectClause) params
+    srcRes <- lift . runSql $ rawQueryRes query params
     (_, src) <- allocateAcquire srcRes
     src .| converter
   where
@@ -67,8 +82,8 @@ runSqlQuery Query{..} = do
 propertyQuery :: Key GPU -> Set Text -> Set Text -> Query (Props, Algorithms)
 propertyQuery gpuId graphProps stepProps = Query{..}
   where
-    query str = [i|
-SELECT #{str}
+    query = [i|
+SELECT #{selectClause}
 FROM Variant
      INNER JOIN Graph ON Variant.graphId = Graph.id
      INNER JOIN
@@ -102,7 +117,7 @@ ORDER BY Graph.name, Variant.variant, Step.stepId ASC|]
     genClauses f =
         clause "GraphProp" graphProps <> clause "StepProp" stepProps
       where
-        clause table = foldMap (f table) . zip [0..] . S.toList
+        clause table = foldMap (f table) . zip [0..] . S.toAscList
 
     select :: Text -> (Word, a) -> Text
     select table (n, _) = [i|#{table}#{n}.value, |]

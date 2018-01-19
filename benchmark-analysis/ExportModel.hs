@@ -41,14 +41,17 @@ import Model
 import Query
 import Schema
 
-trainModel :: Query (Props, Algorithms) -> SqlM Model
-trainModel query@Query{columnCount} = do
+trainModel :: Double -> Query (Props, Algorithms) -> SqlM Model
+trainModel fraction query@Query{columnCount} = do
     numEntries <- runSqlQueryCount query
+
+    let trainingSize :: Integer
+        trainingSize = round (fraction * fromIntegral numEntries)
 
     let process :: Fd -> CreateProcess
         process fd = proc "./model.py"
             [ "--entries"
-            , show numEntries
+            , show trainingSize
             , "--properties"
             , show columnCount
             , "--fd"
@@ -77,7 +80,7 @@ trainModel query@Query{columnCount} = do
 
                 combinedSink = getZipSink (propertySink <* resultSink)
 
-            runConduit $ runSqlQuery query .| combinedSink
+            runConduit $ runSqlQueryRandom fraction query .| combinedSink
             liftIO $ byteStringToModel <$> BS.hGetContents hnd
 
     withCheckedProcessCleanup (process outFd) handleStreams
@@ -146,7 +149,7 @@ main = do
         stepProps <- gatherProps "StepProp"
         let query = propertyQuery (toSqlKey 1) graphProps stepProps
 
-        model <- trainModel query
+        model <- trainModel 0.6 query
         validate model query
 
         impls <- queryImplementations
