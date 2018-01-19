@@ -24,6 +24,7 @@ import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 import Data.Set (Set)
 import qualified Data.Set as S
+import Data.String (fromString)
 import Data.String.Interpolate.IsString
 import Database.Persist.Sqlite
 import GHC.Conc.Sync (getNumProcessors)
@@ -40,7 +41,7 @@ import Model
 import Query
 import Schema
 
-trainModel :: Query (Props, Algorithms) -> SqlM ByteString
+trainModel :: Query (Props, Algorithms) -> SqlM Model
 trainModel query@Query{columnCount} = do
     numEntries <- runSqlQueryCount query
 
@@ -77,7 +78,7 @@ trainModel query@Query{columnCount} = do
                 combinedSink = getZipSink (propertySink <* resultSink)
 
             runConduit $ runSqlQuery query .| combinedSink
-            liftIO $ BS.hGetContents hnd
+            liftIO $ byteStringToModel <$> BS.hGetContents hnd
 
     withCheckedProcessCleanup (process outFd) handleStreams
   where
@@ -99,6 +100,37 @@ queryImplementations = do
     toIntMap :: Entity Implementation -> IntMap Implementation
     toIntMap (Entity k val) = IM.singleton (fromIntegral $ fromSqlKey k) val
 
+dumpQueryToFile :: String -> Query (Props, Algorithms) -> SqlM ()
+dumpQueryToFile path query = runConduit $
+    runSqlQuery query
+        .| C.map ((++"\n") . show)
+        .| C.map fromString
+        .| C.sinkFile path
+
+validate :: Model -> Query (Props, Algorithms) -> SqlM ()
+validate model query = do
+    result <- runConduit $ runSqlQuery predictions .| C.foldl aggregate (0,0)
+    report "total" result
+  where
+    predictions = first (predict model) <$> query
+
+    aggregate (!right,!wrong) (x,y)
+        | fromIntegral x == y = (right + 1, wrong)
+        | otherwise = (right, wrong + 1)
+
+    report :: MonadIO m => String -> (Int, Int) -> m ()
+    report name (right, wrong) = liftIO . putStrLn . unlines $
+        [ "Right predictions (" ++ name ++ "): " ++ show right
+        , "Wrong predictions (" ++ name ++ "): " ++ show wrong
+        , "Error rate (" ++ name ++ "): " ++ percent wrong (right+wrong)
+        ]
+      where
+        percent :: Integral n => n -> n -> String
+        percent x y = showFFloat (Just 2) val "%"
+          where
+            val :: Double
+            val = 100 * fromIntegral x / fromIntegral y
+
 main :: IO ()
 main = do
     numCPUs <- getNumProcessors
@@ -113,30 +145,13 @@ main = do
         graphProps <- gatherProps "GraphProp"
         stepProps <- gatherProps "StepProp"
         let query = propertyQuery (toSqlKey 1) graphProps stepProps
-        input <- trainModel query
-        let model = byteStringToModel input
-            predictor = predict model
-            aggregate (!right,!wrong) (x,y)
-                | fromIntegral x == y = (right + 1, wrong)
-                | otherwise = (right, wrong + 1)
 
-        (right, wrong) <- runConduit $
-            runSqlQuery (first predictor <$> query) .| C.foldl aggregate (0,0)
-
-        liftIO $ do
-            putStrLn $ "Right predictions: " ++ show (right :: Int)
-            putStrLn $ "Wrong predictions: " ++ show wrong
-            putStrLn $ "Error rate: " ++ percent wrong (right+wrong)
+        model <- trainModel query
+        validate model query
 
         impls <- queryImplementations
         dumpCppModel "test.cpp" model graphProps stepProps impls
   where
-    percent :: Integral n => n -> n -> String
-    percent x y = showFFloat (Just 2) val "%"
-      where
-        val :: Double
-        val = 100 * fromIntegral x / fromIntegral y
-
     gatherProps :: Text -> SqlM (Set Text)
     gatherProps table =
         runSql . runConduit $ rawQuery query [] .| C.foldMap toSet
