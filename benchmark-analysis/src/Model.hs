@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -22,7 +23,7 @@ import Data.Text.Lazy.Builder.Int
 import Data.Text.Lazy.Builder.RealFloat
 import qualified Data.Text.Lazy.IO as LT
 import qualified Data.Vector.Storable as VS
-import qualified Data.Vector.Unboxed as VU
+import qualified Data.Vector.Generic as V
 
 import Foreign.ForeignPtr
 import Foreign.Ptr
@@ -32,7 +33,7 @@ import Schema (Implementation(..), Text)
 
 newtype Model = Model (VS.Vector TreeNode)
 
-predict :: Model -> VU.Vector Double -> Int
+predict :: V.Vector v Double => Model -> v Double -> Int
 predict (Model tree) props = go (tree `VS.unsafeIndex` 0)
   where
     go :: TreeNode -> Int
@@ -41,7 +42,7 @@ predict (Model tree) props = go (tree `VS.unsafeIndex` 0)
         | belowThreshold = go (tree `VS.unsafeIndex` leftNode)
         | otherwise = go (tree `VS.unsafeIndex` rightNode)
         where
-          belowThreshold = props `VU.unsafeIndex` propIdx <= threshold
+          belowThreshold = props `V.unsafeIndex` propIdx <= threshold
 
 dumpCppModel
     :: MonadIO m
