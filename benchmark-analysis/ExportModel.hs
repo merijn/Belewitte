@@ -33,6 +33,7 @@ import System.IO (hClose)
 import System.Posix.IO (createPipe, closeFd, fdToHandle)
 import System.Posix.Types (Fd)
 
+import qualified Data.Vector.Generic as V
 import qualified Data.Vector.Unboxed as VU
 
 import Data.Binary.Put
@@ -103,15 +104,20 @@ queryImplementations = do
     toIntMap :: Entity Implementation -> IntMap Implementation
     toIntMap (Entity k val) = IM.singleton (fromIntegral $ fromSqlKey k) val
 
-dumpQueryToFile :: String -> Query (Props, Algorithms) -> SqlM ()
+dumpQueryToFile
+    :: (Show (v Double), V.Vector v Double)
+    => String
+    -> Query (v Double, Algorithms)
+    -> SqlM ()
 dumpQueryToFile path query = runConduit $
     runSqlQuery query
         .| C.map ((++"\n") . show)
         .| C.map fromString
         .| C.sinkFile path
 
-validate :: Model -> Query (Props, Algorithms) -> SqlM ()
-validate model query = do
+validateModel
+    :: V.Vector v Double => Model -> Query (v Double, Algorithms) -> SqlM ()
+validateModel model query = do
     result <- runConduit $ runSqlQuery predictions .| C.foldl aggregate (0,0)
     report "total" result
   where
@@ -150,7 +156,7 @@ main = do
         let query = propertyQuery (toSqlKey 1) graphProps stepProps
 
         model <- trainModel 0.6 query
-        validate model query
+        validateModel model query
 
         impls <- queryImplementations
         dumpCppModel "test.cpp" model graphProps stepProps impls
