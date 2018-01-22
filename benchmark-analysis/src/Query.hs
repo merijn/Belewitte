@@ -7,6 +7,7 @@ module Query
     ( Algorithms
     , Props
     , Query(Query,columnCount)
+    , explainSqlQuery
     , runSqlQueryCount
     , runSqlQuery
     , runSqlQueryRandom
@@ -15,10 +16,11 @@ module Query
 
 import Control.Exception (Exception)
 import Control.Monad ((>=>))
-import Control.Monad.Trans (MonadIO, lift)
+import Control.Monad.Trans (MonadIO(liftIO), lift)
 import Control.Monad.Trans.Resource
 import Data.Acquire (allocateAcquire)
 import Data.Conduit
+import qualified Data.Conduit.List as C
 import Data.Int (Int64)
 import Data.List (intersperse)
 import Data.Monoid ((<>))
@@ -26,6 +28,7 @@ import Data.String.Interpolate.IsString
 import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Text (Text)
+import qualified Data.Text.IO as T
 import Data.Vector.Unboxed (Vector)
 import qualified Data.Vector.Unboxed as V
 import Database.Persist.Sqlite
@@ -48,6 +51,17 @@ instance Functor Query where
 
 data Error = Error Text deriving (Show)
 instance Exception Error
+
+explainSqlQuery :: Query r -> SqlM ()
+explainSqlQuery q@Query{} = do
+    runConduit $ runSqlQuery newQuery .| C.mapM_ (liftIO . T.putStrLn)
+  where
+    explain :: (MonadIO m, MonadThrow m) => [PersistValue] -> m Text
+    explain [PersistInt64 _,PersistInt64 _,PersistInt64 _,PersistText t] =
+        return t
+    explain _ = throwM $ Error "Explain failed!"
+
+    newQuery = q{ query = "EXPLAIN QUERY PLAN " <> query q, convert = explain }
 
 runSqlQueryCount :: Query r -> SqlM Int
 runSqlQueryCount Query{params,query} = do
