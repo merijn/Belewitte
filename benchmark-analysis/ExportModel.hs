@@ -7,6 +7,7 @@
 module Main where
 
 import Control.Concurrent hiding (yield)
+import Control.Monad (forM_, replicateM)
 import Control.Monad.Catch (mask_)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Logger
@@ -20,12 +21,17 @@ import Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
 import Data.Conduit.Process
     (CreateProcess, Inherited(..), proc, withCheckedProcessCleanup)
+import Data.List (sortBy)
+import Data.Map (Map)
+import qualified Data.Map as M
+import Data.Ord (comparing)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 import Data.Set (Set)
 import qualified Data.Set as S
 import Data.String (fromString)
 import Data.String.Interpolate.IsString
+import qualified Data.Text as T
 import Database.Persist.Sqlite
 import GHC.Conc.Sync (getNumProcessors)
 import Numeric (showFFloat)
@@ -36,14 +42,20 @@ import System.Posix.Types (Fd)
 import qualified Data.Vector.Generic as V
 import qualified Data.Vector.Unboxed as VU
 
+import Data.Binary.Get
 import Data.Binary.Put
 
 import Model
 import Query
 import Schema
 
-trainModel :: Double -> Query (Props, Algorithms) -> SqlM Model
-trainModel fraction query@Query{columnCount} = do
+trainModel
+    :: Double
+    -> Key GPU
+    -> Set Text
+    -> Set Text
+    -> SqlM (Map Text Double, Model)
+trainModel fraction gpuId graphProps stepProps = do
     numEntries <- runSqlQueryCount query
 
     let trainingSize :: Integer
@@ -82,15 +94,32 @@ trainModel fraction query@Query{columnCount} = do
                 combinedSink = getZipSink (propertySink <* resultSink)
 
             runConduit $ runSqlQueryRandom fraction query .| combinedSink
-            liftIO $ byteStringToModel <$> BS.hGetContents hnd
+            (importance, model) <- liftIO $ getResult <$> BS.hGetContents hnd
+            return (importanceMap importance, byteStringToModel model)
 
     withCheckedProcessCleanup (process outFd) handleStreams
   where
+    query@Query{columnCount} = propertyQuery gpuId graphProps stepProps
+
+    propList :: [Text]
+    propList = S.toAscList graphProps ++ S.toAscList stepProps
+
+    importanceMap :: [Double] -> Map Text Double
+    importanceMap = M.fromList . zip propList
+
     putProps :: Props -> ByteString
     putProps = LBS.toStrict . runPut . VU.mapM_ putDoublehost
 
     putResults :: Algorithms -> ByteString
     putResults = LBS.toStrict . runPut . putInt64host
+
+    getResult :: ByteString -> ([Double], ByteString)
+    getResult = runGet parseBlock . LBS.fromStrict
+      where
+        parseBlock = do
+            dbls <- replicateM columnCount getDoublehost
+            bs <- LBS.toStrict <$> getRemainingLazyByteString
+            return (dbls, bs)
 
 queryImplementations :: SqlM (IntMap Implementation)
 queryImplementations = do
@@ -140,6 +169,17 @@ validateModel model query = do
             val :: Double
             val = 100 * fromIntegral x / fromIntegral y
 
+reportFeatureImportance :: MonadIO m => Map Text Double -> m ()
+reportFeatureImportance importances =
+  forM_ featureList $ \(lbl, val) -> liftIO $ do
+    putStrLn $ T.unpack lbl ++ ": " ++ showFFloat (Just 2) (val * 100) "%"
+  where
+    revCmpDouble :: (a, Double) -> (a, Double) -> Ordering
+    revCmpDouble = flip (comparing snd)
+
+    featureList :: [(Text, Double)]
+    featureList = sortBy revCmpDouble $ M.toList importances
+
 main :: IO ()
 main = do
     numCPUs <- getNumProcessors
@@ -155,7 +195,9 @@ main = do
         stepProps <- gatherProps "StepProp"
         let query = propertyQuery (toSqlKey 1) graphProps stepProps
 
-        model <- trainModel 0.6 query
+        (importance, model) <- trainModel 0.6 (toSqlKey 1) graphProps stepProps
+        reportFeatureImportance importance
+        liftIO $ putStrLn ""
         validateModel model query
 
         impls <- queryImplementations

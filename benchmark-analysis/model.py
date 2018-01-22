@@ -91,5 +91,8 @@ def translate(data):
         data = data[:2] + (translation[data[2]], translation[data[3]])
     return data + (0,)
 
+for val in predictor.feature_importances_:
+    stdout.write(struct.pack("d", val))
+
 for vals in map(translate, arrayTree):
     stdout.write(struct.pack("diiii", *vals))
