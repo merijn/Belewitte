@@ -9,17 +9,11 @@ print-graph
 graph-details
 evolve/gen-graph
 evolve/evolve
-*.d
-*.graph
-*.obj
-*.ptx
-data
 .ghc.environment.*
 evolve/breeding-pool
 evolve/darwin
 benchmark-analysis/Ingest
 benchmark-analysis/Model
-benchmark-analysis/dist
 plotting/Plot
 plotting/graph-edges
 .build/
