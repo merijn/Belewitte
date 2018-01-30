@@ -19,6 +19,7 @@ edgeListBfs(EdgeList<unsigned> *graph, int *levels, int depth)
     bfs.finalise();
 }
 
+#ifndef __APPLE__
 template __global__ void
 edgeListBfs<BFS<normal>>(EdgeList<unsigned> *, int *, int);
 
@@ -30,3 +31,4 @@ edgeListBfs<BFS<warpreduce>>(EdgeList<unsigned> *, int *, int);
 
 template __global__ void
 edgeListBfs<BFS<blockreduce>>(EdgeList<unsigned> *, int *, int);
+#endif

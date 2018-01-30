@@ -60,6 +60,7 @@ vertexPushWarpBfs
     bfs.finalise();
 }
 
+#ifndef __APPLE__
 template __global__ void
 vertexPushWarpBfs<BFS<normal>>
 (size_t, size_t, CSR<unsigned,unsigned> *, int *, int);
@@ -75,3 +76,4 @@ vertexPushWarpBfs<BFS<warpreduce>>
 template __global__ void
 vertexPushWarpBfs<BFS<blockreduce>>
 (size_t, size_t, CSR<unsigned,unsigned> *, int *, int);
+#endif
