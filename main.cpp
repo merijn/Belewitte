@@ -212,8 +212,7 @@ runJob
         auto outputFile = basePath.replace_extension("output");
 
         {
-            Epoch epoch(timeFile.string(), verbose);
-            if (printStdOut) outputFile = path("/dev/stdout");
+            Epoch epoch(printStdOut ? "/dev/stdout" : timeFile.string(), verbose);
             kernel(graph, outputFile.string());
         }
 
@@ -232,7 +231,7 @@ int main(int argc, char **argv)
            .add('o', "output-dir", "DIR", outputDir,
                 "Location to use for writing algorithm output.")
            .add('O', "output", printStdOut, true,
-                "Print result to stdout, inhibits output file creation.")
+                "Print timings to stdout, inhibits timings file creation.")
            .add('p', "platform", "NUM", platform, "Platform to use.")
            .add('v', "verbose", verbose, true, "Verbose output.")
            .add('W', "warn", warnings, true, "Verbose/debug warnings.")
