@@ -29,6 +29,7 @@ vertexPullBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth)
     bfs.finalise();
 }
 
+#ifndef __APPLE__
 template __global__ void
 vertexPullBfs<BFS<normal>>(CSR<unsigned,unsigned> *, int *, int);
 
@@ -40,3 +41,4 @@ vertexPullBfs<BFS<warpreduce>>(CSR<unsigned,unsigned> *, int *, int);
 
 template __global__ void
 vertexPullBfs<BFS<blockreduce>>(CSR<unsigned,unsigned> *, int *, int);
+#endif

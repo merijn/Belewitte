@@ -24,6 +24,7 @@ vertexPushBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth)
     bfs.finalise();
 }
 
+#ifndef __APPLE__
 template __global__ void
 vertexPushBfs<BFS<normal>>(CSR<unsigned,unsigned> *, int *, int);
 
@@ -35,3 +36,4 @@ vertexPushBfs<BFS<warpreduce>>(CSR<unsigned,unsigned> *, int *, int);
 
 template __global__ void
 vertexPushBfs<BFS<blockreduce>>(CSR<unsigned,unsigned> *, int *, int);
+#endif
