@@ -21,14 +21,23 @@ struct BFSConfig : public Config
 
     unsigned root;
 
-    prop_ref frontierSize;
+    prop_ref absFrontier, relFrontier, absVisited, relVisited;
 
     BFSConfig(ConfigArg k)
-    : Config(k), root(0), frontierSize("frontier", *this)
+    : Config(k), root(0)
+    , absFrontier("frontier abs", *this)
+    , relFrontier("frontier rel", *this)
+    , absVisited("visited abs", *this)
+    , relVisited("visited rel", *this)
     { options.add('r', "root", "NUM", root, "Starting vertex for BFS."); }
 
     inline void setProps(unsigned frontier)
-    { frontierSize = frontier; }
+    {
+        absVisited += absFrontier.get();
+        relVisited = absVisited.get() / vertex_count;
+        absFrontier = frontier;
+        relFrontier = absFrontier.get() / vertex_count;
+    }
 
     virtual void runImplementation(std::ofstream& outputFile) override
     {
@@ -39,9 +48,9 @@ struct BFSConfig : public Config
         std::vector<Timer> levelTimers;
         levelTimers.reserve(1000);
 
-        std::string timerName = std::to_string(root) + ":bfsLevel";
+        std::string timerName = ":bfsLevel";
         for (int i = 0; i < 1000; i++) {
-            levelTimers.emplace_back(timerName + std::to_string(i), run_count);
+            levelTimers.emplace_back(std::to_string(i) + timerName, run_count);
         }
 
         Timer resultTransfer("resultTransfer", run_count);
@@ -64,7 +73,10 @@ struct BFSConfig : public Config
             int curr = 0;
 
             if constexpr (isSwitching) {
-                setProps(frontier);
+                absFrontier = 1;
+                relFrontier = 1.0 / vertex_count;
+                absVisited = 0;
+                relVisited = 0;
                 this->predictInitial();
             } else {
                 setKernelConfig(kernel);

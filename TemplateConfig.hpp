@@ -610,9 +610,10 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
     void setupLogging(prop_set& missingGraphProps, prop_set& missingAlgoProps)
     {
         propLog = std::ofstream(logFile);
+        propLog.imbue(std::locale("C"));
         lookup = [this,oldPredictor{lookup}]() {
             int32_t result = oldPredictor();
-            propLog << "prediction : " << stepNum << " : " << result
+            propLog << "prediction:" << stepNum << ":" << result
                     << std::endl;
             return result;
         };
@@ -628,7 +629,7 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
         logGraphProps = [this,props{std::move(graphProps)}]() {
             for (auto& pair : graphProperties) {
                 auto& [name, ref] = pair;
-                propLog << "graph : " << name << " : " << ref.get()
+                propLog << "graph:" << name << ":" << ref.get()
                         << std::endl;
             }
         };
@@ -644,7 +645,7 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
         logAlgorithmProps = [this,props{std::move(algoProps)}]() {
             for (auto& pair : algorithmProperties) {
                 auto& [name, ref] = pair;
-                propLog << "step : " << stepNum << " : " << name << " : "
+                propLog << "step:" << stepNum << ":" << name << ":"
                         << ref.get() << std::endl;
             }
         };
