@@ -406,6 +406,7 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
 
     SwitchConfig(std::map<std::string,std::shared_ptr<KernelType>> ks)
     : Config(nullptr)
+    , modelHandle(nullptr)
     , kernelMap(ks)
     , vertices("vertex count", *this, true)
     , edges("edge count", *this, true)
@@ -460,12 +461,12 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
         logAlgorithmProps();
 
         lastKernel = lookup();
-        if (lastKernel != -1) {
-            auto& impl = implementations[static_cast<size_t>(lastKernel)];
-            kernel = impl.kernel;
-            warp_size = impl.warp_size;
-            chunk_size = impl.chunk_size;
-        }
+        if (lastKernel == -1) lastKernel = defaultKernel;
+
+        auto& impl = implementations[static_cast<size_t>(lastKernel)];
+        kernel = impl.kernel;
+        warp_size = impl.warp_size;
+        chunk_size = impl.chunk_size;
         setKernelConfig(kernel);
     }
 
@@ -593,7 +594,10 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
                     kern->warp_size = std::ref(warp_size);
                     kern->chunk_size = std::ref(chunk_size);
                 }
-                if (name == "edge-list") kernel = implementations[idx].kernel;
+                if (name == "edge-list") {
+                    kernel = implementations[idx].kernel;
+                    defaultKernel = static_cast<int32_t>(idx);
+                }
             } catch (const std::out_of_range&) {
                 std::cerr << "Missing implementation: " << name << std::endl;
                 missing = true;
@@ -657,6 +661,7 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
     std::function<void()> logAlgorithmProps;
 
     int32_t lastKernel;
+    int32_t defaultKernel;
 
     std::vector<implementation> implementations;
     std::map<std::string,std::shared_ptr<KernelType>> kernelMap;
