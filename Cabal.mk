@@ -27,7 +27,7 @@ $(DEST)/$(NAME).mk: $($(NAME)_CABAL_FILES) $(BASE)/cabal.awk | $(DEST)/
 	    --prefix "$(patsubst %.cabal,%,$(notdir $($(NAME)_CABAL)))" \
 	| $(BASE)/cabal.awk "$($(NAME)_CABAL_FIRST_BIN)" \
 	    "$(foreach dir,$($(NAME)_CABAL_DIRS),\
-		$(shell find "$(CURDIR)/$(dir)" -iname '*.hs'))" >$@
+		$(shell find $(wildcard $(CURDIR)/$(dir)) -iname '*.hs'))" >$@
 
 -include $(DEST)/$(NAME).mk
 
