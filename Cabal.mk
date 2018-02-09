@@ -11,8 +11,6 @@ endif
 $(NAME)_CABAL_FILES:=$(patsubst ../%,$(BASE)/%,$($(NAME)_CABAL_FILES))
 $(NAME)_CABAL_DIRS:=$(foreach file, $($(NAME)_CABAL_FILES), $(dir $(file)))
 
-all: $($(NAME)_CABAL_BINS)
-
 $($(NAME)_CABAL_FILES): | $(filter-out ./,$($(NAME)_CABAL_DIRS))
 $($(NAME)_CABAL_BINS): | $(DEST)/$(NAME).mk
 

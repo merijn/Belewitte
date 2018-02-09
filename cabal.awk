@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 awk -v firstbin="$1" -v srcs="$2" '
+BEGIN { delete bins[0] }
 {
     if (match($0, "^[^:]*:exe:[^ ]*  ")) {
         front = substr($0, RSTART, RLENGTH-2)
@@ -11,10 +12,16 @@ awk -v firstbin="$1" -v srcs="$2" '
                 printf("\t$(PRINTF) \" CABAL\t%s\\n\"\n", front)
                 printf("\t$(AT)cd $(SRCDIR); cabal new-build ")
                 printf("--builddir=\"$(PWD)/$(DEST)\" $(if $(AT),>/dev/null,)\n\n")
-            } else {
-                printf("$(SRCDIR)/%s: $(SRCDIR)/%s\n\n", front, firstbin)
             }
         }
+        bins[length(bins)+1] = back
     }
+}
+END {
+    printf("all:")
+    for (i = 1; i <= length(bins); ++i) {
+        printf(" %s", bins[i])
+    }
+    printf("\n")
 }
 '
