@@ -10,10 +10,5 @@ graph-details
 evolve/gen-graph
 evolve/evolve
 .ghc.environment.*
-evolve/breeding-pool
-evolve/darwin
-benchmark-analysis/Ingest
-benchmark-analysis/Model
-plotting/Plot
 plotting/graph-edges
 .build/

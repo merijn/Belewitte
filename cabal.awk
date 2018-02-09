@@ -5,8 +5,6 @@ awk -v firstbin="$1" -v srcs="$2" '
         front = substr($0, RSTART, RLENGTH-2)
         back = substr($0, RSTART+RLENGTH)
         if (sub("^[^:]*:[^:]*:", "", front)) {
-            printf("$(SRCDIR)/%s: %s\n", front, back)
-            printf("\t$(PRINTF) \" CP\t%s\\n\"\n\t$(AT)cp $< $@\n\n", front)
             if (front == firstbin) {
                 printf("%s: SRCDIR:=$(SRCDIR)\n", back)
                 printf("%s: DEST:=$(DEST)\n%s: %s\n", back, back, srcs)
