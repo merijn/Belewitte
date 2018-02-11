@@ -9,7 +9,6 @@ module Main where
 import Control.Concurrent hiding (yield)
 import Control.Monad (forM_, replicateM)
 import Control.Monad.Catch (mask_)
-import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Logger
     ( LogSource, LogLevel(..), filterLogger, runChanLoggingT
     , runStderrLoggingT, unChanLoggingT)
@@ -54,7 +53,7 @@ trainModel
     -> Key GPU
     -> Set Text
     -> Set Text
-    -> SqlM (Map Text Double, Model)
+    -> SqlTx (Map Text Double, Model)
 trainModel fraction gpuId graphProps stepProps = do
     numEntries <- runSqlQueryCount query
 
@@ -138,7 +137,7 @@ dumpQueryToFile
     => String
     -> Query (v Double, Algorithms)
     -> SqlM ()
-dumpQueryToFile path query = runConduit $
+dumpQueryToFile path query = runSql . runConduit $
     runSqlQuery query
         .| C.map ((++"\n") . show)
         .| C.map fromString
@@ -147,7 +146,7 @@ dumpQueryToFile path query = runConduit $
 validateModel
     :: V.Vector v Double => Model -> Query (v Double, Algorithms) -> SqlM ()
 validateModel model query = do
-    result <- runConduit $ runSqlQuery predictions .| C.foldl aggregate (0,0)
+    result <- runSql . runConduit $ runSqlQuery predictions .| C.foldl aggregate (0,0)
     report "total" result
   where
     predictions = first (predict model) <$> query
@@ -195,7 +194,7 @@ main = do
         stepProps <- gatherProps "StepProp"
         let query = propertyQuery (toSqlKey 1) graphProps stepProps
 
-        (importance, model) <- trainModel 0.6 (toSqlKey 1) graphProps stepProps
+        (importance, model) <- runSql $ trainModel 0.6 (toSqlKey 1) graphProps stepProps
         reportFeatureImportance importance
         liftIO $ putStrLn ""
         validateModel model query

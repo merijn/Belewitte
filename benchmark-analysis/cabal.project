@@ -1,6 +1,8 @@
-packages: ./benchmark-analysis.cabal ../broadcast-chan/broadcast-chan/broadcast-chan.cabal
+packages: ./benchmark-analysis.cabal ../broadcast-chan/*/*.cabal
 jobs: 8
 solver: modular
 doc-index-file: $datadir/doc/$arch-$os-$compiler/index.html
 optimization: 2
 documentation: True
+
+allow-newer: time

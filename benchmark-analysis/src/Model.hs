@@ -5,7 +5,6 @@
 {-# LANGUAGE RecordWildCards #-}
 module Model (Model, predict, dumpCppModel, byteStringToModel) where
 
-import Control.Monad.IO.Class (MonadIO(liftIO))
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Internal as BS
 import Data.Int (Int32)
@@ -29,7 +28,7 @@ import Foreign.ForeignPtr
 import Foreign.Ptr
 import Foreign.Storable
 
-import Schema (Implementation(..), Text)
+import Schema (Implementation(..), MonadIO(liftIO), Text)
 
 newtype Model = Model (VS.Vector TreeNode)
 
@@ -115,7 +114,7 @@ extern "C" int32_t lookup()
 
         lookupName :: (Int, Int) -> Builder
         lookupName (new, original) = case implNames IM.! original of
-            Implementation _ implName _ -> mconcat
+            Implementation _ implName _ _ -> mconcat
                 [ "    { \"" , fromText implName , "\", " , decimal new
                 , ", ", warpConfig implName, " },\n" ]
 

@@ -1,14 +1,18 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 module Schema
     ( ByteString
     , LoggingT
+    , MonadIO(liftIO)
     , MonadResource
     , ReaderT(..)
     , ResourceT
@@ -20,10 +24,13 @@ module Schema
 
 import Control.Monad.Catch
     ( MonadCatch, SomeException(..), catch, displayException, throwM)
+import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Logger (LoggingT, MonadLogger, logErrorN)
+import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Reader (ReaderT(..), ask)
 import Control.Monad.Trans.Resource (ResourceT, runResourceT, MonadResource)
 import Data.ByteString (ByteString)
+import Data.Conduit (ConduitT)
 import Data.Pool (Pool)
 import Database.Persist.Quasi
 import Database.Persist.Sqlite
@@ -44,6 +51,18 @@ withLoggedExceptions :: (MonadCatch m, MonadLogger m) => String -> m r -> m r
 withLoggedExceptions msg act = act `catch`  \(SomeException e) -> do
     logErrorN . T.pack $ msg ++ displayException e
     throwM e
+
+showSqlKey :: ToBackendKey SqlBackend record => Key record -> Text
+showSqlKey = T.pack . show . fromSqlKey
+
+whenNotExists
+    :: SqlRecord record
+    => [Filter record]
+    -> ConduitT i a SqlTx ()
+    -> ConduitT i a SqlTx ()
+whenNotExists filters act = lift (selectFirst filters []) >>= \case
+    Just _ -> return ()
+    Nothing -> act
 
 getUniq :: SqlRecord record => record -> SqlTx (Key record)
 getUniq record = do

@@ -16,7 +16,7 @@ module Query
 
 import Control.Exception (Exception)
 import Control.Monad ((>=>))
-import Control.Monad.Trans (MonadIO(liftIO), lift)
+import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Resource
 import Data.Acquire (allocateAcquire)
 import Data.Conduit
@@ -52,7 +52,7 @@ instance Functor Query where
 data Error = Error Text deriving (Show)
 instance Exception Error
 
-explainSqlQuery :: Query r -> SqlM ()
+explainSqlQuery :: Query r -> SqlTx ()
 explainSqlQuery q@Query{} = do
     runConduit $ runSqlQuery newQuery .| C.mapM_ (liftIO . T.putStrLn)
   where
@@ -63,16 +63,16 @@ explainSqlQuery q@Query{} = do
 
     newQuery = q{ query = "EXPLAIN QUERY PLAN " <> query q, convert = explain }
 
-runSqlQueryCount :: Query r -> SqlM Int
+runSqlQueryCount :: Query r -> SqlTx Int
 runSqlQueryCount Query{params,query} = do
-    result <- runSql $ withRawQuery countQuery params await
+    result <- withRawQuery countQuery params await
     case result of
         Just [PersistInt64 n] -> return $ fromIntegral n
         _ -> throwM $ Error "Error computing count!"
   where
     countQuery = "SELECT COUNT(*) FROM (" <> query <> ")"
 
-runSqlQueryRandom :: Double -> Query r -> Source SqlM r
+runSqlQueryRandom :: Double -> Query r -> ConduitT () r SqlTx ()
 runSqlQueryRandom fraction q = do
     num <- lift $ runSqlQueryCount q
 
@@ -85,9 +85,9 @@ runSqlQueryRandom fraction q = do
 
     runSqlQuery q{ query = randomizedQuery <> queryLimit }
 
-runSqlQuery :: Query r -> Source SqlM r
+runSqlQuery :: Query r -> ConduitT () r SqlTx ()
 runSqlQuery Query{..} = do
-    srcRes <- lift . runSql $ rawQueryRes query params
+    srcRes <- lift $ rawQueryRes query params
     (_, src) <- allocateAcquire srcRes
     src .| converter
   where
