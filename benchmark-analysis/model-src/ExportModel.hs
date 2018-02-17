@@ -132,11 +132,7 @@ queryImplementations = do
     toIntMap :: Entity Implementation -> IntMap Implementation
     toIntMap (Entity k val) = IM.singleton (fromIntegral $ fromSqlKey k) val
 
-dumpQueryToFile
-    :: (Show (v Double), V.Vector v Double)
-    => String
-    -> Query (v Double, Algorithms)
-    -> SqlM ()
+dumpQueryToFile :: Show r => String -> Query r -> SqlM ()
 dumpQueryToFile path query = runSql . runConduit $
     runSqlQuery query
         .| C.map ((++"\n") . show)
