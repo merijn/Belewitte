@@ -102,14 +102,14 @@ FROM Variant
      INNER JOIN Graph ON Variant.graphId = Graph.id
      INNER JOIN
      ( SELECT variantId, stepId, implId
-       FROM StepTime
+       FROM StepTimer
        WHERE gpuId = #{fromSqlKey gpuId}
        GROUP BY variantId, stepId
-       HAVING avgRuntime = MIN(avgRuntime)) AS Step
+       HAVING avgTime = MIN(avgTime)) AS Step
      ON Variant.id = Step.variantId
 #{genClauses joinClause}
 WHERE #{mconcat . intersperse " AND " $ genClauses whereClause}
-ORDER BY Graph.name, Variant.variant, Step.stepId ASC|]
+ORDER BY Graph.name, Variant.name, Step.stepId ASC|]
 
     params :: [PersistValue]
     params = []
