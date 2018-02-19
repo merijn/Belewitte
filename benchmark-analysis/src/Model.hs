@@ -6,29 +6,27 @@
 module Model (Model, predict, dumpCppModel, byteStringToModel) where
 
 import Data.ByteString (ByteString)
-import qualified Data.ByteString.Internal as BS
 import Data.Int (Int32)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 import Data.List (sortBy)
 import Data.Monoid ((<>))
 import Data.Ord (comparing)
-import Data.String.Interpolate.IsString
+import Data.String.Interpolate.IsString (i)
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
-import Data.Text.Lazy.Builder
-import Data.Text.Lazy.Builder.Int
-import Data.Text.Lazy.Builder.RealFloat
+import Data.Text.Lazy.Builder (Builder, fromText, toLazyText)
+import Data.Text.Lazy.Builder.Int (decimal)
+import Data.Text.Lazy.Builder.RealFloat (realFloat)
 import qualified Data.Text.Lazy.IO as LT
 import qualified Data.Vector.Storable as VS
 import qualified Data.Vector.Generic as V
-
-import Foreign.ForeignPtr
-import Foreign.Ptr
-import Foreign.Storable
+import Foreign.Ptr (castPtr)
+import Foreign.Storable (Storable(..))
 
 import Schema (Implementation(..), MonadIO(liftIO), Text)
+import Utils (byteStringToVector)
 
 newtype Model = Model (VS.Vector TreeNode)
 
@@ -190,8 +188,4 @@ instance Storable TreeNode where
             int32Size = sizeOf (undefined :: Int32)
 
 byteStringToModel :: ByteString -> Model
-byteStringToModel bs = Model vec
-  where
-    vec = VS.unsafeFromForeignPtr (castForeignPtr fptr) (scale off) (scale len)
-    (fptr, off, len) = BS.toForeignPtr bs
-    scale = (`div` sizeOf (undefined `asTypeOf` VS.head vec))
+byteStringToModel = Model . byteStringToVector

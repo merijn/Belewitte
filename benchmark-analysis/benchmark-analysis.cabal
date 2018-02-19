@@ -28,6 +28,7 @@ Library
   Exposed-Modules:      Model
                         Query
                         Schema
+                        Utils
 
   Build-Depends:        base
                ,        bytestring
