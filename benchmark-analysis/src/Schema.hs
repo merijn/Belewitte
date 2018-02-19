@@ -11,6 +11,7 @@
 {-# LANGUAGE TypeFamilies #-}
 module Schema
     ( ByteString
+    , ImplType(..)
     , LoggingT
     , MonadIO(liftIO)
     , MonadResource
@@ -37,6 +38,8 @@ import Database.Persist.Sqlite
 import Database.Persist.TH
 import Data.Text (Text)
 import qualified Data.Text as T
+
+import ImplType (ImplType(..))
 
 type BaseM = ResourceT (LoggingT IO)
 type SqlTx = ReaderT SqlBackend BaseM

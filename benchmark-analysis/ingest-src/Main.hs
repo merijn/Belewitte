@@ -3,7 +3,7 @@
 {-# LANGUAGE TupleSections #-}
 module Main where
 
-import Control.Monad (forM_, guard)
+import Control.Monad ((>=>), forM_, guard)
 import Control.Monad.IO.Unlift
 import Control.Monad.Logger (LoggingT(..), LogSource, LogLevel(..))
 import qualified Control.Monad.Logger as Log
@@ -26,6 +26,7 @@ import System.Exit (ExitCode(ExitFailure, ExitSuccess))
 import System.FilePath (splitExtension, takeFileName)
 import System.IO (hFlush, stdout)
 import System.Process (createProcess, proc, waitForProcess)
+import Text.Read (readMaybe)
 
 import BroadcastChan.Conduit
 import Parsers
@@ -96,7 +97,7 @@ processProperty (varId, graphId, var) = do
 timingJobs
     :: Key GPU -> ConduitT () (Key Variant, Key Implementation, Text) SqlTx ()
 timingJobs gpuId = do
-    impls <- lift $ Sql.selectList [] []
+    impls <- lift $ Sql.selectList [ImplementationRunnable ==. True] []
     Sql.selectSource [] [] .| awaitForever (toTimingJob impls)
   where
     toTimingJob
@@ -107,8 +108,10 @@ timingJobs gpuId = do
                    SqlTx
                    ()
     toTimingJob impls (Entity varId (Variant graphId algoId _ varFlags)) =
-        forM_ impls $ \(Entity implId (Implementation _ name _ implFlags)) ->
-            whenNotExists  (filters ++ [TotalTimerImplId ==. implId]) $ do
+        forM_ impls runImpl
+      where
+        runImpl (Entity implId (Implementation _ name _ implFlags _ _)) = do
+            whenNotExists (filters ++ [TotalTimerImplId ==. implId]) $ do
                 Graph _ path _ <- lift $ getJust graphId
                 Algorithm algo _ <- lift $ getJust algoId
 
@@ -120,10 +123,9 @@ timingJobs gpuId = do
                     , "-n 30"
                     , path
                     ]
-      where
+
         filters = [TotalTimerGpuId ==. gpuId, TotalTimerVariantId ==. varId]
-        tag name = mconcat
-            ["\"", showSqlKey varId, " ", name, "\""]
+        tag name = mconcat ["\"", showSqlKey varId, " ", name, "\""]
 
 processTiming :: Key GPU -> (Key Variant, Key Implementation, Text) -> SqlTx ()
 processTiming gpuId (varId, implId, var) = do
@@ -158,14 +160,20 @@ processTiming gpuId (varId, implId, var) = do
     insertTiming (StepTiming n Timing{..}) = insert_ $
         StepTimer gpuId varId n implId name minTime avgTime maxTime stddev
 
-queryLine :: MonadIO m => Text -> m (Maybe Text)
-queryLine prompt = liftIO $ do
+queryLineWith :: MonadIO m => (Text -> Maybe a) -> Text -> m (Maybe a)
+queryLineWith convert prompt = liftIO $ do
     T.putStr $ prompt <> ": "
     hFlush stdout
-    foo <$> T.getLine
+    (checkEmpty >=> convert) <$> T.getLine
   where
-    foo :: Text -> Maybe Text
-    foo t = if T.null t then Nothing else Just t
+    checkEmpty :: Text -> Maybe Text
+    checkEmpty t = if T.null t then Nothing else Just t
+
+queryLine :: MonadIO m => Text -> m (Maybe Text)
+queryLine = queryLineWith return
+
+queryRead :: (MonadIO m, Read a) => Text -> m (Maybe a)
+queryRead = queryLineWith (readMaybe . T.unpack)
 
 addGPU :: SqlTx ()
 addGPU = do
@@ -193,7 +201,9 @@ addImplementation = do
     Just implName <- queryLine "Implementation Name"
     prettyName <- queryLine "Implementation Pretty Name"
     flags <- queryLine "Flags"
-    insert_ $ Implementation algoId implName prettyName flags
+    Just algoType <- queryRead "Algorithm type"
+    Just runnable <- queryRead "Runnable"
+    insert_ $ Implementation algoId implName prettyName flags algoType runnable
 
 addVariant :: SqlTx ()
 addVariant = do

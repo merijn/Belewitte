@@ -25,7 +25,8 @@ Library
   GHC-Options:          -O2 -Wall -fno-warn-unused-do-bind
   GHC-Prof-Options:     -fprof-auto
   Hs-Source-Dirs:       src
-  Exposed-Modules:      Model
+  Exposed-Modules:      ImplType
+                        Model
                         Query
                         Schema
                         Utils

@@ -111,10 +111,11 @@ extern "C" int32_t lookup()
             | otherwise = "0, 0"
 
         lookupName :: (Int, Int) -> Builder
-        lookupName (new, original) = case implNames IM.! original of
-            Implementation _ implName _ _ -> mconcat
+        lookupName (new, original) = mconcat
                 [ "    { \"" , fromText implName , "\", " , decimal new
                 , ", ", warpConfig implName, " },\n" ]
+          where
+            implName = implementationName $ implNames IM.! original
 
     propEntries :: Builder
     propEntries = foldMap propEntry . zip [0..] $ props

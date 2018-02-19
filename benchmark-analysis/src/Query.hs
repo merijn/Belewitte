@@ -103,7 +103,8 @@ FROM Variant
      INNER JOIN
      ( SELECT variantId, stepId, implId
        FROM StepTimer
-       WHERE gpuId = #{fromSqlKey gpuId}
+       INNER JOIN Implementation ON StepTimer.implId = Implementation.id
+       WHERE gpuId = #{fromSqlKey gpuId} AND Implementation.type = "Core"
        GROUP BY variantId, stepId
        HAVING avgTime = MIN(avgTime)) AS Step
      ON Variant.id = Step.variantId
