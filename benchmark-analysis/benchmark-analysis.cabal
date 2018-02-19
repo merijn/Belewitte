@@ -53,7 +53,7 @@ Executable Ingest
                         -with-rtsopts=-qg
   GHC-Prof-Options:     -fprof-auto
   Hs-Source-Dirs:       ingest-src
-  Main-Is:              Ingest.hs
+  Main-Is:              Main.hs
   Other-Modules:        Parsers
                         ProcessPool
 
@@ -84,7 +84,7 @@ Executable Model
                         -with-rtsopts=-qg
   GHC-Prof-Options:     -fprof-auto
   Hs-Source-Dirs:       model-src
-  Main-Is:              ExportModel.hs
+  Main-Is:              Main.hs
 
   Build-Depends:        base
                ,        benchmark-analysis
