@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
@@ -80,13 +81,18 @@ runSqlQuery Query{..} sink = do
     runConduit (src .| C.mapM convert .| sink) <* release key
 
 runSqlQueryCount :: Query r -> SqlM Int
-runSqlQueryCount Query{params,query} = do
-    result <- liftPersist $ withRawQuery countQuery params await
+runSqlQueryCount originalQuery = do
+    result <- runSqlQuery countQuery await
     case result of
-        Just [PersistInt64 n] -> return $ fromIntegral n
-        _ -> logThrowM $ Error "Error computing count!"
+        Just n -> return n
+        Nothing -> logThrowM . Error $ "Missing count result!"
   where
-    countQuery = "SELECT COUNT(*) FROM (" <> query <> ")"
+    countQuery = originalQuery
+        { query = "SELECT COUNT(*) FROM (" <> query originalQuery <> ")"
+        , convert = \case
+            [PersistInt64 n] -> return $ fromIntegral n
+            _ -> logThrowM . Error $ "Unexpected value in count query"
+        }
 
 propertyQuery
     :: Key GPU -> Set Text -> Set Text -> Query (Vector Double, Int64)
@@ -118,7 +124,7 @@ ORDER BY Graph.name, Variant.name, Step.stepId ASC|]
       where
         go f [PersistInt64 n] = return (V.fromList (f []), n)
         go f (PersistDouble d:vs) = go (f . (d:)) vs
-        go _ _ = logThrowM . Error $ "Unexpected value!"
+        go _ _ = logThrowM . Error $ "Unexpected value in property query!"
 
     selectClause :: Text
     selectClause = genClauses select <> "Step.implId"
