@@ -8,8 +8,10 @@ module Main where
 
 import Control.Monad (forM_, replicateM)
 import Control.Monad.Catch (mask_)
-import Control.Monad.Trans.Resource
+import Control.Monad.Trans.Resource (register, release)
 import Data.Bifunctor (first)
+import Data.Binary.Get (getDoublehost, getRemainingLazyByteString, runGet)
+import Data.Binary.Put (putDoublehost, putInt64host, runPut)
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
@@ -22,11 +24,14 @@ import Data.Ord (comparing)
 import Data.Int (Int64)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
+import Data.Monoid ((<>))
 import Data.Set (Set)
 import qualified Data.Set as S
 import Data.String (fromString)
 import Data.String.Interpolate.IsString
 import qualified Data.Text as T
+import Data.Vector.Storable (Vector)
+import qualified Data.Vector.Storable as VS
 import Database.Persist.Sqlite
 import GHC.Conc.Sync (getNumProcessors, setNumCapabilities)
 import Numeric (showFFloat)
@@ -34,20 +39,14 @@ import System.IO (hClose)
 import System.Posix.IO (createPipe, closeFd, fdToHandle)
 import System.Posix.Types (Fd)
 
-import qualified Data.Vector.Generic as V
-import qualified Data.Vector.Unboxed as VU
-
-import Data.Binary.Get
-import Data.Binary.Put
-
 import Model
 import Query
 import Schema
 
-trainModel :: Query (VU.Vector Double, Int64) -> SqlM ([Double], Model)
+trainModel :: Query (Vector Double, Int64) -> SqlM ([Double], Model)
 trainModel query = do
     numEntries <- runSqlQueryCount query
-    Just columnCount <- fmap (VU.length . fst) <$> runSqlQuery query C.head
+    Just columnCount <- fmap (VS.length . fst) <$> runSqlQuery query C.head
 
     let process :: Fd -> CreateProcess
         process fd = proc "./model.py"
@@ -90,8 +89,8 @@ trainModel query = do
 
     withCheckedProcessCleanup (process outFd) handleStreams
   where
-    putProps :: VU.Vector Double -> ByteString
-    putProps = LBS.toStrict . runPut . VU.mapM_ putDoublehost
+    putProps :: Vector Double -> ByteString
+    putProps = LBS.toStrict . runPut . VS.mapM_ putDoublehost
 
     putResults :: Int64 -> ByteString
     putResults = LBS.toStrict . runPut . putInt64host
@@ -121,13 +120,14 @@ dumpQueryToFile path query = runSqlQuery query $
     C.map ((++"\n") . show) .| C.map fromString .| C.sinkFile path
 
 validateModel
-    :: V.Vector v Double
-    => Model -> Query (v Double, Int64) -> Query (v Double, Int64) -> SqlM ()
+    :: Model
+    -> Query (Vector Double, Int64)
+    -> Query (Vector Double, Int64)
+    -> SqlM ()
 validateModel model validation total = do
     computeResults "validation" validation
     computeResults "total" total
   where
-
     computeResults name query = do
         result <- runSqlQuery predictions $ C.foldl aggregate (0,0)
         report name result
@@ -174,14 +174,15 @@ main = do
         liftPersist $ runMigrationSilent migrateAll
         graphProps <- gatherProps "GraphProp"
         stepProps <- gatherProps "StepProp"
-        let query = propertyQuery (toSqlKey 1) graphProps stepProps
+        let appendVectors (v1, v2, a) = (v1 <> v2, a)
+            query = appendVectors <$> propertyQuery (toSqlKey 1) graphProps stepProps
 
         rowCount <- runSqlQueryCount query
 
         let trainingSize :: Integer
             trainingSize = round (fromIntegral rowCount * 0.6 :: Double)
 
-            training, validation :: Query (VU.Vector Double, Int64)
+            training, validation :: Query (Vector Double, Int64)
             (training, validation) = randomizeQuery 42 trainingSize query
 
         (importance, model) <- trainModel training

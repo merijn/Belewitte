@@ -34,7 +34,7 @@ Library
                         Utils
 
   C-Sources:            cbits/sqlite-functions.c
-  CC-Options:           -Wall -Wextra -pedantic -std=c11
+  CC-Options:           -Wall -Wextra -pedantic -std=c11 -g
   Include-Dirs:         cbits
   Includes:             sqlite-functions.h
 

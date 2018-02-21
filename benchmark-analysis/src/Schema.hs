@@ -63,6 +63,12 @@ instance MonadUnliftIO BaseM where
 foreign import ccall "sqlite-functions.h &randomFun"
     randomFun :: FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
 
+foreign import ccall "random.h &vector_step"
+    vector_step :: FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
+
+foreign import ccall "random.h &vector_finalise"
+    vector_finalise :: FunPtr (Ptr () -> IO ())
+
 foreign import capi "sqlite3.h value SQLITE_ANY"
     sqliteAny :: CInt
 
@@ -112,11 +118,23 @@ createSqlFun
 createSqlFun sqlPtr nArgs name funPtr =
   createSqliteFun sqlPtr nArgs name funPtr nullFunPtr nullFunPtr
 
+createSqlAggregate
+    :: (MonadIO m, MonadLogger m, MonadThrow m)
+    => Ptr ()
+    -> CInt
+    -> String
+    -> FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
+    -> FunPtr (Ptr () -> IO ())
+    -> m ()
+createSqlAggregate sqlPtr nArgs name =
+  createSqliteFun sqlPtr nArgs name nullFunPtr
+
 runSqlM :: (LogSource -> LogLevel -> Bool) -> Text -> SqlM a -> IO a
 runSqlM logFilter path work =
   runLog . runBaseRes . withRawSqliteConnInfo connInfo . runReaderT $ do
     sqlitePtr <- asks $ getSqlitePtr . Lens.view rawSqliteConnection
     createSqlFun sqlitePtr 1 "random" randomFun
+    createSqlAggregate sqlitePtr 3 "vector" vector_step vector_finalise
     rawExecute "PRAGMA busy_timeout = 1000" []
     work
   where

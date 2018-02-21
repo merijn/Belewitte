@@ -4,7 +4,6 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TypeFamilies #-}
 module Query
     ( Query
     , explainSqlQuery
@@ -14,28 +13,31 @@ module Query
     , propertyQuery
     ) where
 
-import Control.Exception (Exception)
+import Control.Monad (forM_)
+import Control.Monad.Catch (Exception, bracket_)
 import Control.Monad.Trans.Resource (release)
 import Data.Acquire (allocateAcquire)
 import Data.Conduit (ConduitT, Void, (.|), await, runConduit)
 import qualified Data.Conduit.List as C
 import Data.Int (Int64)
-import Data.List (intersperse)
 import Data.Monoid ((<>))
-import Data.String.Interpolate.IsString
+import Data.String (fromString)
+import Data.String.Interpolate.IsString (i)
 import Data.Set (Set)
 import qualified Data.Set as S
-import Data.Text (Text)
+import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import Data.Vector.Unboxed (Vector)
-import qualified Data.Vector.Unboxed as V
+import Data.Vector.Storable (Vector)
 import Database.Persist.Sqlite
 
 import Schema
+import Utils (byteStringToVector)
 
 data Query r =
   Query
-    { params :: [PersistValue]
+    { tempTables :: [Text]
+    , clearTempTables :: [Text]
+    , params :: [PersistValue]
     , convert :: forall m . (MonadIO m, MonadLogger m, MonadThrow m)
               => [PersistValue] -> m r
     , query :: Text
@@ -75,10 +77,13 @@ randomizeQuery seed trainingSize originalQuery = (training, validation)
       { query = randomizedQuery <> [i|LIMIT -1 OFFSET #{trainingSize}|] }
 
 runSqlQuery :: Query r -> ConduitT r Void SqlM a -> SqlM a
-runSqlQuery Query{..} sink = do
+runSqlQuery Query{..} sink = bracket_ createTables dropTables $ do
     srcRes <- liftPersist $ rawQueryRes query params
     (key, src) <- allocateAcquire srcRes
     runConduit (src .| C.mapM convert .| sink) <* release key
+  where
+    createTables = forM_ tempTables $ \q -> rawExecute q []
+    dropTables = forM_ clearTempTables $ \q -> rawExecute q []
 
 runSqlQueryCount :: Query r -> SqlM Int
 runSqlQueryCount originalQuery = do
@@ -95,11 +100,45 @@ runSqlQueryCount originalQuery = do
         }
 
 propertyQuery
-    :: Key GPU -> Set Text -> Set Text -> Query (Vector Double, Int64)
+    :: Key GPU
+    -> Set Text
+    -> Set Text
+    -> Query (Vector Double, Vector Double, Int64)
 propertyQuery gpuId graphProps stepProps = Query{..}
   where
+    params :: [PersistValue]
+    params = [toPersistValue gpuId]
+
+    whereClauses :: Set Text -> Text
+    whereClauses = T.intercalate " OR " . map clause . S.toAscList
+      where
+        clause t = [i|property = "#{t}"|]
+
+    convert :: (MonadIO m, MonadLogger m, MonadThrow m)
+            => [PersistValue] -> m (Vector Double, Vector Double, Int64)
+    convert [PersistByteString bs1, PersistByteString bs2, PersistInt64 n] = do
+        return (byteStringToVector bs1, byteStringToVector bs2, n)
+    convert l = logThrowM . Error . fromString $ "Unexpected value: " ++ show l
+
+    tempTables = [[i|
+CREATE TEMP TABLE indexedGraphProps AS
+    SELECT DISTINCT property
+    FROM GraphProp
+    WHERE #{whereClauses graphProps}
+    ORDER BY property ASC
+|],[i|
+CREATE TEMP TABLE indexedStepProps AS
+    SELECT DISTINCT property
+    FROM StepProp
+    WHERE #{whereClauses stepProps}
+    ORDER BY property ASC
+|]]
+
+    clearTempTables =
+      ["DROP TABLE indexedGraphProps","DROP TABLE indexedStepProps"]
+
     query = [i|
-SELECT #{selectClause}
+SELECT GraphProps.props, StepProps.props, Step.implId
 FROM Variant
      INNER JOIN Graph ON Variant.graphId = Graph.id
      INNER JOIN
@@ -110,43 +149,20 @@ FROM Variant
        GROUP BY variantId, stepId
        HAVING avgTime = MIN(avgTime)) AS Step
      ON Variant.id = Step.variantId
-#{genClauses joinClause}
-WHERE #{mconcat . intersperse " AND " $ genClauses whereClause}
+     INNER JOIN
+     ( SELECT graphId
+            , vector(value, idxProps.rowid, #{S.size graphProps}) AS props
+       FROM GraphProp
+       INNER JOIN indexedGraphProps AS idxProps
+             ON idxProps.property = GraphProp.property
+       GROUP BY graphId) AS GraphProps
+     ON GraphProps.graphId = Graph.id
+     INNER JOIN
+     ( SELECT variantId, stepId
+            , vector(value, idxProps.rowid, #{S.size stepProps}) AS props
+       FROM StepProp
+       INNER JOIN indexedStepProps AS idxProps
+             ON idxProps.property = StepProp.property
+       GROUP BY variantId, stepId) AS StepProps
+     ON Variant.id = StepProps.variantId AND Step.stepId = StepProps.stepId
 ORDER BY Graph.name, Variant.name, Step.stepId ASC|]
-
-    params :: [PersistValue]
-    params = [toPersistValue gpuId]
-
-    convert
-        :: (MonadLogger m, MonadThrow m)
-        => [PersistValue] -> m (Vector Double, Int64)
-    convert = go id
-      where
-        go f [PersistInt64 n] = return (V.fromList (f []), n)
-        go f (PersistDouble d:vs) = go (f . (d:)) vs
-        go _ _ = logThrowM . Error $ "Unexpected value in property query!"
-
-    selectClause :: Text
-    selectClause = genClauses select <> "Step.implId"
-
-    genClauses :: Monoid m => (Text -> (Word, Text) -> m) -> m
-    genClauses f =
-        clause "GraphProp" graphProps <> clause "StepProp" stepProps
-      where
-        clause table = foldMap (f table) . zip [0..] . S.toAscList
-
-    select :: Text -> (Word, a) -> Text
-    select table (n, _) = [i|#{table}#{n}.value, |]
-
-    joinClause :: Text -> (Word, a) -> Text
-    joinClause tbl (n, _) = case tbl of
-        "GraphProp" -> clause [i|Variant.graphId = #{tbl}#{n}.graphId|]
-        "StepProp" -> clause $ [i|Variant.id = #{tbl}#{n}.variantId|]
-                            <> [i| AND #{tbl}#{n}.stepId = Step.stepId|]
-        _ -> ""
-      where
-        clause s =
-            [i|     INNER JOIN #{tbl} AS #{tbl}#{n} ON |] <> s <> "\n"
-
-    whereClause :: Text -> (Word, Text) -> [Text]
-    whereClause table (n, prop) = [[i|#{table}#{n}.property = '#{prop}'|]]
