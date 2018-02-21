@@ -9,11 +9,9 @@ module Main where
 import Control.Concurrent hiding (yield)
 import Control.Monad (forM_, replicateM)
 import Control.Monad.Catch (mask_)
-import Control.Monad.Logger
-    ( LogSource, LogLevel(..), filterLogger, runChanLoggingT
-    , runStderrLoggingT, unChanLoggingT)
 import Control.Monad.Trans.Resource
 import Data.Bifunctor (first)
+import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import Data.Conduit as C
@@ -53,7 +51,7 @@ trainModel
     -> Key GPU
     -> Set Text
     -> Set Text
-    -> SqlTx (Map Text Double, Model)
+    -> SqlM (Map Text Double, Model)
 trainModel fraction gpuId graphProps stepProps = do
     numEntries <- runSqlQueryCount query
 
@@ -122,8 +120,8 @@ trainModel fraction gpuId graphProps stepProps = do
 
 queryImplementations :: SqlM (IntMap Implementation)
 queryImplementations = do
-    Just (Entity aId _) <- runSql selectBfs
-    runSql . runConduitRes $ selectImpls aId .| C.foldMap toIntMap
+    Just (Entity aId _) <- selectBfs
+    runConduitRes $ selectImpls aId .| C.foldMap toIntMap
   where
     selectBfs = selectFirst [ AlgorithmName ==. "bfs" ] []
 
@@ -133,7 +131,7 @@ queryImplementations = do
     toIntMap (Entity k val) = IM.singleton (fromIntegral $ fromSqlKey k) val
 
 dumpQueryToFile :: Show r => String -> Query r -> SqlM ()
-dumpQueryToFile path query = runSql . runConduit $
+dumpQueryToFile path query = runConduit $
     runSqlQuery query
         .| C.map ((++"\n") . show)
         .| C.map fromString
@@ -142,7 +140,7 @@ dumpQueryToFile path query = runSql . runConduit $
 validateModel
     :: V.Vector v Double => Model -> Query (v Double, Algorithms) -> SqlM ()
 validateModel model query = do
-    result <- runSql . runConduit $ runSqlQuery predictions .| C.foldl aggregate (0,0)
+    result <- runConduit $ runSqlQuery predictions .| C.foldl aggregate (0,0)
     report "total" result
   where
     predictions = first (predict model) <$> query
@@ -177,20 +175,15 @@ reportFeatureImportance importances =
 
 main :: IO ()
 main = do
-    numCPUs <- getNumProcessors
-    setNumCapabilities numCPUs
+    getNumProcessors >>= setNumCapabilities
 
-    logChan <- newChan
-    forkIO . runStderrLoggingT . filterLogger isNotDebug $
-        unChanLoggingT logChan
-
-    runChanLoggingT logChan . runWithDb "test.db" numCPUs $ do
-        runSql $ runMigrationSilent migrateAll
+    runSqlM isNotDebug "test.db" $ do
+        liftPersist $ runMigrationSilent migrateAll
         graphProps <- gatherProps "GraphProp"
         stepProps <- gatherProps "StepProp"
         let query = propertyQuery (toSqlKey 1) graphProps stepProps
 
-        (importance, model) <- runSql $ trainModel 0.6 (toSqlKey 1) graphProps stepProps
+        (importance, model) <- trainModel 0.6 (toSqlKey 1) graphProps stepProps
         reportFeatureImportance importance
         liftIO $ putStrLn ""
         validateModel model query
@@ -200,7 +193,7 @@ main = do
   where
     gatherProps :: Text -> SqlM (Set Text)
     gatherProps table =
-        runSql . runConduit $ rawQuery query [] .| C.foldMap toSet
+        runConduit $ rawQuery query [] .| C.foldMap toSet
       where
         toSet [PersistText t] = S.singleton t
         toSet _ = S.empty
@@ -210,6 +203,3 @@ main = do
     isNotDebug :: LogSource -> LogLevel -> Bool
     isNotDebug _ LevelDebug = False
     isNotDebug _ _ = True
-
-    runWithDb :: Text -> Int -> SqlM a -> LoggingT IO a
-    runWithDb path n = runResourceT . withSqlitePool path n . runReaderT

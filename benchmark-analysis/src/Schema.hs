@@ -6,33 +6,29 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 module Schema
-    ( ByteString
-    , ImplType(..)
-    , LoggingT
+    ( ImplType(..)
+    , LogLevel(..)
+    , LogSource
     , MonadIO(liftIO)
-    , MonadResource
     , ReaderT(..)
-    , ResourceT
     , Text
-    , ask
-    , runResourceT
     , module Schema
     ) where
 
+import Control.Exception (Exception(displayException))
 import Control.Monad.Catch
-    ( MonadCatch, SomeException(..), catch, displayException, throwM)
-import Control.Monad.IO.Class (MonadIO(liftIO))
-import Control.Monad.Logger (LoggingT, MonadLogger, logErrorN)
+    (MonadCatch, MonadMask, MonadThrow, SomeException(..), catch, throwM)
+import Control.Monad.IO.Unlift
+    (MonadIO(liftIO), MonadUnliftIO(..), UnliftIO(..), withUnliftIO)
+import Control.Monad.Logger (LoggingT, LogLevel, LogSource, MonadLogger)
+import qualified Control.Monad.Logger as Log
 import Control.Monad.Trans (lift)
-import Control.Monad.Trans.Reader (ReaderT(..), ask)
-import Control.Monad.Trans.Resource (ResourceT, runResourceT, MonadResource)
-import Data.ByteString (ByteString)
+import Control.Monad.Trans.Reader (ReaderT(..))
+import Control.Monad.Trans.Resource (MonadResource, ResourceT, runResourceT)
 import Data.Conduit (ConduitT)
-import Data.Pool (Pool)
 import Database.Persist.Quasi
 import Database.Persist.Sqlite
 import Database.Persist.TH
@@ -41,18 +37,35 @@ import qualified Data.Text as T
 
 import ImplType (ImplType(..))
 
-type BaseM = ResourceT (LoggingT IO)
-type SqlTx = ReaderT SqlBackend BaseM
-type SqlM = ReaderT (Pool SqlBackend) BaseM
+type SqlM = ReaderT (RawSqlite SqlBackend) BaseM
 
-type SqlRecord t = PersistRecordBackend t SqlBackend
+newtype BaseM a = BaseM { runBaseM :: ResourceT (LoggingT IO) a }
+  deriving
+  ( Applicative, Functor, Monad, MonadCatch, MonadIO, MonadLogger, MonadMask
+  , MonadResource, MonadThrow)
 
-runSql :: SqlTx a -> SqlM a
-runSql = ReaderT . runSqlPool
+instance MonadUnliftIO BaseM where
+  askUnliftIO = BaseM $ withUnliftIO $ \u ->
+                            return (UnliftIO (unliftIO u . runBaseM))
 
-withLoggedExceptions :: (MonadCatch m, MonadLogger m) => String -> m r -> m r
+type SqlRecord rec = (PersistRecordBackend rec (RawSqlite SqlBackend))
+
+runSqlM :: (LogSource -> LogLevel -> Bool) -> Text -> SqlM a -> IO a
+runSqlM logFilter path =
+   runLog . runBaseRes . withRawSqliteConnInfo connInfo . runReaderT
+  where
+    runLog :: LoggingT IO a -> IO a
+    runLog = Log.runStderrLoggingT . Log.filterLogger logFilter
+
+    runBaseRes :: BaseM a -> LoggingT IO a
+    runBaseRes = runResourceT . runBaseM
+
+    connInfo :: SqliteConnectionInfo
+    connInfo = mkSqliteConnectionInfo path
+
+withLoggedExceptions :: (MonadMask m, MonadLogger m) => String -> m r -> m r
 withLoggedExceptions msg act = act `catch`  \(SomeException e) -> do
-    logErrorN . T.pack $ msg ++ displayException e
+    Log.logErrorN . T.pack $ msg ++ displayException e
     throwM e
 
 showSqlKey :: ToBackendKey SqlBackend record => Key record -> Text
@@ -60,25 +73,25 @@ showSqlKey = T.pack . show . fromSqlKey
 
 whenNotExists
     :: SqlRecord record
-    => [Filter record]
-    -> ConduitT i a SqlTx ()
-    -> ConduitT i a SqlTx ()
+    => [Filter record] -> ConduitT i a SqlM () -> ConduitT i a SqlM ()
 whenNotExists filters act = lift (selectFirst filters []) >>= \case
     Just _ -> return ()
     Nothing -> act
 
-getUniq :: SqlRecord record => record -> SqlTx (Key record)
+getUniq :: SqlRecord record => record -> SqlM (Key record)
 getUniq record = do
     result <- getBy =<< onlyUnique record
     case result of
         Nothing -> insert record
         Just (Entity k _) -> return k
 
-insertUniq :: (Eq record, Show record, SqlRecord record) => record -> SqlTx ()
+insertUniq
+    :: (SqlRecord record, Eq record, Show record)
+    => record -> SqlM ()
 insertUniq record = do
     result <- insertBy record
     case result of
-        Left (Entity _ r) | record /= r -> logErrorN . T.pack $ mconcat
+        Left (Entity _ r) | record /= r -> Log.logErrorN . T.pack $ mconcat
             ["Unique insert failed:\nFound: ", show r, "\nNew: ", show record]
         _ -> return ()
 

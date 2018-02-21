@@ -3,6 +3,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeFamilies #-}
 module Query
     ( Algorithms
     , Props
@@ -18,7 +19,6 @@ import Control.Exception (Exception)
 import Control.Monad ((>=>))
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Resource
-import Data.Acquire (allocateAcquire)
 import Data.Conduit
 import qualified Data.Conduit.List as C
 import Data.Int (Int64)
@@ -52,7 +52,7 @@ instance Functor Query where
 data Error = Error Text deriving (Show)
 instance Exception Error
 
-explainSqlQuery :: Query r -> SqlTx ()
+explainSqlQuery :: Query r -> SqlM ()
 explainSqlQuery q@Query{} = do
     runConduit $ runSqlQuery newQuery .| C.mapM_ (liftIO . T.putStrLn)
   where
@@ -63,16 +63,16 @@ explainSqlQuery q@Query{} = do
 
     newQuery = q{ query = "EXPLAIN QUERY PLAN " <> query q, convert = explain }
 
-runSqlQueryCount :: Query r -> SqlTx Int
+runSqlQueryCount :: Query r -> SqlM Int
 runSqlQueryCount Query{params,query} = do
-    result <- withRawQuery countQuery params await
+    result <- liftPersist $ withRawQuery countQuery params await
     case result of
         Just [PersistInt64 n] -> return $ fromIntegral n
         _ -> throwM $ Error "Error computing count!"
   where
     countQuery = "SELECT COUNT(*) FROM (" <> query <> ")"
 
-runSqlQueryRandom :: Double -> Query r -> ConduitT () r SqlTx ()
+runSqlQueryRandom :: Double -> Query r -> ConduitT () r SqlM ()
 runSqlQueryRandom fraction q = do
     num <- lift $ runSqlQueryCount q
 
@@ -85,11 +85,8 @@ runSqlQueryRandom fraction q = do
 
     runSqlQuery q{ query = randomizedQuery <> queryLimit }
 
-runSqlQuery :: Query r -> ConduitT () r SqlTx ()
-runSqlQuery Query{..} = do
-    srcRes <- lift $ rawQueryRes query params
-    (_, src) <- allocateAcquire srcRes
-    src .| converter
+runSqlQuery :: Query r -> ConduitT () r SqlM ()
+runSqlQuery Query{..} = rawQuery query params .| converter
   where
       converter = awaitForever $ convert >=> yield
 

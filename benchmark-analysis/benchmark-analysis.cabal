@@ -47,6 +47,7 @@ Library
                ,        resource-pool
                ,        text
                ,        transformers
+               ,        unliftio-core == 0.1.1.*
                ,        vector == 0.12.0.1
 
 Executable Ingest
@@ -70,7 +71,6 @@ Executable Ingest
                ,        filepath == 1.4.1.*
                ,        monad-logger == 0.3.28.*
                ,        optparse-applicative == 0.14.0.*
-               ,        microlens == 0.4.8.*
                ,        mtl == 2.2.1
                ,        process == 1.6.1.*
                ,        persistent-sqlite == 2.8.*

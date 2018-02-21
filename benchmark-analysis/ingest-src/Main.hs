@@ -5,8 +5,6 @@ module Main where
 
 import Control.Monad ((>=>), forM_, guard)
 import Control.Monad.IO.Unlift
-import Control.Monad.Logger (LoggingT(..), LogSource, LogLevel(..))
-import qualified Control.Monad.Logger as Log
 import Control.Monad.Trans (lift)
 import Data.Conduit (ConduitT, (.|), awaitForever, runConduit, yield)
 import qualified Data.Conduit.Combinators as C
@@ -18,7 +16,6 @@ import qualified Data.Text.IO as T
 import Database.Persist.Sqlite (Key, Entity(..), (==.), getJust, insert_)
 import qualified Database.Persist.Sqlite as Sql
 import GHC.Conc.Sync (getNumProcessors, setNumCapabilities)
-import qualified Lens.Micro as Lens
 import Options.Applicative
 import System.Directory (removeFile, doesFileExist)
 import System.Environment (getProgName)
@@ -41,12 +38,12 @@ runTask Process{..} (x, y, cmd) = do
     T.putStrLn $ "Done: " <> cmd
     return (x, y, result)
 
-propertyJobs :: ConduitT () (Key Variant, Key Graph, Text) SqlTx ()
+propertyJobs :: ConduitT () (Key Variant, Key Graph, Text) SqlM ()
 propertyJobs = Sql.selectSource [] [] .| awaitForever toPropJob
   where
     toPropJob
         :: Entity Variant
-        -> ConduitT (Entity Variant) (Key Variant, Key Graph, Text) SqlTx ()
+        -> ConduitT (Entity Variant) (Key Variant, Key Graph, Text) SqlM ()
     toPropJob (Entity varId (Variant graphId algoId _ varFlags)) = do
         whenNotExists filters $ do
             Graph _ path _ <- lift $ getJust graphId
@@ -62,7 +59,7 @@ propertyJobs = Sql.selectSource [] [] .| awaitForever toPropJob
       where
         filters = [StepPropVariantId ==. varId, StepPropStepId ==. 0]
 
-processProperty :: (Key Variant, Key Graph, Text) -> SqlTx ()
+processProperty :: (Key Variant, Key Graph, Text) -> SqlM ()
 processProperty (varId, graphId, var) = do
     liftIO $ do
         putStrLn $ "Property: " ++ T.unpack var
@@ -85,7 +82,7 @@ processProperty (varId, graphId, var) = do
     timingFile :: FilePath
     timingFile = T.unpack var <> ".timings"
 
-    insertProperty :: Property -> SqlTx ()
+    insertProperty :: Property -> SqlM ()
     insertProperty (GraphProperty name val) =
         insertUniq $ GraphProp graphId name val
 
@@ -95,7 +92,7 @@ processProperty (varId, graphId, var) = do
     insertProperty Prediction{} = return ()
 
 timingJobs
-    :: Key GPU -> ConduitT () (Key Variant, Key Implementation, Text) SqlTx ()
+    :: Key GPU -> ConduitT () (Key Variant, Key Implementation, Text) SqlM ()
 timingJobs gpuId = do
     impls <- lift $ Sql.selectList [ImplementationRunnable ==. True] []
     Sql.selectSource [] [] .| awaitForever (toTimingJob impls)
@@ -105,7 +102,7 @@ timingJobs gpuId = do
         -> Entity Variant
         -> ConduitT (Entity Variant)
                    (Key Variant, Key Implementation, Text)
-                   SqlTx
+                   SqlM
                    ()
     toTimingJob impls (Entity varId (Variant graphId algoId _ varFlags)) =
         forM_ impls runImpl
@@ -127,7 +124,7 @@ timingJobs gpuId = do
         filters = [TotalTimerGpuId ==. gpuId, TotalTimerVariantId ==. varId]
         tag name = mconcat ["\"", showSqlKey varId, " ", name, "\""]
 
-processTiming :: Key GPU -> (Key Variant, Key Implementation, Text) -> SqlTx ()
+processTiming :: Key GPU -> (Key Variant, Key Implementation, Text) -> SqlM ()
 processTiming gpuId (varId, implId, var) = do
     result <- liftIO $ do
         putStrLn $ "Timing: " ++ T.unpack var
@@ -153,7 +150,7 @@ processTiming gpuId (varId, implId, var) = do
     reference = T.unpack $ T.takeWhile (/=' ') var <> ".output"
     compareProc = proc "diff" ["-q", reference, outputFile]
 
-    insertTiming :: Timer -> SqlTx ()
+    insertTiming :: Timer -> SqlM ()
     insertTiming (TotalTiming Timing{..}) = insert_ $
         TotalTimer gpuId varId implId name minTime avgTime maxTime stddev
 
@@ -175,26 +172,26 @@ queryLine = queryLineWith return
 queryRead :: (MonadIO m, Read a) => Text -> m (Maybe a)
 queryRead = queryLineWith (readMaybe . T.unpack)
 
-addGPU :: SqlTx ()
+addGPU :: SqlM ()
 addGPU = do
     Just gpuName <- queryLine "GPU Slurm Name"
     prettyName <- queryLine "GPU Pretty Name"
     insert_ $ GPU gpuName prettyName
 
-addGraphs :: [FilePath] -> SqlTx ()
+addGraphs :: [FilePath] -> SqlM ()
 addGraphs = mapM_ $ \path -> do
     liftIO $ doesFileExist path >>= guard
     let (graphName, ext) = splitExtension $ takeFileName path
     liftIO $ guard (ext == ".graph")
     insert_ $ Graph (T.pack graphName) (T.pack path) Nothing
 
-addAlgorithm :: SqlTx ()
+addAlgorithm :: SqlM ()
 addAlgorithm = do
     Just algoName <- queryLine "Algorithm Name"
     prettyName <- queryLine "Algorithm Pretty Name"
     insert_ $ Algorithm algoName prettyName
 
-addImplementation :: SqlTx ()
+addImplementation :: SqlM ()
 addImplementation = do
     Just algoName <- queryLine "Algorithm Name"
     Just (Entity algoId _) <- Sql.getBy (UniqAlgorithm algoName)
@@ -205,7 +202,7 @@ addImplementation = do
     Just runnable <- queryRead "Runnable"
     insert_ $ Implementation algoId implName prettyName flags algoType runnable
 
-addVariant :: SqlTx ()
+addVariant :: SqlM ()
 addVariant = do
     Just algoName <- queryLine "Algorithm Name"
     Just (Entity algoId _) <- Sql.getBy (UniqAlgorithm algoName)
@@ -215,7 +212,7 @@ addVariant = do
         Sql.selectKeys [] []
         .| C.mapM_ (\gId -> insert_ $ Variant gId algoId variantName flags)
 
-runBenchmarks :: Int -> SqlTx ()
+runBenchmarks :: Int -> SqlM ()
 runBenchmarks n = do
     withProcessPool n (GPU "TitanX" Nothing) $ \procPool -> runConduit $
         propertyJobs
@@ -232,7 +229,7 @@ runBenchmarks n = do
 data Options = Options
     { dbPath :: Text
     , verbosity :: LogLevel
-    , ingestTask :: SqlTx ()
+    , ingestTask :: SqlM ()
     }
 
 commandParser :: String -> ParserInfo Options
@@ -266,7 +263,7 @@ commandParser name = info (options <**> helper) $ mconcat
             [ short 'v', long "verbose", help "Enable more verbose logging."
             , value 0, metavar "N", showDefault ]
 
-commands :: String -> Parser (SqlTx ())
+commands :: String -> Parser (SqlM ())
 commands name = hsubparser $ mconcat
     [ subCommand "add-gpu" "register a new GPU" "" $
         pure addGPU
@@ -301,14 +298,9 @@ main = do
     programName <- getProgName
     Options{..} <- execParser $ commandParser programName
 
-    let isNotDebug :: LogSource -> LogLevel -> Bool
-        isNotDebug _ lvl = lvl >= verbosity
+    let logVerbosity :: LogSource -> LogLevel -> Bool
+        logVerbosity _ lvl = lvl >= verbosity
 
-    Log.runStderrLoggingT . Log.filterLogger isNotDebug . runWithDb dbPath $ do
-        Sql.runMigrationSilent migrateAll
+    runSqlM logVerbosity dbPath $ do
+        Sql.liftPersist $ Sql.runMigrationSilent migrateAll
         ingestTask
-  where
-    runWithDb :: Text -> SqlTx a -> LoggingT IO a
-    runWithDb path = runResourceT . Sql.withSqliteConnInfo sqlInfo . runReaderT
-      where
-        sqlInfo = Lens.set Sql.fkEnabled True $ Sql.mkSqliteConnectionInfo path
