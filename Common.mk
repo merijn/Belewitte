@@ -95,12 +95,3 @@ endif
     NVCCXXFLAGS += --compiler-options "$(NVWFLAGS) $(NVCCHOSTCXXFLAGS)" \
                    -Wno-deprecated-gpu-targets
 endif
-
-$(BASE)/broadcast-chan/:
-	$(PRINTF) " HG\tbroadcast-chan (clone)\n"
-	$(AT)hg clone https://bitbucket.org/merijnv/broadcast-chan $@ \
-	     $(if $(AT),>/dev/null,)
-
-$(BASE)/broadcast-chan/%: | $(BASE)/broadcast-chan/
-	$(PRINTF) " HG\tbroadcast-chan (pull)\n"
-	$(AT)cd $(BASE)/broadcast-chan && hg pull $(if $(AT),>/dev/null,)
