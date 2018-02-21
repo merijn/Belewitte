@@ -5,21 +5,18 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
 module Query
-    ( Algorithms
-    , Props
-    , Query(Query,columnCount)
+    ( Query
     , explainSqlQuery
-    , runSqlQueryCount
+    , randomizeQuery
     , runSqlQuery
-    , runSqlQueryRandom
+    , runSqlQueryCount
     , propertyQuery
     ) where
 
 import Control.Exception (Exception)
-import Control.Monad ((>=>))
-import Control.Monad.Trans (lift)
-import Control.Monad.Trans.Resource
-import Data.Conduit
+import Control.Monad.Trans.Resource (release)
+import Data.Acquire (allocateAcquire)
+import Data.Conduit (ConduitT, Void, (.|), await, runConduit)
 import qualified Data.Conduit.List as C
 import Data.Int (Int64)
 import Data.List (intersperse)
@@ -35,14 +32,11 @@ import Database.Persist.Sqlite
 
 import Schema
 
-type Props = Vector Double
-type Algorithms = Int64
-
 data Query r =
   Query
-    { columnCount :: Int
-    , params :: [PersistValue]
-    , convert :: forall m . (MonadIO m, MonadThrow m) => [PersistValue] -> m r
+    { params :: [PersistValue]
+    , convert :: forall m . (MonadIO m, MonadLogger m, MonadThrow m)
+              => [PersistValue] -> m r
     , query :: Text
     }
 
@@ -53,44 +47,49 @@ data Error = Error Text deriving (Show)
 instance Exception Error
 
 explainSqlQuery :: Query r -> SqlM ()
-explainSqlQuery q@Query{} = do
-    runConduit $ runSqlQuery newQuery .| C.mapM_ (liftIO . T.putStrLn)
+explainSqlQuery originalQuery =
+    runSqlQuery explainQuery $ C.mapM_ (liftIO . T.putStrLn)
   where
-    explain :: (MonadIO m, MonadThrow m) => [PersistValue] -> m Text
+    explain
+        :: (MonadIO m, MonadLogger m, MonadThrow m) => [PersistValue] -> m Text
     explain [PersistInt64 _,PersistInt64 _,PersistInt64 _,PersistText t] =
         return t
-    explain _ = throwM $ Error "Explain failed!"
+    explain _ = logThrowM $ Error "Explain failed!"
 
-    newQuery = q{ query = "EXPLAIN QUERY PLAN " <> query q, convert = explain }
+    explainQuery = originalQuery
+      { query = "EXPLAIN QUERY PLAN " <> query originalQuery
+      , convert = explain
+      }
+
+randomizeQuery :: Int -> Integer -> Query r -> (Query r, Query r)
+randomizeQuery seed trainingSize originalQuery = (training, validation)
+  where
+    randomizedQuery =
+      [i|SELECT * FROM (#{query originalQuery}) ORDER BY random(#{seed}) |]
+
+    training = originalQuery
+      { query = randomizedQuery <> [i|LIMIT #{trainingSize}|] }
+
+    validation = originalQuery
+      { query = randomizedQuery <> [i|LIMIT -1 OFFSET #{trainingSize}|] }
+
+runSqlQuery :: Query r -> ConduitT r Void SqlM a -> SqlM a
+runSqlQuery Query{..} sink = do
+    srcRes <- liftPersist $ rawQueryRes query params
+    (key, src) <- allocateAcquire srcRes
+    runConduit (src .| C.mapM convert .| sink) <* release key
 
 runSqlQueryCount :: Query r -> SqlM Int
 runSqlQueryCount Query{params,query} = do
     result <- liftPersist $ withRawQuery countQuery params await
     case result of
         Just [PersistInt64 n] -> return $ fromIntegral n
-        _ -> throwM $ Error "Error computing count!"
+        _ -> logThrowM $ Error "Error computing count!"
   where
     countQuery = "SELECT COUNT(*) FROM (" <> query <> ")"
 
-runSqlQueryRandom :: Double -> Query r -> ConduitT () r SqlM ()
-runSqlQueryRandom fraction q = do
-    num <- lift $ runSqlQueryCount q
-
-    let trainingSize :: Integer
-        trainingSize = round (fraction * fromIntegral num)
-
-        queryLimit = [i|LIMIT #{trainingSize}|]
-
-        randomizedQuery = [i|SELECT * FROM (#{query q}) ORDER BY random() |]
-
-    runSqlQuery q{ query = randomizedQuery <> queryLimit }
-
-runSqlQuery :: Query r -> ConduitT () r SqlM ()
-runSqlQuery Query{..} = rawQuery query params .| converter
-  where
-      converter = awaitForever $ convert >=> yield
-
-propertyQuery :: Key GPU -> Set Text -> Set Text -> Query (Props, Algorithms)
+propertyQuery
+    :: Key GPU -> Set Text -> Set Text -> Query (Vector Double, Int64)
 propertyQuery gpuId graphProps stepProps = Query{..}
   where
     query = [i|
@@ -101,7 +100,7 @@ FROM Variant
      ( SELECT variantId, stepId, implId
        FROM StepTimer
        INNER JOIN Implementation ON StepTimer.implId = Implementation.id
-       WHERE gpuId = #{fromSqlKey gpuId} AND Implementation.type = "Core"
+       WHERE gpuId = ? AND Implementation.type = "Core"
        GROUP BY variantId, stepId
        HAVING avgTime = MIN(avgTime)) AS Step
      ON Variant.id = Step.variantId
@@ -110,17 +109,16 @@ WHERE #{mconcat . intersperse " AND " $ genClauses whereClause}
 ORDER BY Graph.name, Variant.name, Step.stepId ASC|]
 
     params :: [PersistValue]
-    params = []
+    params = [toPersistValue gpuId]
 
-    columnCount :: Int
-    columnCount = S.size graphProps + S.size stepProps
-
-    convert :: MonadThrow m => [PersistValue] -> m (Props, Algorithms)
-    convert = go id columnCount
+    convert
+        :: (MonadLogger m, MonadThrow m)
+        => [PersistValue] -> m (Vector Double, Int64)
+    convert = go id
       where
-        go f 0 [PersistInt64 n] = return (V.fromListN columnCount (f []), n)
-        go f n (PersistDouble d:vs) = go (f . (d:)) (n-1) vs
-        go _ _ _ = throwM . Error $ "Unexpect value!"
+        go f [PersistInt64 n] = return (V.fromList (f []), n)
+        go f (PersistDouble d:vs) = go (f . (d:)) vs
+        go _ _ = logThrowM . Error $ "Unexpected value!"
 
     selectClause :: Text
     selectClause = genClauses select <> "Step.implId"

@@ -20,6 +20,8 @@ Synopsis:
 
 Description:
 
+Extra-Source-Files:     cbits/*.h
+
 Library
   Default-Language:     Haskell2010
   GHC-Options:          -O2 -Wall -fno-warn-unused-do-bind
@@ -31,6 +33,11 @@ Library
                         Schema
                         Utils
 
+  C-Sources:            cbits/sqlite-functions.c
+  CC-Options:           -Wall -Wextra -pedantic -std=c11
+  Include-Dirs:         cbits
+  Includes:             sqlite-functions.h
+
   Build-Depends:        base
                ,        bytestring
                ,        binary >= 0.8.4
@@ -38,6 +45,7 @@ Library
                ,        containers == 0.5.10.*
                ,        exceptions == 0.8.3.*
                ,        interpolate == 0.1.1
+               ,        microlens == 0.4.8.*
                ,        monad-logger == 0.3.28.*
                ,        mtl == 2.2.1
                ,        persistent == 2.8.*
@@ -78,7 +86,6 @@ Executable Ingest
                ,        text
                ,        time == 1.9
                ,        unix == 2.7.2.*
-               ,        unliftio-core == 0.1.1.0
 
 Executable Model
   Default-Language:     Haskell2010

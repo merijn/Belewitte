@@ -4,7 +4,6 @@
 module Main where
 
 import Control.Monad ((>=>), forM_, guard)
-import Control.Monad.IO.Unlift
 import Control.Monad.Trans (lift)
 import Data.Conduit (ConduitT, (.|), awaitForever, runConduit, yield)
 import qualified Data.Conduit.Combinators as C
@@ -65,7 +64,7 @@ processProperty (varId, graphId, var) = do
         putStrLn $ "Property: " ++ T.unpack var
         removeFile timingFile
 
-    withLoggedExceptions (propLog <> ": ") . runConduit $
+    runConduit $
         C.sourceFile propLog
         .| C.decode C.utf8
         .| C.map (T.replace "," "")
@@ -135,7 +134,7 @@ processTiming gpuId (varId, implId, var) = do
         ExitFailure _ -> liftIO $ putStrLn "whoops!"
         ExitSuccess -> do
             liftIO $ removeFile outputFile
-            withLoggedExceptions (timingFile ++ ": ") . runConduit $
+            runConduit $
                 C.sourceFile timingFile
                 .| C.decode C.utf8
                 .| C.map (T.replace "," "")
