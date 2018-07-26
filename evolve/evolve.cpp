@@ -382,7 +382,7 @@ usage(int exitCode = EXIT_FAILURE)
     out << execName << " fitness <graph>" << endl;
     out << execName << " [--directed | -d] [--undirected | -u] "
          << "[--mutation-rate <rate> | -m <rate>] "
-         << "[ --single-point | --pointwise ] crossover <graph 1> "
+         << "[ --single-point | --edgewise | --vertexwise ] crossover <graph 1> "
          << "<graph 2> <output graph>" << endl;
     exit(exitCode);
 }
