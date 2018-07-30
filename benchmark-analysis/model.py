@@ -4,6 +4,7 @@ from sys import stdin, stdout, stderr
 
 import argparse
 import numpy as np
+from collections import defaultdict
 from os import fdopen
 from scipy.sparse import csr_matrix
 import struct
@@ -63,6 +64,7 @@ arrayTree = []
 translation = { -1 : -1 }
 queue = [0]
 
+unknown = defaultdict(lambda: 0)
 while queue:
     node = queue.pop(0)
     left_child = tree.children_left[node]
@@ -74,7 +76,12 @@ while queue:
     if left_child == _tree.TREE_LEAF:
         proba = tree.value[node] / tree.weighted_n_node_samples[node]
         pred = np.argmax(proba, axis=1).nonzero()[0]
-        pred = thread.decode_table[pred[0]] if len(pred) == 1 else -1
+        if len(pred) == 1:
+            pred = thread.decode_table[pred[0]]
+        else:
+            key = tuple(thread.decode_table[k] for k in np.flatnonzero(proba[:,1]))
+            unknown[key] += 1
+            pred = key[0]
         translation[node] = count
         count += 1
         arrayTree.append((threshold, featureIdx, -1, pred))
@@ -85,6 +92,10 @@ while queue:
 
         queue.append(left_child)
         queue.append(right_child)
+
+total = sum(unknown.values())
+for key, val in sorted(unknown.items(), key=lambda x: x[1], reverse=True):
+    print >>stderr, key, ":", val, float(val)/total
 
 def translate(data):
     if data[2] != -1:
