@@ -126,7 +126,7 @@ withChildrenDo cleanup body = do
   where
     act :: (?threadState :: ThreadState) => IO a
     act = mask $ \restore -> do
-        result <- try (restore body)
+        result <- Catch.try (restore body)
         case cleanup of
             Kill -> mapChildren killWeak
             Reraise | Left (SomeException e) <- result -> mapChildren (throwToWeak e)
@@ -292,7 +292,7 @@ withProcess
     => CreateProcess
     -> (Either e Text -> m b)
     -> m b
-withProcess procDesc getResult = try (go 5) >>= getResult
+withProcess procDesc getResult = Catch.try (go 5) >>= getResult
   where
     process :: MonadIO m => m ProcHandles
     process = liftIO $ createProcess procDesc{ std_out = CreatePipe }
@@ -304,7 +304,7 @@ withProcess procDesc getResult = try (go 5) >>= getResult
     go :: (MonadThrow m, MonadIO m) => Int -> m Text
     go 0 = throwM . ProcFailed $ showCmd (cmdspec procDesc)
     go n = do
-        result <- try $ Catch.bracket process cleanup work
+        result <- Catch.try $ Catch.bracket process cleanup work
         case result of
             Right v -> return v
             Left e | Just ProcFailed{} <- fromException e -> throwM e
