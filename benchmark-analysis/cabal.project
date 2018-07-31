@@ -1,9 +1,0 @@
-packages: ./benchmark-analysis.cabal ../broadcast-chan/*/*.cabal
-optional-packages: ../persistent/persistent-sqlite/*.cabal
-jobs: 8
-solver: modular
-doc-index-file: $datadir/doc/$arch-$os-$compiler/index.html
-optimization: 2
-documentation: True
-
-allow-newer: time

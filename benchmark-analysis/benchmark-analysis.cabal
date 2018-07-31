@@ -85,7 +85,7 @@ Executable Ingest
                ,        resource-pool
                ,        text
                ,        time == 1.9
-               ,        unix == 2.7.2.*
+               ,        unix == 2.7.*
 
 Executable Model
   Default-Language:     Haskell2010

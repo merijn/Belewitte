@@ -1,0 +1,27 @@
+packages: */*.cabal
+
+source-repository-package
+  type: git
+  location: https://github.com/merijn/broadcast-chan.git
+  tag: 996aecdacc2eb8501a1a27c8559153d93ed3d6d2
+  subdir: broadcast-chan
+
+source-repository-package
+  type: git
+  location: https://github.com/merijn/broadcast-chan.git
+  tag: 996aecdacc2eb8501a1a27c8559153d93ed3d6d2
+  subdir: broadcast-chan-conduit
+
+source-repository-package
+  type: git
+  location: https://github.com/merijn/persistent.git
+  tag: 788048f439ff471a6bec5079e5e6c50377ae4cc2
+  subdir: persistent-sqlite
+
+jobs: 8
+solver: modular
+doc-index-file: $datadir/doc/$arch-$os-$compiler/index.html
+optimization: 2
+documentation: False
+
+allow-newer: time

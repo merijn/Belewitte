@@ -1,6 +1,5 @@
 SRCDIR := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
 -include SubDir.mk ../SubDir.mk
--include Cabal.mk ../Cabal.mk
 
 all: $(SRCDIR)/gen-graph $(SRCDIR)/evolve
 

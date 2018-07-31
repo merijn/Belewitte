@@ -55,7 +55,7 @@ Executable breeding-pool
 
   Build-Depends:        base
                ,        bytestring == 0.10.*
-               ,        broadcast-chan == 0.1.0.*
+               ,        broadcast-chan == 0.2.*
                ,        containers
                ,        directory
                ,        evolution
