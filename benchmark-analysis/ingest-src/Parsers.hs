@@ -4,9 +4,11 @@ module Parsers
     ( Timing(..)
     , Timer(..)
     , Property(..)
+    , ExternalResult(..)
     , conduitParse
     , property
-    , timing
+    , timer
+    , externalResult
     ) where
 
 import Control.Applicative ((<|>))
@@ -38,6 +40,9 @@ data Property
     | Prediction Int Int
     deriving (Show, Eq)
 
+data ExternalResult = Result Text Text Timing
+    deriving (Show, Eq)
+
 property :: Parser Property
 property = (graphProp <|> stepProp <|> prediction) <* endOfLine
   where
@@ -59,21 +64,27 @@ property = (graphProp <|> stepProp <|> prediction) <* endOfLine
         string "prediction:"
         Prediction <$> signed decimal <* char ':' <*> signed decimal
 
-timing :: Parser Timer
-timing = stepTime <|> totalTime
+timer :: Parser Timer
+timer = stepTimer <|> totalTimer
   where
-    stepTime :: Parser Timer
-    stepTime = StepTiming <$> decimal <* char ':' <*> timer
+    stepTimer :: Parser Timer
+    stepTimer = StepTiming <$> decimal <* char ':' <*> timing
 
-    totalTime :: Parser Timer
-    totalTime = TotalTiming <$> timer
+    totalTimer :: Parser Timer
+    totalTimer = TotalTiming <$> timing
 
-    timer :: Parser Timing
-    timer = do
-        name <- takeWhile1 (/=':')
-        char ':'
-        minTime <- double <* char ' '
-        avgTime <- double <* char ' '
-        maxTime <- double <* char ' '
-        stddev <- double <* endOfLine
-        return Timing{..}
+timing :: Parser Timing
+timing = do
+    name <- takeWhile1 (/=':')
+    char ':'
+    minTime <- double <* char ' '
+    avgTime <- double <* char ' '
+    maxTime <- double <* char ' '
+    stddev <- double <* endOfLine
+    return Timing{..}
+
+externalResult :: Parser ExternalResult
+externalResult = do
+    name <- takeWhile1 (/=':') <* char ':'
+    variant <- takeWhile1 (/=':') <* char ':'
+    Result name variant <$> timing

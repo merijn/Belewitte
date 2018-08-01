@@ -40,6 +40,7 @@ Variant
     algorithmId AlgorithmId
     name Text
     flags Text Maybe
+    result Hash Maybe
     UniqVariant graphId algorithmId name
     deriving Eq Show
 

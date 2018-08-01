@@ -11,7 +11,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 module Schema
-    ( ImplType(..)
+    ( Hash(..)
+    , ImplType(..)
     , LogLevel(..)
     , LogSource
     , MonadIO(liftIO)
@@ -25,12 +26,13 @@ module Schema
 import Control.Exception (Exception(displayException))
 import Control.Monad ((>=>), when)
 import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow, throwM)
+import Control.Monad.Fail
 import Control.Monad.IO.Unlift
     (MonadIO(liftIO), MonadUnliftIO(..), UnliftIO(..), withUnliftIO)
 import Control.Monad.Logger (LoggingT, LogLevel, LogSource, MonadLogger)
 import qualified Control.Monad.Logger as Log
 import Control.Monad.Trans (lift)
-import Control.Monad.Trans.Reader (ReaderT(..), asks)
+import Control.Monad.Trans.Reader (ReaderT(..), ask, asks)
 import Control.Monad.Trans.Resource (MonadResource, ResourceT, runResourceT)
 import qualified Data.ByteString as BS
 import Data.Conduit (ConduitT)
@@ -38,23 +40,47 @@ import Database.Persist.Quasi
 import Database.Persist.Sqlite hiding (Connection)
 import Database.Persist.TH
 import Database.Sqlite.Internal
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Text (Text)
 import Data.Text.Encoding (decodeUtf8')
 import qualified Data.Text as T
+import Data.Typeable (Typeable)
 import Foreign (Ptr, FunPtr, nullPtr, nullFunPtr)
 import Foreign.C (CInt(..), CString, withCString)
 import qualified Lens.Micro.Extras as Lens
 
-import ImplType (ImplType(..))
+import Types (ImplType(..), Hash(..))
+
+data Abort = Abort deriving (Show, Typeable)
+
+instance Exception Abort where
 
 type SqlM = ReaderT (RawSqlite SqlBackend) BaseM
 
 type SqlRecord rec = (PersistRecordBackend rec (RawSqlite SqlBackend))
 
-newtype BaseM a = BaseM { runBaseM :: ResourceT (LoggingT IO) a }
+newtype BaseM a =
+  BaseM { runBaseM :: ReaderT (IORef Text) (ResourceT (LoggingT IO)) a }
   deriving
   ( Applicative, Functor, Monad, MonadCatch, MonadIO, MonadLogger, MonadMask
   , MonadResource, MonadThrow)
+
+showText :: Show a => a -> Text
+showText = T.pack . show
+
+logIfFail :: Show v => Text -> v -> SqlM a -> SqlM a
+logIfFail tag val action = do
+    lift . BaseM $ do
+        ref <- ask
+        liftIO . writeIORef ref $ tag <> ": " <> showText val
+    action
+
+instance MonadFail BaseM where
+    fail _ = BaseM $ do
+        ref <- ask
+        msg <- liftIO $ readIORef ref
+        Log.logErrorN msg
+        throwM Abort
 
 instance MonadUnliftIO BaseM where
   askUnliftIO = BaseM $ withUnliftIO $ \u ->
@@ -130,8 +156,9 @@ createSqlAggregate sqlPtr nArgs name =
   createSqliteFun sqlPtr nArgs name nullFunPtr
 
 runSqlM :: (LogSource -> LogLevel -> Bool) -> Text -> SqlM a -> IO a
-runSqlM logFilter path work =
-  runLog . runBaseRes . withRawSqliteConnInfo connInfo . runReaderT $ do
+runSqlM logFilter path work = do
+  ref <- newIORef ""
+  runLog . runBaseRes ref . withRawSqliteConnInfo connInfo . runReaderT $ do
     sqlitePtr <- asks $ getSqlitePtr . Lens.view rawSqliteConnection
     createSqlFun sqlitePtr 1 "random" randomFun
     createSqlAggregate sqlitePtr 3 "vector" vector_step vector_finalise
@@ -141,8 +168,8 @@ runSqlM logFilter path work =
     runLog :: LoggingT IO a -> IO a
     runLog = Log.runStderrLoggingT . Log.filterLogger logFilter
 
-    runBaseRes :: BaseM a -> LoggingT IO a
-    runBaseRes = runResourceT . runBaseM
+    runBaseRes :: IORef Text -> BaseM a -> LoggingT IO a
+    runBaseRes ref = runResourceT . (`runReaderT` ref) . runBaseM
 
     connInfo :: SqliteConnectionInfo
     connInfo = mkSqliteConnectionInfo path
@@ -156,7 +183,7 @@ logThrowM exc = do
     throwM exc
 
 showSqlKey :: ToBackendKey SqlBackend record => Key record -> Text
-showSqlKey = T.pack . show . fromSqlKey
+showSqlKey = showText . fromSqlKey
 
 whenNotExists
     :: SqlRecord record

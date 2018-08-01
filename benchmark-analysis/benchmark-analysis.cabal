@@ -27,10 +27,10 @@ Library
   GHC-Options:          -O2 -Wall -fno-warn-unused-do-bind
   GHC-Prof-Options:     -fprof-auto
   Hs-Source-Dirs:       src
-  Exposed-Modules:      ImplType
-                        Model
+  Exposed-Modules:      Model
                         Query
                         Schema
+                        Types
                         Utils
 
   C-Sources:            cbits/sqlite-functions.c
@@ -74,11 +74,14 @@ Executable Ingest
                ,        attoparsec == 0.13.1.*
                ,        conduit == 1.3.*
                ,        conduit-extra == 1.3.*
+               ,        cryptonite == 0.25.*
+               ,        cryptonite-conduit == 0.2.*
                ,        directory == 1.3.*
                ,        exceptions == 0.8.3.*
                ,        filepath == 1.4.*
                ,        monad-logger == 0.3.28.*
                ,        optparse-applicative == 0.14.0.*
+               ,        memory == 0.14.*
                ,        mtl == 2.2.1
                ,        process == 1.6.*
                ,        persistent-sqlite == 2.8.*
