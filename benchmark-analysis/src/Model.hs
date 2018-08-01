@@ -24,6 +24,7 @@ import qualified Data.Vector.Storable as VS
 import qualified Data.Vector.Generic as V
 import Foreign.Ptr (castPtr)
 import Foreign.Storable (Storable(..))
+import Text.Read (readMaybe)
 
 import Schema (Implementation(..), MonadIO(liftIO), Text)
 import Utils (byteStringToVector)
@@ -105,17 +106,31 @@ extern "C" int32_t lookup()
             swap :: (a, b) -> (b, a)
             swap (x, y) = (y, x)
 
-        warpConfig :: Text -> Builder
-        warpConfig implName
-            | "-warp-" `T.isInfixOf` implName = "32, 32"
-            | otherwise = "0, 0"
+        kernelConfig :: Text -> (Builder, Builder)
+        kernelConfig implName
+            | "-warp-" `T.isInfixOf` implName
+            , Just warp <- readMaybe (T.unpack warpTxt) :: Maybe Int
+            , Just chunk <- readMaybe (T.unpack chunkTxt) :: Maybe Int
+            = (fromText newName, decimal warp <> ", " <> decimal chunk)
+            | "-warp-" `T.isInfixOf` implName || "-warp" `T.isSuffixOf` implName
+            = (fromText implName, "32, 32")
+            | otherwise = (fromText implName, "0, 0")
+          where
+            chunks = T.split (=='-') implName
+
+            (revWarpCfg, revRemainder) = splitAt 2 . reverse $ chunks
+
+            [warpTxt, chunkTxt] = reverse revWarpCfg
+
+            newName = T.intercalate "-" . reverse $ revRemainder
 
         lookupName :: (Int, Int) -> Builder
         lookupName (new, original) = mconcat
-                [ "    { \"" , fromText implName , "\", " , decimal new
-                , ", ", warpConfig implName, " },\n" ]
+                [ "    { \"" , kernelName , "\", " , decimal new
+                , ", ", warpConfig, " },\n" ]
           where
             implName = implementationName $ implNames IM.! original
+            (kernelName, warpConfig) = kernelConfig implName
 
     propEntries :: Builder
     propEntries = foldMap propEntry . zip [0..] $ props
