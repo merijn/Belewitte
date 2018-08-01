@@ -124,7 +124,7 @@ createSqliteFun
     -> FunPtr (Ptr () -> IO ())
     -> m ()
 createSqliteFun sqlPtr nArgs strName sqlFun aggStep aggFinal = do
-    result <- liftIO . withCString strName $ \name ->
+    result <- liftIO . withCString strName $ \name -> do
         createFun sqlPtr name nArgs sqliteAny nullPtr sqlFun aggStep aggFinal
     when (result /= sqliteOk) $ do
         bs <- liftIO $ unpackError sqlPtr
