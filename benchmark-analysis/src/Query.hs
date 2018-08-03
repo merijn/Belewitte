@@ -4,8 +4,10 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ViewPatterns #-}
 module Query
     ( Query
+    , StepInfo(..)
     , explainSqlQuery
     , randomizeQuery
     , runSqlQuery
@@ -13,9 +15,10 @@ module Query
     , propertyQuery
     ) where
 
-import Control.Monad (forM_)
-import Control.Monad.Catch (Exception, bracket_)
-import Control.Monad.Trans.Resource (release)
+import Control.Monad (forM_, join)
+import Control.Monad.Catch (Exception)
+import Control.Monad.IO.Unlift (toIO)
+import Control.Monad.Trans.Resource (allocate, release)
 import Data.Acquire (allocateAcquire)
 import Data.Conduit (ConduitT, Void, (.|), await, runConduit)
 import qualified Data.Conduit.List as C
@@ -77,13 +80,20 @@ randomizeQuery seed trainingSize originalQuery = (training, validation)
       { query = randomizedQuery <> [i|LIMIT -1 OFFSET #{trainingSize}|] }
 
 runSqlQuery :: Query r -> ConduitT r Void SqlM a -> SqlM a
-runSqlQuery Query{..} sink = bracket_ createTables dropTables $ do
+runSqlQuery Query{..} sink = do
+    (tables, ()) <- join $ allocate <$> createTables <*> dropTables
     srcRes <- liftPersist $ rawQueryRes query params
     (key, src) <- allocateAcquire srcRes
-    runConduit (src .| C.mapM convert .| sink) <* release key
+    runConduit (src .| C.mapM convert .| sink) <* release key <* release tables
   where
-    createTables = forM_ tempTables $ \q -> rawExecute q []
-    dropTables = forM_ clearTempTables $ \q -> rawExecute q []
+    createTables :: SqlM (IO ())
+    createTables = toIO . forM_ tempTables $ \q -> rawExecute q []
+
+    dropTables :: SqlM (() -> IO ())
+    dropTables = const <$> act
+      where
+        act :: SqlM (IO ())
+        act = toIO . forM_ clearTempTables $ \q -> rawExecute q []
 
 runSqlQueryCount :: Query r -> SqlM Int
 runSqlQueryCount originalQuery = do
@@ -99,11 +109,17 @@ runSqlQueryCount originalQuery = do
             _ -> logThrowM . Error $ "Unexpected value in count query"
         }
 
-propertyQuery
-    :: Key GPU
-    -> Set Text
-    -> Set Text
-    -> Query (Vector Double, Vector Double, Int64)
+data StepInfo =
+  StepInfo
+    { props :: {-# UNPACK #-} !(Vector Double)
+    , bestImpl :: {-# UNPACK #-} !Int64
+    , variantId :: {-# UNPACK #-} !(Key Variant)
+    , stepId :: {-# UNPACK #-} !Int64
+    , timings :: {-# UNPACK #-} !(Vector Double)
+    } deriving (Show)
+
+--FIXME specify algorithm?!
+propertyQuery :: Key GPU -> Set Text -> Set Text -> Query StepInfo
 propertyQuery gpuId graphProps stepProps = Query{..}
   where
     params :: [PersistValue]
@@ -114,10 +130,17 @@ propertyQuery gpuId graphProps stepProps = Query{..}
       where
         clause t = [i|property = "#{t}"|]
 
-    convert :: (MonadIO m, MonadLogger m, MonadThrow m)
-            => [PersistValue] -> m (Vector Double, Vector Double, Int64)
-    convert [PersistByteString bs1, PersistByteString bs2, PersistInt64 n] = do
-        return (byteStringToVector bs1, byteStringToVector bs2, n)
+    convert
+        :: (MonadIO m, MonadLogger m, MonadThrow m)
+        => [PersistValue] -> m StepInfo
+    convert [ PersistByteString bs1, PersistByteString bs2
+            , PersistInt64 bestImpl, PersistInt64 (toSqlKey -> variantId)
+            , PersistInt64 stepId, PersistByteString times
+            ] = return $ StepInfo{..}
+      where
+        props = byteStringToVector bs1 <> byteStringToVector bs2
+        timings = byteStringToVector times
+
     convert l = logThrowM . Error . fromString $ "Unexpected value: " ++ show l
 
     tempTables = [[i|
@@ -138,16 +161,21 @@ CREATE TEMP TABLE indexedStepProps AS
       ["DROP TABLE indexedGraphProps","DROP TABLE indexedStepProps"]
 
     query = [i|
-SELECT GraphProps.props, StepProps.props, Step.implId
+SELECT GraphProps.props, StepProps.props, Step.implId, Variant.id, Step.stepId, Step.timings
 FROM Variant
      INNER JOIN Graph ON Variant.graphId = Graph.id
      INNER JOIN
      ( SELECT variantId, stepId, implId
+            , MIN(CASE Implementation.type
+                  WHEN "Core" THEN avgTime
+                  ELSE NULL END
+            )
+            , vector(avgTime, implId, (SELECT COUNT(*) FROM Implementation)) AS timings
        FROM StepTimer
        INNER JOIN Implementation ON StepTimer.implId = Implementation.id
-       WHERE gpuId = ? AND Implementation.type = "Core"
+       WHERE gpuId = ?
        GROUP BY variantId, stepId
-       HAVING avgTime = MIN(avgTime)) AS Step
+     ) AS Step
      ON Variant.id = Step.variantId
      INNER JOIN
      ( SELECT graphId
@@ -165,4 +193,4 @@ FROM Variant
              ON idxProps.property = StepProp.property
        GROUP BY variantId, stepId) AS StepProps
      ON Variant.id = StepProps.variantId AND Step.stepId = StepProps.stepId
-ORDER BY Graph.name, Variant.name, Step.stepId ASC|]
+ORDER BY Variant.id, Step.stepId ASC|]

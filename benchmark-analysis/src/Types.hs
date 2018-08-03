@@ -8,7 +8,7 @@ import Database.Persist.TH
 import Database.Persist.Sql (PersistFieldSql(..))
 
 data ImplType = Core | Derived | Comparison
-    deriving (Show, Read, Eq)
+    deriving (Show, Read, Eq, Ord)
 derivePersistField "ImplType"
 
 newtype Hash = Hash { getHash :: ByteString }

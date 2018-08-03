@@ -13,6 +13,10 @@
 module Schema
     ( Hash(..)
     , ImplType(..)
+    , Int64
+    , Key
+    , fromSqlKey
+    , toSqlKey
     , LogLevel(..)
     , LogSource
     , MonadIO(liftIO)
@@ -40,6 +44,7 @@ import Database.Persist.Quasi
 import Database.Persist.Sqlite hiding (Connection)
 import Database.Persist.TH
 import Database.Sqlite.Internal
+import Data.Int (Int64)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Text (Text)
 import Data.Text.Encoding (decodeUtf8')

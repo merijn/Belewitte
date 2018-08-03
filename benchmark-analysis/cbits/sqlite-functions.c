@@ -53,9 +53,14 @@ void vector_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
         vector->size = sqlite3_value_int(args[2]);
         vector->idx = 0;
         vector->data = sqlite3_malloc(vector->size * sizeof *vector->data);
+
         if (!vector->data) {
             sqlite3_result_error(ctxt, "Vector allocation failed!", -1);
             return;
+        }
+
+        for (size_t i = 0; i < vector->size; i++) {
+            vector->data[i] = 0.0;
         }
     }
 

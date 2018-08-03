@@ -29,6 +29,7 @@ import System.IO (hFlush, stdout)
 import Text.Read (readMaybe)
 
 import BroadcastChan.Conduit
+import OptionParsers
 import Parsers
 import ProcessPool
 import Schema
@@ -296,7 +297,7 @@ runBenchmarks numNodes numRuns = do
 
 data Options = Options
     { dbPath :: Text
-    , verbosity :: LogLevel
+    , logVerbosity :: LogSource -> LogLevel -> Bool
     , ingestTask :: SqlM ()
     }
 
@@ -311,25 +312,7 @@ commandParser name = info (options <**> helper) $ mconcat
     ]
   where
     options :: Parser Options
-    options = Options <$> dbFlag <*> verbosityLevel <*> commands name
-
-    dbFlag = strOption . mconcat $
-        [ metavar "DATABASE", short 'd', long "database"
-        , value "benchmarks.db", help "Path of SQLite database to use."
-        , showDefaultWith T.unpack
-        ]
-
-    verbosityLevel = (levels !!) <$> verb
-      where
-        verb = length <$> vFlag <|> vOption
-        levels = LevelError : LevelWarn : LevelInfo : repeat LevelDebug
-
-        vFlag = many . flag' () . mconcat $
-            [ short 'v', long "verbose", hidden ]
-
-        vOption = option auto . mconcat $
-            [ short 'v', long "verbose", help "Enable more verbose logging."
-            , value 0, metavar "N", showDefault ]
+    options = Options <$> databaseOption <*> verbosityOption <*> commands name
 
 commands :: String -> Parser (SqlM ())
 commands name = hsubparser $ mconcat
@@ -367,9 +350,6 @@ main = do
     getNumProcessors >>= setNumCapabilities
     programName <- getProgName
     Options{..} <- execParser $ commandParser programName
-
-    let logVerbosity :: LogSource -> LogLevel -> Bool
-        logVerbosity _ lvl = lvl >= verbosity
 
     runSqlM logVerbosity dbPath $ do
         Sql.liftPersist $ Sql.runMigrationSilent migrateAll

@@ -3,13 +3,14 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
 module Main where
 
-import Control.Monad (forM_, replicateM)
+import Control.Monad (forM_, when)
 import Control.Monad.Catch (mask_)
 import Control.Monad.Trans.Resource (register, release)
-import Data.Bifunctor (first)
+import Data.Bifunctor (bimap, first)
 import Data.Binary.Get (getDoublehost, getRemainingLazyByteString, runGet)
 import Data.Binary.Put (putDoublehost, putInt64host, runPut)
 import Data.ByteString (ByteString)
@@ -21,29 +22,31 @@ import Data.Conduit.Process
     (CreateProcess, Inherited(..), proc, withCheckedProcessCleanup)
 import Data.List (sortBy)
 import Data.Ord (comparing)
-import Data.Int (Int64)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
-import Data.Monoid ((<>))
 import Data.Set (Set)
 import qualified Data.Set as S
 import Data.String (fromString)
 import Data.String.Interpolate.IsString
 import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as VS
 import Database.Persist.Sqlite
 import GHC.Conc.Sync (getNumProcessors, setNumCapabilities)
 import Numeric (showFFloat)
+import System.Environment (getProgName)
 import System.IO (hClose)
 import System.Posix.IO (createPipe, closeFd, fdToHandle)
 import System.Posix.Types (Fd)
 
+import Analyse (analyseModel, percent)
 import Model
+import Options
 import Query
 import Schema
 
-trainModel :: Query (Vector Double, Int64) -> SqlM ([Double], Model)
+trainModel :: Query (Vector Double, Int64) -> SqlM (Vector Double, Model)
 trainModel query = do
     numEntries <- runSqlQueryCount query
     Just columnCount <- fmap (VS.length . fst) <$> runSqlQuery query C.head
@@ -95,11 +98,11 @@ trainModel query = do
     putResults :: Int64 -> ByteString
     putResults = LBS.toStrict . runPut . putInt64host
 
-    getResult :: Int -> ByteString -> ([Double], ByteString)
+    getResult :: Int -> ByteString -> (Vector Double, ByteString)
     getResult columnCount = runGet parseBlock . LBS.fromStrict
       where
         parseBlock = do
-            dbls <- replicateM columnCount getDoublehost
+            dbls <- VS.replicateM columnCount getDoublehost
             bs <- LBS.toStrict <$> getRemainingLazyByteString
             return (dbls, bs)
 
@@ -129,30 +132,26 @@ validateModel model validation total = do
     computeResults "total" total
   where
     computeResults name query = do
-        result <- runSqlQuery predictions $ C.foldl aggregate (0,0)
+        result <- runSqlQuery predictions $ C.foldl aggregate (0,0,0)
         report name result
       where
         predictions = first (predict model) <$> query
 
-    aggregate (!right,!wrong) (x,y)
-        | fromIntegral x == y = (right + 1, wrong)
-        | otherwise = (right, wrong + 1)
+    aggregate (!right,!wrong,!unknown) (prediction,actual)
+        | fromIntegral prediction == actual = (right + 1, wrong, unknown)
+        | prediction == -1 = (right, wrong, unknown + 1)
+        | otherwise = (right, wrong + 1, unknown)
 
-    report :: MonadIO m => String -> (Int, Int) -> m ()
-    report name (right, wrong) = liftIO . putStrLn . unlines $
-        [ "Right predictions (" ++ name ++ "): " ++ show right
-        , "Wrong predictions (" ++ name ++ "): " ++ show wrong
-        , "Error rate (" ++ name ++ "): " ++ percent wrong (right+wrong)
+    report :: MonadIO m => Text -> (Int, Int, Int) -> m ()
+    report name (right, wrong, unknown) = liftIO . T.putStrLn . T.unlines $
+        [ "Right predictions (" <> name <> "): " <> showText right
+        , "Wrong predictions (" <> name <> "): " <> showText wrong
+        , "Unknown predictions (" <> name <> "): " <> showText unknown
+        , "Error rate (" <> name <> "): " <> percent wrong (right+wrong+unknown)
         ]
-      where
-        percent :: Integral n => n -> n -> String
-        percent x y = showFFloat (Just 2) val "%"
-          where
-            val :: Double
-            val = 100 * fromIntegral x / fromIntegral y
 
 reportFeatureImportance
-    :: MonadIO m => [Double] -> Set Text -> Set Text -> m ()
+    :: MonadIO m => Vector Double -> Set Text -> Set Text -> m ()
 reportFeatureImportance importances graphProps stepProps =
   forM_ featureList $ \(lbl, val) -> liftIO $ do
     putStrLn $ T.unpack lbl ++ ": " ++ showFFloat (Just 2) (val * 100) "%"
@@ -164,35 +163,53 @@ reportFeatureImportance importances graphProps stepProps =
     revCmpDouble = flip (comparing snd)
 
     featureList :: [(Text, Double)]
-    featureList = sortBy revCmpDouble $ zip propList importances
+    featureList = sortBy revCmpDouble $ zip propList (VS.toList importances)
 
 main :: IO ()
 main = do
     getNumProcessors >>= setNumCapabilities
+    Options{..} <- getProgName >>= optionsParser
 
-    runSqlM isNotDebug "test.db" $ do
+    runSqlM logVerbosity database $ do
         liftPersist $ runMigrationSilent migrateAll
-        graphProps <- gatherProps "GraphProp"
-        stepProps <- gatherProps "StepProp"
-        let appendVectors (v1, v2, a) = (v1 <> v2, a)
-            query = appendVectors <$> propertyQuery (toSqlKey 1) graphProps stepProps
+        graphProps <- liftIO selectProps <*> gatherProps "GraphProp"
+        stepProps <- liftIO selectProps <*> gatherProps "StepProp"
+
+        -- FIXME allow specifying which GPU results to consider
+        -- FIXME specify algorithm?
+        let query = propertyQuery (toSqlKey 1) graphProps stepProps
+            reduceInfo StepInfo{..} = (props, bestImpl)
 
         rowCount <- runSqlQueryCount query
 
         let trainingSize :: Integer
-            trainingSize = round (fromIntegral rowCount * 0.6 :: Double)
+            trainingSize = round (fromIntegral rowCount * trainingFraction)
+
+            both f = bimap f f
 
             training, validation :: Query (Vector Double, Int64)
-            (training, validation) = randomizeQuery 42 trainingSize query
+            (training, validation) =
+                both (fmap reduceInfo) $ randomizeQuery 42 trainingSize query
 
-        (importance, model) <- trainModel training
+        model <- case loadFile of
+            Nothing -> do
+                liftIO $ putStrLn "Training..."
+                (importance, model) <- trainModel training
+                reportFeatureImportance importance graphProps stepProps
+                return model
+            Just fp -> byteStringToModel <$> liftIO (BS.readFile fp)
 
-        reportFeatureImportance importance graphProps stepProps
+        forM_ dumpFile $ dumpModel model
+
         liftIO $ putStrLn ""
-        validateModel model validation query
-
         impls <- queryImplementations
-        dumpCppModel "test.cpp" model graphProps stepProps impls
+        when doValidate $ validateModel model validation (reduceInfo <$> query)
+
+        forM_ analysisReporting $ \reporting -> do
+            analyseModel reporting model query impls
+
+        forM_ exportFile $ \cppFile -> do
+            dumpCppModel cppFile model graphProps stepProps impls
   where
     gatherProps :: Text -> SqlM (Set Text)
     gatherProps table = runConduit $ rawQuery query [] .| C.foldMap toSet
@@ -201,7 +218,3 @@ main = do
         toSet _ = S.empty
 
         query = [i|SELECT DISTINCT property FROM #{table}|]
-
-    isNotDebug :: LogSource -> LogLevel -> Bool
-    isNotDebug _ LevelDebug = False
-    isNotDebug _ _ = True
