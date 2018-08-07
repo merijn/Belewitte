@@ -4,10 +4,9 @@ module ProcessPool(Pool, Process(..), withProcessPool, withProcess) where
 
 import Control.Monad (guard)
 import Control.Monad.Catch
-    (Exception, MonadMask, bracket, throwM, uninterruptibleMask_)
+    (MonadMask, bracket, throwM, uninterruptibleMask_)
 import Data.List (intercalate)
 import Data.Pool (Pool, createPool, destroyAllResources, withResource)
-import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Time.LocalTime as Time
 import Data.Time.Calendar (DayOfWeek(Saturday,Sunday), dayOfWeek)
@@ -20,9 +19,6 @@ import System.Process
     , terminateProcess, waitForProcess)
 
 import Schema
-
-data Error = Error Text deriving (Show)
-instance Exception Error
 
 data Process =
   Process

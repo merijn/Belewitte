@@ -57,8 +57,10 @@ import qualified Lens.Micro.Extras as Lens
 import Types (ImplType(..), Hash(..))
 
 data Abort = Abort deriving (Show, Typeable)
-
 instance Exception Abort where
+
+data Error = Error Text deriving (Show)
+instance Exception Error
 
 type SqlM = ReaderT (RawSqlite SqlBackend) BaseM
 

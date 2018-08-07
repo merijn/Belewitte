@@ -16,7 +16,6 @@ module Query
     ) where
 
 import Control.Monad (forM_, join)
-import Control.Monad.Catch (Exception)
 import Control.Monad.IO.Unlift (toIO)
 import Control.Monad.Trans.Resource (allocate, release)
 import Data.Acquire (allocateAcquire)
@@ -48,9 +47,6 @@ data Query r =
 
 instance Functor Query where
     fmap f query@Query{convert} = query { convert = fmap f . convert }
-
-data Error = Error Text deriving (Show)
-instance Exception Error
 
 explainSqlQuery :: Query r -> SqlM ()
 explainSqlQuery originalQuery =
