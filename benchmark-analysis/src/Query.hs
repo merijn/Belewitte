@@ -8,11 +8,13 @@
 module Query
     ( Query
     , StepInfo(..)
+    , VariantInfo(..)
     , explainSqlQuery
     , randomizeQuery
     , runSqlQuery
     , runSqlQueryCount
-    , propertyQuery
+    , stepInfoQuery
+    , variantInfoQuery
     ) where
 
 import Control.Monad (forM_, join)
@@ -107,16 +109,16 @@ runSqlQueryCount originalQuery = do
 
 data StepInfo =
   StepInfo
-    { props :: {-# UNPACK #-} !(Vector Double)
-    , bestImpl :: {-# UNPACK #-} !Int64
-    , variantId :: {-# UNPACK #-} !(Key Variant)
+    { stepProps :: {-# UNPACK #-} !(Vector Double)
+    , stepBestImpl :: {-# UNPACK #-} !Int64
+    , stepVariantId :: {-# UNPACK #-} !(Key Variant)
     , stepId :: {-# UNPACK #-} !Int64
-    , timings :: {-# UNPACK #-} !(Vector Double)
+    , stepTimings :: {-# UNPACK #-} !(Vector Double)
     } deriving (Show)
 
 --FIXME specify algorithm?!
-propertyQuery :: Key GPU -> Set Text -> Set Text -> Query StepInfo
-propertyQuery gpuId graphProps stepProps = Query{..}
+stepInfoQuery :: Key GPU -> Set Text -> Set Text -> Query StepInfo
+stepInfoQuery gpuId graphProperties stepProperties = Query{..}
   where
     params :: [PersistValue]
     params = [toPersistValue gpuId]
@@ -130,12 +132,13 @@ propertyQuery gpuId graphProps stepProps = Query{..}
         :: (MonadIO m, MonadLogger m, MonadThrow m)
         => [PersistValue] -> m StepInfo
     convert [ PersistByteString bs1, PersistByteString bs2
-            , PersistInt64 bestImpl, PersistInt64 (toSqlKey -> variantId)
-            , PersistInt64 stepId, PersistByteString times
+            , PersistInt64 stepBestImpl
+            , PersistInt64 (toSqlKey -> stepVariantId) , PersistInt64 stepId
+            , PersistByteString times
             ] = return $ StepInfo{..}
       where
-        props = byteStringToVector bs1 <> byteStringToVector bs2
-        timings = byteStringToVector times
+        stepProps = byteStringToVector bs1 <> byteStringToVector bs2
+        stepTimings = byteStringToVector times
 
     convert l = logThrowM . Error . fromString $ "Unexpected value: " ++ show l
 
@@ -143,13 +146,13 @@ propertyQuery gpuId graphProps stepProps = Query{..}
 CREATE TEMP TABLE indexedGraphProps AS
     SELECT DISTINCT property
     FROM GraphProp
-    WHERE #{whereClauses graphProps}
+    WHERE #{whereClauses graphProperties}
     ORDER BY property ASC
 |],[i|
 CREATE TEMP TABLE indexedStepProps AS
     SELECT DISTINCT property
     FROM StepProp
-    WHERE #{whereClauses stepProps}
+    WHERE #{whereClauses stepProperties}
     ORDER BY property ASC
 |]]
 
@@ -175,7 +178,7 @@ FROM Variant
      ON Variant.id = Step.variantId
      INNER JOIN
      ( SELECT graphId
-            , vector(value, idxProps.rowid, #{S.size graphProps}) AS props
+            , vector(value, idxProps.rowid, #{S.size graphProperties}) AS props
        FROM GraphProp
        INNER JOIN indexedGraphProps AS idxProps
              ON idxProps.property = GraphProp.property
@@ -183,10 +186,70 @@ FROM Variant
      ON GraphProps.graphId = Graph.id
      INNER JOIN
      ( SELECT variantId, stepId
-            , vector(value, idxProps.rowid, #{S.size stepProps}) AS props
+            , vector(value, idxProps.rowid, #{S.size stepProperties}) AS props
        FROM StepProp
        INNER JOIN indexedStepProps AS idxProps
              ON idxProps.property = StepProp.property
        GROUP BY variantId, stepId) AS StepProps
      ON Variant.id = StepProps.variantId AND Step.stepId = StepProps.stepId
 ORDER BY Variant.id, Step.stepId ASC|]
+
+data VariantInfo =
+  VariantInfo
+    { variantId :: {-# UNPACK #-} !(Key Variant)
+    , variantOptimal :: {-# UNPACK #-} !Double
+    , variantBestNonSwitching :: {-# UNPACK #-} !Double
+    , variantTimings :: {-# UNPACK #-} !(Vector Double)
+    } deriving (Show)
+
+variantInfoQuery :: Key GPU -> Query VariantInfo
+variantInfoQuery gpuId = Query{..}
+  where
+    params :: [PersistValue]
+    params = [toPersistValue gpuId, toPersistValue gpuId]
+
+    tempTables = []
+    clearTempTables = []
+
+    convert
+        :: (MonadIO m, MonadLogger m, MonadThrow m)
+        => [PersistValue] -> m VariantInfo
+    convert [ PersistInt64 (toSqlKey -> variantId)
+            , PersistDouble variantOptimal
+            , PersistDouble variantBestNonSwitching
+            , PersistByteString (byteStringToVector -> variantTimings) ]
+            = return $ VariantInfo{..}
+
+    convert l = logThrowM . Error . fromString $ "Unexpected value: " ++ show l
+
+    query = [i|
+SELECT Variant.id, OptimalStep.optimal, Total.bestNonSwitching, Total.timings
+FROM Variant
+     INNER JOIN
+     ( SELECT variantId, SUM(Step.minTime) AS optimal
+       FROM ( SELECT variantId, stepId
+                   , MIN(CASE Implementation.type
+                         WHEN "Core" THEN avgTime
+                         ELSE NULL END) as minTime
+              FROM StepTimer
+              INNER JOIN Implementation ON StepTimer.implId = Implementation.id
+              WHERE gpuId = ?
+              GROUP BY variantId, stepId) AS Step
+      GROUP BY variantId
+    ) AS OptimalStep
+    ON Variant.id = OptimalStep.variantId
+    INNER JOIN
+     ( SELECT variantId
+            , MIN(CASE Implementation.type
+                  WHEN "Core" THEN avgTime
+                  ELSE NULL END) as bestNonSwitching
+            , vector(avgTime, implId, (SELECT COUNT(*) FROM Implementation)) AS timings
+       FROM TotalTimer
+       INNER JOIN Implementation ON TotalTimer.implId = Implementation.id
+       WHERE gpuId = ? AND TotalTimer.name = "computation"
+       GROUP BY variantId
+       HAVING MAX( CASE "implId" WHEN 37 THEN 1 ELSE 0 END ) = 1
+          AND MAX( CASE "implId" WHEN 38 THEN 1 ELSE 0 END ) = 1
+     ) AS Total
+     ON Variant.id = Total.variantId
+ORDER BY Variant.id ASC|]

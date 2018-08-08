@@ -1,10 +1,29 @@
 {-# LANGUAGE OverloadedStrings #-}
-module OptionParsers where
+{-# LANGUAGE TupleSections #-}
+module OptionParsers
+    ( databaseOption
+    , intervalReader
+    , optionParserFromValues
+    , verbosityOption
+    , module Options.Applicative
+    ) where
 
 import Control.Monad.Logger (LogLevel(..), LogSource)
+import Data.Char (toLower)
+import Data.Function (on)
+import Data.Int (Int64)
+import Data.Interval (Extended(Finite), Interval)
+import qualified Data.Interval as I
+import Data.IntervalSet (IntervalSet)
+import qualified Data.IntervalSet as IS
+import Data.Map (Map)
+import qualified Data.Map as M
 import Data.Text (Text)
 import qualified Data.Text as T
 import Options.Applicative
+import Text.Megaparsec (Parsec, parseMaybe, sepBy1, try)
+import Text.Megaparsec.Char (char)
+import Text.Megaparsec.Char.Lexer (decimal)
 
 databaseOption :: Parser Text
 databaseOption = strOption . mconcat $
@@ -12,6 +31,25 @@ databaseOption = strOption . mconcat $
     , value "benchmarks.db", help "Path of SQLite database to use."
     , showDefaultWith T.unpack
     ]
+
+intervalReader :: ReadM (IntervalSet Int64)
+intervalReader = maybeReader . parseMaybe $
+    IS.fromList <$> sepBy1 interval (char ',')
+  where
+    interval :: Parsec () String (Interval Int64)
+    interval = range <|> singleValue
+
+    singleValue = I.singleton <$> decimal
+    range = toInterval <$> try (decimal <* char '-') <*> decimal
+
+    toInterval = I.interval `on` (,True) . Finite
+
+optionParserFromValues
+    :: Map String a -> Mod OptionFields a -> Parser a
+optionParserFromValues vals = option . maybeReader $ lookupCI
+  where
+    lookupCI key = M.lookup (map toLower key) valMap
+    valMap = M.mapKeys (map toLower) vals
 
 verbosityOption :: Parser (LogSource -> LogLevel -> Bool)
 verbosityOption = logVerbosity . (levels !!) <$> verb

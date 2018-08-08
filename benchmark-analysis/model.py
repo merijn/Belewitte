@@ -94,8 +94,9 @@ while queue:
         queue.append(right_child)
 
 total = sum(unknown.values())
+print >>stderr, total
 for key, val in sorted(unknown.items(), key=lambda x: x[1], reverse=True):
-    print >>stderr, key, ":", val, float(val)/total
+    print >>stderr, val, ":", key
 
 def translate(data):
     if data[2] != -1:

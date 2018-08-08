@@ -8,6 +8,8 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 module Schema
@@ -38,8 +40,10 @@ import qualified Control.Monad.Logger as Log
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Reader (ReaderT(..), ask, asks)
 import Control.Monad.Trans.Resource (MonadResource, ResourceT, runResourceT)
+import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.Conduit (ConduitT)
+import Data.Proxy (Proxy(Proxy))
 import Database.Persist.Quasi
 import Database.Persist.Sqlite hiding (Connection)
 import Database.Persist.TH
@@ -198,6 +202,20 @@ whenNotExists
 whenNotExists filters act = lift (selectFirst filters []) >>= \case
     Just _ -> return ()
     Nothing -> act
+
+validateKey
+    :: forall record
+     . (ToBackendKey SqlBackend record, SqlRecord record)
+    => Int64 -> SqlM (Key record)
+validateKey n = get key >>= \case
+    Just _ -> return key
+    Nothing -> do
+        let name = entityHaskell $ entityDef (Proxy :: Proxy record)
+        Log.logErrorN . mconcat $
+            [ "No ", unHaskellName name, " entry found for id: ", showText n ]
+        throwM Abort
+  where
+    key = toSqlKey n
 
 getUniq :: SqlRecord record => record -> SqlM (Key record)
 getUniq record = do

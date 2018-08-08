@@ -77,3 +77,36 @@ StepTimer
     stdDev Double
     Primary gpuId variantId stepId implId name
     deriving Eq Show
+
+PredictionModel
+    gpuId GPUId
+    model ByteString
+    trainFraction Double
+    trainSeed Int
+    totalUnknownCount Int
+    deriving Eq Show
+
+ModelGraphProperty
+    modelId PredictionModelId
+    property Text
+    importance Double
+    Primary modelId property
+    deriving Eq Show
+
+ModelStepProperty
+    modelId PredictionModelId
+    property Text
+    importance Double
+    Primary modelId property
+    deriving Eq Show
+
+UnknownPrediction
+    modelId PredictionModelId
+    count Int
+    deriving Eq Show
+
+UnknownSet
+    unknownPredId UnknownPredictionId
+    implId ImplementationId
+    Primary unknownPredId implId
+    deriving Eq Show

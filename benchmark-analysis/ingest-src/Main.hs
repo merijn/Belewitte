@@ -21,7 +21,6 @@ import qualified Data.Text.IO as T
 import Database.Persist.Sqlite (Key, Entity(..), (=.), (==.))
 import qualified Database.Persist.Sqlite as Sql
 import GHC.Conc.Sync (getNumProcessors, setNumCapabilities)
-import Options.Applicative
 import System.Directory (removeFile, doesFileExist)
 import System.Environment (getProgName)
 import System.FilePath (splitExtension, takeFileName)
