@@ -20,6 +20,7 @@ Synopsis:
 
 Description:
 
+Data-Files:             scripts/model.py
 Extra-Source-Files:     cbits/*.h src/schema
 
 Library
@@ -105,6 +106,7 @@ Executable Model
                         Options
                         Train
                         Validate
+                        Paths_benchmark_analysis
 
   Build-Depends:        base
                ,        benchmark-analysis

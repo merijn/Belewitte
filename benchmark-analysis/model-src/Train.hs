@@ -43,6 +43,7 @@ import Text.Megaparsec.Char.Lexer (decimal)
 
 import Core
 import Model
+import Paths_benchmark_analysis (getDataFileName)
 import Query
 import Schema
 
@@ -143,8 +144,10 @@ trainModel gpuId trainCfg@TrainConfig{..} = do
 
     Just propCount <- fmap (VS.length . fst) <$> runSqlQuery trainQuery C.head
 
+    scriptProc <- liftIO $ proc <$> getDataFileName "scripts/model.py"
+
     let process :: Fd -> CreateProcess
-        process fd = proc "./model.py"
+        process fd = scriptProc
             [ "--entries"
             , show numEntries
             , "--properties"
