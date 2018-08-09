@@ -174,7 +174,7 @@ reportParser isComparison =
         values = M.fromList [("avg", Avg), ("max", Max)]
 
     implTypes :: Parser (Set ImplType)
-    implTypes = S.unions <$> many implParser <|> pure (S.singleton Core)
+    implTypes = S.unions <$> some implParser <|> pure (S.singleton Core)
       where
         implParser = optionParserFromValues values $ mconcat
             --FIXME: list options

@@ -249,8 +249,6 @@ FROM Variant
        INNER JOIN Implementation ON TotalTimer.implId = Implementation.id
        WHERE gpuId = ? AND TotalTimer.name = "computation"
        GROUP BY variantId
-       HAVING MAX( CASE "implId" WHEN 37 THEN 1 ELSE 0 END ) = 1
-          AND MAX( CASE "implId" WHEN 38 THEN 1 ELSE 0 END ) = 1
      ) AS Total
      ON Variant.id = Total.variantId
 ORDER BY Variant.id ASC|]

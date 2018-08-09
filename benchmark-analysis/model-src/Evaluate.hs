@@ -249,7 +249,6 @@ evaluateModel gpuId reportConfig@Report{..} model trainConfig oldImpls = do
 compareImplementations
     :: Key GPU -> Report -> IntMap Implementation -> SqlM ()
 compareImplementations gpuId reportConfig@Report{..} originalImpls = do
-
     stats <- runSqlQuery query $
         C.map addBestNonSwitching
         .| aggregateVariants reportVariants relTo impls
