@@ -8,14 +8,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 module Core
-    ( Hash(..)
-    , ImplType(..)
-    , Int64
+    ( Int64
     , Key
     , fromSqlKey
     , toSqlKey
-    , LogLevel(..)
-    , LogSource
     , MonadIO(liftIO)
     , MonadLogger
     , MonadThrow
@@ -52,7 +48,6 @@ import GHC.Conc.Sync (getNumProcessors, setNumCapabilities)
 import qualified Lens.Micro.Extras as Lens
 
 import Schema (migrateAll)
-import Types
 
 data Abort = Abort deriving (Show, Typeable)
 instance Exception Abort where
