@@ -33,6 +33,7 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Vector.Storable (Vector)
 import Database.Persist.Sqlite
+import System.IO (Handle)
 
 import Core
 import Schema
@@ -51,14 +52,15 @@ data Query r =
 instance Functor Query where
     fmap f query@Query{convert} = query { convert = fmap f . convert }
 
-explainSqlQuery :: Query r -> SqlM ()
-explainSqlQuery originalQuery =
-    runSqlQuery explainQuery $ C.mapM_ (liftIO . T.putStrLn)
+explainSqlQuery :: Query r -> Handle -> SqlM ()
+explainSqlQuery originalQuery hnd =
+    runSqlQuery' explainQuery $ C.mapM_ (liftIO . T.hPutStrLn hnd)
   where
     explain
         :: (MonadIO m, MonadLogger m, MonadThrow m) => [PersistValue] -> m Text
-    explain [PersistInt64 _,PersistInt64 _,PersistInt64 _,PersistText t] =
-        return t
+    explain
+        [PersistInt64 _, PersistInt64 _, PersistInt64 _, PersistText t]
+        = return t
     explain _ = logThrowM $ Error "Explain failed!"
 
     explainQuery = originalQuery
@@ -79,7 +81,12 @@ randomizeQuery seed trainingSize originalQuery = (training, validation)
       { query = randomizedQuery <> [i|LIMIT -1 OFFSET #{trainingSize}|] }
 
 runSqlQuery :: Query r -> ConduitT r Void SqlM a -> SqlM a
-runSqlQuery Query{..} sink = do
+runSqlQuery query sink = do
+    logQueryExplanation $ explainSqlQuery query
+    runSqlQuery' query sink
+
+runSqlQuery' :: Query r -> ConduitT r Void SqlM a -> SqlM a
+runSqlQuery' Query{..} sink = do
     (tables, ()) <- join $ allocate <$> createTables <*> dropTables
     srcRes <- liftPersist $ rawQueryRes query params
     (key, src) <- allocateAcquire srcRes

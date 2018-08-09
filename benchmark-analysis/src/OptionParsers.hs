@@ -27,7 +27,7 @@ import Text.Megaparsec (Parsec, parseMaybe, sepBy1, try)
 import Text.Megaparsec.Char (char)
 import Text.Megaparsec.Char.Lexer (decimal)
 
-import Core (Options(..), SqlM, runSqlMWithOptions)
+import Core (Options(..), QueryMode(..), SqlM, runSqlMWithOptions)
 
 intervalReader :: ReadM (IntervalSet Int64)
 intervalReader = maybeReader . parseMaybe $
@@ -51,9 +51,11 @@ optionParserFromValues vals = option . maybeReader $ lookupCI
 runSqlM :: (String -> (InfoMod (Options a), Parser a)) -> (a -> SqlM b) -> IO b
 runSqlM configFromName work = do
     (helpInfo, parser) <- configFromName <$> getProgName
-    let options = Options <$> databaseOption <*> verbosityOption <*> parser
-    config <- execParser $ info (options <**> helper) helpInfo
+    config <- execParser $ info (mkOptions parser <**> helper) helpInfo
     runSqlMWithOptions config work
+  where
+    mkOptions p =
+      Options <$> databaseOption <*> verbosityOption <*> queryOption <*> p
 
 databaseOption :: Parser Text
 databaseOption = strOption . mconcat $
@@ -61,6 +63,16 @@ databaseOption = strOption . mconcat $
     , value "benchmarks.db", help "Path of SQLite database to use."
     , showDefaultWith T.unpack
     ]
+
+queryOption :: Parser QueryMode
+queryOption = explainFlag <|> ExplainLog <$> explainOpt <|> pure Normal
+  where
+    explainFlag = flag' Explain $ mconcat
+        [ long "explain", help "Log query plans to stdout." ]
+
+    explainOpt = strOption . mconcat $
+        [ metavar "FILE", long "explain-log"
+        , help "Log query plans to log file." ]
 
 verbosityOption :: Parser (LogSource -> LogLevel -> Bool)
 verbosityOption = logFilter . (levels !!) <$> verb

@@ -29,7 +29,7 @@ import Control.Monad.IO.Unlift
 import Control.Monad.Logger (LoggingT, LogLevel, LogSource, MonadLogger)
 import qualified Control.Monad.Logger as Log
 import Control.Monad.Trans (lift)
-import Control.Monad.Trans.Reader (ReaderT(..), ask, asks)
+import Control.Monad.Trans.Reader (ReaderT(..), asks)
 import Control.Monad.Trans.Resource (MonadResource, ResourceT, runResourceT)
 import qualified Data.ByteString as BS
 import Data.Conduit (ConduitT)
@@ -46,6 +46,7 @@ import Foreign (Ptr, FunPtr, nullPtr, nullFunPtr)
 import Foreign.C (CInt(..), CString, withCString)
 import GHC.Conc.Sync (getNumProcessors, setNumCapabilities)
 import qualified Lens.Micro.Extras as Lens
+import System.IO (Handle, IOMode(WriteMode), stdout, withFile)
 
 import Schema (migrateAll)
 
@@ -59,8 +60,14 @@ type SqlM = ReaderT (RawSqlite SqlBackend) BaseM
 
 type SqlRecord rec = (PersistRecordBackend rec (RawSqlite SqlBackend))
 
-newtype BaseM a =
-  BaseM { runBaseM :: ReaderT (IORef Text) (ResourceT (LoggingT IO)) a }
+data QueryMode = Normal | Explain | ExplainLog FilePath
+    deriving (Eq, Read, Show)
+
+newtype BaseM a = BaseM
+  { runBaseM :: ReaderT (IORef Text, Maybe Handle)
+                        (ResourceT (LoggingT IO))
+                        a
+  }
   deriving
   ( Applicative, Functor, Monad, MonadCatch, MonadIO, MonadLogger, MonadMask
   , MonadResource, MonadThrow)
@@ -71,13 +78,13 @@ showText = T.pack . show
 logIfFail :: Show v => Text -> v -> SqlM a -> SqlM a
 logIfFail tag val action = do
     lift . BaseM $ do
-        ref <- ask
+        ref <- asks fst
         liftIO . writeIORef ref $ tag <> ": " <> showText val
     action
 
 instance MonadFail BaseM where
     fail _ = BaseM $ do
-        ref <- ask
+        ref <- asks fst
         msg <- liftIO $ readIORef ref
         Log.logErrorN msg
         throwM Abort
@@ -159,26 +166,42 @@ data Options a =
   Options
     { database :: Text
     , logVerbosity :: LogSource -> LogLevel -> Bool
+    , queryMode :: QueryMode
     , task :: a
     }
+
+logQueryExplanation :: (Handle -> SqlM ()) -> SqlM ()
+logQueryExplanation queryLogger = do
+    queryHandle <- lift . BaseM $ asks snd
+    case queryHandle of
+        Nothing -> return ()
+        Just hnd -> queryLogger hnd
 
 runSqlMWithOptions :: Options a -> (a -> SqlM b) -> IO b
 runSqlMWithOptions Options{..} work = do
   getNumProcessors >>= setNumCapabilities
   ref <- newIORef ""
-  runLog . runBaseRes ref . withRawSqliteConnInfo connInfo . runReaderT $ do
-    sqlitePtr <- asks $ getSqlitePtr . Lens.view rawSqliteConnection
-    createSqlFun sqlitePtr 1 "random" randomFun
-    createSqlAggregate sqlitePtr 3 "vector" vector_step vector_finalise
-    rawExecute "PRAGMA busy_timeout = 1000" []
-    liftPersist $ runMigrationSilent migrateAll
-    work task
+  withQueryLog $ \mHnd -> do
+    let config = (ref, mHnd)
+    runLog . runBase config . withRawSqliteConnInfo connInfo . runReaderT $ do
+        sqlitePtr <- asks $ getSqlitePtr . Lens.view rawSqliteConnection
+        createSqlFun sqlitePtr 1 "random" randomFun
+        createSqlAggregate sqlitePtr 3 "vector" vector_step vector_finalise
+        rawExecute "PRAGMA busy_timeout = 1000" []
+        liftPersist $ runMigrationSilent migrateAll
+        work task
   where
+    withQueryLog :: (Maybe Handle -> IO r) -> IO r
+    withQueryLog f = case queryMode of
+        Normal -> f Nothing
+        Explain -> f (Just stdout)
+        ExplainLog p -> withFile p WriteMode $ f . Just
+
     runLog :: LoggingT IO a -> IO a
     runLog = Log.runStderrLoggingT . Log.filterLogger logVerbosity
 
-    runBaseRes :: IORef Text -> BaseM a -> LoggingT IO a
-    runBaseRes ref = runResourceT . (`runReaderT` ref) . runBaseM
+    runBase :: (IORef Text, Maybe Handle) -> BaseM a -> LoggingT IO a
+    runBase cfg = runResourceT . (`runReaderT` cfg) . runBaseM
 
     connInfo :: SqliteConnectionInfo
     connInfo = mkSqliteConnectionInfo database
