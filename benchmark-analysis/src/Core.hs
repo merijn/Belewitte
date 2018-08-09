@@ -45,6 +45,7 @@ import Data.Typeable (Typeable)
 import Foreign (Ptr, FunPtr, nullPtr, nullFunPtr)
 import Foreign.C (CInt(..), CString, withCString)
 import GHC.Conc.Sync (getNumProcessors, setNumCapabilities)
+import qualified Lens.Micro as Lens
 import qualified Lens.Micro.Extras as Lens
 import System.IO (Handle, IOMode(WriteMode), stdout, withFile)
 
@@ -167,6 +168,7 @@ data Options a =
     { database :: Text
     , logVerbosity :: LogSource -> LogLevel -> Bool
     , queryMode :: QueryMode
+    , foreignKeys :: Bool
     , task :: a
     }
 
@@ -204,7 +206,7 @@ runSqlMWithOptions Options{..} work = do
     runBase cfg = runResourceT . (`runReaderT` cfg) . runBaseM
 
     connInfo :: SqliteConnectionInfo
-    connInfo = mkSqliteConnectionInfo database
+    connInfo = Lens.set fkEnabled True $ mkSqliteConnectionInfo database
 
     getSqlitePtr :: Connection -> Ptr ()
     getSqlitePtr (Connection _ (Connection' ptr)) = ptr
