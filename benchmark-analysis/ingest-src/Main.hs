@@ -20,14 +20,13 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Database.Persist.Sqlite (Key, Entity(..), (=.), (==.))
 import qualified Database.Persist.Sqlite as Sql
-import GHC.Conc.Sync (getNumProcessors, setNumCapabilities)
 import System.Directory (removeFile, doesFileExist)
-import System.Environment (getProgName)
 import System.FilePath (splitExtension, takeFileName)
 import System.IO (hFlush, stdout)
 import Text.Read (readMaybe)
 
 import BroadcastChan.Conduit
+import Core
 import OptionParsers
 import Parsers
 import ProcessPool
@@ -294,27 +293,8 @@ runBenchmarks numNodes numRuns = do
             .| parMapM (Simple Retry) numNodes (withProcess procPool runTask)
             .| C.mapM_ (processTiming gpuId)
 
-data Options = Options
-    { dbPath :: Text
-    , logVerbosity :: LogSource -> LogLevel -> Bool
-    , ingestTask :: SqlM ()
-    }
-
-commandParser :: String -> ParserInfo Options
-commandParser name = info (options <**> helper) $ mconcat
-    [ fullDesc
-    , header $ name ++ " - a tool for registering and running GPU benchmarks"
-    , progDesc "Register GPUs, algorithms, algorithm implementations, and \
-               \graphs in an SQLite database of configurations. Automatically \
-               \run missing configurations and store all results in the \
-               \database."
-    ]
-  where
-    options :: Parser Options
-    options = Options <$> databaseOption <*> verbosityOption <*> commands name
-
-commands :: String -> Parser (SqlM ())
-commands name = hsubparser $ mconcat
+commands :: String -> (InfoMod a, Parser (SqlM ()))
+commands name = (,) docs . hsubparser $ mconcat
     [ subCommand "add-gpu" "register a new GPU" "" $
         pure addGPU
     , subCommand "add-graphs" "register graphs" "" $
@@ -333,6 +313,15 @@ commands name = hsubparser $ mconcat
                  runBenchmarks <$> parallelism <*> numRuns
     ]
   where
+    docs = mconcat
+      [ fullDesc
+      , header $ name ++ " - a tool for registering and running GPU benchmarks"
+      , progDesc
+        "Register GPUs, algorithms, algorithm implementations, and graphs in \
+        \an SQLite database of configurations. Automatically run missing \
+        \configurations and store all results in the database."
+      ]
+
     subCommand cmd hdr desc parser = command cmd . info parser $ mconcat
         [ fullDesc
         , header $ name ++ " " ++ cmd ++ " - " ++ hdr
@@ -345,11 +334,4 @@ commands name = hsubparser $ mconcat
 
 
 main :: IO ()
-main = do
-    getNumProcessors >>= setNumCapabilities
-    programName <- getProgName
-    Options{..} <- execParser $ commandParser programName
-
-    runSqlM logVerbosity dbPath $ do
-        Sql.liftPersist $ Sql.runMigrationSilent migrateAll
-        ingestTask
+main = runSqlM commands id

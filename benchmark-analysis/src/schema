@@ -80,11 +80,10 @@ StepTimer
 
 PredictionModel
     gpuId GPUId
-    model ByteString
+    model Model
     trainFraction Double
     trainSeed Int
     totalUnknownCount Int
-    deriving Eq Show
 
 ModelGraphProperty
     modelId PredictionModelId

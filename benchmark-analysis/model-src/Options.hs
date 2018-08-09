@@ -1,8 +1,9 @@
+{-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
-module Options (ModelCommand(..), Options(..), optionsParser) where
+module Options (ModelCommand(..), commands, runSqlM) where
 
 import Control.Monad.Catch (throwM)
 import Data.Char (toLower)
@@ -19,18 +20,12 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Database.Persist.Sqlite as Sql
 
+import Core
 import Evaluate (Report(..), RelativeTo(..), SortBy(..))
-import Model (Model, byteStringToModel)
+import Model (Model)
 import OptionParsers
 import Schema
 import Train (TrainingConfig(..))
-
-data Options =
-  Options
-  { database :: Text
-  , logVerbosity :: LogSource -> LogLevel -> Bool
-  , modelTask :: ModelCommand
-  }
 
 readProps :: MonadIO m => FilePath -> m (Set Text)
 readProps = liftIO . fmap (S.fromList . T.lines) . T.readFile
@@ -44,18 +39,6 @@ dropProps :: Set Text -> Set Text -> Set Text
 dropProps input db
     | S.null input = db
     | otherwise = S.difference db input
-
-optionsParser :: String -> IO Options
-optionsParser name = execParser . info (options <**> helper) $ mconcat
-    [ fullDesc
-    , header $ name ++ " - a tool for generating and validating BDT models"
-    , progDesc "Generate, validate, evaluate, and export Binary Decision Tree \
-               \(BDT) models for predicing which GPU implementation to use \
-               \for a GPU algorithm."
-    ]
-  where
-    options :: Parser Options
-    options = Options <$> databaseOption <*> verbosityOption <*> commands name
 
 data ModelCommand
     = Train
@@ -76,8 +59,8 @@ data ModelCommand
     | Export
       { getModel :: SqlM (Key PredictionModel, Model), cppFile :: FilePath}
 
-commands :: String -> Parser ModelCommand
-commands name = hsubparser $ mconcat
+commands :: String -> (InfoMod a, Parser ModelCommand)
+commands name = (,) docs . hsubparser $ mconcat
     [ subCommand "train" "train a model"
         "Train a new model" $ Train <$> gpuParser <*> trainingConfig
     , subCommand "query" "report model info"
@@ -96,6 +79,15 @@ commands name = hsubparser $ mconcat
         "Export BDT model to C++ file" $ Export <$> modelParser <*> cppFile
     ]
   where
+    docs = mconcat
+      [ fullDesc
+      , header $ name ++ " - a tool for generating and validating BDT models"
+      , progDesc
+        "Generate, validate, evaluate, and export Binary Decision Tree (BDT) \
+        \models for predicing which GPU implementation to use for a GPU \
+        \algorithm."
+      ]
+
     subCommand cmd hdr desc parser = command cmd . info parser $ mconcat
         [ fullDesc
         , header $ name ++ " " ++ cmd ++ " - " ++ hdr
@@ -118,7 +110,7 @@ modelParser = queryModel <$> modelOpt
     queryModel :: Int64 -> SqlM (Key PredictionModel, Model)
     queryModel n = do
         PredictionModel{predictionModelModel} <- Sql.getJust key
-        return $ (key, byteStringToModel predictionModelModel)
+        return $ (key, predictionModelModel)
       where
         key = toSqlKey n
 

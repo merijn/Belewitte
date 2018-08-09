@@ -41,6 +41,7 @@ import Text.Megaparsec (Parsec, parse, between, sepBy1, some)
 import Text.Megaparsec.Char (char, eol, string)
 import Text.Megaparsec.Char.Lexer (decimal)
 
+import Core
 import Model
 import Query
 import Schema
@@ -213,7 +214,7 @@ trainModel gpuId trainCfg@TrainConfig{..} = do
         unknownId <- Sql.insert $ UnknownPrediction modelId count
         forM_ impls $ Sql.insert_ . UnknownSet unknownId . toSqlKey
 
-    return (modelId, byteStringToModel model)
+    return (modelId, model)
   where
     reduceInfo StepInfo{..} = (stepProps, stepBestImpl)
 
@@ -223,13 +224,13 @@ putProps = LBS.toStrict . runPut . VS.mapM_ putDoublehost
 putResults :: Int64 -> ByteString
 putResults = LBS.toStrict . runPut . putInt64host
 
-getResult :: Int -> ByteString -> (Vector Double, ByteString)
+getResult :: Int -> ByteString -> (Vector Double, Model)
 getResult columnCount = runGet parseBlock . LBS.fromStrict
-    where
+  where
     parseBlock = do
         dbls <- VS.replicateM columnCount getDoublehost
         bs <- LBS.toStrict <$> getRemainingLazyByteString
-        return (dbls, bs)
+        return (dbls, byteStringToModel bs)
 
 getUnknowns :: MonadThrow m => Text -> m (Int, [(Int, Set Int64)])
 getUnknowns txt = case parse parseUnknowns "" txt of

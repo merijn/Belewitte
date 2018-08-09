@@ -34,6 +34,7 @@ import qualified Data.Text.IO as T
 import Data.Vector.Storable (Vector)
 import Database.Persist.Sqlite
 
+import Core
 import Schema
 import Utils (byteStringToVector)
 

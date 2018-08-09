@@ -18,6 +18,7 @@ import System.Process
     , StdStream(CreatePipe), createProcess, getProcessExitCode, shell
     , terminateProcess, waitForProcess)
 
+import Core
 import Schema
 
 data Process =

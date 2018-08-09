@@ -9,6 +9,7 @@ import qualified Data.Conduit.Combinators as C
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 
+import Core
 import Evaluate (percent)
 import Model
 import Query

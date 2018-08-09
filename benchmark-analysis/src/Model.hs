@@ -5,6 +5,7 @@
 {-# LANGUAGE RecordWildCards #-}
 module Model (Model, predict, dumpCppModel, dumpModel, byteStringToModel) where
 
+import Control.Monad.IO.Class (MonadIO(liftIO))
 import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import Data.Int (Int32)
@@ -16,6 +17,7 @@ import Data.Ord (comparing)
 import Data.String.Interpolate.IsString (i)
 import Data.Set (Set)
 import qualified Data.Set as S
+import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Lazy.Builder (Builder, fromText, toLazyText)
 import Data.Text.Lazy.Builder.Int (decimal)
@@ -23,14 +25,22 @@ import Data.Text.Lazy.Builder.RealFloat (realFloat)
 import qualified Data.Text.Lazy.IO as LT
 import qualified Data.Vector.Storable as VS
 import qualified Data.Vector.Generic as V
+import Database.Persist.Class (PersistField(..))
+import Database.Persist.Sql (PersistFieldSql(..))
 import Foreign.Ptr (castPtr)
 import Foreign.Storable (Storable(..))
 import Text.Read (readMaybe)
 
-import Schema (Implementation(..), MonadIO(liftIO), Text)
 import Utils (byteStringToVector, vectorToByteString)
 
-newtype Model = Model (VS.Vector TreeNode)
+newtype Model = Model { getModelVector :: VS.Vector TreeNode }
+
+instance PersistField Model where
+    toPersistValue (Model vec) = toPersistValue $ vectorToByteString vec
+    fromPersistValue val = Model . byteStringToVector <$> fromPersistValue val
+
+instance PersistFieldSql Model where
+    sqlType proxy = sqlType $ vectorToByteString . getModelVector <$> proxy
 
 predict :: V.Vector v Double => Model -> v Double -> Int
 predict (Model tree) props = go (tree `VS.unsafeIndex` 0)
@@ -49,7 +59,7 @@ dumpCppModel
     -> Model
     -> Set Text
     -> Set Text
-    -> IntMap Implementation
+    -> IntMap Text
     -> m ()
 dumpCppModel name (Model tree) graphProps stepProps implNames =
   liftIO . LT.writeFile name . toLazyText $ [i|#include <functional>
@@ -130,7 +140,7 @@ extern "C" int32_t lookup()
                 [ "    { \"" , kernelName , "\", " , decimal new
                 , ", ", warpConfig, " },\n" ]
           where
-            implName = implementationName $ implNames IM.! original
+            implName = implNames IM.! original
             (kernelName, warpConfig) = kernelConfig implName
 
     propEntries :: Builder

@@ -1,10 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 module OptionParsers
-    ( databaseOption
-    , intervalReader
+    ( intervalReader
     , optionParserFromValues
-    , verbosityOption
+    , runSqlM
     , module Options.Applicative
     ) where
 
@@ -21,16 +22,12 @@ import qualified Data.Map as M
 import Data.Text (Text)
 import qualified Data.Text as T
 import Options.Applicative
+import System.Environment (getProgName)
 import Text.Megaparsec (Parsec, parseMaybe, sepBy1, try)
 import Text.Megaparsec.Char (char)
 import Text.Megaparsec.Char.Lexer (decimal)
 
-databaseOption :: Parser Text
-databaseOption = strOption . mconcat $
-    [ metavar "DATABASE", short 'd', long "database"
-    , value "benchmarks.db", help "Path of SQLite database to use."
-    , showDefaultWith T.unpack
-    ]
+import Core (Options(..), SqlM, runSqlMWithOptions)
 
 intervalReader :: ReadM (IntervalSet Int64)
 intervalReader = maybeReader . parseMaybe $
@@ -51,10 +48,24 @@ optionParserFromValues vals = option . maybeReader $ lookupCI
     lookupCI key = M.lookup (map toLower key) valMap
     valMap = M.mapKeys (map toLower) vals
 
+runSqlM :: (String -> (InfoMod (Options a), Parser a)) -> (a -> SqlM b) -> IO b
+runSqlM configFromName work = do
+    (helpInfo, parser) <- configFromName <$> getProgName
+    let options = Options <$> databaseOption <*> verbosityOption <*> parser
+    config <- execParser $ info (options <**> helper) helpInfo
+    runSqlMWithOptions config work
+
+databaseOption :: Parser Text
+databaseOption = strOption . mconcat $
+    [ metavar "DATABASE", short 'd', long "database"
+    , value "benchmarks.db", help "Path of SQLite database to use."
+    , showDefaultWith T.unpack
+    ]
+
 verbosityOption :: Parser (LogSource -> LogLevel -> Bool)
-verbosityOption = logVerbosity . (levels !!) <$> verb
+verbosityOption = logFilter . (levels !!) <$> verb
   where
-    logVerbosity verbosity = \_ lvl -> lvl >= verbosity
+    logFilter verbosity = \_ lvl -> lvl >= verbosity
 
     levels = LevelError : LevelWarn : LevelInfo : repeat LevelDebug
 

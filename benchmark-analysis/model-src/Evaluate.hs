@@ -31,6 +31,7 @@ import qualified Data.Vector.Storable as VS
 import qualified Data.Vector.Unboxed as VU
 import Numeric (showFFloat)
 
+import Core
 import Model
 import Query
 import Schema

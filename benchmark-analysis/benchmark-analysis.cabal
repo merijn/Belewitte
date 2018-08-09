@@ -20,14 +20,15 @@ Synopsis:
 
 Description:
 
-Extra-Source-Files:     cbits/*.h
+Extra-Source-Files:     cbits/*.h src/schema
 
 Library
   Default-Language:     Haskell2010
   GHC-Options:          -O2 -Wall -fno-warn-unused-do-bind
   GHC-Prof-Options:     -fprof-auto
   Hs-Source-Dirs:       src
-  Exposed-Modules:      Model
+  Exposed-Modules:      Core
+                        Model
                         OptionParsers
                         Query
                         Schema

@@ -1,8 +1,7 @@
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
 module Main where
@@ -21,9 +20,8 @@ import Data.String (fromString)
 import qualified Data.Text.IO as T
 import Database.Persist.Sqlite (Entity(..), (==.))
 import qualified Database.Persist.Sqlite as Sql
-import GHC.Conc.Sync (getNumProcessors, setNumCapabilities)
-import System.Environment (getProgName)
 
+import Core
 import Evaluate (evaluateModel, compareImplementations, percent)
 import Model
 import Options
@@ -67,42 +65,38 @@ reportModelStats ModelStats{..} = liftIO $ do
     sortedUnknown = sortBy (flip (comparing fst)) modelUnknownPreds
 
 main :: IO ()
-main = do
-    getNumProcessors >>= setNumCapabilities
-    Options{..} <- getProgName >>= optionsParser
+main = runSqlM commands $ \case
+    Train{getGpuId,getConfig} -> do
+        gpuId <- getGpuId
+        trainConfig <- getConfig
+        modelId <- fst <$> trainModel gpuId trainConfig
+        liftIO $ print (fromSqlKey modelId)
 
-    runSqlM logVerbosity database $ do
-        Sql.liftPersist $ Sql.runMigrationSilent migrateAll
+    Query{getModel} -> do
+        modelId <- fst <$> getModel
+        getModelStats modelId >>= reportModelStats
 
+    Validate{getGpuId,getModel} -> do
+        gpuId <- getGpuId
+        (modelId, model) <- getModel
+        trainConfig <- getModelTrainingConfig modelId
+        validateModel gpuId model trainConfig
+
+    Evaluate{getGpuId,getModel,reportConfig} -> void $ do
         impls <- queryImplementations
-        case modelTask of
-            Train{getGpuId,getConfig} -> do
-                gpuId <- getGpuId
-                trainConfig <- getConfig
-                modelId <- fst <$> trainModel gpuId trainConfig
-                liftIO $ print (fromSqlKey modelId)
+        gpuId <- getGpuId
+        (modelId, model) <- getModel
+        trainConfig <- getModelTrainingConfig modelId
+        evaluateModel gpuId reportConfig model trainConfig impls
 
-            Query{getModel} -> do
-                modelId <- fst <$> getModel
-                getModelStats modelId >>= reportModelStats
+    Compare{getGpuId,reportConfig} -> void $ do
+        impls <- queryImplementations
+        gpuId <- getGpuId
+        compareImplementations gpuId reportConfig impls
 
-            Validate{getGpuId,getModel} -> do
-                gpuId <- getGpuId
-                (modelId, model) <- getModel
-                trainConfig <- getModelTrainingConfig modelId
-                validateModel gpuId model trainConfig
-
-            Evaluate{getGpuId,getModel,reportConfig} -> void $ do
-                gpuId <- getGpuId
-                (modelId, model) <- getModel
-                trainConfig <- getModelTrainingConfig modelId
-                evaluateModel gpuId reportConfig model trainConfig impls
-
-            Compare{getGpuId,reportConfig} -> void $ do
-                gpuId <- getGpuId
-                compareImplementations gpuId reportConfig impls
-
-            Export{getModel,cppFile} -> void $ do
-                (modelId, model) <- getModel
-                TrainConfig{..} <- getModelTrainingConfig modelId
-                dumpCppModel cppFile model trainGraphProps trainStepProps impls
+    Export{getModel,cppFile} -> void $ do
+        impls <- queryImplementations
+        (modelId, model) <- getModel
+        TrainConfig{..} <- getModelTrainingConfig modelId
+        dumpCppModel cppFile model trainGraphProps trainStepProps
+            (implementationName <$> impls)
