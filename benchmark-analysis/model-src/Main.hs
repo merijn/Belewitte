@@ -4,7 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
-module Main where
+module Main(main) where
 
 import Control.Monad (forM_, void)
 import Data.Bifunctor (first)
@@ -16,7 +16,6 @@ import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 import qualified Data.Map as M
 import Data.Set (Set)
-import Data.String (fromString)
 import qualified Data.Text.IO as T
 import Database.Persist.Sqlite (Entity(..), (==.))
 import qualified Database.Persist.Sqlite as Sql
@@ -25,7 +24,6 @@ import Core
 import Evaluate (evaluateModel, compareImplementations, percent)
 import Model
 import Options
-import Query
 import Schema
 import Train
 import Validate
@@ -41,10 +39,6 @@ queryImplementations = do
 
     toIntMap :: Entity Implementation -> IntMap Implementation
     toIntMap (Entity k val) = IM.singleton (fromIntegral $ fromSqlKey k) val
-
-dumpQueryToFile :: Show r => String -> Query r -> SqlM ()
-dumpQueryToFile path query = runSqlQuery query $
-    C.map ((++"\n") . show) .| C.map fromString .| C.sinkFile path
 
 reportModelStats :: MonadIO m => ModelStats -> m ()
 reportModelStats ModelStats{..} = liftIO $ do

@@ -3,7 +3,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
-module Main where
+module Main(main) where
 
 import Control.Monad ((>=>), forM_, guard, when)
 import Control.Monad.Logger (logErrorN, logInfoN)
