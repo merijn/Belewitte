@@ -43,11 +43,6 @@ percent x y = T.pack $ showFFloat (Just 2) val "%"
     val :: Double
     val = 100 * realToFrac x / realToFrac y
 
-implName :: Implementation -> Text
-implName = \case
-    Implementation _ _ (Just prettyName) _ _ _ -> prettyName
-    Implementation _ name _ _ _ _ -> name
-
 padText :: Int -> Text -> Text
 padText n t = t <> T.replicate (n - T.length t) " "
 
@@ -130,10 +125,10 @@ aggregateVariants variantIntervals relTo impls = C.foldM aggregate initial
         zeroIntVector = VS.replicate (IM.size impls) 0
         zeroDoubleVector = VS.replicate (IM.size impls) 0
 
-    getImplName :: Int -> Text
-    getImplName ix = implName $ impls IM.! ix
+    toImplName :: Int -> Text
+    toImplName ix = getImplName $ impls IM.! ix
 
-    padSize = 2 + maximum (T.length . implName <$> impls)
+    padSize = 2 + maximum (T.length . getImplName <$> impls)
 
     aggregate
         :: MonadIO m
@@ -145,7 +140,7 @@ aggregateVariants variantIntervals relTo impls = C.foldM aggregate initial
             T.putStrLn $ "Variant #" <> showText (fromSqlKey variantid)
             T.putStrLn $ relTiming "Optimal" optimalTime
             forM_ ranked $ \(implId, time) -> do
-                T.putStrLn $ relTiming (getImplName implId) time
+                T.putStrLn $ relTiming (toImplName implId) time
             T.putStrLn ""
 
         return TotalStats
@@ -289,7 +284,7 @@ printTotalStatistics Report{..} impls TotalStats{..} = liftIO $ do
     forM_ rankedTimings $ relError
   where
     relError (implId, cumError, oneToTwo, gtFive, gtTwenty, maxError) = do
-      T.putStr $ padText padSize (getImplName implId <> ":")
+      T.putStr $ padText padSize (toImplName implId <> ":")
       T.putStr . T.pack $ roundedVal (cumError / fromIntegral variantCount)
       when reportVerbose $ do
           T.putStr $ "\t" <> percent oneToTwo variantCount
@@ -311,15 +306,15 @@ printTotalStatistics Report{..} impls TotalStats{..} = liftIO $ do
                   (VS.convert relErrorMoreThanTwenty)
                   (VS.convert timesMaxRelError)
 
-    getImplName :: Int -> Text
-    getImplName ix = implName $ impls IM.! ix
+    toImplName :: Int -> Text
+    toImplName ix = getImplName $ impls IM.! ix
 
     compareTime :: (Int, Double, Int, Int, Int, Double) -> Double
     compareTime (_, avgTime, _, _, _, maxTime) = case reportSortBy of
         Avg -> avgTime
         Max -> maxTime
 
-    padSize = 2 + maximum (T.length . implName <$> reportImpls)
+    padSize = 2 + maximum (T.length . getImplName <$> reportImpls)
 
     implFilter :: ImplType -> Bool
     implFilter = getAny . foldMap (\i -> Any . (==i)) reportImplTypes
