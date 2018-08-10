@@ -20,7 +20,7 @@ Synopsis:
 
 Description:
 
-Executable Plot
+Executable PlotGraph
   Default-Language:     Haskell2010
   GHC-Options:          -O2 -Wall -fno-warn-unused-do-bind -rtsopts
   GHC-Prof-Options:     -fprof-auto

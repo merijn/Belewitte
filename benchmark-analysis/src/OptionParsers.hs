@@ -1,9 +1,9 @@
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE Rank2Types #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 module OptionParsers
-    ( intervalReader
+    ( gpuParser
+    , intervalReader
     , optionParserFromValues
     , runSqlM
     , module Options.Applicative
@@ -21,13 +21,31 @@ import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Text (Text)
 import qualified Data.Text as T
+import Database.Persist.Sqlite (Key, Entity(..))
+import qualified Database.Persist.Sqlite as Sql
 import Options.Applicative
 import System.Environment (getProgName)
 import Text.Megaparsec (Parsec, parseMaybe, sepBy1, try)
 import Text.Megaparsec.Char (char)
 import Text.Megaparsec.Char.Lexer (decimal)
 
-import Core (Options(..), QueryMode(..), SqlM, runSqlMWithOptions)
+import Core
+import Schema
+
+gpuParser :: Parser (SqlM (Key GPU))
+gpuParser = queryGPU <$> gpuOpt
+  where
+    gpuOpt :: Parser (Either Text Int64)
+    gpuOpt = option (Right <$> auto <|> Left <$> auto) $ mconcat
+        [ metavar "ID", short 'g', long "gpu"
+        , help "GPU results to use, numeric or textual" ]
+
+    queryGPU :: Either Text Int64 -> SqlM (Key GPU)
+    queryGPU (Right n) = validateKey n
+    queryGPU (Left name) = do
+        Just Entity{entityKey} <-
+            logIfFail "No GPU with name" name . Sql.getBy $ UniqGPU name
+        return entityKey
 
 intervalReader :: ReadM (IntervalSet Int64)
 intervalReader = maybeReader . parseMaybe $

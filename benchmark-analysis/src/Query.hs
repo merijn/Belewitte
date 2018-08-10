@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -15,6 +16,8 @@ module Query
     , runSqlQueryCount
     , stepInfoQuery
     , variantInfoQuery
+    , timePlotQuery
+    , levelTimePlotQuery
     ) where
 
 import Control.Monad (forM_, join)
@@ -259,3 +262,62 @@ FROM Variant
      ) AS Total
      ON Variant.id = Total.variantId
 ORDER BY Variant.id ASC|]
+
+timePlotQuery :: Key GPU -> Set (Key Variant) -> Query (Text, Vector Double)
+timePlotQuery gpuId variants = Query{..}
+  where
+    params :: [PersistValue]
+    params = [toPersistValue gpuId]
+
+    tempTables = []
+    clearTempTables = []
+
+    havingClause = T.intercalate " OR " . map clause . S.toList
+      where
+        clause k = [i|variantId = #{fromSqlKey k}|]
+
+    convert
+        :: (MonadIO m, MonadLogger m, MonadThrow m)
+        => [PersistValue] -> m (Text, Vector Double)
+    convert [PersistText graph, PersistByteString timings] =
+        return $ (graph, byteStringToVector timings)
+    convert l = logThrowM . Error . fromString $ "Unexpected value: " ++ show l
+
+    query = [i|
+SELECT Graph.name, Total.timings
+FROM Variant
+     INNER JOIN Graph ON Variant.graphId = Graph.id
+     INNER JOIN
+     ( SELECT variantId
+            , vector(avgTime, implId, (SELECT COUNT(*) FROM Implementation)) AS timings
+       FROM TotalTimer
+       WHERE gpuId = ? AND name = "computation"
+       GROUP BY variantId
+       HAVING #{havingClause variants}
+     ) AS Total
+     ON Variant.id = Total.variantId
+WHERE Variant.name = "default"
+ORDER BY Variant.id ASC|]
+
+levelTimePlotQuery :: Key GPU -> Key Variant -> Query (Int64, Vector Double)
+levelTimePlotQuery gpuId variant = Query{..}
+  where
+    params :: [PersistValue]
+    params = [toPersistValue gpuId, toPersistValue variant]
+
+    tempTables = []
+    clearTempTables = []
+
+    convert
+        :: (MonadIO m, MonadLogger m, MonadThrow m)
+        => [PersistValue] -> m (Int64, Vector Double)
+    convert [PersistInt64 stepId, PersistByteString timings] =
+        return $ (stepId, byteStringToVector timings)
+    convert l = logThrowM . Error . fromString $ "Unexpected value: " ++ show l
+
+    query = [i|
+SELECT stepId, vector(avgTime, implId, (SELECT COUNT(*) FROM Implementation)) AS timings
+FROM StepTimer
+WHERE gpuId = ? AND variantId = ?
+GROUP BY stepId
+ORDER BY stepId ASC|]

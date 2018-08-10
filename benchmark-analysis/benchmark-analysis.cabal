@@ -20,7 +20,7 @@ Synopsis:
 
 Description:
 
-Data-Files:             scripts/model.py
+Data-Files:             scripts/model.py scripts/bar-plot.py
 Extra-Source-Files:     cbits/*.h src/schema
 
 Library
@@ -127,6 +127,29 @@ Executable Model
                ,        streaming-commons == 0.1.*
                ,        text
                ,        unix == 2.7.2.*
+               ,        vector == 0.12.0.1
+
+Executable Plot
+  Default-Language:     Haskell2010
+  GHC-Options:          -O2 -Wall -fno-warn-unused-do-bind -rtsopts -threaded
+                        -with-rtsopts=-qg
+  GHC-Prof-Options:     -fprof-auto
+  Hs-Source-Dirs:       plot-src
+  Main-Is:              Plot.hs
+  Other-Modules:        Paths_benchmark_analysis
+
+  Build-Depends:        base
+               ,        benchmark-analysis
+               ,        conduit == 1.3.*
+               ,        containers == 0.5.*
+               ,        exceptions == 0.8.3.*
+               ,        monad-logger == 0.3.28.*
+               ,        optparse-applicative == 0.14.0.*
+               ,        persistent-sqlite == 2.8.*
+               ,        process == 1.6.*
+               ,        resourcet == 1.2.*
+               ,        text
+               ,        unliftio-core == 0.1.1.*
                ,        vector == 0.12.0.1
 
 Source-Repository head

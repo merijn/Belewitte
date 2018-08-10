@@ -114,21 +114,6 @@ modelParser = queryModel <$> modelOpt
       where
         key = toSqlKey n
 
-gpuParser :: Parser (SqlM (Key GPU))
-gpuParser = queryGPU <$> gpuOpt
-  where
-    gpuOpt :: Parser (Either Text Int64)
-    gpuOpt = option (Right <$> auto <|> Left <$> auto) $ mconcat
-        [ metavar "ID", short 'g', long "gpu"
-        , help "GPU results to use, numeric or textual" ]
-
-    queryGPU :: Either Text Int64 -> SqlM (Key GPU)
-    queryGPU (Right n) = validateKey n
-    queryGPU (Left name) = do
-        Just Sql.Entity{entityKey} <-
-            logIfFail "No GPU with name" name . Sql.getBy $ UniqGPU name
-        return entityKey
-
 reportParser :: Bool -> Parser Report
 reportParser isComparison =
   Report <$> variantIntervals <*> resultsRelativeTo <*> sortResultsBy
