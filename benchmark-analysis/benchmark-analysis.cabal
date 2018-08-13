@@ -20,7 +20,8 @@ Synopsis:
 
 Description:
 
-Data-Files:             runtime-data/scripts/model.py
+Data-Files:             runtime-data/main
+                        runtime-data/scripts/model.py
                         runtime-data/scripts/bar-plot.py
 
 Extra-Source-Files:     cbits/*.h src/schema
@@ -73,9 +74,11 @@ Executable Ingest
   GHC-Prof-Options:     -fprof-auto
   Hs-Source-Dirs:       ingest-src
   Main-Is:              Main.hs
+  Autogen-Modules:      Paths_benchmark_analysis
   Other-Modules:        Jobs
                         Parsers
                         ProcessPool
+                        Paths_benchmark_analysis
 
   Build-Depends:        base
                ,        benchmark-analysis

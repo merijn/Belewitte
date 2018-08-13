@@ -19,6 +19,7 @@ import System.Process
     , terminateProcess, waitForProcess)
 
 import Core
+import Paths_benchmark_analysis (getDataFileName)
 import Schema
 
 data Process =
@@ -56,16 +57,18 @@ withProcessPool n (GPU name _) = bracket createProcessPool destroyProcessPool
     allocateProcess :: MonadIO m => m Process
     allocateProcess = liftIO $ do
         timeout <- getJobTimeOut
-        let p = (shell (opts timeout)) { std_in = CreatePipe, std_out = CreatePipe }
+        exePath <- getDataFileName "runtime-data/main"
+        let p = (shell (opts timeout exePath))
+                { std_in = CreatePipe, std_out = CreatePipe }
         (Just inHandle, Just outHandle, Nothing, procHandle) <- createProcess p
         hSetBuffering inHandle LineBuffering
         hSetBuffering outHandle LineBuffering
         return Process{..}
       where
-        opts timeout = intercalate " " . ("prun":) $ timeout ++
+        opts timeout exePath = intercalate " " . ("prun":) $ timeout ++
             [ "-np", "1" , "-native","\"-C " ++ T.unpack name ++"\""
             , "CUDA_VISIBLE_DEVICES=\"0,1,2,3,4,5,6,7,8,9,10\""
-            , "./main", "-W", "-S"
+            , exePath, "-W", "-S"
             ]
 
     destroyProcess :: MonadIO m => Process -> m ()
