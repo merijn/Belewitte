@@ -46,7 +46,7 @@ LDFLAGS=-ldl -g
 LD=$(CXX)
 
 NVCC?=nvcc
-NVCCXXFLAGS?=-std=c++11 -O3 -g -lineinfo -Wno-deprecated-declarations
+NVCCXXFLAGS?=-std=c++11 -O3 -g -Wno-deprecated-declarations
 NVCCARCHFLAGS?= \
     -gencode arch=compute_30,code=sm_30 \
     -gencode arch=compute_35,code=sm_35 \
@@ -95,3 +95,6 @@ endif
     NVCCXXFLAGS += --compiler-options "$(NVWFLAGS) $(NVCCHOSTCXXFLAGS)" \
                    -Wno-deprecated-gpu-targets
 endif
+
+$(BUILD)/kernels/:
+	$(AT)mkdir -p $@

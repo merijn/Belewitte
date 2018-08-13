@@ -57,24 +57,19 @@ usage(int exitCode = EXIT_FAILURE)
 }
 
 static map<string, map<string, AlgorithmConfig*>>
-loadAlgorithms(const char *sym, vector<const char*> &paths, bool warn)
+loadAlgorithms
+(const char *sym, vector<const char*> &paths, bool warn, bool debug)
 {
     map<string, string> libs;
     map<string, map<string, AlgorithmConfig*>> result;
 
-    if (is_directory("./.build/")) {
-        for (auto& entry : directory_iterator("./.build/")) {
-            if (!is_directory(entry)) continue;
-
-            auto p = entry.path();
-            auto filename = p.filename().string();
-            p /= ("lib" + filename + ".so");
-            if (!access(p.c_str(), F_OK)) libs.emplace(filename, p.string());
-        }
+    if (is_directory("./.build/kernels/")) {
+        paths.insert(paths.begin(), "./.build/kernels/");
     }
 
-    const boost::regex lib_regex("lib(.*)\\.so" );
-    boost::cmatch match;
+    boost::smatch match;
+    const boost::regex lib_regex(debug ? "lib(.*)kerneldebug\\.so"
+                                       : "lib(.*)kernel\\.so");
 
     for (auto p_str : paths) {
         if (!is_directory(p_str)) continue;
@@ -83,7 +78,8 @@ loadAlgorithms(const char *sym, vector<const char*> &paths, bool warn)
             if (!is_regular_file(entry)) continue;
 
             auto p = entry.path();
-            if (boost::regex_match(p.filename().c_str(), match, lib_regex)) {
+            const string fileNameString = p.filename().string();
+            if (boost::regex_match(fileNameString, match, lib_regex)) {
                 libs.emplace(match[1], p.string());
             }
         }
@@ -131,6 +127,7 @@ getConfig
 }
 
 static listing listOptions;
+static bool debug = false;
 static bool verbose = false;
 static bool warnings = false;
 static bool printStdOut = false;
@@ -233,6 +230,7 @@ int main(int argc, char **argv)
            .add('O', "output", printStdOut, true,
                 "Print timings to stdout, inhibits timings file creation.")
            .add('p', "platform", "NUM", platform, "Platform to use.")
+           .add('g', "debug", debug, true, "Use debug kernels.")
            .add('v', "verbose", verbose, true, "Verbose output.")
            .add('W', "warn", warnings, true, "Verbose/debug warnings.")
            .add('S', "stdin", fromStdin, true, "Read work from stdin.");
@@ -252,23 +250,23 @@ int main(int argc, char **argv)
 
     map<string, map<string, AlgorithmConfig*>> algorithms;
     switch (fw) {
-        case framework::opencl: {
-            listOptions = run_with_backend(OpenCL, remainingArgs);
-            algorithms = loadAlgorithms("openclDispatch", paths, warnings);
-            {
-                //array<const char*,1> files {{&_binary_kernel_cl_start}};
-                //array<size_t,1> sizes {{(size_t) &_binary_kernel_cl_size}};
-                //cl_kernel initKernel = opencl.createKernel("init", files, sizes);
-                //cl_kernel runKernel = opencl.createKernel("BFS", files, sizes);
-                //benchmark<OpenCL>(opencl, initKernel, runKernel, graph, root, run_count, outputFile);
-            }
-            break;
+      case framework::opencl: {
+        listOptions = run_with_backend(OpenCL, remainingArgs);
+        algorithms = loadAlgorithms("openclDispatch", paths, warnings, debug);
+        {
+            //array<const char*,1> files {{&_binary_kernel_cl_start}};
+            //array<size_t,1> sizes {{(size_t) &_binary_kernel_cl_size}};
+            //cl_kernel initKernel = opencl.createKernel("init", files, sizes);
+            //cl_kernel runKernel = opencl.createKernel("BFS", files, sizes);
+            //benchmark<OpenCL>(opencl, initKernel, runKernel, graph, root, run_count, outputFile);
         }
-        case framework::cuda: {
-            listOptions = run_with_backend(CUDA, remainingArgs);
-            algorithms = loadAlgorithms("cudaDispatch", paths, warnings);
-            break;
-        }
+        break;
+      }
+      case framework::cuda: {
+        listOptions = run_with_backend(CUDA, remainingArgs);
+        algorithms = loadAlgorithms("cudaDispatch", paths, warnings, debug);
+        break;
+      }
     }
 
     switch (listOptions) {
