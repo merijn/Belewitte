@@ -20,7 +20,9 @@ Synopsis:
 
 Description:
 
-Data-Files:             scripts/model.py scripts/bar-plot.py
+Data-Files:             runtime-data/scripts/model.py
+                        runtime-data/scripts/bar-plot.py
+
 Extra-Source-Files:     cbits/*.h src/schema
 
 Library

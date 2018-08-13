@@ -144,7 +144,8 @@ trainModel gpuId trainCfg@TrainConfig{..} = do
 
     Just propCount <- fmap (VS.length . fst) <$> runSqlQuery trainQuery C.head
 
-    scriptProc <- liftIO $ proc <$> getDataFileName "scripts/model.py"
+    scriptProc <- liftIO $
+        proc <$> getDataFileName "runtime-data/scripts/model.py"
 
     let process :: Fd -> CreateProcess
         process fd = scriptProc

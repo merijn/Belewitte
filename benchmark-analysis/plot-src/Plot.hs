@@ -144,7 +144,9 @@ plot
 plot plotName axisName impls printStdout normalise query convert
     | printStdout = doWithHandle stdout
     | otherwise = do
-        scriptProc <- liftIO $ proc <$> getDataFileName "scripts/bar-plot.py"
+        scriptProc <- liftIO $
+            proc <$> getDataFileName "runtime-data/scripts/bar-plot.py"
+
         let plotProc = (scriptProc [plotName, axisName, show normalise])
                 { std_in = CreatePipe }
 
