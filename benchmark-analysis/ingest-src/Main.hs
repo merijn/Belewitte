@@ -1,20 +1,34 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 module Main(main) where
 
-import Control.Monad ((>=>), forM_, guard)
+import Control.Monad (forM_, guard)
+import Control.Monad.Reader (ask, local)
+import Control.Monad.Trans (lift)
+import Data.Bool (bool)
+import Data.Char (toLower)
 import Data.Conduit ((.|), runConduit)
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.Text as C
+import Data.Function (on)
 import Data.Monoid ((<>))
+import Data.List (isPrefixOf)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import Database.Persist.Sqlite (Key, Entity(..), (==.))
+import Database.Persist.Sqlite (Key, Entity(..), EntityField, Unique, (==.))
 import qualified Database.Persist.Sqlite as Sql
+import Lens.Micro.Extras (view)
+import System.Console.Haskeline
+import System.Console.Haskeline.MonadException (throwIO)
 import System.Directory (doesFileExist)
 import System.FilePath (splitExtension, takeFileName)
-import System.IO (hFlush, stdout)
+import System.IO (hClose)
+import System.Process (CreateProcess(std_out), StdStream(CreatePipe))
+import qualified System.Process as Process
 import Text.Read (readMaybe)
 
 import BroadcastChan.Conduit
@@ -22,38 +36,103 @@ import Core
 import Jobs
 import OptionParsers
 import Parsers
+import Paths_benchmark_analysis (getDataFileName)
 import ProcessPool
 import Schema
 
-runTask :: Process -> (a, b, c, Text) -> IO (a, b, c, Text)
-runTask Process{..} (x, y, z, cmd) = do
-    -- FIXME proper logging
-    T.putStrLn $ "Task: " <> cmd
-    T.hPutStrLn inHandle cmd
-    result <- T.hGetLine outHandle
-    T.putStrLn $ "Done: " <> cmd
-    return (x, y, z, result)
+data Completer m
+    = SimpleCompletion (String -> m [Completion])
+    | FileCompletion
 
-queryLineWith :: MonadIO m => (Text -> Maybe a) -> Text -> m (Maybe a)
-queryLineWith convert prompt = liftIO $ do
-    T.putStr $ prompt <> ": "
-    hFlush stdout
-    (checkEmpty >=> convert) <$> T.getLine
+type Input m = InputT (ReaderT (Completer m) m)
+
+liftSql :: SqlM a -> Input SqlM a
+liftSql = lift . lift
+
+withCompletion :: Monad m => Completer m -> Input m a -> Input m a
+withCompletion completion = mapInputT $ local (const completion)
+
+withProcessCompletion :: MonadIO m => [String] -> Input m a -> Input m a
+withProcessCompletion args act = do
+    exePath <- liftIO $ getDataFileName "runtime-data/main"
+    kernelDir <- liftIO $ getDataFileName "runtime-data/kernels"
+    let process = (Process.proc exePath $ ["-L",kernelDir] ++ args)
+            { std_out = CreatePipe }
+    withCompletion (SimpleCompletion $ processCompleter process) act
   where
-    checkEmpty :: Text -> Maybe Text
-    checkEmpty t = if T.null t then Nothing else Just t
+    readOutput Nothing (Just hnd) Nothing procHandle =
+      T.hGetContents hnd <* hClose hnd <* Process.waitForProcess procHandle
+    readOutput _ _ _ _ = throwM Abort
 
-queryLine :: MonadIO m => Text -> m (Maybe Text)
-queryLine = queryLineWith return
+    processCompleter process s = liftIO $ do
+        txt <- Process.withCreateProcess process readOutput
+        let relevant = filter (T.isPrefixOf (T.pack s)) $ T.lines txt
+        return $ map (simpleCompletion . T.unpack) relevant
 
-queryRead :: (MonadIO m, Read a) => Text -> m (Maybe a)
-queryRead = queryLineWith (readMaybe . T.unpack)
+getInputWith
+    :: MonadException m => (Text -> m (Maybe a)) -> Text -> Text -> InputT m a
+getInputWith convert errText prompt = go
+  where
+    go = getInputLine (T.unpack prompt ++ ": ") >>= \case
+            Nothing -> throwIO Abort
+            Just s -> lift (convert . T.stripEnd . T.pack $ s) >>= \case
+                Just r -> return r
+                Nothing -> outputStrLn (T.unpack errText) >> go
 
-addGPU :: SqlM ()
+getInputWithSqlCompletion
+    :: SqlRecord record
+    => EntityField record Text
+    -> (Text -> Unique record)
+    -> Text
+    -> Input SqlM (Entity record)
+getInputWithSqlCompletion field uniq prompt =
+  withCompletion (SimpleCompletion fromQuery) $
+    getInputWith (lift . Sql.getBy . uniq) err prompt
+  where
+    err = "Name not found in database!"
+    getFieldValue = view (Sql.fieldLens field)
+    toCompletions = map $ simpleCompletion . T.unpack . getFieldValue
+    fromQuery s =
+      toCompletions <$> Sql.selectList [field `likeFilter` T.pack s] []
+
+getOptionalInput :: MonadException m => Text -> InputT m (Maybe Text)
+getOptionalInput = getInputWith checkEmpty "" -- Never fails
+  where
+    checkEmpty :: MonadException m => Text -> m (Maybe (Maybe Text))
+    checkEmpty txt
+        | T.null txt = return $ Just Nothing
+        | otherwise = return . Just . Just $ txt
+
+getReadInput
+    :: forall a m . (MonadException m, Bounded a, Enum a, Read a, Show a)
+    => Text -> Input m a
+getReadInput prompt = withCompletion (SimpleCompletion completions) $
+    getInputWith (return . readMaybe . T.unpack) "Parse error!" prompt
+  where
+    allValues :: [a]
+    allValues = [minBound .. maxBound]
+
+    completions :: Monad m => String -> m [Completion]
+    completions s = return $ toCompletions s allValues
+
+    toCompletions :: Show x => String -> [x] -> [Completion]
+    toCompletions s = map simpleCompletion . filter (isPrefix s) . map show
+      where
+        isPrefix = isPrefixOf `on` map toLower
+
+getInput :: MonadException m => Text -> InputT m Text
+getInput = getInputWith checkEmpty "Empty input not allowed!"
+  where
+    checkEmpty :: MonadException m => Text -> m (Maybe Text)
+    checkEmpty txt
+        | T.null txt = return Nothing
+        | otherwise = return $ Just txt
+
+addGPU :: Input SqlM ()
 addGPU = do
-    Just gpuName <- queryLine "GPU Slurm Name"
-    prettyName <- queryLine "GPU Pretty Name"
-    Sql.insert_ $ GPU gpuName prettyName
+    gpuName <- getInput "GPU Slurm Name"
+    prettyName <- getOptionalInput "GPU Pretty Name"
+    liftSql . Sql.insert_ $ GPU gpuName prettyName
 
 addGraphs :: [FilePath] -> SqlM ()
 addGraphs = mapM_ $ \path -> do
@@ -62,51 +141,70 @@ addGraphs = mapM_ $ \path -> do
     liftIO $ guard (ext == ".graph")
     Sql.insert_ $ Graph (T.pack graphName) (T.pack path) Nothing
 
-addAlgorithm :: SqlM ()
+addAlgorithm :: Input SqlM ()
 addAlgorithm = do
-    Just algoName <- queryLine "Algorithm Name"
-    prettyName <- queryLine "Algorithm Pretty Name"
-    Sql.insert_ $ Algorithm algoName prettyName
+    algoName <- withProcessCompletion ["list","algorithms"] $
+        getInput "Algorithm Name"
+    prettyName <- getOptionalInput "Algorithm Pretty Name"
+    liftSql . Sql.insert_ $ Algorithm algoName prettyName
 
-addImplementation :: SqlM ()
+addImplementation :: Input SqlM ()
 addImplementation = do
-    Just algoName <- queryLine "Algorithm Name"
-    Just (Entity algoId _) <- Sql.getBy (UniqAlgorithm algoName)
-    Just implName <- queryLine "Implementation Name"
-    prettyName <- queryLine "Implementation Pretty Name"
-    flags <- queryLine "Flags"
-    Just algoType <- queryRead "Algorithm type"
-    Just runnable <- queryRead "Runnable"
-    Sql.insert_ $
+    Entity algoId Algorithm{..} <- getInputWithSqlCompletion
+        AlgorithmName UniqAlgorithm "Algorithm Name"
+
+    let args = ["list","implementations","-a",T.unpack algorithmName]
+    implName <- withProcessCompletion args $ getInput "Implementation Name"
+
+    prettyName <- getOptionalInput "Implementation Pretty Name"
+    flags <- getOptionalInput "Flags"
+
+    algoType <- getReadInput "Algorithm type"
+    runnable <- getReadInput "Runnable"
+
+    liftSql . Sql.insert_ $
         Implementation algoId implName prettyName flags algoType runnable
 
-addVariant :: SqlM ()
+addVariant :: Input SqlM ()
 addVariant = do
-    Just algoName <- queryLine "Algorithm Name"
-    Just (Entity algoId _) <- Sql.getBy (UniqAlgorithm algoName)
-    Just variantName <- queryLine "Variant Name"
-    flags <- queryLine "Flags"
+    Entity algoId _ <- getInputWithSqlCompletion
+        AlgorithmName UniqAlgorithm "Algorithm Name"
+
+    variantName <- getInput "Variant Name"
+    flags <- getOptionalInput "Flags"
+
     let mkVariant gId = Variant gId algoId variantName flags Nothing
-    runConduit $
+
+    liftSql . runConduit $
         Sql.selectKeys [] []
         .| C.mapM_ (Sql.insert_ . mkVariant)
 
-importResults :: SqlM ()
+importResults :: Input SqlM ()
 importResults = do
-    Just gpuName <- queryLine "GPU Name"
-    Just (Entity gpuId _) <- Sql.getBy (UniqGPU gpuName)
-    Just algoName <- queryLine "Algorithm Name"
-    Just (Entity algoId _) <- Sql.getBy (UniqAlgorithm algoName)
-    Just implName <- queryLine "Implementation Name"
-    Just (Entity implId _) <- Sql.getBy (UniqImpl algoId implName)
-    Just filepath <- queryLine "Result file"
-    runConduit $
-        C.sourceFile (T.unpack filepath)
+    Entity gpuId _ <- getInputWithSqlCompletion
+        GPUName UniqGPU "GPU Name"
+
+    Entity algoId _ <- getInputWithSqlCompletion
+        AlgorithmName UniqAlgorithm "Algorithm Name"
+
+    Entity implId _ <- getInputWithSqlCompletion
+        ImplementationName (UniqImpl algoId) "Implementation Name"
+
+    filepath <- withCompletion FileCompletion $
+        getInputWith checkExists "Non-existent file!" "Result File"
+
+    liftSql . runConduit $
+        C.sourceFile filepath
         .| C.decode C.utf8
         .| C.map (T.replace "," "")
         .| conduitParse externalResult
         .| C.mapM_ (insertResult gpuId algoId implId)
   where
+    checkExists :: MonadIO m => Text -> m (Maybe FilePath)
+    checkExists txt = bool Nothing (Just path) <$> liftIO (doesFileExist path)
+      where
+        path = T.unpack txt
+
     insertResult
         :: Key GPU
         -> Key Algorithm
@@ -130,8 +228,17 @@ importResults = do
             | variantName == "0" = "default"
             | otherwise = "Root " <> variantName
 
-runBenchmarks :: Int -> Int -> SqlM ()
-runBenchmarks numNodes numRuns = do
+runTask :: Process -> (a, b, c, Text) -> IO (a, b, c, Text)
+runTask Process{..} (x, y, z, cmd) = do
+    -- FIXME proper logging
+    T.putStrLn $ "Task: " <> cmd
+    T.hPutStrLn inHandle cmd
+    result <- T.hGetLine outHandle
+    T.putStrLn $ "Done: " <> cmd
+    return (x, y, z, result)
+
+runBenchmarks :: Int -> Int -> Input SqlM ()
+runBenchmarks numNodes numRuns = liftSql $ do
     -- FIXME hardcoded GPU
     withProcessPool numNodes (GPU "TitanX" Nothing) $ \procPool -> runConduit $
         propertyJobs
@@ -145,21 +252,22 @@ runBenchmarks numNodes numRuns = do
             .| parMapM (Simple Retry) numNodes (withProcess procPool runTask)
             .| C.mapM_ (processTiming gpuId)
 
-commands :: String -> (InfoMod a, Parser (SqlM ()))
+commands :: String -> (InfoMod a, Parser (Input SqlM ()))
 commands name = (,) docs . hsubparser $ mconcat
-    [ subCommand "add-gpu" "register a new GPU" "" $
-        pure addGPU
-    , subCommand "add-graphs" "register graphs" "" $
-        addGraphs <$> some (strArgument graphFile)
-    , subCommand "add-algorithm" "register a new algorithm" "" $
-        pure addAlgorithm
-    , subCommand "add-implementation"
-                 "register a new implementation of an algorithm" "" $
+    [ subCommand "add-gpu" "register a new GPU"
+        "Register a new GPU in the database." $ pure addGPU
+    , subCommand "add-graphs" "register graphs"
+        "Register new graphs in the database." $
+        liftSql . addGraphs <$> some (strArgument graphFile)
+    , subCommand "add-algorithm" "register a new algorithm"
+        "Register a new algorithm in the database." $ pure addAlgorithm
+    , subCommand "add-implementation" "register a new implementation"
+        "Register a new implementation of an algorithm." $
         pure addImplementation
-    , subCommand "add-variant" "register a new variant of a graph" "" $
-        pure addVariant
-    , subCommand "import-results" "import results of external tools" "" $
-        pure importResults
+    , subCommand "add-variant" "register a new variant"
+        "Register a new variant of an algorithm for a graph." $ pure addVariant
+    , subCommand "import-results" "import results of external tools"
+        "Import results of external implementations." $ pure importResults
     , subCommand "run-benchmarks" "run benchmarks"
                  "Run benchmarks for missing registered configurations" $
                  runBenchmarks <$> parallelism <*> numRuns
@@ -184,6 +292,14 @@ commands name = (,) docs . hsubparser $ mconcat
     parallelism = option auto . mconcat $ [ metavar "N", short 'j', value 2 ]
     numRuns = option auto . mconcat $ [ metavar "N", short 'n', value 30 ]
 
+dynCompleter :: CompletionFunc (ReaderT (Completer SqlM) SqlM)
+dynCompleter completeArgs = do
+    ask >>= \case
+        SimpleCompletion f -> lift $ completeWord Nothing " \t" f completeArgs
+        FileCompletion -> completeFilename completeArgs
 
 main :: IO ()
-main = runSqlM commands id
+main = runSqlM commands $ (`runReaderT` emptyCompletion) . runInputT settings
+  where
+    emptyCompletion = SimpleCompletion $ const (return [])
+    settings = setComplete dynCompleter defaultSettings

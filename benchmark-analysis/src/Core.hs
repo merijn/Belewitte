@@ -21,7 +21,7 @@ module Core
     ) where
 
 import Control.Exception (Exception(displayException))
-import Control.Monad ((>=>), when)
+import Control.Monad ((>=>), join, when)
 import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow, throwM)
 import Control.Monad.Fail (MonadFail(fail))
 import Control.Monad.IO.Unlift
@@ -48,6 +48,7 @@ import GHC.Conc.Sync (getNumProcessors, setNumCapabilities)
 import qualified Lens.Micro as Lens
 import qualified Lens.Micro.Extras as Lens
 import System.IO (Handle, IOMode(WriteMode), stdout, withFile)
+import System.Console.Haskeline.MonadException (MonadException(..), RunIO(..))
 
 import Schema (migrateAll)
 
@@ -72,6 +73,12 @@ newtype BaseM a = BaseM
   deriving
   ( Applicative, Functor, Monad, MonadCatch, MonadIO, MonadLogger, MonadMask
   , MonadResource, MonadThrow)
+
+instance MonadException BaseM where
+    controlIO f = join (withUnliftIO (f . unliftToRunIO))
+      where
+        unliftToRunIO :: Monad m => UnliftIO m -> RunIO m
+        unliftToRunIO (UnliftIO g) = RunIO (fmap return . g)
 
 showText :: Show a => a -> Text
 showText = T.pack . show
@@ -218,6 +225,10 @@ logThrowM exc = do
 
 showSqlKey :: ToBackendKey SqlBackend record => Key record -> Text
 showSqlKey = showText . fromSqlKey
+
+likeFilter :: EntityField record Text -> Text -> Filter record
+likeFilter field val =
+  Filter field (Left $ T.concat ["%", val, "%"]) (BackendSpecificFilter "like")
 
 whenNotExists
     :: SqlRecord record

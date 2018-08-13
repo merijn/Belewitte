@@ -23,7 +23,7 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Database.Persist.Sqlite (Key, Entity(..))
 import qualified Database.Persist.Sqlite as Sql
-import Options.Applicative
+import Options.Applicative hiding (Completer)
 import System.Environment (getProgName)
 import Text.Megaparsec (Parsec, parseMaybe, sepBy1, try)
 import Text.Megaparsec.Char (char)
