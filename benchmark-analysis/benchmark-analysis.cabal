@@ -103,6 +103,7 @@ Executable Model
   GHC-Prof-Options:     -fprof-auto
   Hs-Source-Dirs:       model-src
   Main-Is:              Main.hs
+  Autogen-Modules:      Paths_benchmark_analysis
   Other-Modules:        Evaluate
                         Options
                         Train
@@ -137,6 +138,7 @@ Executable Plot
   GHC-Prof-Options:     -fprof-auto
   Hs-Source-Dirs:       plot-src
   Main-Is:              Plot.hs
+  Autogen-Modules:      Paths_benchmark_analysis
   Other-Modules:        Paths_benchmark_analysis
 
   Build-Depends:        base
