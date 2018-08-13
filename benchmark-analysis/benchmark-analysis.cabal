@@ -71,7 +71,8 @@ Executable Ingest
   GHC-Prof-Options:     -fprof-auto
   Hs-Source-Dirs:       ingest-src
   Main-Is:              Main.hs
-  Other-Modules:        Parsers
+  Other-Modules:        Jobs
+                        Parsers
                         ProcessPool
 
   Build-Depends:        base
