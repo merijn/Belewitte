@@ -56,8 +56,12 @@ instance Functor Query where
     fmap f query@Query{convert} = query { convert = fmap f . convert }
 
 explainSqlQuery :: Query r -> Handle -> SqlM ()
-explainSqlQuery originalQuery hnd =
+explainSqlQuery originalQuery hnd = do
     runSqlQuery' explainQuery $ C.mapM_ (liftIO . T.hPutStrLn hnd)
+    liftIO $ do
+        T.hPutStrLn hnd $ ""
+        T.hPutStrLn hnd $ T.replicate 80 "#"
+        T.hPutStrLn hnd $ ""
   where
     explain
         :: (MonadIO m, MonadLogger m, MonadThrow m) => [PersistValue] -> m Text
