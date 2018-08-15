@@ -62,6 +62,7 @@ TotalTimer
     avgTime Double
     maxTime Double
     stdDev Double
+    timestamp UTCTime
     Primary gpuId variantId implId name
     deriving Eq Show
 
@@ -75,6 +76,7 @@ StepTimer
     avgTime Double
     maxTime Double
     stdDev Double
+    timestamp UTCTime
     Primary gpuId variantId stepId implId name
     deriving Eq Show
 
@@ -84,6 +86,7 @@ PredictionModel
     trainFraction Double
     trainSeed Int
     totalUnknownCount Int
+    timestamp UTCTime
 
 ModelGraphProperty
     modelId PredictionModelId

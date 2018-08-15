@@ -17,6 +17,7 @@ module Schema
 import Data.ByteString (ByteString)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
+import Data.Time.Clock (UTCTime)
 import Database.Persist.Quasi
 import Database.Persist.TH
 

@@ -15,6 +15,7 @@ import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.Text as C
 import Data.Maybe (fromMaybe, isNothing)
 import qualified Data.Text as T
+import Data.Time.Clock (UTCTime, getCurrentTime)
 import Database.Persist.Sqlite (Key, Entity(..), (=.), (==.))
 import qualified Database.Persist.Sqlite as Sql
 import System.Directory (removeFile)
@@ -133,6 +134,7 @@ processTiming
     :: Key GPU -> (Key Variant, Key Implementation, Hash, Text) -> SqlM ()
 processTiming gpuId (varId, implId, hash, var) = do
     logInfoN $ "Timing: " <> var
+    timestamp <- liftIO getCurrentTime
     resultHash <- computeHash outputFile
 
     if resultHash /= hash
@@ -148,7 +150,7 @@ processTiming gpuId (varId, implId, hash, var) = do
                 .| C.decode C.utf8
                 .| C.map (T.replace "," "")
                 .| conduitParse timer
-                .| C.mapM_ insertTiming
+                .| C.mapM_ (insertTiming timestamp)
             liftIO $ removeFile timingFile
 
     logInfoN $ "Timing done: " <> var
@@ -156,10 +158,9 @@ processTiming gpuId (varId, implId, hash, var) = do
     timingFile = T.unpack var <> ".timings"
     outputFile = T.unpack var <> ".output"
 
-    insertTiming :: Timer -> SqlM ()
-    insertTiming (TotalTiming Timing{..}) = Sql.insert_ $
-        TotalTimer gpuId varId implId name minTime avgTime maxTime stddev
+    insertTiming :: UTCTime -> Timer -> SqlM ()
+    insertTiming ts (TotalTiming Timing{..}) = Sql.insert_ $
+        TotalTimer gpuId varId implId name minTime avgTime maxTime stddev ts
 
-    insertTiming (StepTiming n Timing{..}) = Sql.insert_ $
-        StepTimer gpuId varId n implId name minTime avgTime maxTime stddev
-
+    insertTiming ts (StepTiming n Timing{..}) = Sql.insert_ $
+        StepTimer gpuId varId n implId name minTime avgTime maxTime stddev ts

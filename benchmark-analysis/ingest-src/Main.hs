@@ -19,6 +19,7 @@ import Data.Monoid ((<>))
 import Data.List (isPrefixOf)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
+import Data.Time.Clock (UTCTime, getCurrentTime)
 import Database.Persist.Sqlite (Key, Entity(..), EntityField, Unique, (==.))
 import qualified Database.Persist.Sqlite as Sql
 import Lens.Micro.Extras (view)
@@ -193,12 +194,13 @@ importResults = do
     filepath <- withCompletion FileCompletion $
         getInputWith checkExists "Non-existent file!" "Result File"
 
+    timestamp <- liftIO getCurrentTime
     liftSql . runConduit $
         C.sourceFile filepath
         .| C.decode C.utf8
         .| C.map (T.replace "," "")
         .| conduitParse externalResult
-        .| C.mapM_ (insertResult gpuId algoId implId)
+        .| C.mapM_ (insertResult gpuId algoId implId timestamp)
   where
     checkExists :: MonadIO m => Text -> m (Maybe FilePath)
     checkExists txt = bool Nothing (Just path) <$> liftIO (doesFileExist path)
@@ -209,24 +211,25 @@ importResults = do
         :: Key GPU
         -> Key Algorithm
         -> Key Implementation
+        -> UTCTime
         -> ExternalResult
         -> SqlM ()
-    insertResult gpuId algoId implId (Result gname variantName Timing{..}) = do
+    insertResult gpuId algoId implId ts (Result gname varName Timing{..}) = do
         [graphId] <- logIfFail "More than one graph found for" gname $
             Sql.selectKeysList [GraphName ==. gname] []
 
-        let uniqVariant = UniqVariant graphId algoId varName
+        let uniqVariant = UniqVariant graphId algoId variantName
 
-        Just varId <- logIfFail "No variant found" varName $
+        Just varId <- logIfFail "No variant found" variantName $
             fmap entityKey <$> Sql.getBy uniqVariant
 
         Sql.insert_ $
-            TotalTimer gpuId varId implId name minTime avgTime maxTime stddev
+            TotalTimer gpuId varId implId name minTime avgTime maxTime stddev ts
       where
         --FIXME get from command
-        varName
-            | variantName == "0" = "default"
-            | otherwise = "Root " <> variantName
+        variantName
+            | varName == "0" = "default"
+            | otherwise = "Root " <> varName
 
 runTask :: Process -> (a, b, c, Text) -> IO (a, b, c, Text)
 runTask Process{..} (x, y, z, cmd) = do

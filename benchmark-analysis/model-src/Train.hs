@@ -30,6 +30,7 @@ import qualified Data.Map as M
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text.IO as T
+import Data.Time.Clock (getCurrentTime)
 import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as VS
 import Database.Persist.Sqlite ((==.))
@@ -202,11 +203,13 @@ trainModel gpuId trainCfg@TrainConfig{..} = do
 
             return (model, ModelStats{..})
 
+    timestamp <- liftIO getCurrentTime
     (model, ModelStats{..}) <-
         withCheckedProcessCleanup (process outFd) handleStreams
 
     modelId <- Sql.insert $
         PredictionModel gpuId model trainFraction trainSeed modelUnknownCount
+                        timestamp
 
     forM_ (M.toList modelGraphPropImportance) $
         Sql.insert_ . uncurry (ModelGraphProperty modelId)
