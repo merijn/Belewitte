@@ -32,7 +32,7 @@ Executable darwin
                ,        containers
                ,        directory
                ,        evolution
-               ,        exceptions == 0.8.*
+               ,        exceptions == 0.10.*
                ,        foldl == 1.4.*
                ,        mtl == 2.2.*
                ,        mwc-random == 0.13.*
@@ -59,7 +59,7 @@ Executable breeding-pool
                ,        containers
                ,        directory
                ,        evolution
-               ,        exceptions == 0.8.*
+               ,        exceptions == 0.10.*
                ,        managed == 1.0.*
                ,        mtl == 2.2.*
                ,        network == 2.6.*
@@ -85,7 +85,7 @@ Library
                ,        binary == 0.8.*
                ,        bytestring == 0.10.*
                ,        containers == 0.5.*
-               ,        exceptions == 0.8.*
+               ,        exceptions == 0.10.*
                ,        mtl == 2.2.*
                ,        network == 2.6.*
                ,        pipes == 4.3.*

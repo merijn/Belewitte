@@ -20,9 +20,9 @@ module Core
     , module Core
     ) where
 
-import Control.Exception (Exception(displayException))
+import Control.Exception (Exception(displayException), SomeException(..))
 import Control.Monad ((>=>), join, when)
-import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow, throwM)
+import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow, try, throwM)
 import Control.Monad.Fail (MonadFail(fail))
 import Control.Monad.IO.Unlift
     (MonadIO(liftIO), MonadUnliftIO(..), UnliftIO(..), withUnliftIO)
@@ -197,9 +197,22 @@ runSqlMWithOptions Options{..} work = do
         createSqlFun sqlitePtr 1 "random" randomFun
         createSqlAggregate sqlitePtr 3 "vector" vector_step vector_finalise
         rawExecute "PRAGMA busy_timeout = 1000" []
-        liftPersist $ runMigrationSilent migrateAll
+        result <- try . liftPersist $ runMigrationSilent migrateAll
+        case result of
+            Right migrations
+                | null migrations -> return ()
+                | otherwise -> logMigrationWith Log.logInfoN migrations
+            Left (SomeException e) -> do
+                liftPersist (showMigration migrateAll) >>=
+                    logMigrationWith Log.logErrorN
+                throwM e
         work task
   where
+    logMigrationWith :: (Text -> SqlM ()) -> [Text] -> SqlM ()
+    logMigrationWith _ [] = return ()
+    logMigrationWith logFun ms =
+        logFun . T.unlines $ "Migration commands:" : ms
+
     withQueryLog :: (Maybe Handle -> IO r) -> IO r
     withQueryLog f = case queryMode of
         Normal -> f Nothing
