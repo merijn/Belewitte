@@ -32,7 +32,7 @@ SANITISERS=-fsanitize=undefined -fsanitize=integer -fsanitize=nullability
 %.asan.o: CXXFLAGS:=$(CXXFLAGS) $(SANITISERS) -fsanitize=address \
     -DVERSION=.asan
 %.msan.o: CXXFLAGS:=$(CXXFLAGS) $(SANITISERS) -fsanitize=memory -fPIE \
-    -fsanitize-blacklist=$(BASE)/memory.supp -DVERSION=.msan
+    -DVERSION=.msan
 %.ssan.o: CXXFLAGS:=$(CXXFLAGS) $(SANITISERS) -fsanitize=safe-stack \
     -DVERSION=.ssan
 %.tsan.o: CXXFLAGS:=$(CXXFLAGS) $(SANITISERS) -fsanitize=thread -DVERSION=.tsan

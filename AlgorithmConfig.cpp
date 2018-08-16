@@ -25,6 +25,6 @@ void
 AlgorithmConfig::help(std::ostream& out, std::string prefix)
 { options.usage(out, prefix); }
 
-std::vector<char*>
-AlgorithmConfig::setup(std::vector<char*> args)
+std::vector<string>
+AlgorithmConfig::setup(std::vector<string> args)
 { return options.parseArgsFinal(args); }

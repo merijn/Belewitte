@@ -22,10 +22,10 @@ static Options options('h', "help", cout, [](ostream& out)
     out << "Options:" << endl;
 });
 
-int main(int argc, char **argv)
+int main(int argc, char * const *argv)
 {
     bool readable = false;
-    vector<char*> graphs;
+    vector<string> graphs;
 
     options.add('h', "human", readable, true, "Human readable output.");
 

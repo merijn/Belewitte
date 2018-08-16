@@ -19,11 +19,11 @@ static Options options('h', "help", cout, [](ostream& out)
     out << "Options:" << endl;
 });
 
-int main(int argc, char **argv)
+int main(int argc, char * const *argv)
 {
     map<string, Degrees> orderings;
     bool verbose = false;
-    vector<char*> graphs;
+    vector<string> graphs;
 
     options.add('v', "verbose", verbose, true, "Verbose output.");
 

@@ -64,7 +64,7 @@ usage(int exitCode = EXIT_FAILURE)
 
 static map<string, map<string, AlgorithmConfig*>>
 loadAlgorithms
-(const char *sym, vector<const char*> &paths, bool warn, bool debug)
+(const char *sym, vector<string> &paths, bool warn, bool debug)
 {
     map<string, string> libs;
     map<string, map<string, AlgorithmConfig*>> result;
@@ -143,45 +143,45 @@ static framework fw = framework::cuda;
 static int device = 0;
 static size_t platform = 0;
 static string outputDir(".");
-static string algorithmName;
-static string kernelName;
-static vector<const char*> paths = { "." };
+static string algorithmName = "";
+static string kernelName = "";
+static vector<string> paths = { "." };
 
-static listing run_with_backend(Backend& backend, const vector<char*>& args)
+static listing run_with_backend(Backend& backend, const vector<string>& args)
 {
     if (!fromStdin) {
         if (args.size() < 1) usage();
 
-        if (!strcmp(args[0], "list")) {
+        if (args[0] == "list") {
             if (args.size() < 2) {
                 usage();
-            } else if (!strcmp(args[1], "platforms")) {
+            } else if (args[1] ==  "platforms") {
 
                 backend.listPlatforms(verbose);
                 exit(static_cast<int>(backend.platformCount()));
 
-            } else if (!strcmp(args[1], "devices")) {
+            } else if (args[1] == "devices") {
 
                 backend.listDevices(platform, verbose);
                 exit(backend.deviceCount(platform));
 
-            } else if (!strcmp(args[1], "algorithms")) {
+            } else if (args[1] == "algorithms") {
                 return listing::algorithms;
-            } else if (!strcmp(args[1], "implementations")) {
+            } else if (args[1] == "implementations") {
                 return listing::implementations;
             } else {
                 usage();
             }
 
-        } else if (!strcmp(args[0], "query")) {
+        } else if (args[0] == "query") {
             if (args.size() < 2) {
                 usage();
-            } else if (!strcmp(args[1], "platform")) {
+            } else if (args[1] == "platform") {
 
                 backend.queryPlatform(platform, verbose);
                 exit(backend.deviceCount(platform));
 
-            } else if (!strcmp(args[1], "device")) {
+            } else if (args[1] == "device") {
 
                 backend.queryDevice(platform, device, verbose);
                 exit(EXIT_SUCCESS);
@@ -201,7 +201,7 @@ static listing run_with_backend(Backend& backend, const vector<char*>& args)
 
 static void
 runJob
-(AlgorithmConfig& kernel, vector<char*> args, const string& tag = string())
+(AlgorithmConfig& kernel, vector<string> args, const string& tag = string())
 {
     auto graphs = kernel.setup(args);
 
@@ -224,9 +224,9 @@ runJob
     }
 }
 
-int main(int argc, char **argv)
+int main(int argc, char * const *argv)
 {
-    vector<char*> remainingArgs;
+    vector<string> remainingArgs;
 
     options.add('d', "device", "NUM", device, "Device to use.")
            .add('f', "framework", fw, framework::opencl, "Use OpenCL.")
@@ -312,8 +312,8 @@ int main(int argc, char **argv)
             auto& kernel = getConfig(algorithms, algorithmName, kernelName);
             runJob(kernel, remainingArgs, string(newArgv.we_wordv[0]));
 
-            wordfree(&newArgv);
             kernelParser.reset();
+            wordfree(&newArgv);
         }
     } else if (algorithmName.empty()) {
         reportError("Algorithm name not specified!");

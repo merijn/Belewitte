@@ -40,7 +40,7 @@ Options::add(Option o)
 Options&
 Options::add(char so, const char *lo, string arg, string &var, string help)
 {
-    auto action = [&](auto s) { var = s; };
+    auto action = [&](const string& s) { var = s; };
     auto reset = [&,initial{var}]() { var = initial; };
     auto opt = Option(so, lo, action, reset, arg, help);
     opt.defaultVal = var;
@@ -48,39 +48,41 @@ Options::add(char so, const char *lo, string arg, string &var, string help)
     return add(opt);
 }
 
-vector<char *>
-Options::parseArgs(vector<char *>& args)
-{
-    vector<char*> tmp;
-    tmp.reserve(args.size() + 1);
-    tmp.push_back(const_cast<char*>("dummy"));
-    tmp.insert(tmp.begin()+1, args.begin(), args.end());
-    return parseArgs(static_cast<int>(tmp.size()), tmp.data());
-}
+vector<string>
+Options::parseArgs(vector<string>& args)
+{ return parseArgs(args, false); }
 
-vector<char *>
-Options::parseArgs(int argc, char **argv)
+vector<string>
+Options::parseArgs(int argc, char * const *argv)
 { return parseArgs(argc, argv, false); }
 
-vector<char *>
-Options::parseArgsFinal(vector<char *>& args)
-{
-    vector<char*> tmp;
-    tmp.reserve(args.size() + 1);
-    tmp.push_back(const_cast<char*>("dummy"));
-    tmp.insert(tmp.begin()+1, args.begin(), args.end());
-    return parseArgsFinal(static_cast<int>(tmp.size()), tmp.data());
-}
+vector<string>
+Options::parseArgsFinal(vector<string>& args)
+{ return parseArgs(args, true); }
 
-vector<char *>
-Options::parseArgsFinal(int argc, char **argv)
+vector<string>
+Options::parseArgsFinal(int argc, char * const *argv)
 { return parseArgs(argc, argv, true); }
 
-vector<char *>
-Options::parseArgs(int argc, char **argv, bool exitUnknown)
+vector<string>
+Options::parseArgs(vector<string> args, bool exitUnknown)
 {
-    vector<char*> remainingArgs;
-    map<int, function<void(const char*)>> actions;
+    vector<const char*> tmp;
+    tmp.reserve(args.size() + 1);
+    tmp.push_back(const_cast<char*>("dummy"));
+    for (auto& s : args ){
+        tmp.push_back(s.c_str());
+    }
+    tmp.push_back(nullptr);
+    return parseArgs(static_cast<int>(tmp.size()) - 1,
+                     const_cast<char * const *>(tmp.data()), exitUnknown);
+}
+
+vector<string>
+Options::parseArgs(int argc, char * const *argv, bool exitUnknown)
+{
+    vector<string> remainingArgs;
+    map<int, function<void(const string&)>> actions;
     string shortopts = "-:";
     vector<option> longopts;
 
@@ -151,12 +153,13 @@ Options::parseArgs(int argc, char **argv, bool exitUnknown)
             case 0: break;
 
             case ':':
-                cerr << "Missing option for flag '" << static_cast<char>(optopt) << "'." << endl;
+                cerr << "Missing option for flag '"
+                     << static_cast<char>(optopt) << "'." << endl;
                 usage(usageOutput);
                 exit(EXIT_FAILURE);
 
             default:
-                actions[opt](optarg);
+                actions[opt](optarg ? string(optarg) : string(""));
         }
     }
 

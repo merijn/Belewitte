@@ -14,7 +14,7 @@ class Options {
 
         char shortOption;
         const char *longOption;
-        std::function<void(const char *)> action;
+        std::function<void(const std::string&)> action;
         std::function<void()> resetAction;
         std::string argName;
         std::string helpString;
@@ -29,7 +29,7 @@ class Options {
         Option
         ( char shortOpt
         , const char *longOpt
-        , std::function<void(const char *)> act
+        , std::function<void(const std::string&)> act
         , std::function<void()> resetAct
         , std::string arg
         , std::string help
@@ -60,7 +60,8 @@ class Options {
 
     std::map<int, Option> options;
 
-    std::vector<char *> parseArgs(int, char **, bool);
+    std::vector<std::string> parseArgs(std::vector<std::string>, bool);
+    std::vector<std::string> parseArgs(int, char * const *, bool);
 
   public:
     Options()
@@ -122,10 +123,10 @@ class Options {
     , std::vector<T>& var
     , std::string def
     , std::string help
-    , std::function<T(const char *)> fun = [](auto s) { return s; }
+    , std::function<T(const std::string&)> fun = [](auto s) { return s; }
     )
     {
-        auto action = [&](auto s) { var.push_back(fun(s)); };
+        auto action = [&](const std::string& s) { var.push_back(fun(s)); };
         auto reset = [&]() { var.clear(); };
         auto opt = Option(so, lo, action, reset, arg, help);
         opt.defaultVal = def;
@@ -134,11 +135,11 @@ class Options {
         return add(opt);
     }
 
-    std::vector<char *> parseArgs(std::vector<char *>&);
-    std::vector<char *> parseArgs(int, char **);
+    std::vector<std::string> parseArgs(std::vector<std::string>&);
+    std::vector<std::string> parseArgs(int, char * const *);
 
-    std::vector<char *> parseArgsFinal(std::vector<char *>&);
-    std::vector<char *> parseArgsFinal(int, char **);
+    std::vector<std::string> parseArgsFinal(std::vector<std::string>&);
+    std::vector<std::string> parseArgsFinal(int, char * const *);
 
     void usage(std::ostream&, std::string = "");
 

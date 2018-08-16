@@ -27,7 +27,7 @@ struct AlgorithmConfig {
     void operator()(const std::string& graphFile, std::ofstream&& output);
     void operator()(const std::string& graphFile, const std::string& output);
     void help(std::ostream& out, std::string prefix);
-    std::vector<char*> setup(std::vector<char*> args);
+    std::vector<std::string> setup(std::vector<std::string> args);
 
     virtual ~AlgorithmConfig();
 };
