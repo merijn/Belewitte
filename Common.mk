@@ -101,6 +101,6 @@ $(BUILD)/kernels/:
 
 .PHONY: haskell-dependencies
 haskell-dependencies:
-	$(PRINTF) " CABAL $@\n"
+	$(PRINTF) " CABAL\t$@\n"
 	$(AT)cabal --builddir="$(realpath $(abspath $(BUILD)/haskell/))" \
 	    new-build all $(if $(AT),2>/dev/null >/dev/null,)
