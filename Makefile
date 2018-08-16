@@ -17,8 +17,7 @@ else ifeq ($(CXX),g++)
 main: LDFLAGS += -Wl,-rpath -Wl,$(CUDA_PATH)/lib/
 endif
 
-all: main normalise reorder-graph check-degree print-graph graph-details \
-    haskell-dependencies
+all: main normalise reorder-graph check-degree print-graph graph-details
 
 -include $(patsubst %.cpp, .build/%.d, $(wildcard *.cpp))
 
@@ -50,12 +49,6 @@ print-graph: $(DEST)/print-graph.o $(LIBS)/libutils.a
 graph-details: $(DEST)/graph-details.o $(LIBS)/libutils.a $(LIBS)/liboptions.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) -L$(BOOST_PATH)/lib/ -lboost_system -lboost_filesystem $^ -o $@
-
-.PHONY: haskell-dependencies
-haskell-dependencies:
-	$(PRINTF) " CABAL $@\n"
-	$(AT)cabal --builddir="$(BUILD)/haskell" new-build all \
-	    $(if $(AT),2>/dev/null >/dev/null,)
 
 .PHONY: clean-main-objs clean-main-deps clean-main-bins
 

@@ -1,7 +1,7 @@
 SRCDIR := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
 -include SubDir.mk ../SubDir.mk
 
-all: $(SRCDIR)/gen-graph $(SRCDIR)/evolve
+all: $(SRCDIR)/gen-graph $(SRCDIR)/evolve haskell-dependencies
 
 $(DEST)/evolve.o: CXXFLAGS+=-I$(BOOST_PATH)/include -isystem$(BOOST_PATH)/include
 ifdef $(shell command -v icc 2>/dev/null)

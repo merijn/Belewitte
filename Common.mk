@@ -98,3 +98,9 @@ endif
 
 $(BUILD)/kernels/:
 	$(AT)mkdir -p $@
+
+.PHONY: haskell-dependencies
+haskell-dependencies:
+	$(PRINTF) " CABAL $@\n"
+	$(AT)cabal --builddir="$(realpath $(abspath $(BUILD)/haskell/))" \
+	    new-build all $(if $(AT),2>/dev/null >/dev/null,)
