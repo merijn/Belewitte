@@ -13,7 +13,7 @@ import qualified Data.ByteArray (convert)
 import Data.Conduit (ConduitT, (.|), awaitForever, runConduit, yield)
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.Text as C
-import Data.Maybe (fromMaybe, isNothing)
+import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import Data.Time.Clock (UTCTime, getCurrentTime)
 import Database.Persist.Sqlite (Key, Entity(..), (=.), (==.))
@@ -29,6 +29,7 @@ computeHash path = do
     (digest :: Digest MD5) <- hashFile path
     return . Hash . Data.ByteArray.convert $ digest
 
+--FIXME algorithm!
 propertyJobs :: ConduitT () (Key Variant, Key Graph, Maybe Hash, Text) SqlM ()
 propertyJobs = Sql.selectSource [] [] .| awaitForever toPropJob
   where
@@ -58,19 +59,25 @@ processProperty (varId, graphId, hash, var) = do
     logInfoN $ "Property: " <> var
     liftIO $ removeFile timingFile
 
-    when (isNothing hash) $ do
-        resultHash <- computeHash outputFile
-        Sql.update varId [VariantResult =. Just resultHash]
+    resultHash <- computeHash outputFile
+    loadProps <- case hash of
+        Nothing -> True <$ Sql.update varId [VariantResult =. Just resultHash]
+        Just prevHash | prevHash == resultHash -> return True
+        _ -> False <$ logErrorN
+                ("Hash mismatch for variant: " <> showText (fromSqlKey varId))
+
+    when loadProps $ do
         liftIO $ removeFile outputFile
 
-    runConduit $
-        C.sourceFile propLog
-        .| C.decode C.utf8
-        .| C.map (T.replace "," "")
-        .| conduitParse property
-        .| C.mapM_ insertProperty
+        runConduit $
+            C.sourceFile propLog
+            .| C.decode C.utf8
+            .| C.map (T.replace "," "")
+            .| conduitParse property
+            .| C.mapM_ insertProperty
 
-    liftIO $ removeFile propLog
+        liftIO $ removeFile propLog
+
     logInfoN $ "Property done: " <> var
   where
     propLog :: FilePath
