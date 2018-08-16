@@ -1,6 +1,8 @@
-.PHONY: all clean ptx clean-%
+.PHONY: all clean debug everything ptx clean-% asan msan ssan tsan
 
 all:
+debug: asan msan ssan tsan
+everything: all debug
 
 clean: clean-objs clean-ptx
 
@@ -9,6 +11,11 @@ clean-ptx:
 clean-libs:
 clean-bins:
 clean-deps:
+clean-debug: clean-asan clean-msan clean-ssan clean-tsan
+clean-asan:
+clean-msan:
+clean-ssan:
+clean-tsan:
 clean-all: clean-objs clean-libs clean-deps clean-deps clean-ptx
 	$(PRINTF) "removing build directory...\n"
 	$(AT)rm -rf $(BUILD)
@@ -41,6 +48,7 @@ ICC_CXXFLAGS=$(COMMON_CXXFLAGS) $(ICCWFLAGS) -xHost
 CXX=clang++
 CXXFLAGS=$(if $(findstring clang++, $(CXX)), $(CLANGCXXFLAGS), \
             $(if $(findstring icc, $(CXX)), $(ICC_CXXFLAGS), $(COMMON_CXXFLAGS)))
+
 LDFLAGS=-ldl -g
 
 LD=$(CXX)

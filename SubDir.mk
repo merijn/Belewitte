@@ -20,9 +20,9 @@ $(NAME)_CPP_OBJS:=$(patsubst %.cpp, $(DEST)/%.o, $($(NAME)_CPP_SRCS))
 
 -include $(patsubst %.cpp, $(DEST)/%.d, $($(NAME)_CPP_SRCS))
 
-$($(NAME)_CPP_OBJS): | $(DEST)/
+$(foreach obj,$($(NAME)_CPP_OBJS), $(call sanobjects,$(obj))): | $(DEST)/
 
-.PHONY: clean-$(NAME)-objs clean-$(NAME)-deps
+.PHONY: clean-$(NAME)-objs clean-$(NAME)-deps clean-$(NAME)-%san
 
 clean-$(NAME)-objs: NAME:=$(NAME)
 clean-$(NAME)-objs:
@@ -35,5 +35,33 @@ clean-$(NAME)-deps:
 	$(PRINTF) "cleaning dependencies for: $(NAME)\n"
 	$(AT)rm -rf $(DEST)/*.d
 
+clean-$(NAME)-asan: NAME:=$(NAME)
+clean-$(NAME)-asan: DEST:=$(DEST)
+clean-$(NAME)-asan:
+	$(PRINTF) "cleaning asan for: $(NAME)\n"
+	$(AT)rm -rf $($(NAME)_CPP_OBJS:.o=.asan.o)
+
+clean-$(NAME)-msan: NAME:=$(NAME)
+clean-$(NAME)-msan: DEST:=$(DEST)
+clean-$(NAME)-msan:
+	$(PRINTF) "cleaning msan for: $(NAME)\n"
+	$(AT)rm -rf $($(NAME)_CPP_OBJS:.o=.msan.o)
+
+clean-$(NAME)-ssan: NAME:=$(NAME)
+clean-$(NAME)-ssan: DEST:=$(DEST)
+clean-$(NAME)-ssan:
+	$(PRINTF) "cleaning ssan for: $(NAME)\n"
+	$(AT)rm -rf $($(NAME)_CPP_OBJS:.o=.asan.o)
+
+clean-$(NAME)-tsan: NAME:=$(NAME)
+clean-$(NAME)-tsan: DEST:=$(DEST)
+clean-$(NAME)-tsan:
+	$(PRINTF) "cleaning tsan for: $(NAME)\n"
+	$(AT)rm -rf $($(NAME)_CPP_OBJS:.o=.tsan.o)
+
 clean-objs: clean-$(NAME)-objs
 clean-deps: clean-$(NAME)-deps
+clean-asan: clean-$(NAME)-asan
+clean-msan: clean-$(NAME)-msan
+clean-ssan: clean-$(NAME)-ssan
+clean-tsan: clean-$(NAME)-tsan

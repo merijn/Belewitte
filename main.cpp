@@ -18,6 +18,12 @@
 #include "Timer.hpp"
 #include "utils/Util.hpp"
 
+#define str(a) xstr(a)
+#define xstr(a) #a
+#ifndef VERSION
+#define VERSION
+#endif
+
 using namespace std;
 using namespace boost::filesystem;
 
@@ -68,8 +74,9 @@ loadAlgorithms
     }
 
     boost::smatch match;
-    const boost::regex lib_regex(debug ? "lib(.*)kerneldebug\\.so"
-                                       : "lib(.*)kernel\\.so");
+    const char *regex = "lib(.*)kernel" str(VERSION) "\\.so";
+    const char *debug_regex = "lib(.*)kerneldebug" str(VERSION) "\\.so";
+    const boost::regex lib_regex(debug ? debug_regex : regex);
 
     for (auto p_str : paths) {
         if (!is_directory(p_str)) continue;

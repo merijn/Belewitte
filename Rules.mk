@@ -5,6 +5,60 @@ $(DEST)/%.o: $(SRCDIR)/%.cpp | $(DEST)/
 	$(PRINTF) " CXX\t$*.cpp\n"
 	$(AT)$(CXX) $(CXXFLAGS) -I. $< -c -o $@
 
+define make-static =
+$(PRINTF) " AR\t$(subst ../$(BUILD)/,,$@)\n"
+$(AT)$(AR) rcs $@ $^
+endef
+
+define make-dynamic =
+$(PRINTF) " LD\t$@\n"
+$(AT)$(LD) $(DYLIBLDFLAGS) -shared -o $@ $^
+endef
+
+define make-cuda-lib =
+$(PRINTF) " NVLINK\t$@\n"
+$(AT)$(NVLINK) $(NVCCXXFLAGS) --device-link $^ --output-file $@
+endef
+
+ifeq ($(findstring clang++, $(CXX)), "")
+santargets = $(1)
+sanobjects = $(1).o
+else
+santargets = $(1) $(1).asan $(1).msan $(1).ssan $(1).tsan
+sanobjects = $(1).o $(1).asan.o $(1).msan.o $(1).ssan.o $(1).tsan.o
+
+SANITISERS=-fsanitize=undefined -fsanitize=integer -fsanitize=nullability
+
+%.asan.o: CXXFLAGS:=$(CXXFLAGS) $(SANITISERS) -fsanitize=address \
+    -DVERSION=.asan
+%.msan.o: CXXFLAGS:=$(CXXFLAGS) $(SANITISERS) -fsanitize=memory -fPIE \
+    -fsanitize-blacklist=$(BASE)/memory.supp -DVERSION=.msan
+%.ssan.o: CXXFLAGS:=$(CXXFLAGS) $(SANITISERS) -fsanitize=safe-stack \
+    -DVERSION=.ssan
+%.tsan.o: CXXFLAGS:=$(CXXFLAGS) $(SANITISERS) -fsanitize=thread -DVERSION=.tsan
+
+%.asan %.asan.a: LDFLAGS:=$(LDFLAGS) $(SANITISERS) -fsanitize=address
+%.msan %.msan.a: LDFLAGS:=$(LDFLAGS) $(SANITISERS) -fsanitize=memory -fPIE -pie
+%.ssan %.ssan.a: LDFLAGS:=$(LDFLAGS) $(SANITISERS) -fsanitize=safe-stack
+%.tsan %.tsan.a: LDFLAGS:=$(LDFLAGS) $(SANITISERS) -fsanitize=thread
+
+$(DEST)/%.asan.o: $(SRCDIR)/%.cpp | $(DEST)/
+	$(PRINTF) " CXX\t$*.cpp\n"
+	$(AT)$(CXX) $(CXXFLAGS) -I. $< -c -o $@
+
+$(DEST)/%.msan.o: $(SRCDIR)/%.cpp | $(DEST)/
+	$(PRINTF) " CXX\t$*.cpp\n"
+	$(AT)$(CXX) $(CXXFLAGS) -I. $< -c -o $@
+
+$(DEST)/%.ssan.o: $(SRCDIR)/%.cpp | $(DEST)/
+	$(PRINTF) " CXX\t$*.cpp\n"
+	$(AT)$(CXX) $(CXXFLAGS) -I. $< -c -o $@
+
+$(DEST)/%.tsan.o: $(SRCDIR)/%.cpp | $(DEST)/
+	$(PRINTF) " CXX\t$*.cpp\n"
+	$(AT)$(CXX) $(CXXFLAGS) -I. $< -c -o $@
+endif
+
 $(DEST)/%.obj: %.cu | $(DEST)/
 	$(PRINTF) " NVCC\t$*.cu\n"
 	$(AT)$(NVCC) $(NVCCXXFLAGS) -M -I. $< -o $(@:.obj=.d)

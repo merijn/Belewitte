@@ -5,15 +5,32 @@ ifeq ($(SRCDIR),.)
 all: $(LIBS)/lib$(NAME).a
 endif
 
+asan: $(LIBS)/lib$(NAME).asan.a
+msan: $(LIBS)/lib$(NAME).msan.a
+ssan: $(LIBS)/lib$(NAME).ssan.a
+tsan: $(LIBS)/lib$(NAME).tsan.a
+
 $(LIBS)/lib$(NAME).a: $($(NAME)_CPP_OBJS)
-	$(PRINTF) " AR\t$(subst ../$(BUILD)/,,$@)\n"
-	$(AT)$(AR) rcs $@ $^
+	$(make-static)
+
+$(LIBS)/lib$(NAME)%.a: $($(NAME)_CPP_OBJS:.o=%.o)
+	$(make-static)
 
 .PHONY: clean-$(NAME)-libs
 
 clean-$(NAME)-libs: NAME:=$(NAME)
 clean-$(NAME)-libs:
 	$(PRINTF) "cleaning libs for: $(NAME)\n"
-	$(AT)rm -rf $(LIBS)/lib$(NAME).so
+	$(AT)rm -rf $(LIBS)/lib$(NAME).a
 
 clean-libs: clean-$(NAME)-libs
+
+clean-$(NAME)-lib-%: NAME:=$(NAME)
+clean-$(NAME)-lib-%:
+	$(PRINTF) "cleaning debug for: $(NAME)\n"
+	$(AT)rm -rf $(LIBS)/lib$(NAME).$*.a
+
+clean-asan: clean-$(NAME)-lib-asan
+clean-msan: clean-$(NAME)-lib-msan
+clean-ssan: clean-$(NAME)-lib-ssan
+clean-tsan: clean-$(NAME)-lib-tsan
