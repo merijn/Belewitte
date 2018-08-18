@@ -41,7 +41,7 @@ Options&
 Options::add(char so, const char *lo, string arg, string &var, string help)
 {
     auto action = [&](const string& s) { var = s; };
-    auto reset = [&,initial{var}]() { var = initial; };
+    auto reset = [&,initial=string(var)]() { var = initial; };
     auto opt = Option(so, lo, action, reset, arg, help);
     opt.defaultVal = var;
     opt.hasArg = true;

@@ -27,7 +27,8 @@ else
 santargets = $(1) $(1).asan $(1).msan $(1).ssan $(1).tsan
 sanobjects = $(1).o $(1).asan.o $(1).msan.o $(1).ssan.o $(1).tsan.o
 
-SANITISERS=-fsanitize=undefined -fsanitize=integer -fsanitize=nullability
+SANITISERS=-fsanitize=undefined -fsanitize=integer -fsanitize=nullability \
+    -fno-omit-frame-pointer
 
 %.asan.o: CXXFLAGS:=$(CXXFLAGS) $(SANITISERS) -fsanitize=address \
     -DVERSION=.asan

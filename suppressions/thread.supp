@@ -1,0 +1,2 @@
+thread:libcuda.so
+thread:libnvidia-opencl.so

@@ -1,5 +1,18 @@
 #include "Util.hpp"
 
+extern "C" const char *__asan_default_options();
+extern "C" const char *__asan_default_options()
+{ return "color=always:protect_shadow_gap=0:replace_intrin=0"
+         ":suppress_equal_pcs=1"; }
+
+extern "C" const char *__lsan_default_options();
+extern "C" const char *__lsan_default_options()
+{ return "suppressions=suppressions/leak.supp:print_suppressions=0"; }
+
+extern "C" const char *__tsan_default_options();
+extern "C" const char *__tsan_default_options()
+{ return "suppressions=suppressions/thread.supp"; }
+
 void
 out_of_memory(void)
 { dump_stack_trace(EXIT_FAILURE); }

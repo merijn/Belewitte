@@ -1,5 +1,4 @@
 leak:libOpenCL
 leak:libintelocl
 leak:libtask_executor
-leak:tbb/arena.cpp
-leak:basic_string.tcc
+leak:libc++abi

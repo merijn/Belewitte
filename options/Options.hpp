@@ -95,7 +95,7 @@ class Options {
     Options& add(char so, const char *lo, T& var, T val, std::string help)
     {
         auto action = [&,val](auto) { var = val; };
-        auto reset = [&,initial{var}]() { var = initial; };
+        auto reset = [&,initial=T(var)]() { var = initial; };
         return add(Option(so, lo, action, reset, "", help)); }
 
     template<typename T>
@@ -108,7 +108,7 @@ class Options {
     , typename std::enable_if<std::is_integral<T>::value>::type* = nullptr)
     {
         auto action = [&](auto s) { var = static_cast<T>(std::stoi(s)); };
-        auto reset = [&,initial{var}]() { var = initial; };
+        auto reset = [&,initial=T(var)]() { var = initial; };
         auto opt = Option(so, lo, action, reset, arg, help);
         opt.defaultVal = std::to_string(var);
         opt.hasArg = true;
