@@ -45,7 +45,8 @@ CLANGCXXFLAGS=$(COMMON_CXXFLAGS) $(CLANGWFLAGS) -ftrapv
 ICCWFLAGS=-Wall -Wremarks -Wcheck -Werror -diag-disable=869,981,10382,11074,11076
 ICC_CXXFLAGS=$(COMMON_CXXFLAGS) $(ICCWFLAGS) -xHost
 
-CXX=clang++
+
+CXX?=clang++
 CXXFLAGS=$(if $(findstring clang++, $(CXX)), $(CLANGCXXFLAGS), \
             $(if $(findstring icc, $(CXX)), $(ICC_CXXFLAGS), $(COMMON_CXXFLAGS)))
 
@@ -70,6 +71,8 @@ NVLINK=$(NVCC)
 SED?=sed
 
 BOOST_PATH?=$(HOME)/opt/
+BOOST_CXX_FLAGS=-I$(BOOST_PATH)/include -isystem$(BOOST_PATH)/include
+BOOST_LD_FLAGS=-L$(BOOST_PATH)/lib -L$(BOOST_PATH)/lib64
 
 LIBS := $(BUILD)
 UNAME := $(shell uname -s)

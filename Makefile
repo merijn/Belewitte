@@ -31,19 +31,18 @@ tsan: $(foreach exe,$(EXES),$(exe).tsan)
 -include $(patsubst %.cpp, .build/%.d, $(wildcard *.cpp))
 
 $(call sanobjects,$(DEST)/main) $(call sanobjects,$(DEST)/normalise) \
-    $(call sanobjects,$(DEST)/graph-details): \
-    CXXFLAGS+=-I$(BOOST_PATH)/include -isystem$(BOOST_PATH)/include
+    $(call sanobjects,$(DEST)/graph-details): CXXFLAGS+=$(BOOST_CXX_FLAGS)
 
 $(call santargets,main): main% : $(DEST)/main%.o $(DEST)/AlgorithmConfig%.o \
       $(DEST)/Backend%.o $(DEST)/CUDA%.o $(DEST)/OpenCL%.o $(DEST)/Timer%.o \
       $(LIBS)/liboptions%.a $(LIBS)/libutils%.a
 	$(PRINTF) " LD\t$@\n"
-	$(AT)$(LD) $(LDFLAGS) -L$(BOOST_PATH)/lib/ -lboost_regex -lboost_system -lboost_filesystem $^ -o $@
+	$(AT)$(LD) $(LDFLAGS) $(BOOST_LD_FLAGS) -lboost_regex -lboost_system -lboost_filesystem $^ -o $@
 
 $(call santargets,normalise): normalise%: $(DEST)/normalise%.o \
       $(LIBS)/libutils%.a
 	$(PRINTF) " LD\t$@\n"
-	$(AT)$(LD) $(LDFLAGS) -L$(BOOST_PATH)/lib/ -lboost_system -lboost_filesystem $^ -o $@
+	$(AT)$(LD) $(LDFLAGS) $(BOOST_LD_FLAGS) -lboost_system -lboost_filesystem $^ -o $@
 
 $(call santargets,reorder-graph): reorder-graph%: $(DEST)/reorder-graph%.o \
       $(LIBS)/libutils%.a
@@ -63,7 +62,7 @@ $(call santargets,print-graph): print-graph%: $(DEST)/print-graph%.o \
 $(call santargets,graph-details): graph-details%: $(DEST)/graph-details%.o \
       $(LIBS)/libutils%.a $(LIBS)/liboptions%.a
 	$(PRINTF) " LD\t$@\n"
-	$(AT)$(LD) $(LDFLAGS) -L$(BOOST_PATH)/lib/ -lboost_system -lboost_filesystem $^ -o $@
+	$(AT)$(LD) $(LDFLAGS) $(BOOST_LD_FLAGS) -lboost_system -lboost_filesystem $^ -o $@
 
 .PHONY: clean-main-objs clean-main-deps clean-main-bins clean-main-%san
 
