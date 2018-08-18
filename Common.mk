@@ -16,7 +16,8 @@ clean-asan:
 clean-msan:
 clean-ssan:
 clean-tsan:
-clean-all: clean-objs clean-libs clean-deps clean-deps clean-ptx
+clean-all: clean-objs clean-libs clean-deps clean-deps clean-ptx clean-bins \
+    clean-debug
 	$(PRINTF) "removing build directory...\n"
 	$(AT)rm -rf $(BUILD)
 

@@ -22,7 +22,7 @@ $(SRCDIR)/evolve: $(DEST)/evolve.o $(DEST)/Connectivity.o $(LIBS)/libutils.a
 
 .PHONY: clean-$(NAME)-bins
 
-clean-$(NAME)-bins: SRCDIR:=$(SRCDIR) NAME:=$(NAME)
+clean-$(NAME)-bins: SRCDIR:=$(SRCDIR)
 clean-$(NAME)-bins: NAME:=$(NAME)
 clean-$(NAME)-bins:
 	$(PRINTF) "cleaning executables for: $(NAME)\n"
