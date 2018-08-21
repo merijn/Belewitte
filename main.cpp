@@ -4,6 +4,8 @@
 #include <stdexcept>
 #include <getopt.h>
 #include <wordexp.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 
 #include <dlfcn.h>
 
@@ -252,6 +254,11 @@ int main(int argc, char * const *argv)
     set_new_handler(out_of_memory);
     locale::global(locale(""));
     cout.imbue(locale());
+
+    struct rlimit limits;
+    limits.rlim_cur = RLIM_INFINITY;
+    limits.rlim_max = RLIM_INFINITY;
+    setrlimit(RLIMIT_CORE, &limits);
 
     remainingArgs = options.parseArgs(argc, argv);
 

@@ -3,7 +3,7 @@ $(DEST)/:
 
 $(DEST)/%.o: $(SRCDIR)/%.cpp | $(DEST)/
 	$(PRINTF) " CXX\t$*.cpp\n"
-	$(AT)$(CXX) $(CXXFLAGS) -I. $< -c -o $@
+	$(AT)$(CXX) $(CXXFLAGS) -O3 -I. $< -c -o $@
 
 define make-static =
 $(PRINTF) " AR\t$(subst ../$(BUILD)/,,$@)\n"
@@ -28,15 +28,16 @@ santargets = $(1) $(1).asan $(1).msan $(1).ssan $(1).tsan
 sanobjects = $(1).o $(1).asan.o $(1).msan.o $(1).ssan.o $(1).tsan.o
 
 SANITISERS=-fsanitize=undefined -fsanitize=integer -fsanitize=nullability \
-    -fno-omit-frame-pointer
+    -fno-omit-frame-pointer -O0
 
 %.asan.o: CXXFLAGS:=$(CXXFLAGS) $(SANITISERS) -fsanitize=address \
-    -DVERSION=.asan
+    -DVERSION=.asan -D_LIBCPP_DEBUG
 %.msan.o: CXXFLAGS:=$(CXXFLAGS) $(SANITISERS) -fsanitize=memory -fPIE \
-    -DVERSION=.msan
+    -DVERSION=.msan -D_LIBCPP_DEBUG
 %.ssan.o: CXXFLAGS:=$(CXXFLAGS) $(SANITISERS) -fsanitize=safe-stack \
-    -DVERSION=.ssan
-%.tsan.o: CXXFLAGS:=$(CXXFLAGS) $(SANITISERS) -fsanitize=thread -DVERSION=.tsan
+    -DVERSION=.ssan -D_LIBCPP_DEBUG
+%.tsan.o: CXXFLAGS:=$(CXXFLAGS) $(SANITISERS) -fsanitize=thread \
+    -DVERSION=.tsan -D_LIBCPP_DEBUG
 
 %.asan %.asan.a: LDFLAGS:=$(LDFLAGS) $(SANITISERS) -fsanitize=address
 %.msan %.msan.a: LDFLAGS:=$(LDFLAGS) $(SANITISERS) -fsanitize=memory -fPIE -pie
