@@ -31,13 +31,13 @@ SANITISERS=-fsanitize=undefined -fsanitize=integer -fsanitize=nullability \
     -fno-omit-frame-pointer -O0
 
 %.asan.o: CXXFLAGS:=$(CXXFLAGS) $(SANITISERS) -fsanitize=address \
-    -DVERSION=.asan -D_LIBCPP_DEBUG
+    -DVERSION=.asan
 %.msan.o: CXXFLAGS:=$(CXXFLAGS) $(SANITISERS) -fsanitize=memory -fPIE \
-    -DVERSION=.msan -D_LIBCPP_DEBUG
+    -DVERSION=.msan
 %.ssan.o: CXXFLAGS:=$(CXXFLAGS) $(SANITISERS) -fsanitize=safe-stack \
-    -DVERSION=.ssan -D_LIBCPP_DEBUG
+    -DVERSION=.ssan
 %.tsan.o: CXXFLAGS:=$(CXXFLAGS) $(SANITISERS) -fsanitize=thread \
-    -DVERSION=.tsan -D_LIBCPP_DEBUG
+    -DVERSION=.tsan
 
 %.asan %.asan.a: LDFLAGS:=$(LDFLAGS) $(SANITISERS) -fsanitize=address
 %.msan %.msan.a: LDFLAGS:=$(LDFLAGS) $(SANITISERS) -fsanitize=memory -fPIE -pie

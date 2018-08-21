@@ -2,3 +2,5 @@ leak:libOpenCL
 leak:libintelocl
 leak:libtask_executor
 leak:libc++abi
+leak:src/tbb/arena.cpp
+leak:libstdc++-v3/include/bits/basic_string.tcc
