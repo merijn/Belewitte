@@ -174,7 +174,7 @@ class GraphLoader
                 dest.registerLocalAlloc(&dest->vertices, get(vertices, dir));
                 dest.registerLocalAlloc(&dest->inverse_vertices,
                                         get(vertices, opp));
-                dest.registerLocalAlloc(&dest->edges, get(struct_edges, dir));
+                dest.registerLocalAlloc(&dest->edges, get(out_edges, dir));
             }
         }
     };
