@@ -1,4 +1,5 @@
 #include <fstream>
+#include <iomanip>
 
 #include "CUDA.hpp"
 #include "TemplateConfig.hpp"
@@ -62,6 +63,7 @@ struct PageRankBase : public Config
             resultTransfer.stop();
         }
 
+        outputFile << std::scientific << std::setprecision(3);
         for (size_t i = 0; i < pageranks.size; i++) {
             outputFile << i << "\t" << pageranks[i] << std::endl;
         }
