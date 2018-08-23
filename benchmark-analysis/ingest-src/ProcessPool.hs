@@ -13,10 +13,11 @@ import Data.Time.Calendar (DayOfWeek(Saturday,Sunday), dayOfWeek)
 import System.IO
     ( BufferMode(LineBuffering), Handle, hClose, hIsReadable
     , hIsWritable, hSetBuffering)
+import System.Posix.Signals (sigKILL, signalProcess)
 import System.Process
     ( CreateProcess(std_in, std_out), ProcessHandle
-    , StdStream(CreatePipe), createProcess, getProcessExitCode, shell
-    , terminateProcess, waitForProcess)
+    , StdStream(CreatePipe), createProcess, getPid, getProcessExitCode, shell
+    , waitForProcess)
 
 import Core
 import Paths_benchmark_analysis (getDataFileName)
@@ -73,16 +74,16 @@ withProcessPool n (GPU name _) = bracket createProcessPool destroyProcessPool
 
     destroyProcess :: MonadIO m => Process -> m ()
     destroyProcess Process{..} = liftIO . uninterruptibleMask_ $ do
-        terminateProcess procHandle
-        waitForProcess procHandle
+        getPid procHandle >>= mapM_ (signalProcess sigKILL)
         hClose inHandle
         hClose outHandle
+        () <$ waitForProcess procHandle
 
 checkProcess :: Process -> IO ()
 checkProcess Process{..}= do
     result <- getProcessExitCode procHandle
     case result of
-        Just _ -> throwM $ Error "gah!"
+        Just _ -> throwM $ Error "Process died!"
         Nothing -> return ()
     hIsReadable outHandle >>= guard
     hIsWritable inHandle >>= guard
