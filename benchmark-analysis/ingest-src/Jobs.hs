@@ -4,13 +4,14 @@
 {-# LANGUAGE TupleSections #-}
 module Jobs (propertyJobs, processProperty, timingJobs, processTiming) where
 
-import Control.Monad (forM_, when)
+import Control.Monad (when)
 import Control.Monad.Logger (logErrorN, logInfoN)
 import Control.Monad.Trans (lift)
 import Crypto.Hash (Digest, MD5)
 import Crypto.Hash.Conduit (hashFile)
 import qualified Data.ByteArray (convert)
-import Data.Conduit (ConduitT, (.|), awaitForever, runConduit, yield)
+import Data.Conduit
+    (ConduitT, (.|), awaitForever, runConduit, toProducer, yield)
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.Text as C
 import Data.Maybe (fromMaybe)
@@ -24,14 +25,19 @@ import Core
 import Parsers
 import Schema
 
+(.|>) :: Monad m
+      => ConduitT () b m ()
+      -> (b -> ConduitT b c m r)
+      -> ConduitT a c m ()
+producer .|> consumer = toProducer producer .| awaitForever consumer
+
 computeHash :: MonadIO m => FilePath -> m Hash
 computeHash path = do
     (digest :: Digest MD5) <- hashFile path
     return . Hash . Data.ByteArray.convert $ digest
 
---FIXME algorithm!
 propertyJobs :: ConduitT () (Key Variant, Key Graph, Maybe Hash, Text) SqlM ()
-propertyJobs = Sql.selectSource [] [] .| awaitForever toPropJob
+propertyJobs = Sql.selectSource [] [] .|> toPropJob
   where
     toPropJob
         :: Entity Variant
@@ -39,8 +45,13 @@ propertyJobs = Sql.selectSource [] [] .| awaitForever toPropJob
                     (Key Variant, Key Graph, Maybe Hash, Text)
                     SqlM
                     ()
-    toPropJob (Entity varId (Variant graphId algoId _ varFlags hash)) = do
-        whenNotExists filters $ do
+    toPropJob (Entity varId (Variant graphId algoId _ varFlags hash)) =
+        case hash of
+            Nothing -> yieldJob
+            Just _ -> whenNotExists filters yieldJob
+      where
+        filters = [StepPropVariantId ==. varId, StepPropStepId ==. 0]
+        yieldJob = do
             Graph _ path _ <- lift $ Sql.getJust graphId
             Algorithm algo _ <- lift $ Sql.getJust algoId
             yield . (varId, graphId, hash,) . T.intercalate " " $
@@ -51,8 +62,6 @@ propertyJobs = Sql.selectSource [] [] .| awaitForever toPropJob
                 , fromMaybe "" varFlags
                 , path
                 ]
-      where
-        filters = [StepPropVariantId ==. varId, StepPropStepId ==. 0]
 
 processProperty :: (Key Variant, Key Graph, Maybe Hash, Text) -> SqlM ()
 processProperty (varId, graphId, hash, var) = do
@@ -64,7 +73,7 @@ processProperty (varId, graphId, hash, var) = do
         Nothing -> True <$ Sql.update varId [VariantResult =. Just resultHash]
         Just prevHash | prevHash == resultHash -> return True
         _ -> False <$ logErrorN
-                ("Hash mismatch for variant: " <> showText (fromSqlKey varId))
+                ("Hash mismatch for variant: " <> showSqlKey varId)
 
     when loadProps $ do
         liftIO $ removeFile outputFile
@@ -94,7 +103,7 @@ processProperty (varId, graphId, hash, var) = do
         insertUniq $ GraphProp graphId name val
 
     insertProperty (StepProperty n name val) =
-        Sql.insert_ $ StepProp varId n name val
+        insertUniq $ StepProp varId n name val
 
     insertProperty Prediction{} = return ()
 
@@ -102,23 +111,22 @@ timingJobs
     :: Int -> Key GPU
     -> ConduitT () (Key Variant, Key Implementation, Hash, Text) SqlM ()
 timingJobs numRuns gpuId = do
-    impls <- lift $ Sql.selectList [ImplementationRunnable ==. True] []
-    Sql.selectSource [] [] .| awaitForever (toTimingJob impls)
+    Sql.selectKeys [] [] .|> \algoKey ->
+        Sql.selectSource [VariantAlgorithmId ==. algoKey] [] .|> toTimingJob
   where
     toTimingJob
-        :: [Entity Implementation]
-        -> Entity Variant
+        :: Entity Variant
         -> ConduitT (Entity Variant)
                     (Key Variant, Key Implementation, Hash, Text)
                     SqlM
                     ()
-    toTimingJob _ (Entity varId (Variant graphId algoId _ _ Nothing)) = do
+    toTimingJob (Entity varId (Variant graphId algoId _ _ Nothing)) = do
         logErrorN . mconcat $
-            [ "Algorithm #", showText algoId, " results missing for graph #"
-            , showText graphId, " variant #", showText varId ]
+            [ "Algorithm #", showSqlKey algoId, " results missing for graph #"
+            , showSqlKey graphId, " variant #", showSqlKey varId ]
 
-    toTimingJob impls (Entity varId (Variant graphId algoId _ varFlags (Just hash))) =
-        forM_ impls runImpl
+    toTimingJob (Entity varId (Variant graphId algoId _ varFlags (Just hash)))
+      = Sql.selectSource [ImplementationAlgorithmId ==. algoId] [] .|> runImpl
       where
         runImpl (Entity implId (Implementation _ name _ implFlags _ _)) = do
             whenNotExists (filters ++ [TotalTimerImplId ==. implId]) $ do
@@ -147,9 +155,9 @@ processTiming gpuId (varId, implId, hash, var) = do
     if resultHash /= hash
        then do
            logErrorN . mconcat $
-            [ "Implementation #", showText implId
-            , " has wrong results for variant #", showText varId, " on GPU #"
-            , showText gpuId ]
+            [ "Implementation #", showSqlKey implId
+            , " has wrong results for variant #", showSqlKey varId, " on GPU #"
+            , showSqlKey gpuId ]
         else do
             liftIO $ removeFile outputFile
             runConduit $

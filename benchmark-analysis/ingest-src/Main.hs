@@ -234,10 +234,8 @@ importResults = do
 runTask :: Process -> (a, b, c, Text) -> IO (a, b, c, Text)
 runTask Process{..} (x, y, z, cmd) = do
     -- FIXME proper logging
-    T.putStrLn $ "Task: " <> cmd
     T.hPutStrLn inHandle cmd
     result <- T.hGetLine outHandle
-    T.putStrLn $ "Done: " <> cmd
     return (x, y, z, result)
 
 runBenchmarks :: Int -> Int -> Input SqlM ()

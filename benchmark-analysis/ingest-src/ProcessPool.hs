@@ -59,17 +59,18 @@ withProcessPool n (GPU name _) = bracket createProcessPool destroyProcessPool
     allocateProcess = liftIO $ do
         timeout <- getJobTimeOut
         exePath <- getDataFileName "runtime-data/main"
-        let p = (shell (opts timeout exePath))
+        libPath <- getDataFileName "runtime-data/kernels"
+        let p = (shell (opts timeout exePath libPath))
                 { std_in = CreatePipe, std_out = CreatePipe }
         (Just inHandle, Just outHandle, Nothing, procHandle) <- createProcess p
         hSetBuffering inHandle LineBuffering
         hSetBuffering outHandle LineBuffering
         return Process{..}
       where
-        opts timeout exePath = intercalate " " . ("prun":) $ timeout ++
+        opts timeout exePath libPath = intercalate " " . ("prun":) $ timeout ++
             [ "-np", "1" , "-native","\"-C " ++ T.unpack name ++"\""
             , "CUDA_VISIBLE_DEVICES=\"0,1,2,3,4,5,6,7,8,9,10\""
-            , exePath, "-W", "-S"
+            , exePath, "-L", libPath, "-W", "-S"
             ]
 
     destroyProcess :: MonadIO m => Process -> m ()

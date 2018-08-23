@@ -161,4 +161,6 @@ cudaDispatch(std::map<std::string, AlgorithmConfig*>& result)
     for (auto& pair : prNoDivMap) {
         result[pair.first] = make_config<PageRankNoDiv>(pair.second, consolidateRankNoDiv);
     }
+
+    result["switch"] = make_switch_config<PageRank>(prMap, consolidateRank);
 }
