@@ -1,5 +1,5 @@
-#include <getopt.h>
 #include <map>
+#include <boost/algorithm/string/predicate.hpp>
 
 #include "Options.hpp"
 #include "utils/Util.hpp"
@@ -10,7 +10,7 @@ set<char> Options::globalReservedShort;
 set<string> Options::globalReservedLong;
 
 Options&
-Options::add(Option o)
+Options::add(const Option& o)
 {
     set<char> shortUnion(globalReservedShort);
     set<string> longUnion(globalReservedLong);
@@ -49,7 +49,7 @@ Options::add(char so, const char *lo, string arg, string &var, string help)
 }
 
 vector<string>
-Options::parseArgs(vector<string>& args)
+Options::parseArgs(const vector<string>& args)
 { return parseArgs(args, false); }
 
 vector<string>
@@ -57,7 +57,7 @@ Options::parseArgs(int argc, char * const *argv)
 { return parseArgs(argc, argv, false); }
 
 vector<string>
-Options::parseArgsFinal(vector<string>& args)
+Options::parseArgsFinal(const vector<string>& args)
 { return parseArgs(args, true); }
 
 vector<string>
@@ -65,101 +65,62 @@ Options::parseArgsFinal(int argc, char * const *argv)
 { return parseArgs(argc, argv, true); }
 
 vector<string>
-Options::parseArgs(vector<string> args, bool exitUnknown)
+Options::parseArgs(int argc, char * const *argv, bool exitUnknown)
 {
-    vector<const char*> tmp;
-    tmp.reserve(args.size() + 1);
-    tmp.push_back(const_cast<char*>("dummy"));
-    for (auto& s : args ){
-        tmp.push_back(s.c_str());
-    }
-    tmp.push_back(nullptr);
-    return parseArgs(static_cast<int>(tmp.size()) - 1,
-                     const_cast<char * const *>(tmp.data()), exitUnknown);
+    vector<string> args;
+    args.reserve(static_cast<unsigned long>(argc));
+    for (int i = 1; i < argc; i++) args.emplace_back(argv[i]);
+    return parseArgs(args, exitUnknown);
 }
 
 vector<string>
-Options::parseArgs(int argc, char * const *argv, bool exitUnknown)
+Options::parseArgs(const vector<string>& args, bool exitUnknown)
 {
+    string empty = "";
     vector<string> remainingArgs;
-    map<int, function<void(const string&)>> actions;
-    string shortopts = "-:";
-    vector<option> longopts;
+    map<string, Option> optionParsers;
+
+    pair<map<string, Option>::iterator, bool> result;
+    auto addOption = [&](string flag, const Option& opt) {
+        result = optionParsers.emplace(make_pair(flag, opt));
+        if (!result.second) {
+            reportError("Option ", flag, " is already in use!");
+        }
+    };
 
     if (hasUsage) {
-        shortopts += usageFlag.shortOption;
-        longopts.push_back(
-            { usageFlag.longOption
-            , no_argument
-            , nullptr
-            , usageFlag.shortOption
-            }
-        );
+        addOption("-" + string(1,usageFlag.shortOption), usageFlag);
+        addOption("--" + usageFlag.longOption, usageFlag);
     }
 
     for (auto kv : options) {
         auto opt = kv.second;
-        if (actions.count(opt.shortOption)) {
-            exit(EXIT_FAILURE);
-        }
-
-        shortopts += opt.shortOption;
-        longopts.push_back(
-            { opt.longOption
-            , no_argument
-            , nullptr
-            , opt.shortOption
-            }
-        );
-
-        if (opt.hasArg) {
-            shortopts += ':';
-            longopts.back().has_arg = required_argument;
-        }
-
-        actions[opt.shortOption] = opt.action;
+        addOption("-" + string(1,opt.shortOption), opt);
+        addOption("--" + opt.longOption, opt);
     }
 
-    longopts.push_back({nullptr, 0, nullptr, 0});
-
-    optind = 1;
-#ifdef __APPLE__
-    optreset = 1;
-#endif
-
-    for (;;) {
-        int opt = getopt_long(argc, argv, shortopts.c_str(), longopts.data(), nullptr);
-        if (opt == -1) break;
-
-        if (hasUsage && opt == usageFlag.shortOption) {
-            usage(usageOutput);
-            exit(EXIT_SUCCESS);
-        }
-
-        switch (opt) {
-            case '?':
-                if (exitUnknown) {
-                    cerr << "Unknown option '" << argv[optind-1] << "'!" << endl;
-                    usage(usageOutput);
-                    exit(EXIT_FAILURE);
-                }
-                remainingArgs.push_back(argv[optind-1]);
-                break;
-
-            case 1:
-                remainingArgs.push_back(optarg);
-                break;
-
-            case 0: break;
-
-            case ':':
-                cerr << "Missing option for flag '"
-                     << static_cast<char>(optopt) << "'." << endl;
+    for (unsigned i = 0; i < args.size(); i++) {
+        auto it = optionParsers.find(args[i]);
+        if (it == optionParsers.end()) {
+            if (boost::starts_with(args[i], "--") && exitUnknown) {
+                cerr << "Unknown option '" << args[i] << "'!" << endl;
                 usage(usageOutput);
                 exit(EXIT_FAILURE);
+            }
 
-            default:
-                actions[opt](optarg ? string(optarg) : string(""));
+            remainingArgs.push_back(args[i]);
+            continue;
+        }
+
+        auto opt = it->second;
+        if (opt.hasArg) {
+            if (args.size() <= i+1) {
+                reportError("Option ", args[i], " doesn't have an argument!");
+            }
+            opt.action(args[i+1]);
+            i++;
+        } else {
+            opt.action(empty);
         }
     }
 

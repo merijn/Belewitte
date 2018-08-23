@@ -13,8 +13,8 @@ class Options {
         friend class Options;
 
         char shortOption;
-        const char *longOption;
-        std::function<void(const std::string&)> action;
+        std::string longOption;
+        std::function<void(std::string)> action;
         std::function<void()> resetAction;
         std::string argName;
         std::string helpString;
@@ -29,7 +29,7 @@ class Options {
         Option
         ( char shortOpt
         , const char *longOpt
-        , std::function<void(const std::string&)> act
+        , std::function<void(std::string)> act
         , std::function<void()> resetAct
         , std::string arg
         , std::string help
@@ -60,7 +60,7 @@ class Options {
 
     std::map<int, Option> options;
 
-    std::vector<std::string> parseArgs(std::vector<std::string>, bool);
+    std::vector<std::string> parseArgs(const std::vector<std::string>&, bool);
     std::vector<std::string> parseArgs(int, char * const *, bool);
 
   public:
@@ -88,7 +88,7 @@ class Options {
     ~Options()
     { if (parent) parent->children.erase(this); }
 
-    Options& add(Option o);
+    Options& add(const Option& o);
     Options& add(char, const char *, std::string, std::string &, std::string);
 
     template<typename T>
@@ -96,7 +96,8 @@ class Options {
     {
         auto action = [&,val](auto) { var = val; };
         auto reset = [&,initial=T(var)]() { var = initial; };
-        return add(Option(so, lo, action, reset, "", help)); }
+        return add(Option(so, lo, action, reset, "", help));
+    }
 
     template<typename T>
     Options& add
@@ -123,10 +124,10 @@ class Options {
     , std::vector<T>& var
     , std::string def
     , std::string help
-    , std::function<T(const std::string&)> fun = [](auto s) { return s; }
+    , std::function<T(std::string)> fun = [](auto s) { return s; }
     )
     {
-        auto action = [&](const std::string& s) { var.push_back(fun(s)); };
+        auto action = [&](std::string s) { var.push_back(fun(s)); };
         auto reset = [&]() { var.clear(); };
         auto opt = Option(so, lo, action, reset, arg, help);
         opt.defaultVal = def;
@@ -135,10 +136,10 @@ class Options {
         return add(opt);
     }
 
-    std::vector<std::string> parseArgs(std::vector<std::string>&);
+    std::vector<std::string> parseArgs(const std::vector<std::string>&);
     std::vector<std::string> parseArgs(int, char * const *);
 
-    std::vector<std::string> parseArgsFinal(std::vector<std::string>&);
+    std::vector<std::string> parseArgsFinal(const std::vector<std::string>&);
     std::vector<std::string> parseArgsFinal(int, char * const *);
 
     void usage(std::ostream&, std::string = "");
