@@ -32,7 +32,7 @@ struct PageRankBase : public Config
     {}
 
     virtual void
-    callConsolidate(const alloc_t<float>&, const alloc_t<float>&) = 0;
+    callConsolidate(const alloc_t<float>&, const alloc_t<float>&, bool) = 0;
 
     virtual void runImplementation(std::ofstream& outputFile) override
     {
@@ -59,7 +59,7 @@ struct PageRankBase : public Config
                 resetDiff();
                 setKernelConfig(kernel);
                 kernel->run(this->loader, pageranks, new_pageranks);
-                callConsolidate(pageranks, new_pageranks);
+                callConsolidate(pageranks, new_pageranks, max_iterations > j);
 
                 diff = getDiff();
             } while (j < max_iterations);
@@ -92,7 +92,7 @@ struct PageRank : public PageRankBase<Config> {
     using alloc_t = typename PageRankBase<Config>::template alloc_t<T>;
 
     void
-    callConsolidate(const alloc_t<float>& ranks, const alloc_t<float>& new_ranks) override
+    callConsolidate(const alloc_t<float>& ranks, const alloc_t<float>& new_ranks, bool) override
     {
         this->setKernelConfig(work_division::vertex);
         backend.runKernel(consolidate, this->vertex_count, ranks, new_ranks);
@@ -114,10 +114,10 @@ struct PageRankNoDiv : public PageRankBase<Config> {
     template<typename T>
     using alloc_t = typename PageRankBase<Config>::template alloc_t<T>;
 
-    void callConsolidate(const alloc_t<float>& ranks, const alloc_t<float>& new_ranks) override
+    void callConsolidate(const alloc_t<float>& ranks, const alloc_t<float>& new_ranks, bool notLast) override
     {
         this->setKernelConfig(work_division::vertex);
-        backend.runKernel(consolidate, this->loader.template getGraph<Rep::InverseVertexCSR,Dir::Reverse>(), ranks, new_ranks);
+        backend.runKernel(consolidate, this->loader.template getGraph<Rep::InverseVertexCSR,Dir::Reverse>(), ranks, new_ranks, notLast);
     }
 };
 

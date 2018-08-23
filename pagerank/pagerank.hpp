@@ -20,7 +20,7 @@ __global__ void
 consolidateRank(size_t, float *pagerank, float *new_pagerank);
 
 __global__ void
-consolidateRankNoDiv(InverseVertexCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
+consolidateRankNoDiv(InverseVertexCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank, bool);
 
 __global__ void
 vertexPush(CSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);

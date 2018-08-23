@@ -64,6 +64,7 @@ consolidateRankNoDiv
     ( InverseVertexCSR<unsigned,unsigned> *graph
     , float *pagerank
     , float *new_pagerank
+    , bool notLast
     )
 {
     uint64_t idx = (blockIdx.x * blockDim.x) + threadIdx.x;
@@ -79,7 +80,8 @@ consolidateRankNoDiv
         unsigned end = outgoing_vertices[1];
         unsigned degree = end - start;
 
-        if (degree != 0) pagerank[idx] = new_rank / degree;
+        if (degree != 0 && notLast) new_rank = new_rank / degree;
+        pagerank[idx] = new_rank;
         new_pagerank[idx] = 0.0f;
 
         updateDiff(my_diff);
