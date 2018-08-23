@@ -8,7 +8,7 @@
 
 const float dampening = 0.85f;
 const float epsilon = 0.001f;
-const int max_iterations = 10;
+const int max_iterations = 50;
 
 void resetDiff();
 float getDiff();

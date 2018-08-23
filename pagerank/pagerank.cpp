@@ -7,6 +7,13 @@
 
 #include "pagerank.hpp"
 
+static inline float
+roundPrecision(float val, int digitPrecision)
+{
+    float rounder = std::pow(10.0f, static_cast<float>(digitPrecision));
+    return std::round(val * rounder) / rounder;
+}
+
 template<typename Config>
 struct PageRankBase : public Config
 {
@@ -63,9 +70,9 @@ struct PageRankBase : public Config
             resultTransfer.stop();
         }
 
-        outputFile << std::scientific << std::setprecision(3);
+        outputFile << std::scientific << std::setprecision(2);
         for (size_t i = 0; i < pageranks.size; i++) {
-            outputFile << i << "\t" << pageranks[i] << std::endl;
+            outputFile << i << "\t" << roundPrecision(pageranks[i], 5) << endl;
         }
     }
 };
