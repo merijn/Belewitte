@@ -14,7 +14,9 @@ module Core
     , toSqlKey
     , MonadIO(liftIO)
     , MonadLogger
+    , MonadResource
     , MonadThrow(throwM)
+    , MonadUnliftIO
     , ReaderT(..)
     , Text
     , module Core

@@ -3,10 +3,11 @@
 module ProcessPool(Pool, Process(..), withProcessPool, withProcess) where
 
 import Control.Monad (guard)
-import Control.Monad.Catch
-    (MonadMask, bracket, throwM, uninterruptibleMask_)
+import Control.Monad.Catch (MonadMask, bracket, throwM, uninterruptibleMask_)
+import Data.Acquire (mkAcquireType, withAcquire)
 import Data.List (intercalate)
-import Data.Pool (Pool, createPool, destroyAllResources, withResource)
+import Data.Pool
+    (Pool, createPool, destroyAllResources, putResource, takeResource)
 import qualified Data.Text as T
 import qualified Data.Time.LocalTime as Time
 import Data.Time.Calendar (DayOfWeek(Saturday,Sunday), dayOfWeek)
@@ -80,8 +81,8 @@ withProcessPool n (GPU name _) = bracket createProcessPool destroyProcessPool
         hClose outHandle
         () <$ waitForProcess procHandle
 
-checkProcess :: Process -> IO ()
-checkProcess Process{..}= do
+checkProcess :: MonadIO m => Process -> m ()
+checkProcess Process{..} = liftIO $ do
     result <- getProcessExitCode procHandle
     case result of
         Just _ -> throwM $ Error "Process died!"
@@ -89,7 +90,14 @@ checkProcess Process{..}= do
     hIsReadable outHandle >>= guard
     hIsWritable inHandle >>= guard
 
-withProcess :: Pool Process -> (Process -> a -> IO b) -> a -> IO b
+withResource :: MonadUnliftIO m => Pool a -> (a -> m b) -> m b
+withResource pool f = withAcquire (mkAcquireType alloc clean) $ f . fst
+  where
+    alloc = takeResource pool
+    clean (res, localPool) _ = putResource localPool res
+
+withProcess
+    :: MonadUnliftIO m => Pool Process -> (Process -> a -> m b) -> a -> m b
 withProcess pool f x = withResource pool $ \process@Process{..} -> do
     checkProcess process
     f process x

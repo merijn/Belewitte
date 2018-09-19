@@ -3,13 +3,13 @@ packages: evolve/*.cabal benchmark-analysis/*.cabal
 source-repository-package
   type: git
   location: https://github.com/merijn/broadcast-chan.git
-  tag: 996aecdacc2eb8501a1a27c8559153d93ed3d6d2
+  tag: 126fd15c99263148be7be77a030dfd628fc3516e
   subdir: broadcast-chan
 
 source-repository-package
   type: git
   location: https://github.com/merijn/broadcast-chan.git
-  tag: 996aecdacc2eb8501a1a27c8559153d93ed3d6d2
+  tag: 126fd15c99263148be7be77a030dfd628fc3516e
   subdir: broadcast-chan-conduit
 
 source-repository-package

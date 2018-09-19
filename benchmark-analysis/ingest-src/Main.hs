@@ -7,6 +7,7 @@
 module Main(main) where
 
 import Control.Monad (forM_, guard)
+import Control.Monad.Logger (logInfoN)
 import Control.Monad.Reader (ask, local)
 import Control.Monad.Trans (lift)
 import Data.Bool (bool)
@@ -231,11 +232,12 @@ importResults = do
             | varName == "0" = "default"
             | otherwise = "Root " <> varName
 
-runTask :: Process -> (a, b, c, Text) -> IO (a, b, c, Text)
+runTask
+    :: (MonadIO m, MonadLogger m)
+    => Process -> (a, b, c, Text) -> m (a, b, c, Text)
 runTask Process{..} (x, y, z, cmd) = do
-    -- FIXME proper logging
-    T.hPutStrLn inHandle cmd
-    result <- T.hGetLine outHandle
+    logInfoN $ "Running: " <> cmd
+    result <- liftIO $ T.hPutStrLn inHandle cmd >> T.hGetLine outHandle
     return (x, y, z, result)
 
 runBenchmarks :: Int -> Int -> Input SqlM ()
