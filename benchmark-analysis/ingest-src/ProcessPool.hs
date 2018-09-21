@@ -5,7 +5,7 @@
 module ProcessPool
     ( Pool
     , Process(..)
-    , Timeout
+    , Timeout(..)
     , withProcessPool
     , withProcess
     ) where

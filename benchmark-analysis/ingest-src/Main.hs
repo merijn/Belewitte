@@ -7,7 +7,8 @@
 module Main(main) where
 
 import Control.Monad (forM_, guard)
-import Control.Monad.Catch (MonadMask, displayException, onError, try)
+import Control.Monad.Catch
+    (MonadMask, displayException, fromException, onError, try)
 import Control.Monad.Reader (ask, local)
 import Control.Monad.Trans (lift)
 import Data.Bool (bool)
@@ -21,10 +22,11 @@ import Data.List (isPrefixOf)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Time.Clock (UTCTime, getCurrentTime)
-import Database.Persist.Sqlite (Key, Entity(..), EntityField, Unique, (==.))
+import Database.Persist.Sqlite
+    (Key, Entity(..), EntityField, Unique, (==.), (+=.))
 import qualified Database.Persist.Sqlite as Sql
 import Lens.Micro.Extras (view)
-import System.Console.Haskeline
+import System.Console.Haskeline hiding (Handler)
 import System.Console.Haskeline.MonadException (throwIO)
 import System.Directory (doesFileExist, removeFile)
 import System.FilePath ((<.>), splitExtension, takeFileName)
@@ -232,6 +234,18 @@ importResults = do
             | varName == "0" = "default"
             | otherwise = "Root " <> varName
 
+taskHandler :: Handler SqlM (Text, Key Variant, a, b, Text)
+taskHandler = Handle handler
+  where
+    handler :: (Text, Key Variant, a, b, Text) -> SomeException -> SqlM Action
+    handler (_, varId, _, _, _) exc
+      | Just Timeout <- fromException exc = return Retry
+      | otherwise = do
+          retries <- variantRetryCount <$> Sql.getJust varId
+          if retries >= 5
+             then return Drop
+             else Retry <$ Sql.update varId [ VariantRetryCount +=. 1 ]
+
 runTask
     :: (MonadMask m, MonadIO m, MonadLogger m)
     => Process
@@ -262,14 +276,14 @@ runBenchmarks numNodes numRuns = liftSql $ do
     -- FIXME hardcoded GPU
     withProcessPool numNodes (GPU "TitanX" Nothing) $ \procPool -> runConduit $
         propertyJobs
-        .| parMapM (Simple Drop) numNodes (withProcess procPool runTask)
+        .| parMapM taskHandler numNodes (withProcess procPool runTask)
         .| C.mapM_ processProperty
 
     gpus <- Sql.selectList [] []
     forM_ gpus $ \(Entity gpuId gpu) -> do
         withProcessPool numNodes gpu $ \procPool -> runConduit $
             timingJobs numRuns gpuId
-            .| parMapM (Simple Drop) numNodes (withProcess procPool runTask)
+            .| parMapM taskHandler numNodes (withProcess procPool runTask)
             .| C.mapM_ (processTiming gpuId)
 
 commands :: String -> (InfoMod a, Parser (Input SqlM ()))
