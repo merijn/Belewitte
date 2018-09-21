@@ -2,18 +2,6 @@ packages: evolve/*.cabal benchmark-analysis/*.cabal
 
 source-repository-package
   type: git
-  location: https://github.com/merijn/broadcast-chan.git
-  tag: 126fd15c99263148be7be77a030dfd628fc3516e
-  subdir: broadcast-chan
-
-source-repository-package
-  type: git
-  location: https://github.com/merijn/broadcast-chan.git
-  tag: 126fd15c99263148be7be77a030dfd628fc3516e
-  subdir: broadcast-chan-conduit
-
-source-repository-package
-  type: git
   location: https://github.com/merijn/persistent.git
   tag: 788048f439ff471a6bec5079e5e6c50377ae4cc2
   subdir: persistent-sqlite
