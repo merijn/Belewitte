@@ -5,7 +5,6 @@
 module Jobs (propertyJobs, processProperty, timingJobs, processTiming) where
 
 import Control.Monad (when)
-import Control.Monad.Logger (logErrorN, logInfoN)
 import Control.Monad.Trans (lift)
 import Crypto.Hash (Digest, MD5)
 import Crypto.Hash.Conduit (hashFile)

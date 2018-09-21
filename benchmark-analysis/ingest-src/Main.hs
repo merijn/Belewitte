@@ -7,7 +7,6 @@
 module Main(main) where
 
 import Control.Monad (forM_, guard)
-import Control.Monad.Logger (logInfoN)
 import Control.Monad.Reader (ask, local)
 import Control.Monad.Trans (lift)
 import Data.Bool (bool)
