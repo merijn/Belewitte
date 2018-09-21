@@ -1,34 +1,45 @@
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RecordWildCards #-}
-module ProcessPool(Pool, Process(..), withProcessPool, withProcess) where
+module ProcessPool
+    ( Pool
+    , Process(..)
+    , Timeout
+    , withProcessPool
+    , withProcess
+    ) where
 
+import Control.Exception (Exception)
 import Control.Monad (guard)
 import Control.Monad.Catch (MonadMask, bracket, throwM, uninterruptibleMask_)
-import Data.Acquire (mkAcquireType, withAcquire)
+import Data.Acquire (mkAcquireType, withAcquire, ReleaseType(ReleaseException))
 import Data.List (intercalate)
-import Data.Pool
-    (Pool, createPool, destroyAllResources, putResource, takeResource)
+import Data.Pool (Pool)
+import qualified Data.Pool as Pool
 import qualified Data.Text as T
 import qualified Data.Time.LocalTime as Time
 import Data.Time.Calendar (DayOfWeek(Saturday,Sunday), dayOfWeek)
-import System.IO
-    ( BufferMode(LineBuffering), Handle, hClose, hIsReadable
-    , hIsWritable, hSetBuffering)
+import System.Exit (ExitCode(ExitFailure))
+import System.IO (BufferMode(LineBuffering), Handle)
+import qualified System.IO as System
 import System.Posix.Signals (sigKILL, signalProcess)
-import System.Process
-    ( CreateProcess(std_in, std_out), ProcessHandle
-    , StdStream(CreatePipe), createProcess, getPid, getProcessExitCode, shell
-    , waitForProcess)
+import System.Process (CreateProcess(..), ProcessHandle, Pid, StdStream(..))
+import qualified System.Process as Proc
 
 import Core
 import Paths_benchmark_analysis (getDataFileName)
 import Schema
+
+data Timeout = Timeout deriving (Show)
+instance Exception Timeout
 
 data Process =
   Process
   { inHandle :: Handle
   , outHandle :: Handle
   , procHandle :: ProcessHandle
+  , procId :: Pid
   }
 
 getJobTimeOut :: MonadIO m => m [String]
@@ -46,27 +57,37 @@ getJobTimeOut = liftIO $ do
     timeoutFlag h = ["-t", show h ++ ":00:00"]
 
 withProcessPool
-    :: (MonadMask m, MonadIO m) => Int -> GPU -> (Pool Process -> m a) -> m a
+    :: forall a m . (MonadLogger m, MonadMask m, MonadUnliftIO m)
+    => Int -> GPU -> (Pool Process -> m a) -> m a
 withProcessPool n (GPU name _) = bracket createProcessPool destroyProcessPool
   where
     createProcessPool :: MonadIO m => m (Pool Process)
-    createProcessPool = liftIO $
-        createPool allocateProcess destroyProcess 1 3153600000 n
+    createProcessPool = withUnliftIO $ \(UnliftIO runInIO) -> Pool.createPool
+        (runInIO allocateProcess)
+        (runInIO . destroyProcess)
+        1
+        3153600000
+        n
 
     destroyProcessPool :: MonadIO m => Pool Process -> m ()
-    destroyProcessPool = liftIO . destroyAllResources
+    destroyProcessPool = liftIO . Pool.destroyAllResources
 
-    allocateProcess :: MonadIO m => m Process
-    allocateProcess = liftIO $ do
-        timeout <- getJobTimeOut
-        exePath <- getDataFileName "runtime-data/main"
-        libPath <- getDataFileName "runtime-data/kernels"
-        let p = (shell (opts timeout exePath libPath))
-                { std_in = CreatePipe, std_out = CreatePipe }
-        (Just inHandle, Just outHandle, Nothing, procHandle) <- createProcess p
-        hSetBuffering inHandle LineBuffering
-        hSetBuffering outHandle LineBuffering
-        return Process{..}
+    allocateProcess :: (MonadLogger m, MonadUnliftIO m) => m Process
+    allocateProcess = do
+        proc@Process{procId} <- liftIO $ do
+            timeout <- getJobTimeOut
+            exePath <- getDataFileName "runtime-data/main"
+            libPath <- getDataFileName "runtime-data/kernels"
+            let p = (Proc.shell (opts timeout exePath libPath))
+                    { std_in = CreatePipe, std_out = CreatePipe }
+            (Just inHandle, Just outHandle, Nothing, procHandle) <-
+                Proc.createProcess p
+
+            System.hSetBuffering inHandle LineBuffering
+            System.hSetBuffering outHandle LineBuffering
+            Just procId <- Proc.getPid procHandle
+            return Process{..}
+        proc <$ logInfoN ("Started new process: " <> showText procId)
       where
         opts timeout exePath libPath = intercalate " " . ("prun":) $ timeout ++
             [ "-np", "1" , "-native","\"-C " ++ T.unpack name ++"\""
@@ -74,30 +95,37 @@ withProcessPool n (GPU name _) = bracket createProcessPool destroyProcessPool
             , exePath, "-L", libPath, "-W", "-S"
             ]
 
-    destroyProcess :: MonadIO m => Process -> m ()
-    destroyProcess Process{..} = liftIO . uninterruptibleMask_ $ do
-        getPid procHandle >>= mapM_ (signalProcess sigKILL)
-        hClose inHandle
-        hClose outHandle
-        () <$ waitForProcess procHandle
+    destroyProcess :: (MonadLogger m, MonadUnliftIO m) => Process -> m ()
+    destroyProcess Process{..} = do
+        liftIO . uninterruptibleMask_ $ do
+            Proc.getPid procHandle >>= mapM_ (signalProcess sigKILL)
+            System.hClose inHandle
+            System.hClose outHandle
+            () <$ Proc.waitForProcess procHandle
+        logInfoN $ "Destroyed process: " <> showText procId
 
 checkProcess :: MonadIO m => Process -> m ()
 checkProcess Process{..} = liftIO $ do
-    result <- getProcessExitCode procHandle
+    result <- Proc.getProcessExitCode procHandle
     case result of
-        Just _ -> throwM $ Error "Process died!"
+        Just (ExitFailure 2) -> throwM Timeout
+        Just code -> throwM . Error $
+            "Process died with code: " <> showText code
         Nothing -> return ()
-    hIsReadable outHandle >>= guard
-    hIsWritable inHandle >>= guard
+    System.hIsReadable outHandle >>= guard
+    System.hIsWritable inHandle >>= guard
 
 withResource :: MonadUnliftIO m => Pool a -> (a -> m b) -> m b
 withResource pool f = withAcquire (mkAcquireType alloc clean) $ f . fst
   where
-    alloc = takeResource pool
-    clean (res, localPool) _ = putResource localPool res
+    alloc = Pool.takeResource pool
+    clean (res, localPool) ty = case ty of
+        ReleaseException -> Pool.destroyResource pool localPool res
+        _                -> Pool.putResource localPool res
 
 withProcess
-    :: MonadUnliftIO m => Pool Process -> (Process -> a -> m b) -> a -> m b
+    :: (Show a, MonadMask m, MonadLogger m, MonadUnliftIO m)
+    => Pool Process -> (Process -> a -> m b) -> a -> m b
 withProcess pool f x = withResource pool $ \process@Process{..} -> do
     checkProcess process
     f process x
