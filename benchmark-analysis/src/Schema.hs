@@ -30,4 +30,3 @@ share [mkPersist sqlSettings, mkMigrate "migrateAll"]
 getImplName :: Implementation -> Text
 getImplName (Implementation _ name prettyName _ _ _) =
   fromMaybe name prettyName
-

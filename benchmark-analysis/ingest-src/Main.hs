@@ -7,6 +7,7 @@
 module Main(main) where
 
 import Control.Monad (forM_, guard)
+import Control.Monad.Catch (MonadMask, displayException, onError, try)
 import Control.Monad.Reader (ask, local)
 import Control.Monad.Trans (lift)
 import Data.Bool (bool)
@@ -25,8 +26,8 @@ import qualified Database.Persist.Sqlite as Sql
 import Lens.Micro.Extras (view)
 import System.Console.Haskeline
 import System.Console.Haskeline.MonadException (throwIO)
-import System.Directory (doesFileExist)
-import System.FilePath (splitExtension, takeFileName)
+import System.Directory (doesFileExist, removeFile)
+import System.FilePath ((<.>), splitExtension, takeFileName)
 import System.IO (hClose)
 import System.Process (CreateProcess(std_out), StdStream(CreatePipe))
 import qualified System.Process as Process
@@ -174,7 +175,7 @@ addVariant = do
     variantName <- getInput "Variant Name"
     flags <- getOptionalInput "Flags"
 
-    let mkVariant gId = Variant gId algoId variantName flags Nothing
+    let mkVariant gId = Variant gId algoId variantName flags Nothing False 0
 
     liftSql . runConduit $
         Sql.selectKeys [] []
@@ -232,26 +233,43 @@ importResults = do
             | otherwise = "Root " <> varName
 
 runTask
-    :: (MonadIO m, MonadLogger m)
-    => Process -> (a, b, c, Text) -> m (a, b, c, Text)
-runTask Process{..} (x, y, z, cmd) = do
+    :: (MonadMask m, MonadIO m, MonadLogger m)
+    => Process
+    -> (Text, Key Variant, a, b, Text)
+    -> m (Key Variant, a, b, Text)
+runTask Process{..} (label, x, y, z, cmd) = handleError $ do
     logInfoN $ "Running: " <> cmd
     result <- liftIO $ T.hPutStrLn inHandle cmd >> T.hGetLine outHandle
+    logInfoN $ "Finished: " <> cmd
     return (x, y, z, result)
+  where
+    tryRemoveFile path = do
+        result <- try . liftIO $ removeFile path
+        case result of
+            Left (SomeException e) -> logErrorN . T.pack $ displayException e
+            Right () -> return ()
+
+    fileStem = T.unpack label
+    handleError act = act `onError` do
+        logErrorN ("Failed: " <> cmd)
+        tryRemoveFile $ fileStem <.> "timings"
+        tryRemoveFile $ fileStem <.> "output"
+        tryRemoveFile $ fileStem <.> "log"
+
 
 runBenchmarks :: Int -> Int -> Input SqlM ()
 runBenchmarks numNodes numRuns = liftSql $ do
     -- FIXME hardcoded GPU
     withProcessPool numNodes (GPU "TitanX" Nothing) $ \procPool -> runConduit $
         propertyJobs
-        .| parMapM (Simple Retry) numNodes (withProcess procPool runTask)
+        .| parMapM (Simple Drop) numNodes (withProcess procPool runTask)
         .| C.mapM_ processProperty
 
     gpus <- Sql.selectList [] []
     forM_ gpus $ \(Entity gpuId gpu) -> do
         withProcessPool numNodes gpu $ \procPool -> runConduit $
             timingJobs numRuns gpuId
-            .| parMapM (Simple Retry) numNodes (withProcess procPool runTask)
+            .| parMapM (Simple Drop) numNodes (withProcess procPool runTask)
             .| C.mapM_ (processTiming gpuId)
 
 commands :: String -> (InfoMod a, Parser (Input SqlM ()))

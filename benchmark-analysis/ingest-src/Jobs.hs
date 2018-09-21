@@ -35,30 +35,35 @@ computeHash path = do
     (digest :: Digest MD5) <- hashFile path
     return . Hash . Data.ByteArray.convert $ digest
 
-propertyJobs :: ConduitT () (Key Variant, Key Graph, Maybe Hash, Text) SqlM ()
+propertyJobs
+    :: ConduitT () (Text, Key Variant, Key Graph, Maybe Hash, Text) SqlM ()
 propertyJobs = Sql.selectSource [] [] .|> toPropJob
   where
     toPropJob
         :: Entity Variant
         -> ConduitT (Entity Variant)
-                    (Key Variant, Key Graph, Maybe Hash, Text)
+                    (Text, Key Variant, Key Graph, Maybe Hash, Text)
                     SqlM
                     ()
-    toPropJob (Entity varId (Variant graphId algoId _ varFlags hash)) =
-        case hash of
-            Nothing -> yieldJob
-            Just _ -> whenNotExists filters yieldJob
+    toPropJob
+        (Entity varId (Variant graphId algoId _ flags hash hasProps retries)) =
+            case hash of
+                Nothing -> yieldJob
+                Just _ | not hasProps && retries < 5 -> yieldJob
+                       | not hasProps -> logWarnN $
+                         "Too many retries for variant #" <> showSqlKey varId
+                       | otherwise -> return ()
       where
-        filters = [StepPropVariantId ==. varId, StepPropStepId ==. 0]
+        mkTuple = (showSqlKey varId,varId,graphId,hash,)
         yieldJob = do
             Graph _ path _ <- lift $ Sql.getJust graphId
             Algorithm algo _ <- lift $ Sql.getJust algoId
-            yield . (varId, graphId, hash,) . T.intercalate " " $
+            yield . mkTuple . T.intercalate " " $
                 [ showSqlKey varId
                 , "-a", algo
                 , "-k switch --log"
                 , showSqlKey varId <> ".log"
-                , fromMaybe "" varFlags
+                , fromMaybe "" flags
                 , path
                 ]
 
@@ -85,6 +90,7 @@ processProperty (varId, graphId, hash, var) = do
             .| C.mapM_ insertProperty
 
         liftIO $ removeFile propLog
+        Sql.update varId [VariantPropsStored =. True]
 
     logInfoN $ "Property done: " <> var
   where
@@ -108,7 +114,7 @@ processProperty (varId, graphId, hash, var) = do
 
 timingJobs
     :: Int -> Key GPU
-    -> ConduitT () (Key Variant, Key Implementation, Hash, Text) SqlM ()
+    -> ConduitT () (Text, Key Variant, Key Implementation, Hash, Text) SqlM ()
 timingJobs numRuns gpuId = do
     Sql.selectKeys [] [] .|> \algoKey ->
         Sql.selectSource [VariantAlgorithmId ==. algoKey] [] .|> toTimingJob
@@ -116,23 +122,26 @@ timingJobs numRuns gpuId = do
     toTimingJob
         :: Entity Variant
         -> ConduitT (Entity Variant)
-                    (Key Variant, Key Implementation, Hash, Text)
+                    (Text, Key Variant, Key Implementation, Hash, Text)
                     SqlM
                     ()
-    toTimingJob (Entity varId (Variant graphId algoId _ _ Nothing)) = do
-        logErrorN . mconcat $
-            [ "Algorithm #", showSqlKey algoId, " results missing for graph #"
-            , showSqlKey graphId, " variant #", showSqlKey varId ]
+    toTimingJob
+        (Entity varId (Variant graphId algoId _ _ Nothing _ _))
+        = logErrorN . mconcat $
+                [ "Algorithm #", showSqlKey algoId
+                , " results missing for graph #", showSqlKey graphId
+                , " variant #", showSqlKey varId ]
 
-    toTimingJob (Entity varId (Variant graphId algoId _ varFlags (Just hash)))
-      = Sql.selectSource [ImplementationAlgorithmId ==. algoId] [] .|> runImpl
+    toTimingJob
+        (Entity varId (Variant graphId algId _ varFlags (Just hash) _ _))
+        = Sql.selectSource [ImplementationAlgorithmId ==. algId] [] .|> runImpl
       where
         runImpl (Entity implId (Implementation _ name _ implFlags _ _)) = do
             whenNotExists (filters ++ [TotalTimerImplId ==. implId]) $ do
                 Graph _ path _ <- lift $ Sql.getJust graphId
-                Algorithm algo _ <- lift $ Sql.getJust algoId
+                Algorithm algo _ <- lift $ Sql.getJust algId
 
-                yield . (varId, implId, hash,) . T.intercalate " " $
+                yield . (tag name, varId, implId, hash,) . T.intercalate " " $
                     [ tag name , "-a"
                     , algo
                     , fromMaybe ("-k " <> name) implFlags
