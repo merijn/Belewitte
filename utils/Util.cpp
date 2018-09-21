@@ -49,7 +49,7 @@ dump_stack_trace(int exit_code)
     free(symbols);
 
     if (frame_count == max_frames) fprintf(stderr, "[truncated]\n");
-    exit(exit_code);
+    exit(exit_code | (1 << 7));
 }
 
 void printVals(void) {}
