@@ -23,7 +23,7 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Time.Clock (UTCTime, getCurrentTime)
 import Database.Persist.Sqlite
-    (Key, Entity(..), EntityField, Unique, (==.), (+=.))
+    (Filter, Key, Entity(..), EntityField, Unique, (=.), (==.), (+=.))
 import qualified Database.Persist.Sqlite as Sql
 import Lens.Micro.Extras (view)
 import System.Console.Haskeline hiding (Handler)
@@ -286,6 +286,27 @@ runBenchmarks numNodes numRuns = liftSql $ do
             .| parMapM taskHandler numNodes (withProcess procPool runTask)
             .| C.mapM_ (processTiming gpuId)
 
+resetRetries :: SqlM ()
+resetRetries = Sql.updateWhere [] [VariantRetryCount =. 0]
+
+resetProperties :: SqlM ()
+resetProperties = do
+    Sql.deleteWhere ([] :: [Filter GraphProp])
+    Sql.deleteWhere ([] :: [Filter StepProp])
+
+resetMeasurements :: SqlM ()
+resetMeasurements = do
+    Sql.deleteWhere ([] :: [Filter StepTimer])
+    Sql.deleteWhere ([] :: [Filter TotalTimer])
+
+resetModels :: SqlM ()
+resetModels = do
+    Sql.deleteWhere ([] :: [Filter PredictionModel])
+    Sql.deleteWhere ([] :: [Filter ModelGraphProperty])
+    Sql.deleteWhere ([] :: [Filter ModelStepProperty])
+    Sql.deleteWhere ([] :: [Filter UnknownPrediction])
+    Sql.deleteWhere ([] :: [Filter UnknownSet])
+
 commands :: String -> (InfoMod a, Parser (Input SqlM ()))
 commands name = (,) docs . hsubparser $ mconcat
     [ subCommand "add-gpu" "register a new GPU"
@@ -305,6 +326,18 @@ commands name = (,) docs . hsubparser $ mconcat
     , subCommand "run-benchmarks" "run benchmarks"
                  "Run benchmarks for missing registered configurations" $
                  runBenchmarks <$> parallelism <*> numRuns
+    , subCommand "reset-retries" "resets the retry count"
+                 "Reset the retry count for failed experiments" $
+                 pure $ liftSql resetRetries
+    , subCommand "reset-properties" "deletes logged properties"
+                 "Deletes the properties stored for each variant" $
+                 pure $ liftSql resetProperties
+    , subCommand "reset-measurements" "deletes timing measurements"
+                 "Delete all timing measurements" $
+                 pure $ liftSql resetMeasurements
+    , subCommand "reset-models" "deletes models"
+                 "Delete all stored models" $
+                 pure $ liftSql resetModels
     ]
   where
     docs = mconcat
