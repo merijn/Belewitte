@@ -142,7 +142,7 @@ timingJobs numRuns gpuId = do
                 Algorithm algo _ <- lift $ Sql.getJust algId
 
                 yield . (tag name, varId, implId, hash,) . T.intercalate " " $
-                    [ tag name , "-a"
+                    [ "\"" <> tag name <> "\"", "-a"
                     , algo
                     , fromMaybe ("-k " <> name) implFlags
                     , fromMaybe "" varFlags
@@ -151,7 +151,7 @@ timingJobs numRuns gpuId = do
                     ]
 
         filters = [TotalTimerGpuId ==. gpuId, TotalTimerVariantId ==. varId]
-        tag name = mconcat ["\"", showSqlKey varId, " ", name, "\""]
+        tag name = mconcat [ showSqlKey varId, " ", name]
 
 processTiming
     :: Key GPU -> (Key Variant, Key Implementation, Hash, Text) -> SqlM ()
