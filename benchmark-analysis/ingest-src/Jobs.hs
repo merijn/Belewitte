@@ -48,11 +48,17 @@ propertyJobs = Sql.selectSource [] [] .|> toPropJob
     toPropJob
         (Entity varId (Variant graphId algoId _ flags hash hasProps retries)) =
             case hash of
-                Nothing -> yieldJob
-                Just _ | not hasProps && retries < 5 -> yieldJob
-                       | not hasProps -> logWarnN $
-                         "Too many retries for variant #" <> showSqlKey varId
-                       | otherwise -> return ()
+                Nothing
+                    | retries < 5 -> yieldJob
+                    | otherwise -> logWarnN $
+                      "Hash missing, but too many retries for variant #"
+                      <> showSqlKey varId
+
+                Just _
+                    | not hasProps && retries < 5 -> yieldJob
+                    | not hasProps -> logWarnN $
+                      "Too many retries for variant #" <> showSqlKey varId
+                    | otherwise -> return ()
       where
         mkTuple = (showSqlKey varId,varId,graphId,hash,)
         yieldJob = do
