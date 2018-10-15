@@ -10,8 +10,8 @@ module ProcessPool
     , withProcess
     ) where
 
-import Control.Exception (Exception)
-import Control.Monad (guard)
+import Control.Exception (Exception, SomeException, try)
+import Control.Monad (guard, void)
 import Control.Monad.Catch (MonadMask, bracket, throwM, uninterruptibleMask_)
 import Data.Acquire (mkAcquireType, withAcquire, ReleaseType(ReleaseException))
 import Data.List (intercalate)
@@ -20,7 +20,10 @@ import qualified Data.Pool as Pool
 import qualified Data.Text as T
 import qualified Data.Time.LocalTime as Time
 import Data.Time.Calendar (DayOfWeek(Saturday,Sunday), dayOfWeek)
+import Network.HostName (getHostName)
+import System.Directory (removeFile)
 import System.Exit (ExitCode(ExitFailure))
+import System.FilePath ((<.>))
 import System.IO (BufferMode(LineBuffering), Handle)
 import qualified System.IO as System
 import System.Posix.Signals (sigKILL, signalProcess)
@@ -59,15 +62,18 @@ getJobTimeOut = liftIO $ do
 withProcessPool
     :: forall a m . (MonadLogger m, MonadMask m, MonadUnliftIO m)
     => Int -> GPU -> (Pool Process -> m a) -> m a
-withProcessPool n (GPU name _) = bracket createProcessPool destroyProcessPool
+withProcessPool n (GPU name _) f = do
+    hostName <- liftIO getHostName
+    bracket (createProcessPool hostName) destroyProcessPool f
   where
-    createProcessPool :: MonadIO m => m (Pool Process)
-    createProcessPool = withUnliftIO $ \(UnliftIO runInIO) -> Pool.createPool
-        (runInIO allocateProcess)
-        (runInIO . destroyProcess)
-        1
-        3153600000
-        n
+    createProcessPool :: MonadIO m => String -> m (Pool Process)
+    createProcessPool hostName = withUnliftIO $ \(UnliftIO runInIO) ->
+        Pool.createPool
+            (runInIO allocateProcess)
+            (runInIO . destroyProcess hostName)
+            1
+            3153600000
+            n
 
     destroyProcessPool :: MonadIO m => Pool Process -> m ()
     destroyProcessPool = liftIO . Pool.destroyAllResources
@@ -95,14 +101,21 @@ withProcessPool n (GPU name _) = bracket createProcessPool destroyProcessPool
             , exePath, "-L", libPath, "-W", "-S"
             ]
 
-    destroyProcess :: (MonadLogger m, MonadUnliftIO m) => Process -> m ()
-    destroyProcess Process{..} = do
+    destroyProcess
+        :: (MonadLogger m, MonadUnliftIO m) => String -> Process -> m ()
+    destroyProcess hostName Process{..} = do
         liftIO . uninterruptibleMask_ $ do
             Proc.getPid procHandle >>= mapM_ (signalProcess sigKILL)
             System.hClose inHandle
             System.hClose outHandle
             () <$ Proc.waitForProcess procHandle
+            tryRemoveFile $ "main.0" <.> show procId <.> hostName
+            tryRemoveFile $ ".PRUN_ENVIRONMENT" <.> show procId <.> hostName
         logInfoN $ "Destroyed process: " <> showText procId
+
+    tryRemoveFile :: FilePath -> IO ()
+    tryRemoveFile path =
+        void (try $ removeFile path :: IO (Either SomeException ()))
 
 checkProcess :: MonadIO m => Process -> m ()
 checkProcess Process{..} = liftIO $ do

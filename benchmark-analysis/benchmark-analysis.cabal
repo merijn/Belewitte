@@ -94,6 +94,7 @@ Executable Ingest
                ,        exceptions == 0.10.*
                ,        filepath == 1.4.*
                ,        haskeline == 0.7.4.2
+               ,        hostname == 1.0
                ,        microlens == 0.4.8.*
                ,        monad-logger == 0.3.28.*
                ,        memory == 0.14.*
