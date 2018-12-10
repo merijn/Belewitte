@@ -58,9 +58,9 @@ Library
                ,        monad-logger == 0.3.28.*
                ,        mtl == 2.2.1
                ,        optparse-applicative == 0.14.0.*
-               ,        persistent == 2.8.*
+               ,        persistent == 2.9.*
                ,        persistent-template == 2.5.*
-               ,        persistent-sqlite == 2.8.*
+               ,        persistent-sqlite == 2.9.*
                ,        resourcet == 1.2.*
                ,        resource-pool
                ,        text
@@ -100,7 +100,7 @@ Executable Ingest
                ,        memory == 0.14.*
                ,        mtl == 2.2.1
                ,        process == 1.6.*
-               ,        persistent-sqlite == 2.8.*
+               ,        persistent-sqlite == 2.9.*
                ,        resourcet == 1.2.*
                ,        resource-pool
                ,        text
@@ -135,7 +135,7 @@ Executable Model
                ,        interpolate == 0.1.1
                ,        megaparsec == 6.5.*
                ,        monad-logger == 0.3.28.*
-               ,        persistent-sqlite == 2.8.*
+               ,        persistent-sqlite == 2.9.*
                ,        resourcet == 1.2.*
                ,        streaming-commons == 0.1.*
                ,        text
@@ -160,7 +160,7 @@ Executable Plot
                ,        exceptions == 0.10.*
                ,        monad-logger == 0.3.28.*
                ,        optparse-applicative == 0.14.0.*
-               ,        persistent-sqlite == 2.8.*
+               ,        persistent-sqlite == 2.9.*
                ,        process == 1.6.*
                ,        resourcet == 1.2.*
                ,        text

@@ -3,7 +3,7 @@ packages: evolve/*.cabal benchmark-analysis/*.cabal
 source-repository-package
   type: git
   location: https://github.com/merijn/persistent.git
-  tag: 16c8c68a52216728a1fae00be194d5b988d19a55
+  tag: 613a1413ad66272f3c7159f7c73d52a44e97b7d5
   subdir: persistent-sqlite
 
 jobs: 8
