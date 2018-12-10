@@ -119,9 +119,9 @@ processProperty (varId, graphId, hash, var) = do
     insertProperty Prediction{} = return ()
 
 timingJobs
-    :: Int -> Key GPU
+    :: Int -> Key Platform
     -> ConduitT () (Text, Key Variant, Key Implementation, Hash, Text) SqlM ()
-timingJobs numRuns gpuId = do
+timingJobs numRuns platformId = do
     Sql.selectKeys [] [] .|> \algoKey ->
         Sql.selectSource [VariantAlgorithmId ==. algoKey] [] .|> toTimingJob
   where
@@ -156,12 +156,13 @@ timingJobs numRuns gpuId = do
                     , path
                     ]
 
-        filters = [TotalTimerGpuId ==. gpuId, TotalTimerVariantId ==. varId]
+        filters = [ TotalTimerPlatformId ==. platformId
+                  , TotalTimerVariantId ==. varId ]
         tag name = mconcat [ showSqlKey varId, " ", name]
 
 processTiming
-    :: Key GPU -> (Key Variant, Key Implementation, Hash, Text) -> SqlM ()
-processTiming gpuId (varId, implId, hash, var) = do
+    :: Key Platform -> (Key Variant, Key Implementation, Hash, Text) -> SqlM ()
+processTiming platformId (varId, implId, hash, var) = do
     logInfoN $ "Timing: " <> var
     timestamp <- liftIO getCurrentTime
     resultHash <- computeHash outputFile
@@ -170,8 +171,8 @@ processTiming gpuId (varId, implId, hash, var) = do
        then do
            logErrorN . mconcat $
             [ "Implementation #", showSqlKey implId
-            , " has wrong results for variant #", showSqlKey varId, " on GPU #"
-            , showSqlKey gpuId ]
+            , " has wrong results for variant #", showSqlKey varId
+            , " on Platform #", showSqlKey platformId ]
         else do
             liftIO $ removeFile outputFile
             runConduit $
@@ -189,7 +190,9 @@ processTiming gpuId (varId, implId, hash, var) = do
 
     insertTiming :: UTCTime -> Timer -> SqlM ()
     insertTiming ts (TotalTiming Timing{..}) = Sql.insert_ $
-        TotalTimer gpuId varId implId name minTime avgTime maxTime stddev ts
+        TotalTimer platformId varId implId name minTime avgTime maxTime stddev
+                   ts
 
     insertTiming ts (StepTiming n Timing{..}) = Sql.insert_ $
-        StepTimer gpuId varId n implId name minTime avgTime maxTime stddev ts
+        StepTimer platformId varId n implId name minTime avgTime maxTime stddev
+                  ts

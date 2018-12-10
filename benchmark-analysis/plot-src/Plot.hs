@@ -60,7 +60,7 @@ data PlotOptions =
     PlotOptions
       { plotType :: PlotType
       , getAlgoId :: SqlM (Key Algorithm)
-      , getGpuId :: SqlM (Key GPU)
+      , getPlatformId :: SqlM (Key Platform)
       , getGraphs :: SqlM (Set Text)
       , getImplementations :: Key Algorithm -> SqlM (IntMap Implementation)
       , plotConfig :: PlotConfig
@@ -68,8 +68,8 @@ data PlotOptions =
 
 plotOptions :: PlotType -> Parser PlotOptions
 plotOptions plottype =
-  PlotOptions plottype <$> algorithmParser <*> gpuParser <*> graphs <*> impls
-                       <*> config
+  PlotOptions plottype <$> algorithmParser <*> platformParser <*> graphs
+                       <*> impls <*> config
   where
     baseConfig = case plottype of
         PlotLevels -> pure $ PlotConfig "Levels" False
@@ -231,7 +231,7 @@ plot PlotConfig{..} plotName impls query convert
 main :: IO ()
 main = runSqlM commands $ \PlotOptions{..} -> do
     algoId <- getAlgoId
-    gpuId <- getGpuId
+    platformId <- getPlatformId
     impls <- getImplementations algoId
     variants <- getGraphs >>= queryVariants algoId
 
@@ -241,14 +241,14 @@ main = runSqlM commands $ \PlotOptions{..} -> do
                 graphId <- variantGraphId <$> Sql.getJust variantId
                 name <- graphName <$> Sql.getJust graphId
 
-                let query = levelTimePlotQuery gpuId variantId
+                let query = levelTimePlotQuery platformId variantId
                     pdfName = name <> "-levels"
 
                 plot plotConfig pdfName impls query $ C.map (first showText)
 
         PlotTotals -> do
-            let variantQuery = variantInfoQuery algoId gpuId
-                timeQuery = timePlotQuery algoId gpuId variants
+            let variantQuery = variantInfoQuery algoId platformId
+                timeQuery = timePlotQuery algoId platformId variants
                 variantFilter VariantInfo{variantId} =
                     S.member variantId variants
 

@@ -6,7 +6,7 @@
 {-# LANGUAGE TypeFamilies #-}
 module Main(main) where
 
-import Control.Monad (forM_, void)
+import Control.Monad (forM_)
 import Data.Bifunctor (first)
 import Data.List (sortBy)
 import Data.Ord (comparing)
@@ -42,37 +42,37 @@ reportModelStats ModelStats{..} = liftIO $ do
 
 main :: IO ()
 main = runSqlM commands $ \case
-    Train{getAlgoId,getGpuId,getConfig} -> do
+    Train{getAlgoId,getPlatformId,getConfig} -> do
         algoId <- getAlgoId
-        gpuId <- getGpuId
+        platformId <- getPlatformId
         trainConfig <- getConfig
-        modelId <- fst <$> trainModel algoId gpuId trainConfig
+        modelId <- fst <$> trainModel algoId platformId trainConfig
         liftIO $ print (fromSqlKey modelId)
 
     Query{getModel} -> do
         modelId <- fst <$> getModel
         getModelStats modelId >>= reportModelStats
 
-    Validate{getAlgoId,getGpuId,getModel} -> do
+    Validate{getAlgoId,getPlatformId,getModel} -> do
         algoId <- getAlgoId
-        gpuId <- getGpuId
+        platformId <- getPlatformId
         (modelId, model) <- getModel
         trainConfig <- getModelTrainingConfig modelId
-        validateModel algoId gpuId model trainConfig
+        validateModel algoId platformId model trainConfig
 
-    Evaluate{getAlgoId,getGpuId,getModel,defaultImpl,reportConfig} -> void $ do
+    Evaluate{getAlgoId,getPlatformId,getModel,defaultImpl,reportConfig} -> do
         algoId <- getAlgoId
-        gpuId <- getGpuId
+        platId <- getPlatformId
         (modelId, model) <- getModel
         trainConfig <- getModelTrainingConfig modelId
-        evaluateModel algoId gpuId defaultImpl reportConfig model trainConfig
+        evaluateModel algoId platId defaultImpl reportConfig model trainConfig
 
-    Compare{getAlgoId,getGpuId,reportConfig} -> void $ do
+    Compare{getAlgoId,getPlatformId,reportConfig} -> do
         algoId <- getAlgoId
-        gpuId <- getGpuId
-        compareImplementations algoId gpuId reportConfig
+        platformId <- getPlatformId
+        compareImplementations algoId platformId reportConfig
 
-    Export{getAlgoId,getModel,cppFile} -> void $ do
+    Export{getAlgoId,getModel,cppFile} -> do
         algoId <- getAlgoId
         impls <- queryImplementations algoId
         (modelId, model) <- getModel

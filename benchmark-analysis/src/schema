@@ -1,7 +1,7 @@
-GPU
+Platform
     name Text
     prettyName Text Maybe
-    UniqGPU name
+    UniqPlatform name
     deriving Eq Show
 
 Graph
@@ -58,7 +58,7 @@ StepProp
     deriving Eq Show
 
 TotalTimer
-    gpuId GPUId
+    platformId PlatformId
     variantId VariantId
     implId ImplementationId
     name Text
@@ -67,11 +67,11 @@ TotalTimer
     maxTime Double
     stdDev Double
     timestamp UTCTime
-    Primary gpuId variantId implId name
+    Primary platformId variantId implId name
     deriving Eq Show
 
 StepTimer
-    gpuId GPUId
+    platformId PlatformId
     variantId VariantId
     stepId Int
     implId ImplementationId
@@ -81,11 +81,11 @@ StepTimer
     maxTime Double
     stdDev Double
     timestamp UTCTime
-    Primary gpuId variantId stepId implId name
+    Primary platformId variantId stepId implId name
     deriving Eq Show
 
 PredictionModel
-    gpuId GPUId
+    platformId PlatformId
     model Model
     trainFraction Double
     trainSeed Int

@@ -61,8 +61,8 @@ getJobTimeOut = liftIO $ do
 
 withProcessPool
     :: forall a m . (MonadLogger m, MonadMask m, MonadUnliftIO m)
-    => Int -> GPU -> (Pool Process -> m a) -> m a
-withProcessPool n (GPU name _) f = do
+    => Int -> Platform -> (Pool Process -> m a) -> m a
+withProcessPool n (Platform name _) f = do
     hostName <- liftIO getHostName
     bracket (createProcessPool hostName) destroyProcessPool f
   where

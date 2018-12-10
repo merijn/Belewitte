@@ -256,13 +256,13 @@ data Report = Report
 
 evaluateModel
     :: Key Algorithm
-    -> Key GPU
+    -> Key Platform
     -> Either Int Text
     -> Report
     -> Model
     -> TrainingConfig
     -> SqlM ()
-evaluateModel algoId gpuId defImpl reportCfg@Report{..} model trainConfig = do
+evaluateModel algoId platId defImpl reportCfg@Report{..} model trainConfig = do
     impls <- queryImplementations algoId
     let lookupByName :: Text -> Maybe Int
         lookupByName t = fmap fst
@@ -282,7 +282,7 @@ evaluateModel algoId gpuId defImpl reportCfg@Report{..} model trainConfig = do
 
     printTotalStatistics reportCfg impls stats
   where
-    query = getTotalQuery algoId gpuId trainConfig
+    query = getTotalQuery algoId platId trainConfig
 
     addBestNonSwitching
         :: IntMap Implementation -> VariantAggregate -> VariantAggregate
@@ -302,8 +302,8 @@ evaluateModel algoId gpuId defImpl reportCfg@Report{..} model trainConfig = do
           VU.minimum . VU.map snd . VU.filter (isCoreImpl . fst) $ implTimes
 
 compareImplementations
-    :: Key Algorithm -> Key GPU -> Report -> SqlM ()
-compareImplementations algoId gpuId reportConfig@Report{..} = do
+    :: Key Algorithm -> Key Platform -> Report -> SqlM ()
+compareImplementations algoId platformId reportConfig@Report{..} = do
     impls <- queryImplementations algoId
     stats <- runSqlQuery query $
         C.map addBestNonSwitching
@@ -311,7 +311,7 @@ compareImplementations algoId gpuId reportConfig@Report{..} = do
 
     printTotalStatistics reportConfig impls stats
   where
-    query = variantInfoQuery algoId gpuId
+    query = variantInfoQuery algoId platformId
 
     addBestNonSwitching :: VariantInfo -> VariantAggregate
     addBestNonSwitching VariantInfo{..} = VariantAgg

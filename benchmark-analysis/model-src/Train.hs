@@ -64,10 +64,10 @@ data TrainingConfig = TrainConfig
 
 splitQuery
     :: Key Algorithm
-    -> Key GPU
+    -> Key Platform
     -> TrainingConfig
     -> SqlM (Query StepInfo, Query StepInfo)
-splitQuery algoId gpuId cfg@TrainConfig{..} = do
+splitQuery algoId platformId cfg@TrainConfig{..} = do
     rowCount <- runSqlQueryCount query
 
     let trainingSize :: Integer
@@ -75,19 +75,20 @@ splitQuery algoId gpuId cfg@TrainConfig{..} = do
 
     return $ randomizeQuery trainSeed trainingSize query
   where
-    query = getTotalQuery algoId gpuId cfg
+    query = getTotalQuery algoId platformId cfg
 
 getTrainingQuery
-    :: Key Algorithm -> Key GPU -> TrainingConfig -> SqlM (Query StepInfo)
-getTrainingQuery algoId gpuId = fmap fst . splitQuery algoId gpuId
+    :: Key Algorithm -> Key Platform -> TrainingConfig -> SqlM (Query StepInfo)
+getTrainingQuery algoId platformId = fmap fst . splitQuery algoId platformId
 
 getValidationQuery
-    :: Key Algorithm -> Key GPU -> TrainingConfig -> SqlM (Query StepInfo)
-getValidationQuery algoId gpuId = fmap snd . splitQuery algoId gpuId
+    :: Key Algorithm -> Key Platform -> TrainingConfig -> SqlM (Query StepInfo)
+getValidationQuery algoId platformId = fmap snd . splitQuery algoId platformId
 
-getTotalQuery :: Key Algorithm -> Key GPU -> TrainingConfig -> Query StepInfo
-getTotalQuery algoId gpuId TrainConfig{..} =
-  stepInfoQuery algoId gpuId trainGraphProps trainStepProps
+getTotalQuery
+    :: Key Algorithm -> Key Platform -> TrainingConfig -> Query StepInfo
+getTotalQuery algoId platformId TrainConfig{..} =
+  stepInfoQuery algoId platformId trainGraphProps trainStepProps
 
 getModelTrainingConfig :: Key PredictionModel -> SqlM TrainingConfig
 getModelTrainingConfig modelId = do
@@ -145,11 +146,11 @@ getModelStats modelId = do
 
 trainModel
     :: Key Algorithm
-    -> Key GPU
+    -> Key Platform
     -> TrainingConfig
     -> SqlM (Key PredictionModel, Model)
-trainModel algoId gpuId trainCfg@TrainConfig{..} = do
-    trainQuery <- fmap reduceInfo <$> getTrainingQuery algoId gpuId trainCfg
+trainModel algoId platId trainCfg@TrainConfig{..} = do
+    trainQuery <- fmap reduceInfo <$> getTrainingQuery algoId platId trainCfg
     numEntries <- runSqlQueryCount trainQuery
 
     Just propCount <- fmap (VU.length . fst) <$> runSqlQuery trainQuery C.head
@@ -217,7 +218,7 @@ trainModel algoId gpuId trainCfg@TrainConfig{..} = do
         withCheckedProcessCleanup (process outFd) handleStreams
 
     modelId <- Sql.insert $
-        PredictionModel gpuId model trainFraction trainSeed modelUnknownCount
+        PredictionModel platId model trainFraction trainSeed modelUnknownCount
                         timestamp
 
     forM_ (M.toList modelGraphPropImportance) $

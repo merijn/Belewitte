@@ -128,11 +128,11 @@ data StepInfo =
     } deriving (Show)
 
 stepInfoQuery
-    :: Key Algorithm -> Key GPU -> Set Text -> Set Text -> Query StepInfo
-stepInfoQuery algoId gpuId graphProperties stepProperties = Query{..}
+    :: Key Algorithm -> Key Platform -> Set Text -> Set Text -> Query StepInfo
+stepInfoQuery algoId platformId graphProperties stepProperties = Query{..}
   where
     params :: [PersistValue]
-    params = [toPersistValue gpuId, toPersistValue algoId]
+    params = [toPersistValue platformId, toPersistValue algoId]
 
     whereClauses :: Set Text -> Text
     whereClauses = T.intercalate " OR " . map clause . S.toAscList
@@ -213,7 +213,7 @@ INNER JOIN
     FROM StepTimer
     INNER JOIN IndexedImpls
     ON StepTimer.implId = IndexedImpls.implId
-    WHERE gpuId = ?
+    WHERE platformId = ?
     GROUP BY variantId, stepId
 
 ) AS Step
@@ -251,11 +251,11 @@ data VariantInfo =
     , variantTimings :: {-# UNPACK #-} !(Vector (Int64, Double))
     } deriving (Show)
 
-variantInfoQuery :: Key Algorithm -> Key GPU -> Query VariantInfo
-variantInfoQuery algoId gpuId = Query{..}
+variantInfoQuery :: Key Algorithm -> Key Platform -> Query VariantInfo
+variantInfoQuery algoId platformId = Query{..}
   where
     params :: [PersistValue]
-    params = [ toPersistValue gpuId, toPersistValue gpuId
+    params = [ toPersistValue platformId, toPersistValue platformId
              , toPersistValue algoId
              ]
 
@@ -317,7 +317,7 @@ LEFT JOIN
         FROM StepTimer
         INNER JOIN Implementation
         ON StepTimer.implId = Implementation.id
-        WHERE gpuId = ?
+        WHERE platformId = ?
         GROUP BY variantId, stepId
     ) AS Step
     GROUP BY variantId
@@ -334,7 +334,7 @@ INNER JOIN
       FROM TotalTimer
       INNER JOIN IndexedImpls
       ON TotalTimer.implId = IndexedImpls.implId
-      WHERE gpuId = ? AND TotalTimer.name = "computation"
+      WHERE platformId = ? AND TotalTimer.name = "computation"
       GROUP BY variantId
 ) AS Total
 ON Variant.id = Total.variantId
@@ -346,13 +346,13 @@ ORDER BY Variant.id ASC|]
 
 timePlotQuery
     :: Key Algorithm
-    -> Key GPU
+    -> Key Platform
     -> Set (Key Variant)
     -> Query (Text, Vector (Int64, Double))
-timePlotQuery algoId gpuId variants = Query{..}
+timePlotQuery algoId platformId variants = Query{..}
   where
     params :: [PersistValue]
-    params = [toPersistValue gpuId, toPersistValue algoId]
+    params = [toPersistValue platformId, toPersistValue algoId]
 
     havingClause = T.intercalate " OR " . map clause . S.toList
       where
@@ -400,7 +400,7 @@ INNER JOIN
     FROM TotalTimer
     INNER JOIN IndexedImpls
     ON IndexedImpls.implId = TotalTimer.implId
-    WHERE gpuId = ? AND name = "computation"
+    WHERE platformId = ? AND name = "computation"
     GROUP BY variantId
     HAVING #{havingClause variants}
 ) AS Total
@@ -412,11 +412,11 @@ WHERE Variant.name = "default" AND Variant.algorithmId = ?
 ORDER BY Variant.id ASC|]
 
 levelTimePlotQuery
-    :: Key GPU -> Key Variant -> Query (Int64, Vector (Int64, Double))
-levelTimePlotQuery gpuId variant = Query{..}
+    :: Key Platform -> Key Variant -> Query (Int64, Vector (Int64, Double))
+levelTimePlotQuery platformId variant = Query{..}
   where
     params :: [PersistValue]
-    params = [toPersistValue gpuId, toPersistValue variant]
+    params = [toPersistValue platformId, toPersistValue variant]
 
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
@@ -463,6 +463,6 @@ ON IndexedImpls.implId = StepTimer.implId
 
 LEFT JOIN ImplVector
 
-WHERE gpuId = ? AND variantId = ?
+WHERE platformId = ? AND variantId = ?
 GROUP BY stepId
 ORDER BY stepId ASC|]

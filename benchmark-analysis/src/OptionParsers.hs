@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
 module OptionParsers
-    ( gpuParser
+    ( platformParser
     , algorithmParser
     , intervalReader
     , optionParserFromValues
@@ -33,19 +33,19 @@ import Text.Megaparsec.Char.Lexer (decimal)
 import Core
 import Schema
 
-gpuParser :: Parser (SqlM (Key GPU))
-gpuParser = queryGPU <$> gpuOpt
+platformParser :: Parser (SqlM (Key Platform))
+platformParser = queryPlatform <$> platformOpt
   where
-    gpuOpt :: Parser (Either Text Int64)
-    gpuOpt = option (Right <$> auto <|> Left <$> str) $ mconcat
-        [ metavar "ID", short 'g', long "gpu"
-        , help "GPU results to use, numeric or textual" ]
+    platformOpt :: Parser (Either Text Int64)
+    platformOpt = option (Right <$> auto <|> Left <$> str) $ mconcat
+        [ metavar "ID", short 'p', long "platform"
+        , help "Platform results to use, numeric or textual" ]
 
-    queryGPU :: Either Text Int64 -> SqlM (Key GPU)
-    queryGPU (Right n) = validateKey n
-    queryGPU (Left name) = do
-        Just Entity{entityKey} <-
-            logIfFail "No GPU with name" name . Sql.getBy $ UniqGPU name
+    queryPlatform :: Either Text Int64 -> SqlM (Key Platform)
+    queryPlatform (Right n) = validateKey n
+    queryPlatform (Left name) = do
+        Just Entity{entityKey} <- logIfFail "No Platform with name" name $
+            Sql.getBy $ UniqPlatform name
         return entityKey
 
 algorithmParser :: Parser (SqlM (Key Algorithm))

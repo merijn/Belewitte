@@ -43,26 +43,26 @@ dropProps input db
 data ModelCommand
     = Train
       { getAlgoId :: SqlM (Key Algorithm)
-      , getGpuId :: SqlM (Key GPU)
+      , getPlatformId :: SqlM (Key Platform)
       , getConfig :: SqlM TrainingConfig
       }
     | Query
       { getModel :: SqlM (Key PredictionModel, Model) }
     | Validate
       { getAlgoId :: SqlM (Key Algorithm)
-      , getGpuId :: SqlM (Key GPU)
+      , getPlatformId :: SqlM (Key Platform)
       , getModel :: SqlM (Key PredictionModel, Model)
       }
     | Evaluate
       { getAlgoId :: SqlM (Key Algorithm)
-      , getGpuId :: SqlM (Key GPU)
+      , getPlatformId :: SqlM (Key Platform)
       , getModel :: SqlM (Key PredictionModel, Model)
       , defaultImpl :: Either Int Text
       , reportConfig :: Report
       }
     | Compare
       { getAlgoId :: SqlM (Key Algorithm)
-      , getGpuId :: SqlM (Key GPU)
+      , getPlatformId :: SqlM (Key Platform)
       , reportConfig :: Report
       }
     | Export
@@ -75,20 +75,21 @@ commands :: String -> (InfoMod a, Parser ModelCommand)
 commands name = (,) docs . hsubparser $ mconcat
     [ subCommand "train" "train a model"
         "Train a new model" $
-        Train <$> algorithmParser <*> gpuParser <*> trainingConfig
+        Train <$> algorithmParser <*> platformParser <*> trainingConfig
     , subCommand "query" "report model info"
         "Report model info & statistics" $ Query <$> modelParser
     , subCommand "validate" "validate model accuracy"
         "Compute and report a model's accuracy on validation dataset and full \
-        \dataset" $ Validate <$> algorithmParser <*> gpuParser <*> modelParser
+        \dataset" $ Validate <$> algorithmParser <*> platformParser
+                             <*> modelParser
     , subCommand "evaluate" "evaluate model performance"
         "Evaluate BDT model performance on full dataset and compare against \
         \performance of other implementations" $
-        Evaluate <$> algorithmParser <*> gpuParser <*> modelParser
+        Evaluate <$> algorithmParser <*> platformParser <*> modelParser
                  <*> defaultImplParser <*> reportParser False
     , subCommand "compare" "compare implementation performance"
         "Compare the performance of different implementations" $
-        Compare <$> algorithmParser <*> gpuParser <*> reportParser True
+        Compare <$> algorithmParser <*> platformParser <*> reportParser True
     , subCommand "export" "export model to C++"
         "Export BDT model to C++ file" $
         Export <$> algorithmParser <*> modelParser <*> cppFile
@@ -99,8 +100,7 @@ commands name = (,) docs . hsubparser $ mconcat
       , header $ name ++ " - a tool for generating and validating BDT models"
       , progDesc
         "Generate, validate, evaluate, and export Binary Decision Tree (BDT) \
-        \models for predicing which GPU implementation to use for a GPU \
-        \algorithm."
+        \models for predicting which implementation to use for an algorithm."
       ]
 
     subCommand cmd hdr desc parser = command cmd . info parser $ mconcat

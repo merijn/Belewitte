@@ -132,11 +132,11 @@ getInput = getInputWith checkEmpty "Empty input not allowed!"
         | T.null txt = return Nothing
         | otherwise = return $ Just txt
 
-addGPU :: Input SqlM ()
-addGPU = do
-    gpuName <- getInput "GPU Slurm Name"
-    prettyName <- getOptionalInput "GPU Pretty Name"
-    liftSql . Sql.insert_ $ GPU gpuName prettyName
+addPlatform :: Input SqlM ()
+addPlatform = do
+    platformName <- getInput "Platform Slurm Name"
+    prettyName <- getOptionalInput "Platform Pretty Name"
+    liftSql . Sql.insert_ $ Platform platformName prettyName
 
 addGraphs :: [FilePath] -> Input SqlM ()
 addGraphs paths = do
@@ -187,8 +187,8 @@ addVariant = do
 
 importResults :: Input SqlM ()
 importResults = do
-    Entity gpuId _ <- getInputWithSqlCompletion
-        GPUName UniqGPU "GPU Name"
+    Entity platformId _ <- getInputWithSqlCompletion
+        PlatformName UniqPlatform "Platform Name"
 
     Entity algoId _ <- getInputWithSqlCompletion
         AlgorithmName UniqAlgorithm "Algorithm Name"
@@ -205,7 +205,7 @@ importResults = do
         .| C.decode C.utf8
         .| C.map (T.replace "," "")
         .| conduitParse externalResult
-        .| C.mapM_ (insertResult gpuId algoId implId timestamp)
+        .| C.mapM_ (insertResult platformId algoId implId timestamp)
   where
     checkExists :: MonadIO m => Text -> m (Maybe FilePath)
     checkExists txt = bool Nothing (Just path) <$> liftIO (doesFileExist path)
@@ -213,13 +213,13 @@ importResults = do
         path = T.unpack txt
 
     insertResult
-        :: Key GPU
+        :: Key Platform
         -> Key Algorithm
         -> Key Implementation
         -> UTCTime
         -> ExternalResult
         -> SqlM ()
-    insertResult gpuId algoId implId ts (Result gname varName Timing{..}) = do
+    insertResult platId algoId implId ts (Result gname varName Timing{..}) = do
         [graphId] <- logIfFail "More than one graph found for" gname $
             Sql.selectKeysList [GraphName ==. gname] []
 
@@ -229,7 +229,7 @@ importResults = do
             fmap entityKey <$> Sql.getBy uniqVariant
 
         Sql.insert_ $
-            TotalTimer gpuId varId implId name minTime avgTime maxTime stddev ts
+          TotalTimer platId varId implId name minTime avgTime maxTime stddev ts
       where
         --FIXME get from command
         variantName
@@ -275,18 +275,18 @@ runTask Process{..} (label, x, y, z, cmd) = handleError $ do
 
 runBenchmarks :: Int -> Int -> Input SqlM ()
 runBenchmarks numNodes numRuns = liftSql $ do
-    -- FIXME hardcoded GPU
-    withProcessPool numNodes (GPU "TitanX" Nothing) $ \procPool -> runConduit $
-        propertyJobs
+    -- FIXME hardcoded Platform
+    withProcessPool numNodes (Platform "TitanX" Nothing) $ \procPool ->
+        runConduit $ propertyJobs
         .| parMapM taskHandler numNodes (withProcess procPool runTask)
         .| C.mapM_ processProperty
 
-    gpus <- Sql.selectList [] []
-    forM_ gpus $ \(Entity gpuId gpu) -> do
-        withProcessPool numNodes gpu $ \procPool -> runConduit $
-            timingJobs numRuns gpuId
+    platforms <- Sql.selectList [] []
+    forM_ platforms $ \(Entity platformId platform) -> do
+        withProcessPool numNodes platform $ \procPool -> runConduit $
+            timingJobs numRuns platformId
             .| parMapM taskHandler numNodes (withProcess procPool runTask)
-            .| C.mapM_ (processTiming gpuId)
+            .| C.mapM_ (processTiming platformId)
 
 resetRetries :: SqlM ()
 resetRetries = Sql.updateWhere [] [VariantRetryCount =. 0]
@@ -311,8 +311,8 @@ resetModels = do
 
 commands :: String -> (InfoMod a, Parser (Input SqlM ()))
 commands name = (,) docs . hsubparser $ mconcat
-    [ subCommand "add-gpu" "register a new GPU"
-        "Register a new GPU in the database." $ pure addGPU
+    [ subCommand "add-platform" "register a new platform"
+        "Register a new platform in the database." $ pure addPlatform
     , subCommand "add-graphs" "register graphs"
         "Register new graphs in the database." $
         addGraphs <$> some (strArgument graphFile)

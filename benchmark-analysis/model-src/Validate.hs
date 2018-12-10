@@ -16,15 +16,16 @@ import Query
 import Schema
 import Train
 
-validateModel :: Key Algorithm -> Key GPU -> Model -> TrainingConfig -> SqlM ()
-validateModel algoId gpuId model config = do
-    validation <- getValidationQuery algoId gpuId config
+validateModel
+    :: Key Algorithm -> Key Platform -> Model -> TrainingConfig -> SqlM ()
+validateModel algoId platformId model config = do
+    validation <- getValidationQuery algoId platformId config
     computeResults "validation" $ reduceInfo <$> validation
     computeResults "total" $ reduceInfo <$> total
   where
     reduceInfo StepInfo{..} = (stepProps, stepBestImpl)
 
-    total = getTotalQuery algoId gpuId config
+    total = getTotalQuery algoId platformId config
 
     computeResults name query = do
         result <- runSqlQuery predictions $ C.foldl aggregate (0,0,0)
