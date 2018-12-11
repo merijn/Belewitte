@@ -12,7 +12,7 @@
 using namespace std;
 using namespace boost::filesystem;
 
-static const char *execName = "normalise";
+static const char *execName = "normalise-graph";
 
 static void __attribute__((noreturn))
 usage(int exitCode = EXIT_FAILURE)

@@ -5,7 +5,8 @@ BASE := .
 include Common.mk
 include Rules.mk
 
-EXES := main normalise reorder-graph check-degree print-graph graph-details
+EXES := main normalise-graph reorder-graph check-degree print-graph \
+        graph-details
 
 ifeq ($(UNAME),Darwin)
 $(call santargets,main): \
@@ -30,7 +31,7 @@ tsan: $(foreach exe,$(EXES),$(exe).tsan)
 
 -include $(patsubst %.cpp, .build/%.d, $(wildcard *.cpp))
 
-$(call sanobjects,$(DEST)/main) $(call sanobjects,$(DEST)/normalise) \
+$(call sanobjects,$(DEST)/main) $(call sanobjects,$(DEST)/normalise-graph) \
     $(call sanobjects,$(DEST)/graph-details): CXXFLAGS+=$(BOOST_CXX_FLAGS)
 
 $(call santargets,main): main% : $(DEST)/main%.o $(DEST)/AlgorithmConfig%.o \
@@ -39,7 +40,7 @@ $(call santargets,main): main% : $(DEST)/main%.o $(DEST)/AlgorithmConfig%.o \
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $(BOOST_LD_FLAGS) -lboost_regex -lboost_system -lboost_filesystem $^ -o $@
 
-$(call santargets,normalise): normalise%: $(DEST)/normalise%.o \
+$(call santargets,normalise-graph): normalise-graph%: $(DEST)/normalise-graph%.o \
       $(LIBS)/libutils%.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $(BOOST_LD_FLAGS) -lboost_system -lboost_filesystem $^ -o $@
