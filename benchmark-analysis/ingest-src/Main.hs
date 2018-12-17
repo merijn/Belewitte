@@ -138,12 +138,14 @@ addGPU = do
     prettyName <- getOptionalInput "GPU Pretty Name"
     liftSql . Sql.insert_ $ GPU gpuName prettyName
 
-addGraphs :: [FilePath] -> SqlM ()
-addGraphs = mapM_ $ \path -> do
-    liftIO $ doesFileExist path >>= guard
-    let (graphName, ext) = splitExtension $ takeFileName path
-    liftIO $ guard (ext == ".graph")
-    Sql.insert_ $ Graph (T.pack graphName) (T.pack path) Nothing
+addGraphs :: [FilePath] -> Input SqlM ()
+addGraphs paths = do
+    datasetTag <- getInput "Dataset Tag"
+    liftSql . forM_ paths $ \path -> do
+        liftIO $ doesFileExist path >>= guard
+        let (graphName, ext) = splitExtension $ takeFileName path
+        liftIO $ guard (ext == ".graph")
+        Sql.insert_ $ Graph (T.pack graphName) datasetTag (T.pack path) Nothing
 
 addAlgorithm :: Input SqlM ()
 addAlgorithm = do
@@ -313,7 +315,7 @@ commands name = (,) docs . hsubparser $ mconcat
         "Register a new GPU in the database." $ pure addGPU
     , subCommand "add-graphs" "register graphs"
         "Register new graphs in the database." $
-        liftSql . addGraphs <$> some (strArgument graphFile)
+        addGraphs <$> some (strArgument graphFile)
     , subCommand "add-algorithm" "register a new algorithm"
         "Register a new algorithm in the database." $ pure addAlgorithm
     , subCommand "add-implementation" "register a new implementation"

@@ -6,9 +6,11 @@ GPU
 
 Graph
     name Text
+    dataset Text
     path Text
     prettyName Text Maybe
     UniqGraph path
+    UniqGraphName name dataset
     deriving Eq Show
 
 GraphProp

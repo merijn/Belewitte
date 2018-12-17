@@ -62,7 +62,7 @@ propertyJobs = Sql.selectSource [] [] .|> toPropJob
       where
         mkTuple = (showSqlKey varId,varId,graphId,hash,)
         yieldJob = do
-            Graph _ path _ <- lift $ Sql.getJust graphId
+            Graph _ _ path _ <- lift $ Sql.getJust graphId
             Algorithm algo _ <- lift $ Sql.getJust algoId
             yield . mkTuple . T.intercalate " " $
                 [ showSqlKey varId
@@ -144,7 +144,7 @@ timingJobs numRuns gpuId = do
       where
         runImpl (Entity implId (Implementation _ name _ implFlags _ _)) = do
             whenNotExists (filters ++ [TotalTimerImplId ==. implId]) $ do
-                Graph _ path _ <- lift $ Sql.getJust graphId
+                Graph _ _ path _ <- lift $ Sql.getJust graphId
                 Algorithm algo _ <- lift $ Sql.getJust algId
 
                 yield . (tag name, varId, implId, hash,) . T.intercalate " " $
