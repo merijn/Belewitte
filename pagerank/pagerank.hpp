@@ -42,8 +42,8 @@ __global__ void
 vertexPullWarpNoDiv(size_t, size_t, InverseVertexCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
 
 __global__ void
-updateRankStructEdgeList(StructEdgeListCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
+structEdgeListCSR(StructEdgeListCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
 
 __global__ void
-updateRankEdgeList(EdgeListCSR<unsigned,unsigned> *, float *pagerank, float *new_pagerank);
+edgeListCSR(EdgeListCSR<unsigned,unsigned> *, float *pagerank, float *new_pagerank);
 #endif

@@ -1,7 +1,7 @@
 #include "pagerank.hpp"
 
 __global__ void
-updateRankEdgeList
+edgeListCSR
     ( EdgeListCSR<unsigned,unsigned> *graph
     , float *pagerank
     , float *new_pagerank

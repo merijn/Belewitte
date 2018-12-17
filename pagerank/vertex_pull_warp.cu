@@ -12,9 +12,13 @@ memcpy_SIMD(size_t warp_size, int warp_offset, int cnt, T *dest, T *src)
 }
 
 __global__ void
-vertexPullWarp(size_t warp_size, size_t chunk_size,
-               InverseVertexCSR<unsigned,unsigned> *graph, float *pagerank,
-               float *new_pagerank)
+vertexPullWarp
+    ( size_t warp_size
+    , size_t chunk_size
+    , InverseVertexCSR<unsigned,unsigned> *graph
+    , float *pagerank
+    , float *new_pagerank
+    )
 {
     const size_t vertex_count = graph->vertex_count;
     const int THREAD_ID = (blockIdx.x * blockDim.x) + threadIdx.x;

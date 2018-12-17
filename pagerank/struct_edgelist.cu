@@ -1,7 +1,7 @@
 #include "pagerank.hpp"
 
 __global__ void
-updateRankStructEdgeList
+structEdgeListCSR
     ( StructEdgeListCSR<unsigned,unsigned> *graph
     , float *pagerank
     , float *new_pagerank

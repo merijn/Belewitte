@@ -127,13 +127,13 @@ void
 cudaDispatch(std::map<std::string, AlgorithmConfig*>& result)
 {
     auto prMap = make_kernel_map<CUDABackend,unsigned,unsigned>
-                        (&updateRankEdgeList);
+                        (&edgeListCSR);
 
     prMap.insert_kernel<Rep::EdgeListCSR>
-        ("edge-list", updateRankEdgeList, work_division::edge);
+        ("edge-list", edgeListCSR, work_division::edge);
 
     prMap.insert_kernel<Rep::StructEdgeListCSR>
-        ("struct-edge-list", updateRankStructEdgeList, work_division::edge);
+        ("struct-edge-list", structEdgeListCSR, work_division::edge);
 
     prMap.insert_kernel<Rep::CSR>
         ("vertex-push", vertexPush, work_division::vertex);
