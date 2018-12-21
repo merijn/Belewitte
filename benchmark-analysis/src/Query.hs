@@ -177,36 +177,38 @@ CREATE TEMP TABLE indexedStepProps AS
     query = [i|
 SELECT GraphProps.props, StepProps.props, Step.implId, Variant.id, Step.stepId, Step.timings
 FROM Variant
-     INNER JOIN Graph ON Variant.graphId = Graph.id
-     INNER JOIN
-     ( SELECT variantId, stepId, implId
-            , MIN(CASE Implementation.type
-                  WHEN "Core" THEN avgTime
-                  ELSE NULL END
-            )
-            , vector(avgTime, implId, (SELECT COUNT(*) FROM Implementation)) AS timings
-       FROM StepTimer
-       INNER JOIN Implementation ON StepTimer.implId = Implementation.id
-       WHERE gpuId = ?
-       GROUP BY variantId, stepId
-     ) AS Step
-     ON Variant.id = Step.variantId
-     INNER JOIN
-     ( SELECT graphId
-            , vector(value, idxProps.rowid, #{S.size graphProperties}) AS props
-       FROM GraphProp
-       INNER JOIN indexedGraphProps AS idxProps
-             ON idxProps.property = GraphProp.property
-       GROUP BY graphId) AS GraphProps
-     ON GraphProps.graphId = Graph.id
-     INNER JOIN
-     ( SELECT variantId, stepId
-            , vector(value, idxProps.rowid, #{S.size stepProperties}) AS props
-       FROM StepProp
-       INNER JOIN indexedStepProps AS idxProps
-             ON idxProps.property = StepProp.property
-       GROUP BY variantId, stepId) AS StepProps
-     ON Variant.id = StepProps.variantId AND Step.stepId = StepProps.stepId
+INNER JOIN Graph ON Variant.graphId = Graph.id
+INNER JOIN
+    ( SELECT variantId, stepId, implId
+           , MIN(CASE Implementation.type
+                 WHEN "Core" THEN avgTime
+                 ELSE NULL END
+           )
+           , vector(avgTime, implId, (SELECT COUNT(*) FROM Implementation)) AS timings
+      FROM StepTimer
+      INNER JOIN Implementation ON StepTimer.implId = Implementation.id
+      WHERE gpuId = ?
+      GROUP BY variantId, stepId
+    ) AS Step
+    ON Variant.id = Step.variantId
+INNER JOIN
+    ( SELECT graphId
+           , vector(value, idxProps.rowid, #{S.size graphProperties}) AS props
+      FROM GraphProp
+      INNER JOIN indexedGraphProps AS idxProps
+          ON idxProps.property = GraphProp.property
+      GROUP BY graphId
+    ) AS GraphProps
+    ON GraphProps.graphId = Graph.id
+INNER JOIN
+    ( SELECT variantId, stepId
+           , vector(value, idxProps.rowid, #{S.size stepProperties}) AS props
+      FROM StepProp
+      INNER JOIN indexedStepProps AS idxProps
+          ON idxProps.property = StepProp.property
+      GROUP BY variantId, stepId
+    ) AS StepProps
+    ON Variant.id = StepProps.variantId AND Step.stepId = StepProps.stepId
 ORDER BY Variant.id, Step.stepId ASC|]
 
 data VariantInfo =
@@ -240,31 +242,31 @@ variantInfoQuery gpuId = Query{..}
     query = [i|
 SELECT Variant.id, OptimalStep.optimal, Total.bestNonSwitching, Total.timings
 FROM Variant
-     INNER JOIN
-     ( SELECT variantId, SUM(Step.minTime) AS optimal
-       FROM ( SELECT variantId, stepId
-                   , MIN(CASE Implementation.type
-                         WHEN "Core" THEN avgTime
-                         ELSE NULL END) as minTime
-              FROM StepTimer
-              INNER JOIN Implementation ON StepTimer.implId = Implementation.id
-              WHERE gpuId = ?
-              GROUP BY variantId, stepId) AS Step
+INNER JOIN
+    ( SELECT variantId, SUM(Step.minTime) AS optimal
+      FROM ( SELECT variantId, stepId
+                  , MIN(CASE Implementation.type
+                        WHEN "Core" THEN avgTime
+                        ELSE NULL END) as minTime
+             FROM StepTimer
+             INNER JOIN Implementation ON StepTimer.implId = Implementation.id
+             WHERE gpuId = ?
+             GROUP BY variantId, stepId) AS Step
       GROUP BY variantId
     ) AS OptimalStep
     ON Variant.id = OptimalStep.variantId
-    INNER JOIN
-     ( SELECT variantId
-            , MIN(CASE Implementation.type
-                  WHEN "Core" THEN avgTime
-                  ELSE NULL END) as bestNonSwitching
-            , vector(avgTime, implId, (SELECT COUNT(*) FROM Implementation)) AS timings
-       FROM TotalTimer
-       INNER JOIN Implementation ON TotalTimer.implId = Implementation.id
-       WHERE gpuId = ? AND TotalTimer.name = "computation"
-       GROUP BY variantId
-     ) AS Total
-     ON Variant.id = Total.variantId
+INNER JOIN
+    ( SELECT variantId
+           , MIN(CASE Implementation.type
+                 WHEN "Core" THEN avgTime
+                 ELSE NULL END) as bestNonSwitching
+           , vector(avgTime, implId, (SELECT COUNT(*) FROM Implementation)) AS timings
+      FROM TotalTimer
+      INNER JOIN Implementation ON TotalTimer.implId = Implementation.id
+      WHERE gpuId = ? AND TotalTimer.name = "computation"
+      GROUP BY variantId
+    ) AS Total
+    ON Variant.id = Total.variantId
 ORDER BY Variant.id ASC|]
 
 timePlotQuery :: Key GPU -> Set (Key Variant) -> Query (Text, Vector Double)
@@ -290,16 +292,16 @@ timePlotQuery gpuId variants = Query{..}
     query = [i|
 SELECT Graph.name, Total.timings
 FROM Variant
-     INNER JOIN Graph ON Variant.graphId = Graph.id
-     INNER JOIN
-     ( SELECT variantId
-            , vector(avgTime, implId, (SELECT COUNT(*) FROM Implementation)) AS timings
-       FROM TotalTimer
-       WHERE gpuId = ? AND name = "computation"
-       GROUP BY variantId
-       HAVING #{havingClause variants}
-     ) AS Total
-     ON Variant.id = Total.variantId
+INNER JOIN Graph ON Variant.graphId = Graph.id
+INNER JOIN
+    ( SELECT variantId
+           , vector(avgTime, implId, (SELECT COUNT(*) FROM Implementation)) AS timings
+      FROM TotalTimer
+      WHERE gpuId = ? AND name = "computation"
+      GROUP BY variantId
+      HAVING #{havingClause variants}
+    ) AS Total
+    ON Variant.id = Total.variantId
 WHERE Variant.name = "default"
 ORDER BY Variant.id ASC|]
 
