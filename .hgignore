@@ -12,3 +12,4 @@ evolve/evolve
 .ghc.environment.*
 plotting/graph-edges
 .build/
+cabal.project.local

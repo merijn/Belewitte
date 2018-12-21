@@ -6,7 +6,6 @@ source-repository-package
   tag: 613a1413ad66272f3c7159f7c73d52a44e97b7d5
   subdir: persistent-sqlite
 
-jobs: 8
 solver: modular
 doc-index-file: $datadir/doc/$arch-$os-$compiler/index.html
 optimization: 2
