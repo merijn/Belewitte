@@ -36,7 +36,7 @@ gpuParser :: Parser (SqlM (Key GPU))
 gpuParser = queryGPU <$> gpuOpt
   where
     gpuOpt :: Parser (Either Text Int64)
-    gpuOpt = option (Right <$> auto <|> Left <$> auto) $ mconcat
+    gpuOpt = option (Right <$> auto <|> Left <$> str) $ mconcat
         [ metavar "ID", short 'g', long "gpu"
         , help "GPU results to use, numeric or textual" ]
 
