@@ -1,8 +1,7 @@
 syntax: glob
 main
 main.dSYM/*
-normalise
-normalise.dSYM/*
+normalise-graph
 reorder-graph
 check-degree
 print-graph
