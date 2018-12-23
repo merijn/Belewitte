@@ -26,8 +26,7 @@ import Data.Ord (comparing)
 import Data.Set (Set)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import Data.Vector.Storable (Vector)
-import qualified Data.Vector.Storable as VS
+import Data.Vector.Unboxed (Vector)
 import qualified Data.Vector.Unboxed as VU
 import Numeric (showFFloat)
 
@@ -73,7 +72,7 @@ aggregateSteps implCount model = snd <$> C.foldl aggregate initial
     initial = (1, VariantAgg
         { variantid = toSqlKey (-1)
         , optimalTime = 0
-        , implTimes = VS.replicate implCount 0
+        , implTimes = VU.replicate implCount 0
         })
 
     aggregate :: (Int, VariantAggregate) -> StepInfo -> (Int, VariantAggregate)
@@ -81,8 +80,8 @@ aggregateSteps implCount model = snd <$> C.foldl aggregate initial
       (newPrediction, VariantAgg
             { variantid = stepVariantId
             , optimalTime = optimalTime + getTime stepBestImpl
-            , implTimes = VS.zipWith (+) implTimes $
-                    stepTimings `VS.snoc` getTime newPrediction
+            , implTimes = VU.zipWith (+) implTimes $
+                    stepTimings `VU.snoc` getTime newPrediction
             })
       where
         newPrediction
@@ -92,7 +91,7 @@ aggregateSteps implCount model = snd <$> C.foldl aggregate initial
             prediction = predict model stepProps
 
         getTime :: Integral n => n -> Double
-        getTime ix = stepTimings `VS.unsafeIndex` (fromIntegral ix - 1)
+        getTime ix = stepTimings `VU.unsafeIndex` (fromIntegral ix - 1)
 
 data TotalStatistics =
   TotalStats
@@ -122,8 +121,8 @@ aggregateVariants variantIntervals relTo impls = C.foldM aggregate initial
         , timesMaxRelError = zeroDoubleVector
         }
       where
-        zeroIntVector = VS.replicate (IM.size impls) 0
-        zeroDoubleVector = VS.replicate (IM.size impls) 0
+        zeroIntVector = VU.replicate (IM.size impls) 0
+        zeroDoubleVector = VU.replicate (IM.size impls) 0
 
     toImplName :: Int -> Text
     toImplName ix = getImplName $ impls IM.! ix
@@ -145,18 +144,18 @@ aggregateVariants variantIntervals relTo impls = C.foldM aggregate initial
 
         return TotalStats
           { variantCount = variantCount + 1
-          , timesCumRelError = VS.zipWith (+) timesCumRelError relTimings
+          , timesCumRelError = VU.zipWith (+) timesCumRelError relTimings
 
           , relErrorOneToTwo =
-                VS.zipWith (lessThan 2) relTimings relErrorOneToTwo
+                VU.zipWith (lessThan 2) relTimings relErrorOneToTwo
 
           , relErrorMoreThanFive =
-                VS.zipWith (moreThan 5) relTimings relErrorMoreThanFive
+                VU.zipWith (moreThan 5) relTimings relErrorMoreThanFive
 
           , relErrorMoreThanTwenty =
-                VS.zipWith (moreThan 20) relTimings relErrorMoreThanTwenty
+                VU.zipWith (moreThan 20) relTimings relErrorMoreThanTwenty
 
-          , timesMaxRelError = VS.zipWith max timesMaxRelError relTimings
+          , timesMaxRelError = VU.zipWith max timesMaxRelError relTimings
           }
       where
         lessThan :: Double -> Double -> Int -> Int
@@ -169,17 +168,17 @@ aggregateVariants variantIntervals relTo impls = C.foldM aggregate initial
             | val > x = count + 1
             | otherwise = count
 
-        relTimings = VS.map (/relToTime) implTimes
+        relTimings = VU.map (/relToTime) implTimes
 
         relToTime = case relTo of
             Nothing -> optimalTime
-            Just i -> timesCumRelError VS.! i
+            Just i -> timesCumRelError VU.! i
 
         relTiming name t = mconcat
             [ "    ", padText padSize (name <> ":"), percent t optimalTime
             , " (" <> showText t <> ")" ]
 
-        ranked = sortBy (comparing snd) . zip [1..] $ VS.toList implTimes
+        ranked = sortBy (comparing snd) . zip [1..] $ VU.toList implTimes
 
 data RelativeTo = Optimal | Predicted | BestNonSwitching
     deriving (Eq,Ord,Show,Read)
@@ -230,7 +229,7 @@ evaluateModel gpuId reportConfig@Report{..} model trainConfig oldImpls = do
     addBestNonSwitching VariantAgg{..} = VariantAgg
         { variantid = variantid
         , optimalTime = optimalTime
-        , implTimes = implTimes `VS.snoc` bestNonSwitchingTime
+        , implTimes = implTimes `VU.snoc` bestNonSwitchingTime
         }
       where
         coreImpls = IM.filter ((==Core) . implementationType) oldImpls
@@ -239,7 +238,7 @@ evaluateModel gpuId reportConfig@Report{..} model trainConfig oldImpls = do
         isCoreImpl = (`IM.member` coreImpls)
 
         !bestNonSwitchingTime = minimum . map snd $ coreTimes
-        coreTimes = filter (isCoreImpl . fst) . zip [1..] $ VS.toList implTimes
+        coreTimes = filter (isCoreImpl . fst) . zip [1..] $ VU.toList implTimes
 
 compareImplementations
     :: Key GPU -> Report -> IntMap Implementation -> SqlM ()
@@ -266,7 +265,7 @@ compareImplementations gpuId reportConfig@Report{..} originalImpls = do
     addBestNonSwitching VariantInfo{..} = VariantAgg
         { variantid = variantId
         , optimalTime = variantOptimal
-        , implTimes = variantTimings `VS.snoc` variantBestNonSwitching
+        , implTimes = variantTimings `VU.snoc` variantBestNonSwitching
         }
 
 printTotalStatistics
@@ -296,15 +295,15 @@ printTotalStatistics Report{..} impls TotalStats{..} = liftIO $ do
 
     rankedTimings = sortBy (comparing compareTime) (VU.toList reportTimings)
 
-    reportTimings :: VU.Vector (Int, Double, Int, Int, Int, Double)
+    reportTimings :: Vector (Int, Double, Int, Int, Int, Double)
     reportTimings = VU.filter (\(impl,_,_,_,_,_) -> isReportImpl impl) $
       VU.zipWith6 (,,,,,)
-                  (VU.generate (VS.length timesCumRelError) (+1))
-                  (VS.convert timesCumRelError)
-                  (VS.convert relErrorOneToTwo)
-                  (VS.convert relErrorMoreThanFive)
-                  (VS.convert relErrorMoreThanTwenty)
-                  (VS.convert timesMaxRelError)
+                  (VU.generate (VU.length timesCumRelError) (+1))
+                  timesCumRelError
+                  relErrorOneToTwo
+                  relErrorMoreThanFive
+                  relErrorMoreThanTwenty
+                  timesMaxRelError
 
     toImplName :: Int -> Text
     toImplName ix = getImplName $ impls IM.! ix

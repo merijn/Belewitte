@@ -34,7 +34,7 @@ import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import Data.Vector.Storable (Vector)
+import Data.Vector.Unboxed (Vector)
 import Database.Persist.Sqlite
 import System.IO (Handle)
 

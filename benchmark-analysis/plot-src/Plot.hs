@@ -23,8 +23,8 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Database.Persist.Sqlite (Entity(..), (==.))
 import qualified Database.Persist.Sqlite as Sql
-import Data.Vector.Storable (Vector)
-import qualified Data.Vector.Storable as VS
+import Data.Vector.Unboxed (Vector)
+import qualified Data.Vector.Unboxed as VU
 import System.IO (Handle, hClose, hPutStr, stdout)
 import System.Process
 
@@ -116,11 +116,11 @@ commands name = (,) mempty . hsubparser $ mconcat
 reportData :: MonadIO m => Handle -> Bool -> (String, Vector Double) -> m ()
 reportData hnd normalise (graph, timings) = liftIO $ do
     hPutStr hnd $ graph <> " :"
-    VS.forM_ processedTimings $ \time -> hPutStr hnd $ " " ++ show time
+    VU.forM_ processedTimings $ \time -> hPutStr hnd $ " " ++ show time
     T.hPutStrLn hnd ""
   where
     processedTimings
-        | normalise = VS.map (/ VS.maximum timings) timings
+        | normalise = VU.map (/ VU.maximum timings) timings
         | otherwise = timings
 
 dataFromVariantInfo :: VariantInfo -> SqlM (String, Vector Double)
@@ -130,7 +130,7 @@ dataFromVariantInfo VariantInfo{..} = do
     return (T.unpack name, extendedTimings)
   where
     extendedTimings =
-      variantTimings `VS.snoc` variantBestNonSwitching `VS.snoc` variantOptimal
+      variantTimings `VU.snoc` variantBestNonSwitching `VU.snoc` variantOptimal
 
 plot
     :: String
@@ -155,7 +155,7 @@ plot plotName axisName impls printStdout normalise query convert
   where
     names = map (getImplName . snd) $ IM.toAscList impls
     indices = IS.fromList . map (subtract 1 . fst) . IM.toAscList $ impls
-    filterTimes = VS.ifilter (const . (`IS.member` indices))
+    filterTimes = VU.ifilter (const . (`IS.member` indices))
 
     withProcess work (Just plotHnd) Nothing Nothing procHandle = void $ do
         work plotHnd
