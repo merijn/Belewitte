@@ -1,3 +1,4 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -11,7 +12,6 @@ import Control.Monad.IO.Unlift (withRunInIO)
 import Data.Bifunctor (first, second)
 import Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
-import Data.Functor.Compose (Compose(..))
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 import qualified Data.IntSet as IS
@@ -60,49 +60,51 @@ queryVariants graphs = do
   where
     selectBfs = Sql.selectFirst [ AlgorithmName ==. "bfs" ] []
 
-data PlotCommand
-    = PlotLevels
-      { printStdout :: Bool
+data PlotType = PlotLevels | PlotTotals
+
+data PlotConfig = PlotConfig
+    { axisName :: String
+    , normalise :: Bool
+    , printStdout :: Bool
+    }
+
+data PlotOptions =
+    PlotOptions
+      { plotType :: PlotType
       , getGpuId :: SqlM (Key GPU)
       , getGraphs :: SqlM (Set Text)
       , getImplementations :: SqlM (IntMap Implementation)
-      }
-    | PlotTotals
-      { normalise :: Bool
-      , printStdout :: Bool
-      , getGpuId :: SqlM (Key GPU)
-      , getGraphs :: SqlM (Set Text)
-      , getImplementations :: SqlM (IntMap Implementation)
+      , plotConfig :: PlotConfig
       }
 
-type SqlParser = Compose Parser SqlM
-
-commands :: String -> (InfoMod a, Parser PlotCommand)
-commands name = (,) mempty . hsubparser $ mconcat
-    [ subCommand "levels" "plot level times for a graph" "" $
-        PlotLevels <$> printFlag <*> gpuParser <*> graphs <*> impls
-    , subCommand "totals" "plot total times for set of graphs" "" $
-        PlotTotals <$> normaliseFlag <*>  printFlag <*> gpuParser <*> graphs
-                   <*> impls
-    ]
+plotOptions :: PlotType -> Parser PlotOptions
+plotOptions plottype =
+    PlotOptions plottype <$> gpuParser <*> graphs <*> impls <*> config
   where
-    subCommand cmd hdr desc parser = command cmd . info parser $ mconcat
-        [ fullDesc
-        , header $ name ++ " " ++ cmd ++ " - " ++ hdr
-        , progDesc desc
-        ]
+    baseConfig = case plottype of
+        PlotLevels -> pure $ PlotConfig "Levels" False
+        PlotTotals -> PlotConfig "Graph" <$> normaliseFlag
 
+    config :: Parser PlotConfig
+    config = baseConfig <*> printFlag
+
+    printFlag :: Parser Bool
     printFlag = flag False True $ mconcat
-        [ long "print", help "Print results to stdout, rather than plotting"]
+        [ long "print", help "Print results to stdout, rather than plotting" ]
 
+    normaliseFlag :: Parser Bool
     normaliseFlag = flag False True $ mconcat [long "normalise"]
 
-    graphs = getCompose $ readSet "graphs"
-    impls = getCompose $ filterImpls <$> readSet "implementations"
-                                     <*> Compose (pure queryImplementations)
+    graphs :: Parser (SqlM (Set Text))
+    graphs = readSet "graphs"
 
-    readSet :: FilePath -> SqlParser (Set Text)
-    readSet s = Compose . fmap readText . strOption $ mconcat
+    impls :: Parser (SqlM (IntMap Implementation))
+    impls = do
+        keepImpls <- readSet "implementations"
+        return $ filterImpls <$> keepImpls <*> queryImplementations
+
+    readSet :: FilePath -> Parser (SqlM (Set Text))
+    readSet s = fmap readText . strOption $ mconcat
         [ metavar "FILE", long s
         , help $ "File to read " ++ s ++ " to plot from"
         ]
@@ -113,9 +115,24 @@ commands name = (,) mempty . hsubparser $ mconcat
     filterImpls :: Set Text -> IntMap Implementation -> IntMap Implementation
     filterImpls textSet = IM.filter $ (`S.member` textSet) . implementationName
 
-reportData :: MonadIO m => Handle -> Bool -> (String, Vector Double) -> m ()
+
+commands :: String -> (InfoMod a, Parser PlotOptions)
+commands name = (,) mempty . hsubparser $ mconcat
+    [ subCommand "levels" "plot level times for a graph" "" $
+        plotOptions PlotLevels
+    , subCommand "totals" "plot total times for set of graphs" "" $
+        plotOptions PlotTotals
+    ]
+  where
+    subCommand cmd hdr desc parser = command cmd . info parser $ mconcat
+        [ fullDesc
+        , header $ name ++ " " ++ cmd ++ " - " ++ hdr
+        , progDesc desc
+        ]
+
+reportData :: MonadIO m => Handle -> Bool -> (Text, Vector Double) -> m ()
 reportData hnd normalise (graph, timings) = liftIO $ do
-    hPutStr hnd $ graph <> " :"
+    T.hPutStr hnd $ graph <> " :"
     VU.forM_ processedTimings $ \time -> hPutStr hnd $ " " ++ show time
     T.hPutStrLn hnd ""
   where
@@ -123,27 +140,25 @@ reportData hnd normalise (graph, timings) = liftIO $ do
         | normalise = VU.map (/ VU.maximum timings) timings
         | otherwise = timings
 
-dataFromVariantInfo :: VariantInfo -> SqlM (String, Vector Double)
+dataFromVariantInfo :: VariantInfo -> SqlM (Text, Vector Double)
 dataFromVariantInfo VariantInfo{..} = do
     graphId <- variantGraphId <$> Sql.getJust variantId
     name <- graphName <$> Sql.getJust graphId
-    return (T.unpack name, extendedTimings)
+    return (name, extendedTimings)
   where
     extendedTimings =
       variantTimings `VU.snoc` variantBestNonSwitching `VU.snoc` variantOptimal
 
 plot
-    :: String
+    :: PlotConfig
     -> String
     -> IntMap Implementation
-    -> Bool
-    -> Bool
     -> Query a
-    -> ConduitT a (String, Vector Double) SqlM ()
+    -> ConduitT a (Text, Vector Double) SqlM ()
     -> SqlM ()
-plot plotName axisName impls printStdout normalise query convert
-    | printStdout = doWithHandle stdout
-    | otherwise = do
+plot PlotConfig{..} plotName impls query convert
+  | printStdout = doWithHandle stdout
+  | otherwise = do
         scriptProc <- liftIO $
             proc <$> getDataFileName "runtime-data/scripts/bar-plot.py"
 
@@ -172,36 +187,38 @@ plot plotName axisName impls printStdout normalise query convert
             .| C.mapM_ (reportData hnd normalise)
 
 main :: IO ()
-main = runSqlM commands $ \case
-    PlotLevels{..} -> do
-        impls <- getImplementations
-        gpuId <- getGpuId
-        variants <- getGraphs >>= queryVariants
+main = runSqlM commands $ \PlotOptions{..} -> do
+    gpuId <- getGpuId
+    impls <- getImplementations
+    variants <- getGraphs >>= queryVariants
 
-        forM_ variants $ \variantId -> do
-            graphId <- variantGraphId <$> Sql.getJust variantId
-            name <- graphName <$> Sql.getJust graphId
+    case plotType of
+        PlotLevels -> do
+            forM_ variants $ \variantId -> do
+                graphId <- variantGraphId <$> Sql.getJust variantId
+                name <- graphName <$> Sql.getJust graphId
 
-            let query = levelTimePlotQuery gpuId variantId
-                pdfName = T.unpack name ++ "-levels"
+                let query = levelTimePlotQuery gpuId variantId
+                    pdfName = T.unpack name ++ "-levels"
 
-            plot pdfName "Levels" impls printStdout False query $
-                C.map (first show)
+                plot plotConfig pdfName impls query $
+                    C.map (first (T.pack . show))
 
-    PlotTotals{..} -> do
-        gpuId <- getGpuId
-        keepVariants <- getGraphs >>= queryVariants
+        PlotTotals -> do
+            let variantQuery = variantInfoQuery gpuId
+                timeQuery = timePlotQuery gpuId variants
+                variantFilter VariantInfo{variantId} =
+                    S.member variantId variants
+                extImpls = IM.fromList
+                    [ (50, mkImpl (toSqlKey 1) "Non-switching Best")
+                    , (51, mkImpl (toSqlKey 1) "Optimal")
+                    ]
+                plotImpls = impls <> extImpls
 
-        let query = variantInfoQuery gpuId
-            variantFilter VariantInfo{variantId} =
-                S.member variantId keepVariants
-            extImpls = IM.fromList
-                [ (50, mkImpl (toSqlKey 1) "Non-switching Best")
-                , (51, mkImpl (toSqlKey 1) "Optimal")
-                ]
-        impls <- getImplementations
+            plot plotConfig "times-variant" plotImpls variantQuery $
+                C.filter variantFilter .| C.mapM dataFromVariantInfo
 
-        plot "times" "Graph" (impls <> extImpls) printStdout normalise query $
-            C.filter variantFilter .| C.mapM dataFromVariantInfo
+            plot plotConfig "times-timeplot" impls timeQuery $
+                awaitForever yield
   where
     mkImpl gpuId name = Implementation gpuId name Nothing Nothing Core True
