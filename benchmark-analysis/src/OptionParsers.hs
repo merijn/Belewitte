@@ -3,6 +3,7 @@
 {-# LANGUAGE TupleSections #-}
 module OptionParsers
     ( gpuParser
+    , algorithmParser
     , intervalReader
     , optionParserFromValues
     , runSqlM
@@ -45,6 +46,22 @@ gpuParser = queryGPU <$> gpuOpt
     queryGPU (Left name) = do
         Just Entity{entityKey} <-
             logIfFail "No GPU with name" name . Sql.getBy $ UniqGPU name
+        return entityKey
+
+algorithmParser :: Parser (SqlM (Key Algorithm))
+algorithmParser = queryAlgorithm <$> algorithmOpt
+  where
+    algorithmOpt :: Parser (Either Text Int64)
+    algorithmOpt = option (Right <$> auto <|> Left <$> str) $ mconcat
+        [ metavar "ID", short 'a', long "algorithm"
+        , help "Algorithm to use, numeric or textual id" ]
+
+    queryAlgorithm :: Either Text Int64 -> SqlM (Key Algorithm)
+    queryAlgorithm (Right n) = validateKey n
+    queryAlgorithm (Left name) = do
+        Just Entity{entityKey} <-
+            logIfFail "No algorithm with name" name $
+                Sql.getBy $ UniqAlgorithm name
         return entityKey
 
 intervalReader :: ReadM (IntervalSet Int64)
