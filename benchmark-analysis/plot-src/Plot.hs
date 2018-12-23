@@ -189,17 +189,15 @@ main = runSqlM commands $ \case
                 C.map (first show)
 
     PlotTotals{..} -> do
-        allImpls <- queryImplementations
         gpuId <- getGpuId
         keepVariants <- getGraphs >>= queryVariants
 
         let query = variantInfoQuery gpuId
             variantFilter VariantInfo{variantId} =
                 S.member variantId keepVariants
-            implCount = IM.size allImpls
             extImpls = IM.fromList
-                [ (implCount + 1, mkImpl (toSqlKey 1) "Non-switching Best")
-                , (implCount + 2, mkImpl (toSqlKey 1) "Optimal")
+                [ (50, mkImpl (toSqlKey 1) "Non-switching Best")
+                , (51, mkImpl (toSqlKey 1) "Optimal")
                 ]
         impls <- getImplementations
 
