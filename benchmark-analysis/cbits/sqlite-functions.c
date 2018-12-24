@@ -1,4 +1,5 @@
 #define _POSIX_C_SOURCE 1
+#include <math.h>
 #include <stdlib.h>
 
 #include "sqlite-functions.h"
@@ -60,7 +61,7 @@ void vector_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
         }
 
         for (size_t i = 0; i < vector->size; i++) {
-            vector->data[i] = 0.0;
+            vector->data[i] = NAN;
         }
     }
 
