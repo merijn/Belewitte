@@ -240,7 +240,7 @@ getResult columnCount = runGet parseBlock . LBS.fromStrict
         return (dbls, byteStringToModel bs)
 
 getUnknowns :: MonadThrow m => Text -> m (Int, [(Int, Set Int64)])
-getUnknowns txt = case parse parseUnknowns "" txt of
+getUnknowns txt = case parse parseUnknowns "getUnknowns" txt of
     Left e -> throwM e
     Right r -> return r
 

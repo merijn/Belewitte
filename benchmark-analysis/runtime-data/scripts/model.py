@@ -9,9 +9,12 @@ from os import fdopen
 from scipy.sparse import csr_matrix
 import struct
 import threading
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor, _tree
-from sklearn.preprocessing import OneHotEncoder, LabelEncoder
+import warnings
+
+with warnings.catch_warnings():
+    warnings.filterwarnings("ignore",category=DeprecationWarning)
+    from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor, _tree
+    from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 
 if __name__ != "__main__":
     exit(1)
