@@ -131,12 +131,12 @@ data StepInfo =
     , stepTimings :: {-# UNPACK #-} !(Vector Double)
     } deriving (Show)
 
---FIXME specify algorithm?!
-stepInfoQuery :: Key GPU -> Set Text -> Set Text -> Query StepInfo
-stepInfoQuery gpuId graphProperties stepProperties = Query{..}
+stepInfoQuery
+    :: Key Algorithm -> Key GPU -> Set Text -> Set Text -> Query StepInfo
+stepInfoQuery algoId gpuId graphProperties stepProperties = Query{..}
   where
     params :: [PersistValue]
-    params = [toPersistValue gpuId]
+    params = [toPersistValue gpuId, toPersistValue algoId]
 
     whereClauses :: Set Text -> Text
     whereClauses = T.intercalate " OR " . map clause . S.toAscList
@@ -209,6 +209,7 @@ INNER JOIN
       GROUP BY variantId, stepId
     ) AS StepProps
     ON Variant.id = StepProps.variantId AND Step.stepId = StepProps.stepId
+WHERE Variant.algorithmId = ?
 ORDER BY Variant.id, Step.stepId ASC|]
 
 data VariantInfo =
@@ -219,11 +220,13 @@ data VariantInfo =
     , variantTimings :: {-# UNPACK #-} !(Vector Double)
     } deriving (Show)
 
-variantInfoQuery :: Key GPU -> Query VariantInfo
-variantInfoQuery gpuId = Query{..}
+variantInfoQuery :: Key Algorithm -> Key GPU -> Query VariantInfo
+variantInfoQuery algoId gpuId = Query{..}
   where
     params :: [PersistValue]
-    params = [toPersistValue gpuId, toPersistValue gpuId]
+    params = [ toPersistValue gpuId, toPersistValue gpuId
+             , toPersistValue algoId
+             ]
 
     tempTables = []
     clearTempTables = []
@@ -232,17 +235,25 @@ variantInfoQuery gpuId = Query{..}
         :: (MonadIO m, MonadLogger m, MonadThrow m)
         => [PersistValue] -> m VariantInfo
     convert [ PersistInt64 (toSqlKey -> variantId)
-            , PersistDouble variantOptimal
+            , stepOptimal
             , PersistDouble variantBestNonSwitching
-            , PersistByteString (byteStringToVector -> variantTimings) ]
-            = return $ VariantInfo{..}
+            , PersistByteString (byteStringToVector -> variantTimings)
+            ]
+
+            | PersistDouble variantOptimal <- stepOptimal
+            = return VariantInfo{..}
+
+            | PersistNull <- stepOptimal
+            = let variantOptimal = infinite in return VariantInfo{..}
+            where
+              !infinite = 1/0
 
     convert l = logThrowM . Error . fromString $ "Unexpected value: " ++ show l
 
     query = [i|
 SELECT Variant.id, OptimalStep.optimal, Total.bestNonSwitching, Total.timings
 FROM Variant
-INNER JOIN
+LEFT JOIN
     ( SELECT variantId, SUM(Step.minTime) AS optimal
       FROM ( SELECT variantId, stepId
                   , MIN(CASE Implementation.type
@@ -267,13 +278,18 @@ INNER JOIN
       GROUP BY variantId
     ) AS Total
     ON Variant.id = Total.variantId
+WHERE Variant.algorithmId = ?
 ORDER BY Variant.id ASC|]
 
-timePlotQuery :: Key GPU -> Set (Key Variant) -> Query (Text, Vector Double)
-timePlotQuery gpuId variants = Query{..}
+timePlotQuery
+    :: Key Algorithm
+    -> Key GPU
+    -> Set (Key Variant)
+    -> Query (Text, Vector Double)
+timePlotQuery algoId gpuId variants = Query{..}
   where
     params :: [PersistValue]
-    params = [toPersistValue gpuId]
+    params = [toPersistValue gpuId, toPersistValue algoId]
 
     tempTables = []
     clearTempTables = []
@@ -302,7 +318,7 @@ INNER JOIN
       HAVING #{havingClause variants}
     ) AS Total
     ON Variant.id = Total.variantId
-WHERE Variant.name = "default"
+WHERE Variant.name = "default" AND Variant.algorithmId = ?
 ORDER BY Variant.id ASC|]
 
 levelTimePlotQuery :: Key GPU -> Key Variant -> Query (Int64, Vector Double)

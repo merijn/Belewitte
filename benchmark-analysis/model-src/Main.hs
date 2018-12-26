@@ -28,13 +28,10 @@ import Schema
 import Train
 import Validate
 
-queryImplementations :: SqlM (IntMap Implementation)
-queryImplementations = do
-    Just (Entity aId _) <- selectBfs
-    runConduitRes $ selectImpls aId .| C.foldMap toIntMap
+queryImplementations :: Key Algorithm -> SqlM (IntMap Implementation)
+queryImplementations algoId = do
+    runConduitRes $ selectImpls algoId .| C.foldMap toIntMap
   where
-    selectBfs = Sql.selectFirst [ AlgorithmName ==. "bfs" ] []
-
     selectImpls aId = Sql.selectSource [ ImplementationAlgorithmId ==. aId ] []
 
     toIntMap :: Entity Implementation -> IntMap Implementation
@@ -60,36 +57,41 @@ reportModelStats ModelStats{..} = liftIO $ do
 
 main :: IO ()
 main = runSqlM commands $ \case
-    Train{getGpuId,getConfig} -> do
+    Train{getAlgoId,getGpuId,getConfig} -> do
+        algoId <- getAlgoId
         gpuId <- getGpuId
         trainConfig <- getConfig
-        modelId <- fst <$> trainModel gpuId trainConfig
+        modelId <- fst <$> trainModel algoId gpuId trainConfig
         liftIO $ print (fromSqlKey modelId)
 
     Query{getModel} -> do
         modelId <- fst <$> getModel
         getModelStats modelId >>= reportModelStats
 
-    Validate{getGpuId,getModel} -> do
+    Validate{getAlgoId,getGpuId,getModel} -> do
+        algoId <- getAlgoId
         gpuId <- getGpuId
         (modelId, model) <- getModel
         trainConfig <- getModelTrainingConfig modelId
-        validateModel gpuId model trainConfig
+        validateModel algoId gpuId model trainConfig
 
-    Evaluate{getGpuId,getModel,reportConfig} -> void $ do
-        impls <- queryImplementations
+    Evaluate{getAlgoId,getGpuId,getModel,reportConfig} -> void $ do
+        algoId <- getAlgoId
         gpuId <- getGpuId
+        impls <- queryImplementations algoId
         (modelId, model) <- getModel
         trainConfig <- getModelTrainingConfig modelId
-        evaluateModel gpuId reportConfig model trainConfig impls
+        evaluateModel algoId gpuId reportConfig model trainConfig impls
 
-    Compare{getGpuId,reportConfig} -> void $ do
-        impls <- queryImplementations
+    Compare{getAlgoId,getGpuId,reportConfig} -> void $ do
+        algoId <- getAlgoId
         gpuId <- getGpuId
-        compareImplementations gpuId reportConfig impls
+        impls <- queryImplementations algoId
+        compareImplementations algoId gpuId reportConfig impls
 
-    Export{getModel,cppFile} -> void $ do
-        impls <- queryImplementations
+    Export{getAlgoId,getModel,cppFile} -> void $ do
+        algoId <- getAlgoId
+        impls <- queryImplementations algoId
         (modelId, model) <- getModel
         TrainConfig{..} <- getModelTrainingConfig modelId
         dumpCppModel cppFile model trainGraphProps trainStepProps

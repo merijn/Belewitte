@@ -42,41 +42,55 @@ dropProps input db
 
 data ModelCommand
     = Train
-      { getGpuId :: SqlM (Key GPU) , getConfig :: SqlM TrainingConfig }
+      { getAlgoId :: SqlM (Key Algorithm)
+      , getGpuId :: SqlM (Key GPU)
+      , getConfig :: SqlM TrainingConfig
+      }
     | Query
       { getModel :: SqlM (Key PredictionModel, Model) }
     | Validate
-      { getGpuId :: SqlM (Key GPU)
+      { getAlgoId :: SqlM (Key Algorithm)
+      , getGpuId :: SqlM (Key GPU)
       , getModel :: SqlM (Key PredictionModel, Model)
       }
     | Evaluate
-      { getGpuId :: SqlM (Key GPU)
+      { getAlgoId :: SqlM (Key Algorithm)
+      , getGpuId :: SqlM (Key GPU)
       , getModel :: SqlM (Key PredictionModel, Model)
       , reportConfig :: Report
       }
     | Compare
-      { getGpuId :: SqlM (Key GPU), reportConfig :: Report }
+      { getAlgoId :: SqlM (Key Algorithm)
+      , getGpuId :: SqlM (Key GPU)
+      , reportConfig :: Report
+      }
     | Export
-      { getModel :: SqlM (Key PredictionModel, Model), cppFile :: FilePath}
+      { getAlgoId :: SqlM (Key Algorithm)
+      , getModel :: SqlM (Key PredictionModel, Model)
+      , cppFile :: FilePath
+      }
 
 commands :: String -> (InfoMod a, Parser ModelCommand)
 commands name = (,) docs . hsubparser $ mconcat
     [ subCommand "train" "train a model"
-        "Train a new model" $ Train <$> gpuParser <*> trainingConfig
+        "Train a new model" $
+        Train <$> algorithmParser <*> gpuParser <*> trainingConfig
     , subCommand "query" "report model info"
         "Report model info & statistics" $ Query <$> modelParser
     , subCommand "validate" "validate model accuracy"
         "Compute and report a model's accuracy on validation dataset and full \
-        \dataset" $ Validate <$> gpuParser <*> modelParser
+        \dataset" $ Validate <$> algorithmParser <*> gpuParser <*> modelParser
     , subCommand "evaluate" "evaluate model performance"
         "Evaluate BDT model performance on full dataset and compare against \
         \performance of other implementations" $
-        Evaluate <$> gpuParser <*> modelParser <*> reportParser False
+        Evaluate <$> algorithmParser <*> gpuParser <*> modelParser
+                 <*> reportParser False
     , subCommand "compare" "compare implementation performance"
         "Compare the performance of different implementations" $
-        Compare <$> gpuParser <*> reportParser True
+        Compare <$> algorithmParser <*> gpuParser <*> reportParser True
     , subCommand "export" "export model to C++"
-        "Export BDT model to C++ file" $ Export <$> modelParser <*> cppFile
+        "Export BDT model to C++ file" $
+        Export <$> algorithmParser <*> modelParser <*> cppFile
     ]
   where
     docs = mconcat

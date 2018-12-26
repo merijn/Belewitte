@@ -195,21 +195,22 @@ data Report = Report
      }
 
 evaluateModel
-    :: Key GPU
+    :: Key Algorithm
+    -> Key GPU
     -> Report
     -> Model
     -> TrainingConfig
     -> IntMap Implementation
     -> SqlM ()
-evaluateModel gpuId reportConfig@Report{..} model trainConfig oldImpls = do
+evaluateModel algoId gpuId reportCfg@Report{..} model trainConfig oldImpls = do
     stats <- runSqlQuery query $
         foldGroup ((==) `on` stepVariantId) (aggregateSteps newImplCount model)
         .| C.map addBestNonSwitching
         .| aggregateVariants reportVariants relTo impls
 
-    printTotalStatistics reportConfig impls stats
+    printTotalStatistics reportCfg impls stats
   where
-    query = getTotalQuery gpuId trainConfig
+    query = getTotalQuery algoId gpuId trainConfig
 
     relTo = case reportRelativeTo of
         Optimal -> Nothing
@@ -241,15 +242,15 @@ evaluateModel gpuId reportConfig@Report{..} model trainConfig oldImpls = do
         coreTimes = filter (isCoreImpl . fst) . zip [1..] $ VU.toList implTimes
 
 compareImplementations
-    :: Key GPU -> Report -> IntMap Implementation -> SqlM ()
-compareImplementations gpuId reportConfig@Report{..} originalImpls = do
+    :: Key Algorithm -> Key GPU -> Report -> IntMap Implementation -> SqlM ()
+compareImplementations algoId gpuId reportConfig@Report{..} originalImpls = do
     stats <- runSqlQuery query $
         C.map addBestNonSwitching
         .| aggregateVariants reportVariants relTo impls
 
     printTotalStatistics reportConfig impls stats
   where
-    query = variantInfoQuery gpuId
+    query = variantInfoQuery algoId gpuId
 
     relTo = case reportRelativeTo of
         Optimal -> Nothing

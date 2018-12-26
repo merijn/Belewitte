@@ -34,31 +34,25 @@ import Paths_benchmark_analysis (getDataFileName)
 import Query
 import Schema
 
-queryImplementations :: SqlM (IntMap Implementation)
-queryImplementations = do
-    Just (Entity aId _) <- selectBfs
-    runConduitRes $ selectImpls aId .| C.foldMap toIntMap
+queryImplementations :: Key Algorithm -> SqlM (IntMap Implementation)
+queryImplementations algoId = runConduitRes $
+    selectImpls algoId .| C.foldMap toIntMap
   where
-    selectBfs = Sql.selectFirst [ AlgorithmName ==. "bfs" ] []
-
     selectImpls aId = Sql.selectSource [ ImplementationAlgorithmId ==. aId ] []
 
     toIntMap :: Entity Implementation -> IntMap Implementation
     toIntMap (Entity k val) = IM.singleton (fromIntegral $ fromSqlKey k) val
 
-queryVariants :: Set Text -> SqlM (Set (Key Variant))
-queryVariants graphs = do
-    Just (Entity aId _) <- selectBfs
+queryVariants :: Key Algorithm -> Set Text -> SqlM (Set (Key Variant))
+queryVariants algoId graphs = do
     gids <- runConduitRes $ Sql.selectSource [] []
         .| C.filter (\i -> S.member (graphName (entityVal i)) graphs)
         .| C.map Sql.entityKey
         .| C.foldMap S.singleton
     variants <- forM (S.toList gids) $ \gId ->
-        Sql.getBy $ UniqVariant gId aId "default"
+        Sql.getBy $ UniqVariant gId algoId "default"
 
     return . S.fromList . map Sql.entityKey . catMaybes $ variants
-  where
-    selectBfs = Sql.selectFirst [ AlgorithmName ==. "bfs" ] []
 
 data PlotType = PlotLevels | PlotTotals
 
@@ -71,15 +65,17 @@ data PlotConfig = PlotConfig
 data PlotOptions =
     PlotOptions
       { plotType :: PlotType
+      , getAlgoId :: SqlM (Key Algorithm)
       , getGpuId :: SqlM (Key GPU)
       , getGraphs :: SqlM (Set Text)
-      , getImplementations :: SqlM (IntMap Implementation)
+      , getImplementations :: Key Algorithm -> SqlM (IntMap Implementation)
       , plotConfig :: PlotConfig
       }
 
 plotOptions :: PlotType -> Parser PlotOptions
 plotOptions plottype =
-    PlotOptions plottype <$> gpuParser <*> graphs <*> impls <*> config
+  PlotOptions plottype <$> algorithmParser <*> gpuParser <*> graphs <*> impls
+                       <*> config
   where
     baseConfig = case plottype of
         PlotLevels -> pure $ PlotConfig "Levels" False
@@ -98,10 +94,11 @@ plotOptions plottype =
     graphs :: Parser (SqlM (Set Text))
     graphs = readSet "graphs"
 
-    impls :: Parser (SqlM (IntMap Implementation))
+    impls :: Parser (Key Algorithm -> SqlM (IntMap Implementation))
     impls = do
         keepImpls <- readSet "implementations"
-        return $ filterImpls <$> keepImpls <*> queryImplementations
+        return $ \algoId ->
+            filterImpls <$> keepImpls <*> queryImplementations algoId
 
     readSet :: FilePath -> Parser (SqlM (Set Text))
     readSet s = fmap readText . strOption $ mconcat
@@ -188,9 +185,10 @@ plot PlotConfig{..} plotName impls query convert
 
 main :: IO ()
 main = runSqlM commands $ \PlotOptions{..} -> do
+    algoId <- getAlgoId
     gpuId <- getGpuId
-    impls <- getImplementations
-    variants <- getGraphs >>= queryVariants
+    impls <- getImplementations algoId
+    variants <- getGraphs >>= queryVariants algoId
 
     case plotType of
         PlotLevels -> do
@@ -205,8 +203,8 @@ main = runSqlM commands $ \PlotOptions{..} -> do
                     C.map (first (T.pack . show))
 
         PlotTotals -> do
-            let variantQuery = variantInfoQuery gpuId
-                timeQuery = timePlotQuery gpuId variants
+            let variantQuery = variantInfoQuery algoId gpuId
+                timeQuery = timePlotQuery algoId gpuId variants
                 variantFilter VariantInfo{variantId} =
                     S.member variantId variants
                 extImpls = IM.fromList
