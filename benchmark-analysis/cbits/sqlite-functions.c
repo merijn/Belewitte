@@ -61,7 +61,7 @@ void vector_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
         }
 
         for (size_t i = 0; i < vector->size; i++) {
-            vector->data[i] = NAN;
+            vector->data[i] = INFINITY;
         }
     }
 
