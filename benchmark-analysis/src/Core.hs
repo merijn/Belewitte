@@ -30,7 +30,8 @@ module Core
 
 import Control.Exception (Exception(displayException), SomeException(..))
 import Control.Monad ((>=>), join, when)
-import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow, try, throwM)
+import Control.Monad.Catch
+    (MonadCatch, MonadMask, MonadThrow, handle, try, throwM)
 import Control.Monad.Fail (MonadFail(fail))
 import Control.Monad.IO.Unlift
     (MonadIO(liftIO), MonadUnliftIO(..), UnliftIO(..), withUnliftIO)
@@ -43,6 +44,7 @@ import qualified Data.ByteString as BS
 import Data.Conduit (ConduitT)
 import Data.Proxy (Proxy(Proxy))
 import Database.Persist.Sqlite hiding (Connection)
+import Database.Sqlite (SqliteException(..))
 import Database.Sqlite.Internal
 import Data.Int (Int64)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
@@ -52,10 +54,12 @@ import qualified Data.Text as T
 import Data.Typeable (Typeable)
 import Foreign (Ptr, FunPtr, nullPtr, nullFunPtr)
 import Foreign.C (CInt(..), CString, withCString)
-import GHC.Conc.Sync (getNumProcessors, setNumCapabilities)
+import GHC.Conc.Sync
+    (getNumProcessors, setNumCapabilities, setUncaughtExceptionHandler)
 import qualified Lens.Micro as Lens
 import qualified Lens.Micro.Extras as Lens
-import System.IO (Handle, IOMode(WriteMode), stdout, withFile)
+import System.IO
+    (Handle, IOMode(WriteMode), hPutStrLn, stdout, stderr, withFile)
 import System.Console.Haskeline.MonadException (MonadException(..), RunIO(..))
 
 import Schema (migrateAll)
@@ -65,6 +69,15 @@ instance Exception Abort where
 
 data Error = Error Text deriving (Show)
 instance Exception Error
+
+newtype PrettySqliteError = Pretty SqliteException
+    deriving (Show, Typeable)
+
+instance Exception PrettySqliteError where
+    displayException (Pretty SqliteException{..}) = T.unpack $ mconcat
+        [ T.replace "\\\"" "\"" . T.replace "\\n" "\n" $ seFunctionName
+        , "\n\n", showText seError, seDetails
+        ]
 
 type SqlM = ReaderT (RawSqlite SqlBackend) BaseM
 
@@ -196,26 +209,34 @@ logQueryExplanation queryLogger = do
 
 runSqlMWithOptions :: Options a -> (a -> SqlM b) -> IO b
 runSqlMWithOptions Options{..} work = do
-  getNumProcessors >>= setNumCapabilities
-  ref <- newIORef ""
-  withQueryLog $ \mHnd -> do
-    let config = (ref, mHnd)
-    runLog . runBase config . withRawSqliteConnInfo connInfo . runReaderT $ do
-        sqlitePtr <- asks $ getSqlitePtr . Lens.view rawSqliteConnection
-        createSqlFun sqlitePtr 1 "random" randomFun
-        createSqlAggregate sqlitePtr 3 "vector" vector_step vector_finalise
-        rawExecute "PRAGMA busy_timeout = 1000" []
-        result <- try . liftPersist $ runMigrationSilent migrateAll
-        case result of
-            Right migrations
-                | null migrations -> return ()
-                | otherwise -> logMigrationWith Log.logInfoN migrations
-            Left (SomeException e) -> do
-                liftPersist (showMigration migrateAll) >>=
-                    logMigrationWith Log.logErrorN
-                throwM e
-        work task
+    setUncaughtExceptionHandler (hPutStrLn stderr . displayException)
+    handle wrapSqliteException $ do
+        getNumProcessors >>= setNumCapabilities
+        ref <- newIORef ""
+        withQueryLog $ \mHnd -> runStack (ref, mHnd) $ do
+            sqlitePtr <- asks $ getSqlitePtr . Lens.view rawSqliteConnection
+            createSqlFun sqlitePtr 1 "random" randomFun
+            createSqlAggregate sqlitePtr 3 "vector" vector_step vector_finalise
+            rawExecute "PRAGMA busy_timeout = 1000" []
+            result <- try . liftPersist $ runMigrationSilent migrateAll
+            case result of
+                Right migrations
+                    | null migrations -> return ()
+                    | otherwise -> logMigrationWith Log.logInfoN migrations
+                Left (SomeException e) -> do
+                    liftPersist (showMigration migrateAll) >>=
+                        logMigrationWith Log.logErrorN
+                    throwM e
+            work task
   where
+    wrapSqliteException :: SqliteException -> IO a
+    wrapSqliteException exc = throwM $ Pretty exc
+
+    runStack
+        :: (IORef Text, Maybe Handle) -> SqlM a -> IO a
+    runStack config =
+      runLog . runBase config . withRawSqliteConnInfo connInfo . runReaderT
+
     logMigrationWith :: (Text -> SqlM ()) -> [Text] -> SqlM ()
     logMigrationWith _ [] = return ()
     logMigrationWith logFun ms =
