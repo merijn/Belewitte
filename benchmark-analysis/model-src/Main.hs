@@ -8,17 +8,11 @@ module Main(main) where
 
 import Control.Monad (forM_, void)
 import Data.Bifunctor (first)
-import Data.Conduit as C
-import qualified Data.Conduit.Combinators as C
 import Data.List (sortBy)
 import Data.Ord (comparing)
-import Data.IntMap (IntMap)
-import qualified Data.IntMap.Strict as IM
 import qualified Data.Map as M
 import Data.Set (Set)
 import qualified Data.Text.IO as T
-import Database.Persist.Sqlite (Entity(..), (==.))
-import qualified Database.Persist.Sqlite as Sql
 
 import Core
 import Evaluate (evaluateModel, compareImplementations, percent)
@@ -27,15 +21,6 @@ import Options
 import Schema
 import Train
 import Validate
-
-queryImplementations :: Key Algorithm -> SqlM (IntMap Implementation)
-queryImplementations algoId = do
-    runConduitRes $ selectImpls algoId .| C.foldMap toIntMap
-  where
-    selectImpls aId = Sql.selectSource [ ImplementationAlgorithmId ==. aId ] []
-
-    toIntMap :: Entity Implementation -> IntMap Implementation
-    toIntMap (Entity k val) = IM.singleton (fromIntegral $ fromSqlKey k) val
 
 reportModelStats :: MonadIO m => ModelStats -> m ()
 reportModelStats ModelStats{..} = liftIO $ do
@@ -75,19 +60,17 @@ main = runSqlM commands $ \case
         trainConfig <- getModelTrainingConfig modelId
         validateModel algoId gpuId model trainConfig
 
-    Evaluate{getAlgoId,getGpuId,getModel,reportConfig} -> void $ do
+    Evaluate{getAlgoId,getGpuId,getModel,defaultImpl,reportConfig} -> void $ do
         algoId <- getAlgoId
         gpuId <- getGpuId
-        impls <- queryImplementations algoId
         (modelId, model) <- getModel
         trainConfig <- getModelTrainingConfig modelId
-        evaluateModel algoId gpuId reportConfig model trainConfig impls
+        evaluateModel algoId gpuId defaultImpl reportConfig model trainConfig
 
     Compare{getAlgoId,getGpuId,reportConfig} -> void $ do
         algoId <- getAlgoId
         gpuId <- getGpuId
-        impls <- queryImplementations algoId
-        compareImplementations algoId gpuId reportConfig impls
+        compareImplementations algoId gpuId reportConfig
 
     Export{getAlgoId,getModel,cppFile} -> void $ do
         algoId <- getAlgoId

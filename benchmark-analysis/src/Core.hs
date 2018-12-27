@@ -41,7 +41,10 @@ import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Reader (ReaderT(..), asks)
 import Control.Monad.Trans.Resource (MonadResource, ResourceT, runResourceT)
 import qualified Data.ByteString as BS
-import Data.Conduit (ConduitT)
+import Data.Conduit (ConduitT, (.|), runConduitRes)
+import qualified Data.Conduit.Combinators as C
+import Data.IntMap (IntMap)
+import qualified Data.IntMap.Strict as IM
 import Data.Proxy (Proxy(Proxy))
 import Database.Persist.Sqlite hiding (Connection)
 import Database.Sqlite (SqliteException(..))
@@ -62,7 +65,7 @@ import System.IO
     (Handle, IOMode(WriteMode), hPutStrLn, stdout, stderr, withFile)
 import System.Console.Haskeline.MonadException (MonadException(..), RunIO(..))
 
-import Schema (migrateAll)
+import Schema
 
 data Abort = Abort deriving (Show, Typeable)
 instance Exception Abort where
@@ -329,3 +332,23 @@ insertUniq record = do
         Left (Entity _ r) | record /= r -> Log.logErrorN . T.pack $ mconcat
             ["Unique insert failed:\nFound: ", show r, "\nNew: ", show record]
         _ -> return ()
+
+queryImplementations :: Key Algorithm -> SqlM (IntMap Implementation)
+queryImplementations algoId = fmap (IM.union builtinImpls) . runConduitRes $
+    selectImpls algoId .| C.foldMap toIntMap
+  where
+    selectImpls aId = selectSource [ ImplementationAlgorithmId ==. aId ] []
+
+    toIntMap :: Entity Implementation -> IntMap Implementation
+    toIntMap (Entity k val) = IM.singleton (fromIntegral $ fromSqlKey k) val
+
+    mkImpl :: Text -> Text -> Implementation
+    mkImpl short long =
+        Implementation algoId short (Just long) Nothing Builtin False
+
+    builtinImpls :: IntMap Implementation
+    builtinImpls = IM.fromList
+        [ (predictedImplId, mkImpl "predicted" "Predicted")
+        , (bestNonSwitchingImplId, mkImpl "best" "Best Non-switching")
+        , (optimalImplId, mkImpl "optimal" "Optimal")
+        ]

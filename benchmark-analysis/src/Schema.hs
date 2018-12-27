@@ -27,6 +27,15 @@ import Types
 share [mkPersist sqlSettings, mkMigrate "migrateAll"]
     $(persistFileWith upperCaseSettings "src/schema")
 
+bestNonSwitchingImplId :: Integral n => n
+bestNonSwitchingImplId = -1
+
+predictedImplId :: Integral n => n
+predictedImplId = -2
+
+optimalImplId :: Integral n => n
+optimalImplId = -3
+
 getImplName :: Implementation -> Text
 getImplName (Implementation _ name prettyName _ _ _) =
   fromMaybe name prettyName

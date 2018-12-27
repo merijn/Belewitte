@@ -57,6 +57,7 @@ data ModelCommand
       { getAlgoId :: SqlM (Key Algorithm)
       , getGpuId :: SqlM (Key GPU)
       , getModel :: SqlM (Key PredictionModel, Model)
+      , defaultImpl :: Either Int Text
       , reportConfig :: Report
       }
     | Compare
@@ -84,7 +85,7 @@ commands name = (,) docs . hsubparser $ mconcat
         "Evaluate BDT model performance on full dataset and compare against \
         \performance of other implementations" $
         Evaluate <$> algorithmParser <*> gpuParser <*> modelParser
-                 <*> reportParser False
+                 <*> defaultImplParser <*> reportParser False
     , subCommand "compare" "compare implementation performance"
         "Compare the performance of different implementations" $
         Compare <$> algorithmParser <*> gpuParser <*> reportParser True
@@ -111,6 +112,15 @@ commands name = (,) docs . hsubparser $ mconcat
     cppFile = strOption . mconcat $
         [ metavar "FILE", short 'e', long "export", value "test.cpp"
         , showDefaultWith id, help "C++ file to write predictor to." ]
+
+defaultImplParser :: Parser (Either Int Text)
+defaultImplParser = implParser <|> pure (Right "edge-list")
+  where
+    implParser = option (Left <$> auto <|> Right <$> str) $ mconcat
+        [ metavar "IMPLEMENTATION", short 'i', long "default-impl"
+        , help "Default implementation in case of no valid prediction. \
+               \Numeric or textual."
+        ]
 
 modelParser :: Parser (SqlM (Key PredictionModel, Model))
 modelParser = queryModel <$> modelOpt
@@ -173,7 +183,8 @@ reportParser isComparison =
         values = M.fromList [("avg", Avg), ("max", Max)]
 
     implTypes :: Parser (Set ImplType)
-    implTypes = S.unions <$> some implParser <|> pure (S.singleton Core)
+    implTypes = S.insert Builtin <$>
+        (S.unions <$> some implParser <|> pure (S.singleton Core))
       where
         implParser = optionParserFromValues values $ mconcat
             --FIXME: list options

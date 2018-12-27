@@ -7,7 +7,7 @@ import Database.Persist.Class (PersistField(..))
 import Database.Persist.TH
 import Database.Persist.Sql (PersistFieldSql(..))
 
-data ImplType = Core | Derived | Comparison
+data ImplType = Builtin | Core | Derived | Comparison
     deriving (Bounded, Enum, Eq, Ord, Read, Show)
 derivePersistField "ImplType"
 

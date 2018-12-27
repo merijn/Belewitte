@@ -1,26 +1,29 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE ViewPatterns #-}
 module Main (main) where
 
 import Control.Monad (forM, forM_, void)
+import Control.Monad.Fail (MonadFail)
 import Control.Monad.IO.Unlift (withRunInIO)
 import Data.Bifunctor (first, second)
 import Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
+import Data.List (intersperse)
 import Data.Maybe (catMaybes)
-import Data.Monoid ((<>))
+import Data.Monoid (Any(..), (<>))
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import Database.Persist.Sqlite (Entity(..), (==.))
 import qualified Database.Persist.Sqlite as Sql
 import Data.Vector.Unboxed (Vector)
 import qualified Data.Vector.Unboxed as VU
@@ -33,19 +36,10 @@ import Paths_benchmark_analysis (getDataFileName)
 import Query
 import Schema
 
-queryImplementations :: Key Algorithm -> SqlM (IntMap Implementation)
-queryImplementations algoId = runConduitRes $
-    selectImpls algoId .| C.foldMap toIntMap
-  where
-    selectImpls aId = Sql.selectSource [ ImplementationAlgorithmId ==. aId ] []
-
-    toIntMap :: Entity Implementation -> IntMap Implementation
-    toIntMap (Entity k val) = IM.singleton (fromIntegral $ fromSqlKey k) val
-
 queryVariants :: Key Algorithm -> Set Text -> SqlM (Set (Key Variant))
 queryVariants algoId graphs = do
     gids <- runConduitRes $ Sql.selectSource [] []
-        .| C.filter (\i -> S.member (graphName (entityVal i)) graphs)
+        .| C.filter (\i -> S.member (graphName (Sql.entityVal i)) graphs)
         .| C.map Sql.entityKey
         .| C.foldMap S.singleton
     variants <- forM (S.toList gids) $ \gId ->
@@ -109,8 +103,10 @@ plotOptions plottype =
     readText = liftIO . fmap (S.fromList . T.lines) . T.readFile
 
     filterImpls :: Set Text -> IntMap Implementation -> IntMap Implementation
-    filterImpls textSet = IM.filter $ (`S.member` textSet) . implementationName
-
+    filterImpls textSet = IM.filter $ getAny . mconcat
+        [ Any . (`S.member` textSet) . implementationName
+        , Any . (Builtin==) . implementationType
+        ]
 
 commands :: String -> (InfoMod a, Parser PlotOptions)
 commands name = (,) mempty . hsubparser $ mconcat
@@ -126,19 +122,52 @@ commands name = (,) mempty . hsubparser $ mconcat
         , progDesc desc
         ]
 
-reportData :: MonadIO m => Handle -> Bool -> (Text, Vector (Int64, Double)) -> m ()
-reportData hnd normalise (graph, timingsPair) = liftIO $ do
-    T.hPutStr hnd $ graph <> " :"
-    VU.forM_ processedTimings $ \time -> hPutStr hnd $ " " ++ show time
-    T.hPutStrLn hnd ""
+reportData
+    :: (MonadFail m, MonadIO m, MonadThrow m)
+    => Handle
+    -> Bool
+    -> IntMap Implementation
+    -> ConduitT (Text, Vector (Int64, Double)) Void m ()
+reportData hnd normalise implMap = do
+    Just (_, VU.map fst -> impls) <- C.peek
+    liftIO . T.putStrLn $ toColumnLabels impls
+    C.mapM_ $ printGraph impls
   where
-    timings :: Vector Double
-    timings = VU.map snd timingsPair
+    translate :: Int64 -> Text
+    translate i = getImplName $ implMap IM.! fromIntegral i
 
-    processedTimings :: Vector Double
-    processedTimings
-        | normalise = VU.map (/ VU.maximum timings) timings
-        | otherwise = timings
+    toColumnLabels :: Vector Int64 -> Text
+    toColumnLabels = mconcat . intersperse ":" . map translate . VU.toList
+
+    printGraph
+        :: (MonadIO m, MonadThrow m)
+        => Vector Int64 -> (Text, Vector (Int64, Double)) -> m ()
+    printGraph impls (graph, timingsPair)
+        | mismatch = throwM . Error . T.unlines $
+            [ "Implementation mismatch between:"
+            , showText impls
+            , "and"
+            , showText timingImpls
+            ]
+        | otherwise = liftIO $ do
+            T.hPutStr hnd $ graph <> " :"
+            VU.forM_ processedTimings $ \time -> hPutStr hnd $ " " ++ show time
+            T.hPutStrLn hnd ""
+      where
+        mismatch :: Bool
+        mismatch = not . VU.and $ VU.zipWith (==) impls timingImpls
+
+        timingImpls :: Vector Int64
+        timings :: Vector Double
+        (timingImpls, timings) = VU.unzip timingsPair
+
+        maxTime :: Double
+        maxTime = VU.maximum . VU.filter (not . isInfinite) $ timings
+
+        processedTimings :: Vector Double
+        processedTimings
+            | normalise = VU.map (/ maxTime) timings
+            | otherwise = timings
 
 dataFromVariantInfo :: VariantInfo -> SqlM (Text, Vector (Int64,Double))
 dataFromVariantInfo VariantInfo{..} = do
@@ -146,8 +175,9 @@ dataFromVariantInfo VariantInfo{..} = do
     name <- graphName <$> Sql.getJust graphId
     return (name, extendedTimings)
   where
-    extendedTimings =
-      variantTimings `VU.snoc` (100, variantBestNonSwitching) `VU.snoc` (200, variantOptimal)
+    extendedTimings = variantTimings
+        `VU.snoc` (bestNonSwitchingImplId, variantBestNonSwitching)
+        `VU.snoc` (optimalImplId, variantOptimal)
 
 plot
     :: PlotConfig
@@ -162,29 +192,36 @@ plot PlotConfig{..} plotName impls query convert
         scriptProc <- liftIO $
             proc <$> getDataFileName "runtime-data/scripts/bar-plot.py"
 
-        let plotProc = (scriptProc [T.unpack plotName, axisName, show normalise])
-                { std_in = CreatePipe }
+        let plotProc = (scriptProc args) { std_in = CreatePipe }
 
         withRunInIO $ \runInIO ->
             withCreateProcess plotProc . withProcess $ runInIO . doWithHandle
   where
+    args :: [String]
+    args = [T.unpack plotName, axisName, show normalise]
+
+    isRelevant :: (Int64, a) -> Bool
     isRelevant (i, _) = IM.member (fromIntegral i) impls
 
-    names = map (getImplName . snd) $ IM.toAscList impls
+    doWithHandle :: Handle -> SqlM ()
+    doWithHandle hnd = runSqlQuery query $
+        convert
+        .| C.map (second (VU.filter isRelevant))
+        .| reportData hnd normalise impls
 
+    withProcess
+        :: (Handle -> IO a)
+        -> Maybe Handle
+        -> Maybe Handle
+        -> Maybe Handle
+        -> ProcessHandle
+        -> IO ()
     withProcess work (Just plotHnd) Nothing Nothing procHandle = void $ do
         work plotHnd
         hClose plotHnd
         waitForProcess procHandle
 
     withProcess _ _ _ _ _ = throwM . Error $ "Error creating plot process!"
-
-    doWithHandle hnd = do
-        liftIO . T.hPutStrLn hnd $ T.intercalate ":" names
-        runSqlQuery query $
-            convert
-            .| C.map (second (VU.filter isRelevant))
-            .| C.mapM_ (reportData hnd normalise)
 
 main :: IO ()
 main = runSqlM commands $ \PlotOptions{..} -> do
@@ -202,24 +239,16 @@ main = runSqlM commands $ \PlotOptions{..} -> do
                 let query = levelTimePlotQuery gpuId variantId
                     pdfName = name <> "-levels"
 
-                plot plotConfig pdfName impls query $
-                    C.map (first showText)
+                plot plotConfig pdfName impls query $ C.map (first showText)
 
         PlotTotals -> do
             let variantQuery = variantInfoQuery algoId gpuId
                 timeQuery = timePlotQuery algoId gpuId variants
                 variantFilter VariantInfo{variantId} =
                     S.member variantId variants
-                extImpls = IM.fromList
-                    [ (100, mkImpl (toSqlKey 1) "Non-switching Best")
-                    , (200, mkImpl (toSqlKey 1) "Optimal")
-                    ]
-                plotImpls = impls <> extImpls
 
-            plot plotConfig "times-variant" plotImpls variantQuery $
+            plot plotConfig "times-variant" impls variantQuery $
                 C.filter variantFilter .| C.mapM dataFromVariantInfo
 
             plot plotConfig "times-timeplot" impls timeQuery $
                 awaitForever yield
-  where
-    mkImpl gpuId name = Implementation gpuId name Nothing Nothing Core True

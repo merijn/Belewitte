@@ -14,7 +14,7 @@ module Evaluate
     , compareImplementations
     ) where
 
-import Control.Monad (forM_, when)
+import Control.Monad (when)
 import Control.Monad.Fail (MonadFail)
 import Control.Monad.Fix (fix)
 import Data.Bifunctor (second)
@@ -26,6 +26,7 @@ import qualified Data.IntervalSet as IS
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 import Data.List (sortBy)
+import Data.Maybe (fromMaybe, listToMaybe)
 import Data.Monoid (Any(..), (<>))
 import Data.Ord (comparing)
 import Data.Set (Set)
@@ -47,13 +48,34 @@ percent x y = T.pack $ showFFloat (Just 2) val "%"
     val :: Double
     val = 100 * realToFrac x / realToFrac y
 
+mIf :: Monoid m => Bool -> m -> m
+mIf condition v
+    | condition = v
+    | otherwise = mempty
+
 padText :: Int -> Text -> Text
 padText n t = t <> T.replicate (n - T.length t) " "
 
-accumTimings :: (Int64, Double) -> (Int64, Double) -> (Int64, Double)
-accumTimings (i1, v1) (i2, v2)
-    | i1 == i2 = (i1, v1 + v2)
-    | otherwise = error "Shouldn't happen!"
+liftTuple :: (a -> b -> c) -> (Int64, a) -> (Int64, b) -> (Int64, c)
+liftTuple f (i1, v1) (i2, v2)
+    | i1 == i2 = (i1, f v1 v2)
+    | otherwise = error $ mconcat
+        [ "Shouldn't happen! Found: " , show i1, " and ", show i2]
+
+reportImplementations
+    :: Int -> IntMap Implementation -> (a -> Text) -> [(Int64, a)] -> IO ()
+reportImplementations padding impls f =
+    mapM_ $ \(implId, val) -> T.putStrLn $ mconcat
+        [ T.replicate padding " "
+        , padText padSize $ toImplName implId <> ":"
+        , f val
+        ]
+  where
+    toImplName :: Int64 -> Text
+    toImplName ix = getImplName $ impls IM.! fromIntegral ix
+
+    padSize :: Int
+    padSize = 2 + maximum (T.length . getImplName <$> impls)
 
 foldGroup
     :: Monad m
@@ -76,35 +98,55 @@ data VariantAggregate =
 
 aggregateSteps
     :: (MonadFail m, MonadIO m)
-    => Model -> ConduitT StepInfo Void m VariantAggregate
-aggregateSteps model = do
-    Just StepInfo{stepTimings} <- C.peek
-    snd <$> C.foldl aggregate (initial stepTimings)
-  where
-    initial :: Unbox a => Vector (Int64, a) -> (Int, VariantAggregate)
-    initial v = (1, VariantAgg
-        { variantid = toSqlKey (-1)
-        , optimalTime = 0
-        , implTimes = VU.map (second (const 0)) v `VU.snoc` (300, 0)
-        })
+    => Int -> Model -> ConduitT StepInfo Void m VariantAggregate
+aggregateSteps defaultImpl model = do
+    Just StepInfo{stepVariantId,stepTimings} <- C.peek
 
-    aggregate :: (Int, VariantAggregate) -> StepInfo -> (Int, VariantAggregate)
-    aggregate (!lastImpl, !VariantAgg{..}) !StepInfo{..} =
-      (newPrediction, VariantAgg
+    let zeroTimeVec :: Vector (Int64, Double)
+        zeroTimeVec = VU.map (second (const 0)) stepTimings `VU.snoc`
+            (predictedImplId, 0)
+
+        initial :: (Int, VariantAggregate)
+        initial = (defaultImpl, VariantAgg
+            { variantid = stepVariantId
+            , optimalTime = 0
+            , implTimes = zeroTimeVec
+            })
+
+        mapImpl :: Vector (Int64, Double) -> Vector (Int, Int)
+        mapImpl = VU.imap (\i (impl, _) -> (fromIntegral impl, i))
+
+        translateMap :: IntMap Int
+        translateMap = IM.fromList . VU.toList .  mapImpl $ zeroTimeVec
+
+    snd <$> C.foldl (aggregate translateMap) initial
+  where
+    aggregate
+        :: IntMap Int
+        -> (Int, VariantAggregate)
+        -> StepInfo
+        -> (Int, VariantAggregate)
+    aggregate translateMap (!lastImpl, !VariantAgg{..}) !StepInfo{..} =
+      (predictedImpl, VariantAgg
             { variantid = stepVariantId
             , optimalTime = optimalTime + getTime stepBestImpl
-            , implTimes = VU.zipWith accumTimings implTimes $
-                    stepTimings `VU.snoc` (300, getTime newPrediction)
+            , implTimes = VU.zipWith (liftTuple (+)) implTimes $
+                    stepTimings `VU.snoc` newPrediction
             })
       where
-        newPrediction
+        newPrediction :: (Int64, Double)
+        newPrediction = (predictedImplId, getTime predictedImpl)
+
+        predictedImpl :: Int
+        predictedImpl
           | prediction == -1 = lastImpl
           | otherwise = prediction
           where
             prediction = predict model stepProps
 
         getTime :: Integral n => n -> Double
-        getTime ix = snd $ stepTimings `VU.unsafeIndex` (fromIntegral ix - 1)
+        getTime ix = snd $
+            stepTimings `VU.unsafeIndex` (translateMap IM.! fromIntegral ix)
 
 data TotalStatistics =
   TotalStats
@@ -119,7 +161,7 @@ data TotalStatistics =
 aggregateVariants
     :: (MonadFail m, MonadIO m)
     => IntervalSet Int64
-    -> Maybe Int
+    -> RelativeTo
     -> IntMap Implementation
     -> ConduitT VariantAggregate Void m TotalStatistics
 aggregateVariants variantIntervals relTo impls = do
@@ -139,11 +181,6 @@ aggregateVariants variantIntervals relTo impls = do
         zeroIntVector = VU.map (const 0) v
         zeroDoubleVector = VU.map (const 0) v
 
-    toImplName :: Int64 -> Text
-    toImplName ix = getImplName $ impls IM.! fromIntegral ix
-
-    padSize = 2 + maximum (T.length . getImplName <$> impls)
-
     aggregate
         :: MonadIO m
         => TotalStatistics
@@ -152,14 +189,13 @@ aggregateVariants variantIntervals relTo impls = do
     aggregate TotalStats{..} VariantAgg{..} = liftIO $ do
         when (fromSqlKey variantid `IS.member` variantIntervals) $ do
             T.putStrLn $ "Variant #" <> showText (fromSqlKey variantid)
-            T.putStrLn $ relTiming "Optimal" optimalTime
-            forM_ ranked $ \(implId, time) -> do
-                T.putStrLn $ relTiming (toImplName implId) time
+            reportImplementations 4 impls relTiming ranked
             T.putStrLn ""
 
         return TotalStats
           { variantCount = variantCount + 1
-          , timesCumRelError = VU.zipWith accumTimings timesCumRelError relTimings
+          , timesCumRelError =
+                VU.zipWith (liftTuple (+)) timesCumRelError relTimings
 
           , relErrorOneToTwo =
                 VU.zipWith (lessThan 2) relTimings relErrorOneToTwo
@@ -170,7 +206,8 @@ aggregateVariants variantIntervals relTo impls = do
           , relErrorMoreThanTwenty =
                 VU.zipWith (moreThan 20) relTimings relErrorMoreThanTwenty
 
-          , timesMaxRelError = VU.zipWith max timesMaxRelError (VU.map snd relTimings)
+          , timesMaxRelError =
+                VU.zipWith max timesMaxRelError . VU.map snd $ relTimings
           }
       where
         lessThan :: Double -> (Int64, Double) -> Int -> Int
@@ -185,15 +222,23 @@ aggregateVariants variantIntervals relTo impls = do
 
         relTimings = VU.map (second (/relToTime)) implTimes
 
-        relToTime = case relTo of
-            Nothing -> optimalTime
-            Just i -> snd $ timesCumRelError VU.! i
+        findImplTime :: Int64 -> Maybe Double
+        findImplTime i = snd <$> VU.find ((i==) . fst) timesCumRelError
 
-        relTiming name t = mconcat
-            [ "    ", padText padSize (name <> ":"), percent t optimalTime
-            , " (" <> showText t <> ")" ]
+        relToTime :: Double
+        relToTime = fromMaybe (error "Implementation not found!") $
+            case relTo of
+                Optimal -> Just optimalTime
+                Predicted -> findImplTime predictedImplId
+                BestNonSwitching -> findImplTime bestNonSwitchingImplId
 
-        ranked = sortBy (comparing snd) $ VU.toList implTimes
+        relTiming t = percent t optimalTime <> " (" <> showText t <> ")"
+
+        rankImpls :: Vector (Int64, Double) -> [(Int64, Double)]
+        rankImpls = sortBy (comparing snd) . VU.toList
+
+        ranked :: [(Int64, Double)]
+        ranked = (optimalImplId, optimalTime) : rankImpls implTimes
 
 data RelativeTo = Optimal | Predicted | BestNonSwitching
     deriving (Eq,Ord,Show,Read)
@@ -212,122 +257,103 @@ data Report = Report
 evaluateModel
     :: Key Algorithm
     -> Key GPU
+    -> Either Int Text
     -> Report
     -> Model
     -> TrainingConfig
-    -> IntMap Implementation
     -> SqlM ()
-evaluateModel algoId gpuId reportCfg@Report{..} model trainConfig oldImpls = do
+evaluateModel algoId gpuId defImpl reportCfg@Report{..} model trainConfig = do
+    impls <- queryImplementations algoId
+    let lookupByName :: Text -> Maybe Int
+        lookupByName t = fmap fst
+                       . listToMaybe
+                       . filter ((t==) . implementationName . snd)
+                       $ IM.toList impls
+
+    defaultImpl <- case defImpl of
+        Left i | IM.member i impls -> return i
+        Right t | Just i <- lookupByName t -> return i
+        _ -> logThrowM $ Error "Default implementation not found!"
+
     stats <- runSqlQuery query $
-        foldGroup ((==) `on` stepVariantId) (aggregateSteps model)
-        .| C.map addBestNonSwitching
-        .| aggregateVariants reportVariants relTo impls
+        foldGroup ((==) `on` stepVariantId) (aggregateSteps defaultImpl model)
+        .| C.map (addBestNonSwitching impls)
+        .| aggregateVariants reportVariants reportRelativeTo impls
 
     printTotalStatistics reportCfg impls stats
   where
     query = getTotalQuery algoId gpuId trainConfig
 
-    relTo = case reportRelativeTo of
-        Optimal -> Nothing
-        Predicted -> Just implCount
-        BestNonSwitching -> Just $ implCount + 1
-
-    implCount = IM.size oldImpls
-    impls = oldImpls <> IM.fromList
-        [(300,
-            Implementation (toSqlKey 1) "Predicted" Nothing Nothing Core True)
-        ,(100,
-            Implementation (toSqlKey 1) "Best Non-switching" Nothing Nothing Core True)
-        ]
-
-    addBestNonSwitching :: VariantAggregate -> VariantAggregate
-    addBestNonSwitching VariantAgg{..} = VariantAgg
+    addBestNonSwitching
+        :: IntMap Implementation -> VariantAggregate -> VariantAggregate
+    addBestNonSwitching impls VariantAgg{..} = VariantAgg
         { variantid = variantid
         , optimalTime = optimalTime
-        , implTimes = implTimes `VU.snoc` (100, bestNonSwitchingTime)
+        , implTimes = implTimes `VU.snoc`
+            (bestNonSwitchingImplId, bestNonSwitchingTime)
         }
       where
-        coreImpls = IM.filter ((==Core) . implementationType) oldImpls
-
         isCoreImpl :: Int64 -> Bool
-        isCoreImpl = (`IM.member` coreImpls) . fromIntegral
+        isCoreImpl i = case IM.lookup (fromIntegral i) impls of
+            Just Implementation{implementationType = Core} -> True
+            _ -> False
 
-        !bestNonSwitchingTime = minimum . map snd $ coreTimes
-        coreTimes = filter (isCoreImpl . fst) $ VU.toList implTimes
+        !bestNonSwitchingTime =
+          VU.minimum . VU.map snd . VU.filter (isCoreImpl . fst) $ implTimes
 
 compareImplementations
-    :: Key Algorithm -> Key GPU -> Report -> IntMap Implementation -> SqlM ()
-compareImplementations algoId gpuId reportConfig@Report{..} originalImpls = do
+    :: Key Algorithm -> Key GPU -> Report -> SqlM ()
+compareImplementations algoId gpuId reportConfig@Report{..} = do
+    impls <- queryImplementations algoId
     stats <- runSqlQuery query $
         C.map addBestNonSwitching
-        .| aggregateVariants reportVariants relTo impls
+        .| aggregateVariants reportVariants reportRelativeTo impls
 
     printTotalStatistics reportConfig impls stats
   where
     query = variantInfoQuery algoId gpuId
 
-    relTo = case reportRelativeTo of
-        Optimal -> Nothing
-        Predicted -> error "Not supported!"
-        BestNonSwitching -> Just implCount
-
-    implCount = IM.size originalImpls
-    nonSwitching = Implementation (toSqlKey 1) "non-switching" Nothing Nothing Core True
-
-    impls = IM.insert 100 nonSwitching originalImpls
-
     addBestNonSwitching :: VariantInfo -> VariantAggregate
     addBestNonSwitching VariantInfo{..} = VariantAgg
         { variantid = variantId
         , optimalTime = variantOptimal
-        , implTimes = variantTimings `VU.snoc` (100, variantBestNonSwitching)
+        , implTimes = variantTimings `VU.snoc`
+            (bestNonSwitchingImplId, variantBestNonSwitching)
         }
 
 printTotalStatistics
     :: MonadIO m => Report -> IntMap Implementation -> TotalStatistics -> m ()
 printTotalStatistics Report{..} impls TotalStats{..} = liftIO $ do
-    T.putStr . T.unlines $
-        [ "Summarising:"
-        {-
-        , relError "Predicted" predictedCumRelError predictedMaxRelError
-        , relError "Best Non-switching"
-            bestNonSwitchingCumRelError bestNonSwitchingMaxRelError
-            -}
-        ]
-
-    forM_ rankedTimings $ relError
+    T.putStrLn "Summarising:"
+    reportImplementations 0 impls relError rankedTimings
   where
-    relError (implId, cumError, oneToTwo, gtFive, gtTwenty, maxError) = do
-      T.putStr $ padText padSize (toImplName implId <> ":")
-      T.putStr . T.pack $ roundedVal (cumError / fromIntegral variantCount)
-      when reportVerbose $ do
-          T.putStr $ "\t" <> percent oneToTwo variantCount
-          T.putStr $ "\t" <> percent gtFive variantCount
-          T.putStr $ "\t" <> percent gtTwenty variantCount
-      T.putStrLn . T.pack $ "\t" <> roundedVal maxError
+    relError (cumError, oneToTwo, gtFive, gtTwenty, maxError) = mconcat
+        [ T.pack $ roundedVal (cumError / fromIntegral variantCount)
+        , mIf reportVerbose $ mconcat
+                [ "\t" <> percent oneToTwo variantCount
+                , "\t" <> percent gtFive variantCount
+                , "\t" <> percent gtTwenty variantCount
+                ]
+        , T.pack $ "\t" <> roundedVal maxError
+        ]
       where
         roundedVal val = showFFloat (Just 3) val ""
 
-    rankedTimings = sortBy (comparing compareTime) (VU.toList reportTimings)
+    rankedTimings = sortBy (comparing compareTime) $ VU.toList reportTimings
 
-    reportTimings :: Vector (Int64, Double, Int, Int, Int, Double)
-    reportTimings = VU.filter (\(impl,_,_,_,_,_) -> isReportImpl impl) $
-      VU.zipWith5 (\(x,y) -> (x,y,,,,))
+    reportTimings :: Vector (Int64, (Double, Int, Int, Int, Double))
+    reportTimings = VU.filter (\(impl,_) -> isReportImpl impl) $
+      VU.zipWith5 (\(i,a) b c d e-> (i,(a,b,c,d,e)))
                   timesCumRelError
                   relErrorOneToTwo
                   relErrorMoreThanFive
                   relErrorMoreThanTwenty
                   timesMaxRelError
 
-    toImplName :: Int64 -> Text
-    toImplName ix = getImplName $ impls IM.! fromIntegral ix
-
-    compareTime :: (Int64, Double, Int, Int, Int, Double) -> Double
-    compareTime (_, avgTime, _, _, _, maxTime) = case reportSortBy of
+    compareTime :: (Int64, (Double, Int, Int, Int, Double)) -> Double
+    compareTime (_, (avgTime, _, _, _, maxTime)) = case reportSortBy of
         Avg -> avgTime
         Max -> maxTime
-
-    padSize = 2 + maximum (T.length . getImplName <$> reportImpls)
 
     implFilter :: ImplType -> Bool
     implFilter = getAny . foldMap (\i -> Any . (==i)) reportImplTypes

@@ -109,12 +109,12 @@ getOptionalInput = getInputWith checkEmpty "" -- Never fails
 
 getReadInput
     :: forall a m . (MonadException m, Bounded a, Enum a, Read a, Show a)
-    => Text -> Input m a
-getReadInput prompt = withCompletion (SimpleCompletion completions) $
+    => (a -> Bool) -> Text -> Input m a
+getReadInput f prompt = withCompletion (SimpleCompletion completions) $
     getInputWith (return . readMaybe . T.unpack) "Parse error!" prompt
   where
     allValues :: [a]
-    allValues = [minBound .. maxBound]
+    allValues = filter f [minBound .. maxBound]
 
     completions :: Monad m => String -> m [Completion]
     completions s = return $ toCompletions s allValues
@@ -163,11 +163,11 @@ addImplementation = do
     prettyName <- getOptionalInput "Implementation Pretty Name"
     flags <- getOptionalInput "Flags"
 
-    algoType <- getReadInput "Algorithm type"
-    runnable <- getReadInput "Runnable"
+    implType <- getReadInput (/=Builtin) "Implementation type"
+    runnable <- getReadInput (const True) "Runnable"
 
     liftSql . Sql.insert_ $
-        Implementation algoId implName prettyName flags algoType runnable
+        Implementation algoId implName prettyName flags implType runnable
 
 addVariant :: Input SqlM ()
 addVariant = do
