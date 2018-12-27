@@ -266,7 +266,7 @@ compareImplementations algoId gpuId reportConfig@Report{..} originalImpls = do
     addBestNonSwitching VariantInfo{..} = VariantAgg
         { variantid = variantId
         , optimalTime = variantOptimal
-        , implTimes = variantTimings `VU.snoc` variantBestNonSwitching
+        , implTimes = VU.ifilter (\i _ -> IM.member (i+1) originalImpls) variantTimings `VU.snoc` variantBestNonSwitching
         }
 
 printTotalStatistics
