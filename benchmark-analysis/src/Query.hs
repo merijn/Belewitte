@@ -20,13 +20,11 @@ module Query
     , levelTimePlotQuery
     ) where
 
-import Control.Monad (forM_, join)
-import Control.Monad.IO.Unlift (toIO)
-import Control.Monad.Trans.Resource (allocate, release)
+import Control.Monad.Trans.Resource (release)
 import Data.Acquire (allocateAcquire)
 import Data.Conduit (ConduitT, Void, (.|), await, runConduit)
 import qualified Data.Conduit.List as C
-import Data.Int (Int64)
+import Data.List (intersperse)
 import Data.Monoid ((<>))
 import Data.String (fromString)
 import Data.String.Interpolate.IsString (i)
@@ -35,6 +33,7 @@ import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Vector.Unboxed (Vector)
+import qualified Data.Vector.Unboxed as VU
 import Database.Persist.Sqlite
 import System.IO (Handle)
 
@@ -44,8 +43,7 @@ import Utils (byteStringToVector)
 
 data Query r =
   Query
-    { tempTables :: [Text]
-    , clearTempTables :: [Text]
+    { commonTableExpressions :: [Text]
     , params :: [PersistValue]
     , convert :: forall m . (MonadIO m, MonadLogger m, MonadThrow m)
               => [PersistValue] -> m r
@@ -57,7 +55,7 @@ instance Functor Query where
 
 explainSqlQuery :: Query r -> Handle -> SqlM ()
 explainSqlQuery originalQuery hnd = do
-    runSqlQuery' explainQuery $ C.mapM_ (liftIO . T.hPutStrLn hnd)
+    runSqlQuery' True explainQuery $ C.mapM_ (liftIO . T.hPutStrLn hnd)
     liftIO $ do
         T.hPutStrLn hnd $ ""
         T.hPutStrLn hnd $ T.replicate 80 "#"
@@ -70,10 +68,7 @@ explainSqlQuery originalQuery hnd = do
         = return t
     explain _ = logThrowM $ Error "Explain failed!"
 
-    explainQuery = originalQuery
-      { query = "EXPLAIN QUERY PLAN " <> query originalQuery
-      , convert = explain
-      }
+    explainQuery = originalQuery { convert = explain }
 
 randomizeQuery :: Int -> Integer -> Query r -> (Query r, Query r)
 randomizeQuery seed trainingSize originalQuery = (training, validation)
@@ -90,23 +85,24 @@ randomizeQuery seed trainingSize originalQuery = (training, validation)
 runSqlQuery :: Query r -> ConduitT r Void SqlM a -> SqlM a
 runSqlQuery query sink = do
     logQueryExplanation $ explainSqlQuery query
-    runSqlQuery' query sink
+    runSqlQuery' False query sink
 
-runSqlQuery' :: Query r -> ConduitT r Void SqlM a -> SqlM a
-runSqlQuery' Query{..} sink = do
-    (tables, ()) <- join $ allocate <$> createTables <*> dropTables
-    srcRes <- liftPersist $ rawQueryRes query params
+mIf :: Monoid m => Bool -> m -> m
+mIf condition val
+    | condition = val
+    | otherwise = mempty
+
+runSqlQuery' :: Bool -> Query r -> ConduitT r Void SqlM a -> SqlM a
+runSqlQuery' isExplain Query{..} sink = do
+    srcRes <- liftPersist $ rawQueryRes fullQuery params
     (key, src) <- allocateAcquire srcRes
-    runConduit (src .| C.mapM convert .| sink) <* release key <* release tables
+    runConduit (src .| C.mapM convert .| sink) <* release key
   where
-    createTables :: SqlM (IO ())
-    createTables = toIO . forM_ tempTables $ \q -> rawExecute q []
-
-    dropTables :: SqlM (() -> IO ())
-    dropTables = const <$> act
-      where
-        act :: SqlM (IO ())
-        act = toIO . forM_ clearTempTables $ \q -> rawExecute q []
+    fullQuery :: Text
+    fullQuery = mconcat $
+        [ mIf isExplain "EXPLAIN QUERY PLAN "
+        , mIf (not $ null commonTableExpressions) "\nWITH "
+        ] <> intersperse ",\n\n" commonTableExpressions <> [query]
 
 runSqlQueryCount :: Query r -> SqlM Int
 runSqlQueryCount originalQuery = do
@@ -128,7 +124,7 @@ data StepInfo =
     , stepBestImpl :: {-# UNPACK #-} !Int64
     , stepVariantId :: {-# UNPACK #-} !(Key Variant)
     , stepId :: {-# UNPACK #-} !Int64
-    , stepTimings :: {-# UNPACK #-} !(Vector Double)
+    , stepTimings :: {-# UNPACK #-} !(Vector (Int64, Double))
     } deriving (Show)
 
 stepInfoQuery
@@ -146,69 +142,104 @@ stepInfoQuery algoId gpuId graphProperties stepProperties = Query{..}
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
         => [PersistValue] -> m StepInfo
-    convert [ PersistByteString bs1, PersistByteString bs2
+    convert [ PersistByteString (byteStringToVector -> graphProps)
+            , PersistByteString (byteStringToVector -> rawStepProps)
             , PersistInt64 stepBestImpl
             , PersistInt64 (toSqlKey -> stepVariantId) , PersistInt64 stepId
-            , PersistByteString times
+            , PersistByteString (byteStringToVector -> impls)
+            , PersistByteString (byteStringToVector -> timings)
             ] = return $ StepInfo{..}
       where
-        stepProps = byteStringToVector bs1 <> byteStringToVector bs2
-        stepTimings = byteStringToVector times
+        stepProps = graphProps <> rawStepProps
+        stepTimings = VU.zip impls timings
 
     convert l = logThrowM . Error . fromString $ "Unexpected value: " ++ show l
 
-    tempTables = [[i|
-CREATE TEMP TABLE indexedGraphProps AS
-    SELECT DISTINCT property
-    FROM GraphProp
-    WHERE #{whereClauses graphProperties}
-    ORDER BY property ASC
-|],[i|
-CREATE TEMP TABLE indexedStepProps AS
-    SELECT DISTINCT property
-    FROM StepProp
-    WHERE #{whereClauses stepProperties}
-    ORDER BY property ASC
-|]]
+    commonTableExpressions :: [Text]
+    commonTableExpressions = [[i|
+    IndexedGraphProps(idx, property) AS (
+        SELECT ROW_NUMBER() OVER (ORDER BY property)
+             , property
+          FROM (SELECT DISTINCT property
+                 FROM GraphProp
+                WHERE #{whereClauses graphProperties})
+         ORDER BY property
+    ),
 
-    clearTempTables =
-      ["DROP TABLE indexedGraphProps","DROP TABLE indexedStepProps"]
+    IndexedStepProps(idx, property) AS (
+        SELECT ROW_NUMBER() OVER (ORDER BY property)
+             , property
+          FROM (SELECT DISTINCT property
+                  FROM StepProp
+                 WHERE #{whereClauses stepProperties})
+         ORDER BY property
+    ),
+
+    IndexedImpls(idx, implId, type) AS (
+        SELECT ROW_NUMBER() OVER (ORDER BY implId)
+             , implId
+             , type
+          FROM (SELECT id AS implId
+                     , type
+                  FROM Implementation
+                 WHERE algorithmId = #{fromSqlKey algoId})
+         ORDER BY implId
+    ),
+
+    ImplVector(impls) AS (
+        SELECT int64_vector(implId, idx, (SELECT COUNT(*) FROM IndexedImpls))
+          FROM IndexedImpls
+    )|]]
 
     query = [i|
-SELECT GraphProps.props, StepProps.props, Step.implId, Variant.id, Step.stepId, Step.timings
+SELECT GraphProps.props
+     , StepProps.props
+     , Step.implId
+     , Variant.id
+     , Step.stepId
+     , ImplVector.impls
+     , Step.timings
 FROM Variant
-INNER JOIN Graph ON Variant.graphId = Graph.id
+INNER JOIN Graph
+ON Variant.graphId = Graph.id
+
 INNER JOIN
-    ( SELECT variantId, stepId, implId
-           , MIN(CASE Implementation.type
-                 WHEN "Core" THEN avgTime
-                 ELSE NULL END
-           )
-           , vector(avgTime, implId, (SELECT COUNT(*) FROM Implementation)) AS timings
-      FROM StepTimer
-      INNER JOIN Implementation ON StepTimer.implId = Implementation.id
-      WHERE gpuId = ?
-      GROUP BY variantId, stepId
-    ) AS Step
-    ON Variant.id = Step.variantId
+(   SELECT variantId, stepId, IndexedImpls.implId
+         , MIN(CASE IndexedImpls.type
+               WHEN "Core" THEN avgTime
+               ELSE NULL END)
+         , double_vector(avgTime, idx, (SELECT COUNT(*) FROM IndexedImpls))
+           AS timings
+    FROM StepTimer
+    INNER JOIN IndexedImpls
+    ON StepTimer.implId = IndexedImpls.implId
+    WHERE gpuId = ?
+    GROUP BY variantId, stepId
+
+) AS Step
+ON Variant.id = Step.variantId
+
 INNER JOIN
-    ( SELECT graphId
-           , vector(value, idxProps.rowid, #{S.size graphProperties}) AS props
-      FROM GraphProp
-      INNER JOIN indexedGraphProps AS idxProps
-          ON idxProps.property = GraphProp.property
-      GROUP BY graphId
-    ) AS GraphProps
-    ON GraphProps.graphId = Graph.id
+(   SELECT graphId
+         , double_vector(value, idx, #{S.size graphProperties}) AS props
+    FROM GraphProp
+    INNER JOIN IndexedGraphProps AS IdxProps
+    ON IdxProps.property = GraphProp.property
+    GROUP BY graphId
+) AS GraphProps
+ON GraphProps.graphId = Graph.id
+
 INNER JOIN
-    ( SELECT variantId, stepId
-           , vector(value, idxProps.rowid, #{S.size stepProperties}) AS props
-      FROM StepProp
-      INNER JOIN indexedStepProps AS idxProps
-          ON idxProps.property = StepProp.property
-      GROUP BY variantId, stepId
-    ) AS StepProps
-    ON Variant.id = StepProps.variantId AND Step.stepId = StepProps.stepId
+(   SELECT variantId, stepId
+         , double_vector(value, idx, #{S.size stepProperties}) AS props
+    FROM StepProp
+    INNER JOIN IndexedStepProps AS IdxProps
+    ON IdxProps.property = StepProp.property
+    GROUP BY variantId, stepId
+) AS StepProps
+ON Variant.id = StepProps.variantId AND Step.stepId = StepProps.stepId
+
+LEFT JOIN ImplVector
 WHERE Variant.algorithmId = ?
 ORDER BY Variant.id, Step.stepId ASC|]
 
@@ -217,7 +248,7 @@ data VariantInfo =
     { variantId :: {-# UNPACK #-} !(Key Variant)
     , variantOptimal :: {-# UNPACK #-} !Double
     , variantBestNonSwitching :: {-# UNPACK #-} !Double
-    , variantTimings :: {-# UNPACK #-} !(Vector Double)
+    , variantTimings :: {-# UNPACK #-} !(Vector (Int64, Double))
     } deriving (Show)
 
 variantInfoQuery :: Key Algorithm -> Key GPU -> Query VariantInfo
@@ -228,16 +259,14 @@ variantInfoQuery algoId gpuId = Query{..}
              , toPersistValue algoId
              ]
 
-    tempTables = []
-    clearTempTables = []
-
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
         => [PersistValue] -> m VariantInfo
     convert [ PersistInt64 (toSqlKey -> variantId)
             , stepOptimal
             , PersistDouble variantBestNonSwitching
-            , PersistByteString (byteStringToVector -> variantTimings)
+            , PersistByteString (byteStringToVector -> impls)
+            , PersistByteString (byteStringToVector -> timings)
             ]
 
             | PersistDouble variantOptimal <- stepOptimal
@@ -247,37 +276,71 @@ variantInfoQuery algoId gpuId = Query{..}
             = let variantOptimal = infinite in return VariantInfo{..}
             where
               !infinite = 1/0
+              variantTimings = VU.zip impls timings
 
     convert l = logThrowM . Error . fromString $ "Unexpected value: " ++ show l
 
+    commonTableExpressions :: [Text]
+    commonTableExpressions = [[i|
+    IndexedImpls(idx, implId, type) AS (
+        SELECT ROW_NUMBER() OVER (ORDER BY implId)
+             , implId
+             , type
+          FROM (SELECT id AS implId
+                     , type
+                  FROM Implementation
+                 WHERE algorithmId = #{fromSqlKey algoId})
+         ORDER BY implId
+    ),
+
+    ImplVector(impls) AS (
+        SELECT int64_vector(implId, idx, (SELECT COUNT(*) FROM IndexedImpls))
+          FROM IndexedImpls
+    )|]]
+
     query = [i|
-SELECT Variant.id, OptimalStep.optimal, Total.bestNonSwitching, Total.timings
+SELECT Variant.id
+     , OptimalStep.optimal
+     , Total.bestNonSwitching
+     , ImplVector.impls
+     , Total.timings
 FROM Variant
 LEFT JOIN
-    ( SELECT variantId, SUM(Step.minTime) AS optimal
-      FROM ( SELECT variantId, stepId
-                  , MIN(CASE Implementation.type
-                        WHEN "Core" THEN avgTime
-                        ELSE NULL END) as minTime
-             FROM StepTimer
-             INNER JOIN Implementation ON StepTimer.implId = Implementation.id
-             WHERE gpuId = ?
-             GROUP BY variantId, stepId) AS Step
-      GROUP BY variantId
-    ) AS OptimalStep
-    ON Variant.id = OptimalStep.variantId
+(   SELECT variantId
+         , SUM(Step.minTime) AS optimal
+    FROM (
+        SELECT variantId
+             , stepId
+             ,  MIN(CASE Implementation.type
+                    WHEN "Core" THEN avgTime
+                    ELSE NULL END) AS minTime
+        FROM StepTimer
+        INNER JOIN Implementation
+        ON StepTimer.implId = Implementation.id
+        WHERE gpuId = ?
+        GROUP BY variantId, stepId
+    ) AS Step
+    GROUP BY variantId
+) AS OptimalStep
+ON Variant.id = OptimalStep.variantId
+
 INNER JOIN
-    ( SELECT variantId
-           , MIN(CASE Implementation.type
-                 WHEN "Core" THEN avgTime
-                 ELSE NULL END) as bestNonSwitching
-           , vector(avgTime, implId, (SELECT COUNT(*) FROM Implementation)) AS timings
+(   SELECT variantId
+         , MIN(CASE IndexedImpls.type
+               WHEN "Core" THEN avgTime
+               ELSE NULL END) AS bestNonSwitching
+         , double_vector(avgTime, idx, (SELECT COUNT(*) FROM IndexedImpls))
+           AS timings
       FROM TotalTimer
-      INNER JOIN Implementation ON TotalTimer.implId = Implementation.id
+      INNER JOIN IndexedImpls
+      ON TotalTimer.implId = IndexedImpls.implId
       WHERE gpuId = ? AND TotalTimer.name = "computation"
       GROUP BY variantId
-    ) AS Total
-    ON Variant.id = Total.variantId
+) AS Total
+ON Variant.id = Total.variantId
+
+LEFT JOIN ImplVector
+
 WHERE Variant.algorithmId = ?
 ORDER BY Variant.id ASC|]
 
@@ -285,14 +348,11 @@ timePlotQuery
     :: Key Algorithm
     -> Key GPU
     -> Set (Key Variant)
-    -> Query (Text, Vector Double)
+    -> Query (Text, Vector (Int64, Double))
 timePlotQuery algoId gpuId variants = Query{..}
   where
     params :: [PersistValue]
     params = [toPersistValue gpuId, toPersistValue algoId]
-
-    tempTables = []
-    clearTempTables = []
 
     havingClause = T.intercalate " OR " . map clause . S.toList
       where
@@ -300,46 +360,109 @@ timePlotQuery algoId gpuId variants = Query{..}
 
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
-        => [PersistValue] -> m (Text, Vector Double)
-    convert [PersistText graph, PersistByteString timings] =
-        return $ (graph, byteStringToVector timings)
+        => [PersistValue] -> m (Text, Vector (Int64, Double))
+    convert [ PersistText graph
+            , PersistByteString (byteStringToVector -> impls)
+            , PersistByteString (byteStringToVector -> timings)
+            ] = return $ (graph, VU.zip impls timings)
     convert l = logThrowM . Error . fromString $ "Unexpected value: " ++ show l
 
+    commonTableExpressions :: [Text]
+    commonTableExpressions = [[i|
+    IndexedImpls(idx, implId, type) AS (
+        SELECT ROW_NUMBER() OVER (ORDER BY implId)
+             , implId
+             , type
+          FROM (SELECT id AS implId
+                     , type
+                  FROM Implementation
+                 WHERE algorithmId = #{fromSqlKey algoId})
+         ORDER BY implId
+    ),
+
+    ImplVector(impls) AS (
+        SELECT int64_vector(implId, idx, (SELECT COUNT(*) FROM IndexedImpls))
+          FROM IndexedImpls
+    )|]]
+
     query = [i|
-SELECT Graph.name, Total.timings
+SELECT Graph.name
+     , ImplVector.impls
+     , Total.timings
 FROM Variant
-INNER JOIN Graph ON Variant.graphId = Graph.id
+INNER JOIN Graph
+ON Variant.graphId = Graph.id
+
 INNER JOIN
-    ( SELECT variantId
-           , vector(avgTime, implId, (SELECT COUNT(*) FROM Implementation)) AS timings
-      FROM TotalTimer
-      WHERE gpuId = ? AND name = "computation"
-      GROUP BY variantId
-      HAVING #{havingClause variants}
-    ) AS Total
-    ON Variant.id = Total.variantId
+(   SELECT variantId
+         , double_vector(avgTime, idx, (SELECT COUNT(*) FROM IndexedImpls))
+           AS timings
+    FROM TotalTimer
+    INNER JOIN IndexedImpls
+    ON IndexedImpls.implId = TotalTimer.implId
+    WHERE gpuId = ? AND name = "computation"
+    GROUP BY variantId
+    HAVING #{havingClause variants}
+) AS Total
+ON Variant.id = Total.variantId
+
+LEFT JOIN ImplVector
+
 WHERE Variant.name = "default" AND Variant.algorithmId = ?
 ORDER BY Variant.id ASC|]
 
-levelTimePlotQuery :: Key GPU -> Key Variant -> Query (Int64, Vector Double)
+levelTimePlotQuery
+    :: Key GPU -> Key Variant -> Query (Int64, Vector (Int64, Double))
 levelTimePlotQuery gpuId variant = Query{..}
   where
     params :: [PersistValue]
     params = [toPersistValue gpuId, toPersistValue variant]
 
-    tempTables = []
-    clearTempTables = []
-
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
-        => [PersistValue] -> m (Int64, Vector Double)
-    convert [PersistInt64 stepId, PersistByteString timings] =
-        return $ (stepId, byteStringToVector timings)
+        => [PersistValue] -> m (Int64, Vector (Int64, Double))
+    convert [ PersistInt64 stepId
+            , PersistByteString (byteStringToVector -> impls)
+            , PersistByteString (byteStringToVector -> timings)
+            ] =
+        return $ (stepId, VU.zip impls timings)
     convert l = logThrowM . Error . fromString $ "Unexpected value: " ++ show l
 
+    commonTableExpressions :: [Text]
+    commonTableExpressions = [[i|
+    IndexedImpls(idx, implId, type) AS (
+        SELECT ROW_NUMBER() OVER (ORDER BY implId)
+             , implId
+             , type
+        FROM
+        (   SELECT id AS implId
+                 , type
+            FROM Implementation
+            WHERE algorithmId IN
+            (   SELECT algorithmId
+                FROM Variant
+                WHERE id = #{fromSqlKey variant}
+            )
+        )
+        ORDER BY implId
+    ),
+
+    ImplVector(impls) AS (
+        SELECT int64_vector(implId, idx, (SELECT COUNT(*) FROM IndexedImpls))
+          FROM IndexedImpls
+    )|]]
+
     query = [i|
-SELECT stepId, vector(avgTime, implId, (SELECT COUNT(*) FROM Implementation)) AS timings
+SELECT stepId
+     , ImplVector.impls
+     , double_vector(avgTime, idx, (SELECT COUNT(*) FROM IndexedImpls))
+       AS timings
 FROM StepTimer
+INNER JOIN IndexedImpls
+ON IndexedImpls.implId = StepTimer.implId
+
+LEFT JOIN ImplVector
+
 WHERE gpuId = ? AND variantId = ?
 GROUP BY stepId
 ORDER BY stepId ASC|]

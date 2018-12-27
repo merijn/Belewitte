@@ -14,7 +14,6 @@ import Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
-import qualified Data.IntSet as IS
 import Data.Maybe (catMaybes)
 import Data.Monoid ((<>))
 import Data.Set (Set)
@@ -127,31 +126,35 @@ commands name = (,) mempty . hsubparser $ mconcat
         , progDesc desc
         ]
 
-reportData :: MonadIO m => Handle -> Bool -> (Text, Vector Double) -> m ()
-reportData hnd normalise (graph, timings) = liftIO $ do
+reportData :: MonadIO m => Handle -> Bool -> (Text, Vector (Int64, Double)) -> m ()
+reportData hnd normalise (graph, timingsPair) = liftIO $ do
     T.hPutStr hnd $ graph <> " :"
     VU.forM_ processedTimings $ \time -> hPutStr hnd $ " " ++ show time
     T.hPutStrLn hnd ""
   where
+    timings :: Vector Double
+    timings = VU.map snd timingsPair
+
+    processedTimings :: Vector Double
     processedTimings
         | normalise = VU.map (/ VU.maximum timings) timings
         | otherwise = timings
 
-dataFromVariantInfo :: VariantInfo -> SqlM (Text, Vector Double)
+dataFromVariantInfo :: VariantInfo -> SqlM (Text, Vector (Int64,Double))
 dataFromVariantInfo VariantInfo{..} = do
     graphId <- variantGraphId <$> Sql.getJust variantId
     name <- graphName <$> Sql.getJust graphId
     return (name, extendedTimings)
   where
     extendedTimings =
-      variantTimings `VU.snoc` variantBestNonSwitching `VU.snoc` variantOptimal
+      variantTimings `VU.snoc` (100, variantBestNonSwitching) `VU.snoc` (200, variantOptimal)
 
 plot
     :: PlotConfig
-    -> String
+    -> Text
     -> IntMap Implementation
     -> Query a
-    -> ConduitT a (Text, Vector Double) SqlM ()
+    -> ConduitT a (Text, Vector (Int64, Double)) SqlM ()
     -> SqlM ()
 plot PlotConfig{..} plotName impls query convert
   | printStdout = doWithHandle stdout
@@ -159,15 +162,15 @@ plot PlotConfig{..} plotName impls query convert
         scriptProc <- liftIO $
             proc <$> getDataFileName "runtime-data/scripts/bar-plot.py"
 
-        let plotProc = (scriptProc [plotName, axisName, show normalise])
+        let plotProc = (scriptProc [T.unpack plotName, axisName, show normalise])
                 { std_in = CreatePipe }
 
         withRunInIO $ \runInIO ->
             withCreateProcess plotProc . withProcess $ runInIO . doWithHandle
   where
+    isRelevant (i, _) = IM.member (fromIntegral i) impls
+
     names = map (getImplName . snd) $ IM.toAscList impls
-    indices = IS.fromList . map (subtract 1 . fst) . IM.toAscList $ impls
-    filterTimes = VU.ifilter (const . (`IS.member` indices))
 
     withProcess work (Just plotHnd) Nothing Nothing procHandle = void $ do
         work plotHnd
@@ -180,7 +183,7 @@ plot PlotConfig{..} plotName impls query convert
         liftIO . T.hPutStrLn hnd $ T.intercalate ":" names
         runSqlQuery query $
             convert
-            .| C.map (second filterTimes)
+            .| C.map (second (VU.filter isRelevant))
             .| C.mapM_ (reportData hnd normalise)
 
 main :: IO ()
@@ -197,10 +200,10 @@ main = runSqlM commands $ \PlotOptions{..} -> do
                 name <- graphName <$> Sql.getJust graphId
 
                 let query = levelTimePlotQuery gpuId variantId
-                    pdfName = T.unpack name ++ "-levels"
+                    pdfName = name <> "-levels"
 
                 plot plotConfig pdfName impls query $
-                    C.map (first (T.pack . show))
+                    C.map (first showText)
 
         PlotTotals -> do
             let variantQuery = variantInfoQuery algoId gpuId
@@ -208,8 +211,8 @@ main = runSqlM commands $ \PlotOptions{..} -> do
                 variantFilter VariantInfo{variantId} =
                     S.member variantId variants
                 extImpls = IM.fromList
-                    [ (50, mkImpl (toSqlKey 1) "Non-switching Best")
-                    , (51, mkImpl (toSqlKey 1) "Optimal")
+                    [ (100, mkImpl (toSqlKey 1) "Non-switching Best")
+                    , (200, mkImpl (toSqlKey 1) "Optimal")
                     ]
                 plotImpls = impls <> extImpls
 

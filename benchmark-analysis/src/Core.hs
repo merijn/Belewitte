@@ -125,11 +125,17 @@ instance MonadUnliftIO BaseM where
 foreign import ccall "sqlite-functions.h &randomFun"
     randomFun :: FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
 
-foreign import ccall "random.h &vector_step"
-    vector_step :: FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
+foreign import ccall "sqlite-functions.h &int64_vector_step"
+    int64_vector_step :: FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
 
-foreign import ccall "random.h &vector_finalise"
-    vector_finalise :: FunPtr (Ptr () -> IO ())
+foreign import ccall "sqlite-functions.h &int64_vector_finalise"
+    int64_vector_finalise :: FunPtr (Ptr () -> IO ())
+
+foreign import ccall "sqlite-functions.h &double_vector_step"
+    double_vector_step :: FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
+
+foreign import ccall "sqlite-functions.h &double_vector_finalise"
+    double_vector_finalise :: FunPtr (Ptr () -> IO ())
 
 foreign import capi "sqlite3.h value SQLITE_ANY"
     sqliteAny :: CInt
@@ -216,7 +222,21 @@ runSqlMWithOptions Options{..} work = do
         withQueryLog $ \mHnd -> runStack (ref, mHnd) $ do
             sqlitePtr <- asks $ getSqlitePtr . Lens.view rawSqliteConnection
             createSqlFun sqlitePtr 1 "random" randomFun
-            createSqlAggregate sqlitePtr 3 "vector" vector_step vector_finalise
+
+            createSqlAggregate
+                sqlitePtr
+                3
+                "double_vector"
+                double_vector_step
+                double_vector_finalise
+
+            createSqlAggregate
+                sqlitePtr
+                3
+                "int64_vector"
+                int64_vector_step
+                int64_vector_finalise
+
             rawExecute "PRAGMA busy_timeout = 1000" []
             result <- try . liftPersist $ runMigrationSilent migrateAll
             case result of
