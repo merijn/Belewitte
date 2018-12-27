@@ -52,6 +52,7 @@ data PlotType = PlotLevels | PlotTotals
 data PlotConfig = PlotConfig
     { axisName :: String
     , normalise :: Bool
+    , slideFormat :: Bool
     , printStdout :: Bool
     }
 
@@ -75,7 +76,11 @@ plotOptions plottype =
         PlotTotals -> PlotConfig "Graph" <$> normaliseFlag
 
     config :: Parser PlotConfig
-    config = baseConfig <*> printFlag
+    config = baseConfig <*> slideFlag <*> printFlag
+
+    slideFlag :: Parser Bool
+    slideFlag = flag False True $ mconcat
+        [ long "slide", help "Render 4:3 slide dimensions" ]
 
     printFlag :: Parser Bool
     printFlag = flag False True $ mconcat
@@ -198,7 +203,7 @@ plot PlotConfig{..} plotName impls query convert
             withCreateProcess plotProc . withProcess $ runInIO . doWithHandle
   where
     args :: [String]
-    args = [T.unpack plotName, axisName, show normalise]
+    args = [T.unpack plotName, axisName, show normalise, show slideFormat]
 
     isRelevant :: (Int64, a) -> Bool
     isRelevant (i, _) = IM.member (fromIntegral i) impls

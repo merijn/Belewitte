@@ -1,7 +1,8 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 from __future__ import division
-from sys import stdin
+from sys import stdin, stderr
 
 import locale
 
@@ -13,6 +14,7 @@ from sys import argv, exit
 import numpy as np
 from colorsys import hsv_to_rgb
 import matplotlib as mpl
+from matplotlib.ticker import ScalarFormatter, FuncFormatter
 mpl.use('pdf')
 import matplotlib.pyplot as plt
 
@@ -20,6 +22,17 @@ locale.setlocale(locale.LC_NUMERIC, "")
 
 params = {'legend.fontsize': 20 }
 plt.rcParams.update(params)
+
+def isBool(val):
+    if val == "True":
+        return True
+    elif val == "False":
+        return False
+    else:
+        return val
+
+def prettyFormat(val, pos):
+    return str(int(val/1e6)) + u'×10⁶'
 
 def colours():
     def fractions(value):
@@ -35,13 +48,17 @@ def colours():
                 yield c
 
 class Plot(object):
-    def __init__(self, filename):
+    def __init__(self, filename, slideFormat):
         self.filename = filename
+        if slideFormat:
+            self.figsize = (20, 12)
+        else:
+            self.figsize = (16, 5)
         self.handles = []
         self.labels = []
 
     def __enter__(self):
-        self.fig, self.ax = plt.subplots(figsize=(16, 5), dpi=300)
+        self.fig, self.ax = plt.subplots(figsize=self.figsize, dpi=300)
         old_bar = self.ax.bar
         self.ax.extra_axes = OrderedDict()
 
@@ -124,16 +141,32 @@ def plotBars(ax, xAxisName, columnNames, groups, normalised):
                color=colour, label=column)
 
     fontsize=25
+    labelsize=20
+
+    ax.tick_params(axis='both', which='major', labelsize=labelsize,
+                   right=True, labelright=True)
+
     if normalised:
+        yTicks = [0, 0.2, 0.4, 0.6, 0.8, 1]
+        yLabels = ["0%", "20%", "40%", "60%", "80%", "100%"]
+        ax.set_yticks(yTicks)
+        ax.set_yticklabels(yLabels)
         ax.set_ylabel("Normalised Runtime", fontsize=fontsize)
+
     else:
+        maxVal = max([max(grp[1]) for grp in groups])
+        yTicks = np.arange(1e6, maxVal, 2e6)
+
         ax.set_ylabel("Runtime (ns)", fontsize=fontsize)
+        ax.set_yticks(yTicks)
+
+        formatter = FuncFormatter(prettyFormat)
+        ax.yaxis.set_major_formatter(formatter)
 
     ax.set_xlabel(xAxisName, fontsize=fontsize)
     ax.set_xticks(ind + (numBars // 3))
-    ax.set_xticklabels([group[0] for group in groups], fontsize=fontsize,
-            rotation=-35, ha='left', va='top')
-    ax.set_yticklabels(ax.get_yticklabels(), fontsize=fontsize)
+    ax.set_xticklabels([group[0] for i, group in enumerate(groups, 1)],
+            rotation=0, ha='center', va='top')
 
     ySettings = {'ymin' : 0}
     if normalised:
@@ -144,13 +177,15 @@ def plotBars(ax, xAxisName, columnNames, groups, normalised):
 if __name__ != "__main__":
     exit(1)
 
-if len(argv) != 4:
+if len(argv) != 5:
     print >>stderr, "Not enough arguments!"
     exit(1)
+else:
+    _, outputPDF, xAxisName, normalise, slideFormat = map(isBool, argv)
 
-with Plot(argv[1]) as ax:
+with Plot(outputPDF, slideFormat) as ax:
     lines = stdin.readlines()
     columns = lines[0].strip().split(':')
-    lines = [line.split(':') for line in lines[1:]]
+    lines = [map(lambda s: s.strip(), line.split(':')) for line in lines[1:]]
     groups = [(k, map(float, vals.split())) for k, vals in lines]
-    plotBars(ax, argv[2], columns, groups, argv[3] == "True")
+    plotBars(ax, xAxisName, columns, groups, normalise)
