@@ -8,6 +8,7 @@ import locale
 
 from collections import OrderedDict
 from fractions import Fraction
+from math import isinf
 import itertools
 from sys import argv, exit
 
@@ -31,8 +32,18 @@ def isBool(val):
     else:
         return val
 
+def superscriptNumber(val):
+    mapping = {
+        '0' : u'⁰', '1' : u'¹', '2' : u'²', '3' : u'³', '4' : u'⁴',
+        '5' : u'⁵', '6' : u'⁶', '7' : u'⁷', '8' : u'⁸', '9' : u'⁹'
+    }
+
+    return ''.join(mapping[c] for c in str(val))
+
 def prettyFormat(val, pos):
-    return str(int(val/1e6)) + u'×10⁶'
+    order = len(str(int(val))) - 1
+    divider = pow(10, order)
+    return "{0:0.0f}".format(val/divider) + u'×10' + superscriptNumber(order)
 
 def colours():
     def fractions(value):
@@ -146,7 +157,10 @@ def plotBars(ax, xAxisName, columnNames, groups, normalised):
     ax.tick_params(axis='both', which='major', labelsize=labelsize,
                    right=True, labelright=True)
 
+    ySettings = {'ymin' : 0}
+
     if normalised:
+        ySettings['ymax'] = 1
         yTicks = [0, 0.2, 0.4, 0.6, 0.8, 1]
         yLabels = ["0%", "20%", "40%", "60%", "80%", "100%"]
         ax.set_yticks(yTicks)
@@ -154,11 +168,13 @@ def plotBars(ax, xAxisName, columnNames, groups, normalised):
         ax.set_ylabel("Normalised Runtime", fontsize=fontsize)
 
     else:
-        maxVal = max([max(grp[1]) for grp in groups])
-        yTicks = np.arange(1e6, maxVal, 2e6)
+        maxWithoutInf = lambda l: max(filter(lambda d: not isinf(d), l))
+        maxVal = max([maxWithoutInf(grp[1]) for grp in groups])
 
         ax.set_ylabel("Runtime (ns)", fontsize=fontsize)
-        ax.set_yticks(yTicks)
+        # FIXME: better logic for yticks
+        #yTicks = np.arange(1e6, maxVal, 2e6)
+        #ax.set_yticks(yTicks)
 
         formatter = FuncFormatter(prettyFormat)
         ax.yaxis.set_major_formatter(formatter)
@@ -167,10 +183,6 @@ def plotBars(ax, xAxisName, columnNames, groups, normalised):
     ax.set_xticks(ind + (numBars // 3))
     ax.set_xticklabels([group[0] for i, group in enumerate(groups, 1)],
             rotation=0, ha='center', va='top')
-
-    ySettings = {'ymin' : 0}
-    if normalised:
-        ySettings['ymax'] = 1
 
     ax.set_ylim(**ySettings)
 

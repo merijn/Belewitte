@@ -47,7 +47,7 @@ queryVariants algoId graphs = do
 
     return . S.fromList . map Sql.entityKey . catMaybes $ variants
 
-data PlotType = PlotLevels | PlotTotals
+data PlotType = PlotLevels | PlotTotals | PlotVsOptimal
 
 data PlotConfig = PlotConfig
     { axisName :: String
@@ -74,6 +74,7 @@ plotOptions plottype =
     baseConfig = case plottype of
         PlotLevels -> pure $ PlotConfig "Levels" False
         PlotTotals -> PlotConfig "Graph" <$> normaliseFlag
+        PlotVsOptimal -> PlotConfig "Graph" <$> normaliseFlag
 
     config :: Parser PlotConfig
     config = baseConfig <*> slideFlag <*> printFlag
@@ -117,8 +118,11 @@ commands :: String -> (InfoMod a, Parser PlotOptions)
 commands name = (,) mempty . hsubparser $ mconcat
     [ subCommand "levels" "plot level times for a graph" "" $
         plotOptions PlotLevels
-    , subCommand "totals" "plot total times for set of graphs" "" $
+    , subCommand "totals" "plot total times for a set of graphs" "" $
         plotOptions PlotTotals
+    , subCommand "vs-optimal"
+        "plot total times for a set of graphs against the optimal" "" $
+        plotOptions PlotVsOptimal
     ]
   where
     subCommand cmd hdr desc parser = command cmd . info parser $ mconcat
@@ -135,7 +139,7 @@ reportData
     -> ConduitT (Text, Vector (Int64, Double)) Void m ()
 reportData hnd normalise implMap = do
     Just (_, VU.map fst -> impls) <- C.peek
-    liftIO . T.putStrLn $ toColumnLabels impls
+    liftIO . T.hPutStrLn hnd $ toColumnLabels impls
     C.mapM_ $ printGraph impls
   where
     translate :: Int64 -> Text
@@ -247,13 +251,15 @@ main = runSqlM commands $ \PlotOptions{..} -> do
                 plot plotConfig pdfName impls query $ C.map (first showText)
 
         PlotTotals -> do
+            let timeQuery = timePlotQuery algoId gpuId variants
+
+            plot plotConfig "times-totals" impls timeQuery $
+                awaitForever yield
+
+        PlotVsOptimal -> do
             let variantQuery = variantInfoQuery algoId gpuId
-                timeQuery = timePlotQuery algoId gpuId variants
                 variantFilter VariantInfo{variantId} =
                     S.member variantId variants
 
-            plot plotConfig "times-variant" impls variantQuery $
+            plot plotConfig "times-vs-optimal" impls variantQuery $
                 C.filter variantFilter .| C.mapM dataFromVariantInfo
-
-            plot plotConfig "times-timeplot" impls timeQuery $
-                awaitForever yield
