@@ -241,6 +241,7 @@ runSqlMWithOptions Options{..} work = do
                 int64_vector_step
                 int64_vector_finalise
 
+            -- Wait longer before timing out query steps
             rawExecute "PRAGMA busy_timeout = 1000" []
             result <- try . liftPersist $ runMigrationSilent migrateAll
             case result of
@@ -252,9 +253,15 @@ runSqlMWithOptions Options{..} work = do
                         logMigrationWith Log.logErrorN
                     throwM e
 
+            -- Compacts and reindexes the database when request
             when vacuumDb $ rawExecute "VACUUM" []
 
-            work task
+            workResult <- work task
+
+            -- Runs the ANALYZE command and updates query planner
+            rawExecute "PRAGMA optimize" []
+
+            return workResult
   where
     wrapSqliteException :: SqliteException -> IO a
     wrapSqliteException exc = throwM $ Pretty exc
