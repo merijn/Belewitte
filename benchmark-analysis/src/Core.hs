@@ -61,9 +61,10 @@ import GHC.Conc.Sync
     (getNumProcessors, setNumCapabilities, setUncaughtExceptionHandler)
 import qualified Lens.Micro as Lens
 import qualified Lens.Micro.Extras as Lens
+import System.Clock (Clock(Monotonic), diffTimeSpec, getTime, toNanoSecs)
+import System.Console.Haskeline.MonadException (MonadException(..), RunIO(..))
 import System.IO
     (Handle, IOMode(WriteMode), hPutStrLn, stdout, stderr, withFile)
-import System.Console.Haskeline.MonadException (MonadException(..), RunIO(..))
 
 import Schema
 
@@ -113,6 +114,15 @@ logIfFail tag val action = do
         ref <- asks fst
         liftIO . writeIORef ref $ tag <> ": " <> showText val
     action
+
+withTime :: MonadIO m => m a -> m (Double, a)
+withTime act = do
+    start <- liftIO $ getTime Monotonic
+    r <- act
+    end <- liftIO $ getTime Monotonic
+    let wallTime :: Integer
+        wallTime = toNanoSecs (diffTimeSpec start end)
+    return $ (fromIntegral wallTime / 1e9, r)
 
 instance MonadFail BaseM where
     fail _ = BaseM $ do

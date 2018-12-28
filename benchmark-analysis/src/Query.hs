@@ -20,10 +20,11 @@ module Query
     , levelTimePlotQuery
     ) where
 
+import Control.Monad (void)
 import Control.Monad.Trans.Resource (release)
 import Data.Acquire (allocateAcquire)
 import Data.Conduit (ConduitT, Void, (.|), await, runConduit)
-import qualified Data.Conduit.List as C
+import qualified Data.Conduit.Combinators as C
 import Data.List (intersperse)
 import Data.Monoid ((<>))
 import Data.String (fromString)
@@ -35,6 +36,7 @@ import qualified Data.Text.IO as T
 import Data.Vector.Unboxed (Vector)
 import qualified Data.Vector.Unboxed as VU
 import Database.Persist.Sqlite
+import Numeric (showGFloat)
 import System.IO (Handle)
 
 import Core
@@ -48,27 +50,52 @@ data Query r =
     , convert :: forall m . (MonadIO m, MonadLogger m, MonadThrow m)
               => [PersistValue] -> m r
     , query :: Text
+    , isExplain :: Bool
     }
 
 instance Functor Query where
     fmap f query@Query{convert} = query { convert = fmap f . convert }
 
+printExplainTree
+    :: (MonadIO m, MonadThrow m)
+    => Handle -> ConduitT (Int64, Int64, Text) Void m ()
+printExplainTree hnd= do
+    liftIO . T.hPutStrLn hnd $ "QUERY PLAN"
+    void $ C.foldM renderTree [0]
+  where
+    renderTree
+        :: (MonadIO m, MonadThrow m)
+        => [Int64] -> (Int64, Int64, Text) -> m [Int64]
+    renderTree [] _ = throwM $ Error "Something went horribly wrong!"
+    renderTree stack@(parent:parents) node@(parentId, nodeId, plan)
+      | parent /= parentId = renderTree parents node
+      | otherwise = liftIO $ do
+          T.hPutStrLn hnd $ branches <> "--" <> plan
+          return $ nodeId:stack
+      where
+        branches = mconcat $ intersperse "  " $ replicate (length stack) "|"
+
 explainSqlQuery :: Query r -> Handle -> SqlM ()
 explainSqlQuery originalQuery hnd = do
-    runSqlQuery' True explainQuery $ C.mapM_ (liftIO . T.hPutStrLn hnd)
     liftIO $ do
-        T.hPutStrLn hnd $ ""
         T.hPutStrLn hnd $ T.replicate 80 "#"
+        T.hPutStrLn hnd $ toTextQuery originalQuery
         T.hPutStrLn hnd $ ""
+
+    runSqlQuery' explainQuery $ printExplainTree hnd
   where
     explain
-        :: (MonadIO m, MonadLogger m, MonadThrow m) => [PersistValue] -> m Text
+        :: (MonadIO m, MonadLogger m, MonadThrow m)
+        => [PersistValue] -> m (Int64, Int64, Text)
     explain
-        [PersistInt64 _, PersistInt64 _, PersistInt64 _, PersistText t]
-        = return t
+        [ PersistInt64 nodeId
+        , PersistInt64 parentId
+        , PersistInt64 _
+        , PersistText t
+        ] = return (parentId, nodeId, t)
     explain _ = logThrowM $ Error "Explain failed!"
 
-    explainQuery = originalQuery { convert = explain }
+    explainQuery = originalQuery { convert = explain, isExplain = True }
 
 randomizeQuery :: Int -> Integer -> Query r -> (Query r, Query r)
 randomizeQuery seed trainingSize originalQuery = (training, validation)
@@ -85,24 +112,36 @@ randomizeQuery seed trainingSize originalQuery = (training, validation)
 runSqlQuery :: Query r -> ConduitT r Void SqlM a -> SqlM a
 runSqlQuery query sink = do
     logQueryExplanation $ explainSqlQuery query
-    runSqlQuery' False query sink
+    (timing, result) <- withTime $ runSqlQuery' query sink
+
+    let formattedTime :: Text
+        formattedTime = T.pack $ showGFloat (Just 3) timing "s"
+
+    logInfoN $ "Query time: " <> formattedTime
+
+    logQueryExplanation $ \hnd -> do
+        liftIO $ do
+            T.hPutStrLn hnd $ "\nQuery time: " <> formattedTime
+            T.hPutStrLn hnd $ ""
+            T.hPutStrLn hnd $ T.replicate 80 "#"
+    return result
 
 mIf :: Monoid m => Bool -> m -> m
 mIf condition val
     | condition = val
     | otherwise = mempty
 
-runSqlQuery' :: Bool -> Query r -> ConduitT r Void SqlM a -> SqlM a
-runSqlQuery' isExplain Query{..} sink = do
-    srcRes <- liftPersist $ rawQueryRes fullQuery params
+toTextQuery :: Query r -> Text
+toTextQuery Query{..} = mconcat $
+    [ mIf isExplain "EXPLAIN QUERY PLAN "
+    , mIf (not $ null commonTableExpressions) "\nWITH "
+    ] <> intersperse ",\n\n" commonTableExpressions <> [query]
+
+runSqlQuery' :: Query r -> ConduitT r Void SqlM a -> SqlM a
+runSqlQuery' query@Query{convert,params} sink = do
+    srcRes <- liftPersist $ rawQueryRes (toTextQuery query) params
     (key, src) <- allocateAcquire srcRes
     runConduit (src .| C.mapM convert .| sink) <* release key
-  where
-    fullQuery :: Text
-    fullQuery = mconcat $
-        [ mIf isExplain "EXPLAIN QUERY PLAN "
-        , mIf (not $ null commonTableExpressions) "\nWITH "
-        ] <> intersperse ",\n\n" commonTableExpressions <> [query]
 
 runSqlQueryCount :: Query r -> SqlM Int
 runSqlQueryCount originalQuery = do
@@ -131,6 +170,9 @@ stepInfoQuery
     :: Key Algorithm -> Key GPU -> Set Text -> Set Text -> Query StepInfo
 stepInfoQuery algoId gpuId graphProperties stepProperties = Query{..}
   where
+    isExplain :: Bool
+    isExplain = False
+
     params :: [PersistValue]
     params = [toPersistValue gpuId, toPersistValue algoId]
 
@@ -254,6 +296,9 @@ data VariantInfo =
 variantInfoQuery :: Key Algorithm -> Key GPU -> Query VariantInfo
 variantInfoQuery algoId gpuId = Query{..}
   where
+    isExplain :: Bool
+    isExplain = False
+
     params :: [PersistValue]
     params = [ toPersistValue gpuId, toPersistValue gpuId
              , toPersistValue algoId
@@ -351,6 +396,9 @@ timePlotQuery
     -> Query (Text, Vector (Int64, Double))
 timePlotQuery algoId gpuId variants = Query{..}
   where
+    isExplain :: Bool
+    isExplain = False
+
     params :: [PersistValue]
     params = [toPersistValue gpuId, toPersistValue algoId]
 
@@ -415,6 +463,9 @@ levelTimePlotQuery
     :: Key GPU -> Key Variant -> Query (Int64, Vector (Int64, Double))
 levelTimePlotQuery gpuId variant = Query{..}
   where
+    isExplain :: Bool
+    isExplain = False
+
     params :: [PersistValue]
     params = [toPersistValue gpuId, toPersistValue variant]
 
