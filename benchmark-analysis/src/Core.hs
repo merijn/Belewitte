@@ -203,6 +203,7 @@ createSqlAggregate sqlPtr nArgs name =
 data Options a =
   Options
     { database :: Text
+    , vacuumDb :: Bool
     , logVerbosity :: LogSource -> LogLevel -> Bool
     , queryMode :: QueryMode
     , foreignKeys :: Bool
@@ -250,6 +251,9 @@ runSqlMWithOptions Options{..} work = do
                     liftPersist (showMigration migrateAll) >>=
                         logMigrationWith Log.logErrorN
                     throwM e
+
+            when vacuumDb $ rawExecute "VACUUM" []
+
             work task
   where
     wrapSqliteException :: SqliteException -> IO a

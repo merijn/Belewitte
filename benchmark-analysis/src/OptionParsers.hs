@@ -90,8 +90,12 @@ runSqlM configFromName work = do
     runSqlMWithOptions config work
   where
     mkOptions p =
-      Options <$> databaseOption <*> verbosityOption <*> queryOption
-              <*> foreignkeys <*> p
+      Options <$> databaseOption <*> vacuumOption <*> verbosityOption
+              <*> queryOption <*> foreignkeys <*> p
+
+    vacuumOption = flag False True $ mconcat
+        [ long "vacuum-db"
+        , help "Vacuum SQLite database to compact it and speed up." ]
 
     foreignkeys = flag True False $ mconcat
         [ long "migrate", internal
