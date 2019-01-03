@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TypeFamilies #-}
 module Options (ModelCommand(..), commands, runSqlM) where
