@@ -86,6 +86,7 @@ instance Exception PrettySqliteError where
 type SqlM = ReaderT (RawSqlite SqlBackend) BaseM
 
 type SqlRecord rec = (PersistRecordBackend rec (RawSqlite SqlBackend))
+type SqlField rec field = (PersistField field, SqlRecord rec)
 
 data QueryMode = Normal | Explain | ExplainLog FilePath
     deriving (Eq, Read, Show)

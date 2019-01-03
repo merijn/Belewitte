@@ -5,6 +5,8 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 module Query
     ( Query
@@ -14,6 +16,7 @@ module Query
     , randomizeQuery
     , runSqlQuery
     , runSqlQueryCount
+    , getDistinctFieldQuery
     , stepInfoQuery
     , variantInfoQuery
     , timePlotQuery
@@ -156,6 +159,31 @@ runSqlQueryCount originalQuery = do
             [PersistInt64 n] -> return $ fromIntegral n
             _ -> logThrowM . Error $ "Unexpected value in count query"
         }
+
+getDistinctFieldQuery
+    :: forall a rec
+     . (PersistField a, SqlRecord rec)
+     => EntityField rec a
+     -> SqlM (Query a)
+getDistinctFieldQuery entityField = liftPersist $ do
+    table <- getTableName (undefined :: rec)
+    field <- getFieldName entityField
+    let query = [i|SELECT DISTINCT #{table}.#{field} FROM #{table}|]
+    return Query{..}
+  where
+    isExplain :: Bool
+    isExplain = False
+
+    commonTableExpressions :: [Text]
+    commonTableExpressions = []
+
+    params :: [PersistValue]
+    params = []
+
+    convert
+        :: (MonadIO m, MonadLogger m, MonadThrow m) => [PersistValue] -> m a
+    convert [v] | Right val <- fromPersistValue v = return val
+    convert l = logThrowM . Error . fromString $ "Unexpected value: " ++ show l
 
 data StepInfo =
   StepInfo

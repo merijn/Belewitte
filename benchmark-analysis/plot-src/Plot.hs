@@ -13,21 +13,26 @@ import Control.Monad (forM, forM_, void)
 import Control.Monad.Fail (MonadFail)
 import Control.Monad.IO.Unlift (withRunInIO)
 import Data.Bifunctor (first, second)
+import Data.Char (isSpace)
 import Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
+import qualified Data.Conduit.Text as C
+import Data.Foldable (toList)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 import Data.List (intersperse)
+import Data.List.Split (chunksOf)
 import Data.Maybe (catMaybes)
 import Data.Monoid (Any(..), (<>))
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
+import Database.Persist.Sqlite ((==.))
 import qualified Database.Persist.Sqlite as Sql
 import Data.Vector.Unboxed (Vector)
 import qualified Data.Vector.Unboxed as VU
-import System.IO (Handle, hClose, hPutStr, stdout)
+import System.IO (Handle, IOMode(WriteMode), hClose, hPutStr, stdout, withFile)
 import System.Process
 
 import Core
@@ -56,14 +61,19 @@ data PlotConfig = PlotConfig
     , printStdout :: Bool
     }
 
-data PlotOptions =
-    PlotOptions
+data PlotOptions
+    = PlotOptions
       { plotType :: PlotType
       , getAlgoId :: SqlM (Key Algorithm)
       , getGpuId :: SqlM (Key GPU)
       , getGraphs :: SqlM (Set Text)
       , getImplementations :: Key Algorithm -> SqlM (IntMap Implementation)
       , plotConfig :: PlotConfig
+      }
+    | QueryTest
+      { getAlgoId :: SqlM (Key Algorithm)
+      , getGpuId :: SqlM (Key GPU)
+      , outputSuffix :: Maybe FilePath
       }
 
 plotOptions :: PlotType -> Parser PlotOptions
@@ -115,7 +125,7 @@ plotOptions plottype =
         ]
 
 commands :: String -> (InfoMod a, Parser PlotOptions)
-commands name = (,) mempty . hsubparser $ mconcat
+commands name = (,) mempty . (<|>) hiddenCommands . hsubparser $ mconcat
     [ subCommand "levels" "plot level times for a graph" "" $
         plotOptions PlotLevels
     , subCommand "totals" "plot total times for a set of graphs" "" $
@@ -125,11 +135,29 @@ commands name = (,) mempty . hsubparser $ mconcat
         plotOptions PlotVsOptimal
     ]
   where
+    subCommand :: String -> String -> String -> Parser a -> Mod CommandFields a
     subCommand cmd hdr desc parser = command cmd . info parser $ mconcat
         [ fullDesc
         , header $ name ++ " " ++ cmd ++ " - " ++ hdr
         , progDesc desc
         ]
+
+    hiddenCommands :: Parser PlotOptions
+    hiddenCommands = hsubparser . mappend internal $
+        subCommand "query-test" "check query output"
+            "Dump query output to files to validate results" $
+            QueryTest <$> algorithmParser <*> gpuParser
+                      <*> (suffixParser <|> pure Nothing)
+
+    suffixReader :: String -> Maybe (Maybe String)
+    suffixReader "" = Nothing
+    suffixReader s
+        | any isSpace s = Nothing
+        | otherwise = Just $ Just s
+
+    suffixParser :: Parser (Maybe String)
+    suffixParser = argument (maybeReader suffixReader) . mconcat $
+        [ metavar "SUFFIX" ]
 
 reportData
     :: (MonadFail m, MonadIO m, MonadThrow m)
@@ -232,8 +260,26 @@ plot PlotConfig{..} plotName impls query convert
 
     withProcess _ _ _ _ _ = throwM . Error $ "Error creating plot process!"
 
+runQueryDump
+    :: (Foldable f, Show r)
+    => Maybe String -> String -> (a -> Query r) -> f a -> SqlM ()
+runQueryDump Nothing _ mkQuery coll = case toList coll of
+    (val:_) -> runSqlQuery (mkQuery val) $ void await
+    _ -> logThrowM $ Error "Unexpectedly found no element!"
+
+runQueryDump (Just suffix) name mkQuery vals =
+  withUnliftIO $ \(UnliftIO runInIO) ->
+    withFile (name <> suffix) WriteMode $ \hnd ->
+        forM_ vals $ \val ->
+            runInIO . runSqlQuery (mkQuery val) $
+                C.map showText
+                .| C.map (`T.snoc` '\n')
+                .| C.encode C.utf8
+                .| C.sinkHandle hnd
+
 main :: IO ()
-main = runSqlM commands $ \PlotOptions{..} -> do
+main = runSqlM commands $ \case
+  PlotOptions{..} -> do
     algoId <- getAlgoId
     gpuId <- getGpuId
     impls <- getImplementations algoId
@@ -263,3 +309,15 @@ main = runSqlM commands $ \PlotOptions{..} -> do
 
             plot plotConfig "times-vs-optimal" impls variantQuery $
                 C.filter variantFilter .| C.mapM dataFromVariantInfo
+
+  QueryTest{getAlgoId,getGpuId,outputSuffix} -> do
+    algoId <- getAlgoId
+    gpuId <- getGpuId
+    variants <- Sql.selectKeysList [VariantAlgorithmId ==. algoId] []
+
+    let chunkedVariants = map S.fromList $ chunksOf 500 variants
+        timeQuery = timePlotQuery algoId gpuId
+        levelTimeQuery = levelTimePlotQuery gpuId
+
+    runQueryDump outputSuffix "timeQuery-" timeQuery chunkedVariants
+    runQueryDump outputSuffix "levelTimeQuery-" levelTimeQuery variants
