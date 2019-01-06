@@ -28,10 +28,9 @@ module Core
     , module Core
     ) where
 
-import Control.Exception (Exception(displayException), SomeException(..))
+import Control.Exception (Exception(displayException))
 import Control.Monad ((>=>), join, when)
-import Control.Monad.Catch
-    (MonadCatch, MonadMask, MonadThrow, handle, try, throwM)
+import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow, handle, throwM)
 import Control.Monad.Fail (MonadFail(fail))
 import Control.Monad.IO.Unlift
     (MonadIO(liftIO), MonadUnliftIO(..), UnliftIO(..), withUnliftIO)
@@ -65,6 +64,7 @@ import System.IO
     (Handle, IOMode(WriteMode), hPutStrLn, stdout, stderr, withFile)
 import System.Console.Haskeline.MonadException (MonadException(..), RunIO(..))
 
+import Migration
 import Schema
 
 data Abort = Abort deriving (Show, Typeable)
@@ -205,7 +205,7 @@ data Options a =
     { database :: Text
     , logVerbosity :: LogSource -> LogLevel -> Bool
     , queryMode :: QueryMode
-    , foreignKeys :: Bool
+    , migrateSchema :: Bool
     , task :: a
     }
 
@@ -240,16 +240,8 @@ runSqlMWithOptions Options{..} work = do
                 int64_vector_step
                 int64_vector_finalise
 
+            checkMigration migrateSchema
             rawExecute "PRAGMA busy_timeout = 1000" []
-            result <- try . liftPersist $ runMigrationSilent migrateAll
-            case result of
-                Right migrations
-                    | null migrations -> return ()
-                    | otherwise -> logMigrationWith Log.logInfoN migrations
-                Left (SomeException e) -> do
-                    liftPersist (showMigration migrateAll) >>=
-                        logMigrationWith Log.logErrorN
-                    throwM e
             work task
   where
     wrapSqliteException :: SqliteException -> IO a
@@ -259,11 +251,6 @@ runSqlMWithOptions Options{..} work = do
         :: (IORef Text, Maybe Handle) -> SqlM a -> IO a
     runStack config =
       runLog . runBase config . withRawSqliteConnInfo connInfo . runReaderT
-
-    logMigrationWith :: (Text -> SqlM ()) -> [Text] -> SqlM ()
-    logMigrationWith _ [] = return ()
-    logMigrationWith logFun ms =
-        logFun . T.unlines $ "Migration commands:" : ms
 
     withQueryLog :: (Maybe Handle -> IO r) -> IO r
     withQueryLog f = case queryMode of

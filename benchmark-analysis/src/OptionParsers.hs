@@ -91,11 +91,11 @@ runSqlM configFromName work = do
   where
     mkOptions p =
       Options <$> databaseOption <*> verbosityOption <*> queryOption
-              <*> foreignkeys <*> p
+              <*> migrateOption <*> p
 
-    foreignkeys = flag True False $ mconcat
-        [ long "migrate", internal
-        , help "Disable foreign key checking to speed up database migration" ]
+    migrateOption = flag False True $ mconcat
+        [ help "Automatically migrate old schema to current version. Caution!"
+        , long "migrate" ]
 
 databaseOption :: Parser Text
 databaseOption = strOption . mconcat $
