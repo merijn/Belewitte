@@ -2,10 +2,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Migration (checkMigration) where
 
-import Control.Exception (Exception(displayException))
+import Control.Exception (Exception(displayException), bracket)
 import Control.Monad (forM_, unless)
 import Control.Monad.Catch (MonadCatch, MonadThrow, catch, throwM)
-import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.IO.Unlift (MonadIO, MonadUnliftIO, withRunInIO)
 import Control.Monad.Logger (MonadLogger)
 import qualified Control.Monad.Logger as Log
 import Control.Monad.Reader (ReaderT)
@@ -16,6 +16,8 @@ import Database.Persist.Sql
     (Migration, PersistField, PersistValue, Single(Single), SqlBackend)
 import qualified Database.Persist.Sql as Sql
 import Database.Persist.Sqlite (RawSqlite)
+import GHC.IO.Handle (hDuplicate, hDuplicateTo)
+import System.IO (Handle, IOMode(WriteMode), hClose, stderr, withFile)
 
 import Schema
 
@@ -25,6 +27,22 @@ setPragma :: (MonadIO m, Show v) => Text -> v -> SqlM m ()
 setPragma pragma val = Sql.liftPersist $ Sql.rawExecute query []
   where
     query = "PRAGMA " <> pragma <> " = " <> T.pack (show val)
+
+withSilencedHandle :: MonadUnliftIO m => Handle -> m a -> m a
+withSilencedHandle hnd action = withRunInIO $ \runInIO ->
+    withFile "/dev/null" WriteMode $ \devNull ->
+        bracket (alloc devNull) cleanup $ \_ -> runInIO action
+  where
+    alloc devNull = do
+        hDuplicate hnd <* hDuplicateTo devNull hnd
+
+    cleanup oldStdErr = do
+        hDuplicateTo oldStdErr hnd
+        hClose oldStdErr
+
+silencedUnsafeMigration :: Migration -> ReaderT SqlBackend IO ()
+silencedUnsafeMigration m = withSilencedHandle stderr $ do
+    Sql.runMigrationUnsafe m
 
 querySingleValue
     :: (MonadIO m, MonadThrow m, PersistField a, Show a)
@@ -62,7 +80,7 @@ validateSchema migrateSchema version
             setPragma "defer_foreign_keys" (1 :: Int64)
             migration <- Sql.liftPersist $ do
                 migration <- schemaUpdateForVersion n
-                migration <$ Sql.runMigrationUnsafe migration
+                migration <$ silencedUnsafeMigration migration
 
             checkSchema migration `catch` migrationFailed (n+1)
             Sql.rawExecute "COMMIT TRANSACTION" []
