@@ -60,9 +60,10 @@ import GHC.Conc.Sync
     (getNumProcessors, setNumCapabilities, setUncaughtExceptionHandler)
 import qualified Lens.Micro as Lens
 import qualified Lens.Micro.Extras as Lens
+import System.Clock (Clock(Monotonic), diffTimeSpec, getTime, toNanoSecs)
+import System.Console.Haskeline.MonadException (MonadException(..), RunIO(..))
 import System.IO
     (Handle, IOMode(WriteMode), hPutStrLn, stdout, stderr, withFile)
-import System.Console.Haskeline.MonadException (MonadException(..), RunIO(..))
 
 import Migration
 import Schema
@@ -85,6 +86,7 @@ instance Exception PrettySqliteError where
 type SqlM = ReaderT (RawSqlite SqlBackend) BaseM
 
 type SqlRecord rec = (PersistRecordBackend rec (RawSqlite SqlBackend))
+type SqlField rec field = (PersistField field, SqlRecord rec)
 
 data QueryMode = Normal | Explain | ExplainLog FilePath
     deriving (Eq, Read, Show)
@@ -113,6 +115,15 @@ logIfFail tag val action = do
         ref <- asks fst
         liftIO . writeIORef ref $ tag <> ": " <> showText val
     action
+
+withTime :: MonadIO m => m a -> m (Double, a)
+withTime act = do
+    start <- liftIO $ getTime Monotonic
+    r <- act
+    end <- liftIO $ getTime Monotonic
+    let wallTime :: Integer
+        wallTime = toNanoSecs (diffTimeSpec start end)
+    return $ (fromIntegral wallTime / 1e9, r)
 
 instance MonadFail BaseM where
     fail _ = BaseM $ do
@@ -203,6 +214,7 @@ createSqlAggregate sqlPtr nArgs name =
 data Options a =
   Options
     { database :: Text
+    , vacuumDb :: Bool
     , logVerbosity :: LogSource -> LogLevel -> Bool
     , queryMode :: QueryMode
     , migrateSchema :: Bool
@@ -241,8 +253,19 @@ runSqlMWithOptions Options{..} work = do
                 int64_vector_finalise
 
             checkMigration migrateSchema
+
+            -- Wait longer before timing out query steps
             rawExecute "PRAGMA busy_timeout = 1000" []
-            work task
+
+            -- Compacts and reindexes the database when request
+            when vacuumDb $ rawExecute "VACUUM" []
+
+            workResult <- work task
+
+            -- Runs the ANALYZE command and updates query planner
+            rawExecute "PRAGMA optimize" []
+
+            return workResult
   where
     wrapSqliteException :: SqliteException -> IO a
     wrapSqliteException exc = throwM $ Pretty exc

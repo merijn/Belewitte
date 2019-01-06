@@ -1,11 +1,9 @@
 {-# LANGUAGE ApplicativeDo #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 module Main (main) where
 
@@ -13,21 +11,26 @@ import Control.Monad (forM, forM_, void)
 import Control.Monad.Fail (MonadFail)
 import Control.Monad.IO.Unlift (withRunInIO)
 import Data.Bifunctor (first, second)
+import Data.Char (isSpace)
 import Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
+import qualified Data.Conduit.Text as C
+import Data.Foldable (toList)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 import Data.List (intersperse)
+import Data.List.Split (chunksOf)
 import Data.Maybe (catMaybes)
 import Data.Monoid (Any(..), (<>))
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
+import Database.Persist.Sqlite ((==.))
 import qualified Database.Persist.Sqlite as Sql
 import Data.Vector.Unboxed (Vector)
 import qualified Data.Vector.Unboxed as VU
-import System.IO (Handle, hClose, hPutStr, stdout)
+import System.IO (Handle, IOMode(WriteMode), hClose, hPutStr, stdout, withFile)
 import System.Process
 
 import Core
@@ -47,7 +50,7 @@ queryVariants algoId graphs = do
 
     return . S.fromList . map Sql.entityKey . catMaybes $ variants
 
-data PlotType = PlotLevels | PlotTotals
+data PlotType = PlotLevels | PlotTotals | PlotVsOptimal
 
 data PlotConfig = PlotConfig
     { axisName :: String
@@ -56,14 +59,19 @@ data PlotConfig = PlotConfig
     , printStdout :: Bool
     }
 
-data PlotOptions =
-    PlotOptions
+data PlotOptions
+    = PlotOptions
       { plotType :: PlotType
       , getAlgoId :: SqlM (Key Algorithm)
       , getPlatformId :: SqlM (Key Platform)
       , getGraphs :: SqlM (Set Text)
       , getImplementations :: Key Algorithm -> SqlM (IntMap Implementation)
       , plotConfig :: PlotConfig
+      }
+    | QueryTest
+      { getAlgoId :: SqlM (Key Algorithm)
+      , getPlatformId :: SqlM (Key Platform)
+      , outputSuffix :: Maybe FilePath
       }
 
 plotOptions :: PlotType -> Parser PlotOptions
@@ -74,6 +82,7 @@ plotOptions plottype =
     baseConfig = case plottype of
         PlotLevels -> pure $ PlotConfig "Levels" False
         PlotTotals -> PlotConfig "Graph" <$> normaliseFlag
+        PlotVsOptimal -> PlotConfig "Graph" <$> normaliseFlag
 
     config :: Parser PlotConfig
     config = baseConfig <*> slideFlag <*> printFlag
@@ -114,18 +123,39 @@ plotOptions plottype =
         ]
 
 commands :: String -> (InfoMod a, Parser PlotOptions)
-commands name = (,) mempty . hsubparser $ mconcat
+commands name = (,) mempty . (<|>) hiddenCommands . hsubparser $ mconcat
     [ subCommand "levels" "plot level times for a graph" "" $
         plotOptions PlotLevels
-    , subCommand "totals" "plot total times for set of graphs" "" $
+    , subCommand "totals" "plot total times for a set of graphs" "" $
         plotOptions PlotTotals
+    , subCommand "vs-optimal"
+        "plot total times for a set of graphs against the optimal" "" $
+        plotOptions PlotVsOptimal
     ]
   where
+    subCommand :: String -> String -> String -> Parser a -> Mod CommandFields a
     subCommand cmd hdr desc parser = command cmd . info parser $ mconcat
         [ fullDesc
         , header $ name ++ " " ++ cmd ++ " - " ++ hdr
         , progDesc desc
         ]
+
+    hiddenCommands :: Parser PlotOptions
+    hiddenCommands = hsubparser . mappend internal $
+        subCommand "query-test" "check query output"
+            "Dump query output to files to validate results" $
+            QueryTest <$> algorithmParser <*> platformParser
+                      <*> (suffixParser <|> pure Nothing)
+
+    suffixReader :: String -> Maybe (Maybe String)
+    suffixReader "" = Nothing
+    suffixReader s
+        | any isSpace s = Nothing
+        | otherwise = Just $ Just s
+
+    suffixParser :: Parser (Maybe String)
+    suffixParser = argument (maybeReader suffixReader) . mconcat $
+        [ metavar "SUFFIX" ]
 
 reportData
     :: (MonadFail m, MonadIO m, MonadThrow m)
@@ -135,7 +165,7 @@ reportData
     -> ConduitT (Text, Vector (Int64, Double)) Void m ()
 reportData hnd normalise implMap = do
     Just (_, VU.map fst -> impls) <- C.peek
-    liftIO . T.putStrLn $ toColumnLabels impls
+    liftIO . T.hPutStrLn hnd $ toColumnLabels impls
     C.mapM_ $ printGraph impls
   where
     translate :: Int64 -> Text
@@ -228,8 +258,26 @@ plot PlotConfig{..} plotName impls query convert
 
     withProcess _ _ _ _ _ = throwM . Error $ "Error creating plot process!"
 
+runQueryDump
+    :: (Foldable f, Show r)
+    => Maybe String -> String -> (a -> Query r) -> f a -> SqlM ()
+runQueryDump Nothing _ mkQuery coll = case toList coll of
+    (val:_) -> runSqlQuery (mkQuery val) $ void await
+    _ -> logThrowM $ Error "Unexpectedly found no element!"
+
+runQueryDump (Just suffix) name mkQuery vals =
+  withUnliftIO $ \(UnliftIO runInIO) ->
+    withFile (name <> suffix) WriteMode $ \hnd ->
+        forM_ vals $ \val ->
+            runInIO . runSqlQuery (mkQuery val) $
+                C.map showText
+                .| C.map (`T.snoc` '\n')
+                .| C.encode C.utf8
+                .| C.sinkHandle hnd
+
 main :: IO ()
-main = runSqlM commands $ \PlotOptions{..} -> do
+main = runSqlM commands $ \case
+  PlotOptions{..} -> do
     algoId <- getAlgoId
     platformId <- getPlatformId
     impls <- getImplementations algoId
@@ -247,13 +295,27 @@ main = runSqlM commands $ \PlotOptions{..} -> do
                 plot plotConfig pdfName impls query $ C.map (first showText)
 
         PlotTotals -> do
+            let timeQuery = timePlotQuery algoId platformId variants
+
+            plot plotConfig "times-totals" impls timeQuery $
+                awaitForever yield
+
+        PlotVsOptimal -> do
             let variantQuery = variantInfoQuery algoId platformId
-                timeQuery = timePlotQuery algoId platformId variants
                 variantFilter VariantInfo{variantId} =
                     S.member variantId variants
 
-            plot plotConfig "times-variant" impls variantQuery $
+            plot plotConfig "times-vs-optimal" impls variantQuery $
                 C.filter variantFilter .| C.mapM dataFromVariantInfo
 
-            plot plotConfig "times-timeplot" impls timeQuery $
-                awaitForever yield
+  QueryTest{getAlgoId,getPlatformId,outputSuffix} -> do
+    algoId <- getAlgoId
+    platformId <- getPlatformId
+    variants <- Sql.selectKeysList [VariantAlgorithmId ==. algoId] []
+
+    let chunkedVariants = map S.fromList $ chunksOf 500 variants
+        timeQuery = timePlotQuery algoId platformId
+        levelTimeQuery = levelTimePlotQuery platformId
+
+    runQueryDump outputSuffix "timeQuery-" timeQuery chunkedVariants
+    runQueryDump outputSuffix "levelTimeQuery-" levelTimeQuery variants

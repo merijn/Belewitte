@@ -90,8 +90,12 @@ runSqlM configFromName work = do
     runSqlMWithOptions config work
   where
     mkOptions p =
-      Options <$> databaseOption <*> verbosityOption <*> queryOption
-              <*> migrateOption <*> p
+      Options <$> databaseOption <*> vacuumOption <*> verbosityOption
+              <*> queryOption <*> migrateOption <*> p
+
+    vacuumOption = flag False True $ mconcat
+        [ long "vacuum-db"
+        , help "Vacuum SQLite database to compact it and speed up." ]
 
     migrateOption = flag False True $ mconcat
         [ help "Automatically migrate old schema to current version. Caution!"

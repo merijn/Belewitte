@@ -1,21 +1,20 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeFamilies #-}
 module Options (ModelCommand(..), commands, runSqlM) where
 
-import Control.Monad.Catch (throwM)
-import Data.Char (toLower)
-import Data.Conduit as C
+import Data.Char (isSpace, toLower)
 import qualified Data.Conduit.Combinators as C
 import Data.Functor.Compose (Compose(..))
+import Data.Foldable (asum)
 import Data.IntervalSet (IntervalSet)
 import qualified Data.IntervalSet as IS
 import qualified Data.Map as M
 import Data.Set (Set)
 import qualified Data.Set as S
-import Data.String.Interpolate.IsString
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import qualified Database.Persist.Sqlite as Sql
@@ -24,6 +23,7 @@ import Core
 import Evaluate (Report(..), RelativeTo(..), SortBy(..))
 import Model (Model)
 import OptionParsers
+import Query
 import Schema
 import Train (TrainingConfig(..))
 
@@ -70,9 +70,14 @@ data ModelCommand
       , getModel :: SqlM (Key PredictionModel, Model)
       , cppFile :: FilePath
       }
+    | QueryTest
+      { getAlgoId :: SqlM (Key Algorithm)
+      , getPlatformId :: SqlM (Key Platform)
+      , outputSuffix :: Maybe FilePath
+      }
 
 commands :: String -> (InfoMod a, Parser ModelCommand)
-commands name = (,) docs . hsubparser $ mconcat
+commands name = (,) docs . (<|>) hiddenCommands . hsubparser $ mconcat
     [ subCommand "train" "train a model"
         "Train a new model" $
         Train <$> algorithmParser <*> platformParser <*> trainingConfig
@@ -95,6 +100,7 @@ commands name = (,) docs . hsubparser $ mconcat
         Export <$> algorithmParser <*> modelParser <*> cppFile
     ]
   where
+    docs :: InfoMod a
     docs = mconcat
       [ fullDesc
       , header $ name ++ " - a tool for generating and validating BDT models"
@@ -103,15 +109,34 @@ commands name = (,) docs . hsubparser $ mconcat
         \models for predicting which implementation to use for an algorithm."
       ]
 
+    subCommand :: String-> String -> String -> Parser a -> Mod CommandFields a
     subCommand cmd hdr desc parser = command cmd . info parser $ mconcat
         [ fullDesc
         , header $ name ++ " " ++ cmd ++ " - " ++ hdr
         , progDesc desc
         ]
 
+    cppFile :: Parser FilePath
     cppFile = strOption . mconcat $
         [ metavar "FILE", short 'e', long "export", value "test.cpp"
         , showDefaultWith id, help "C++ file to write predictor to." ]
+
+    hiddenCommands :: Parser ModelCommand
+    hiddenCommands = hsubparser . mappend internal $
+        subCommand "query-test" "check query output"
+            "Dump query output to files to validate results" $
+            QueryTest <$> algorithmParser <*> platformParser
+                      <*> (suffixParser <|> pure Nothing)
+
+    suffixReader :: String -> Maybe (Maybe String)
+    suffixReader "" = Nothing
+    suffixReader s
+        | any isSpace s = Nothing
+        | otherwise = Just $ Just s
+
+    suffixParser :: Parser (Maybe String)
+    suffixParser = argument (maybeReader suffixReader) . mconcat $
+        [ metavar "SUFFIX" ]
 
 defaultImplParser :: Parser (Either Int Text)
 defaultImplParser = implParser <|> pure (Right "edge-list")
@@ -202,7 +227,10 @@ type SqlParser = Compose Parser SqlM
 
 trainingConfig :: Parser (SqlM TrainingConfig)
 trainingConfig = getCompose $
-    TrainConfig <$> props "graph" <*> props "step" <*> trainFract <*> seedOpt
+    TrainConfig <$> props GraphPropProperty "graph"
+                <*> props StepPropProperty "step"
+                <*> trainFract
+                <*> seedOpt
   where
     seedOpt = Compose . fmap pure . option auto . mconcat $
         [ metavar "N", short 's', long "seed", value 42, showDefault
@@ -212,33 +240,37 @@ trainingConfig = getCompose $
         [ metavar "PERCENT", short 'p', long "percent", value 0.8, showDefault
         , help "Training set as percentage of data." ]
 
-    props :: Text -> SqlParser (Set Text)
-    props name = keepFilter name <|> dropFilter name <|> gatherProps name
+    props
+        :: SqlField rec Text
+        => Sql.EntityField rec Text -> String -> SqlParser (Set Text)
+    props field name = asum
+        [keepFilter field name, dropFilter field name, gatherProps field]
 
-    keepFilter :: Text -> SqlParser (Set Text)
-    keepFilter name = keepProps <$> gatherProps name
-                                <*> Compose (readProps <$> keepOpt)
+    keepFilter
+        :: SqlField rec Text
+        => Sql.EntityField rec Text -> String -> SqlParser (Set Text)
+    keepFilter field name =
+        keepProps <$> gatherProps field <*> Compose (readProps <$> keepOpt)
       where
         keepOpt = strOption $ mconcat
-            [ metavar "FILE", long ("keep-" <> T.unpack name <> "-props")
+            [ metavar "FILE", long ("keep-" <> name <> "-props")
             , help "File listing properties to use for training, one per line."
             ]
 
-    dropFilter :: Text -> SqlParser (Set Text)
-    dropFilter name = dropProps <$> gatherProps name
-                                <*> Compose (readProps <$> dropOpt)
+    dropFilter
+        :: SqlField rec Text
+        => Sql.EntityField rec Text -> String -> SqlParser (Set Text)
+    dropFilter field name =
+        dropProps <$> gatherProps field <*> Compose (readProps <$> dropOpt)
       where
         dropOpt = strOption $ mconcat
-            [ metavar "FILE", long ("drop-" <> T.unpack name <> "-props")
+            [ metavar "FILE", long ("drop-" <> name <> "-props")
             , help "File listing properties not to use for training, \
                    \one per line."]
 
-    gatherProps :: Text -> SqlParser (Set Text)
-    gatherProps name = Compose . pure . runConduit $
-        Sql.rawQuery query [] .| C.foldMapM toSet
-      where
-        toSet [Sql.PersistText t] = return $ S.singleton t
-        toSet _ = throwM . Error $ "Unexpected result from property query"
-
-        query = [i|SELECT DISTINCT property FROM #{T.toTitle name}Prop|]
-
+    gatherProps
+        :: (SqlField rec Text)
+        => Sql.EntityField rec Text -> SqlParser (Set Text)
+    gatherProps field = Compose . pure $ do
+        query <- getDistinctFieldQuery field
+        runSqlQuery query $ C.foldMap S.singleton
