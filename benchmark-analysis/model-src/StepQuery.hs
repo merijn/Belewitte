@@ -32,13 +32,11 @@ stepInfoQuery algoId platformId graphProperties stepProperties = Query{..}
     isExplain :: Bool
     isExplain = False
 
-    params :: [PersistValue]
-    params = [toPersistValue platformId, toPersistValue algoId]
-
-    whereClauses :: Set Text -> Text
-    whereClauses = T.intercalate " OR " . map clause . S.toAscList
+    inExpression :: Set Text -> Text
+    inExpression s = "(" <> clauses <> ")"
       where
-        clause t = [i|property = "#{t}"|]
+        clauses = T.intercalate ", " . map clause . S.toAscList $ s
+        clause t = "'" <> t <> "'"
 
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
@@ -56,6 +54,9 @@ stepInfoQuery algoId platformId graphProperties stepProperties = Query{..}
 
     convert l = logThrowM . Error . T.pack $ "Unexpected value: " ++ show l
 
+    cteParams :: [PersistValue]
+    cteParams = [toPersistValue algoId]
+
     commonTableExpressions :: [Text]
     commonTableExpressions = [[i|
     IndexedGraphProps(idx, property) AS (
@@ -63,7 +64,7 @@ stepInfoQuery algoId platformId graphProperties stepProperties = Query{..}
              , property
           FROM (SELECT DISTINCT property
                  FROM GraphProp
-                WHERE #{whereClauses graphProperties})
+                WHERE property IN #{inExpression graphProperties})
          ORDER BY property
     ),
 
@@ -72,7 +73,7 @@ stepInfoQuery algoId platformId graphProperties stepProperties = Query{..}
              , property
           FROM (SELECT DISTINCT property
                   FROM StepProp
-                 WHERE #{whereClauses stepProperties})
+                 WHERE property IN #{inExpression stepProperties})
          ORDER BY property
     ),
 
@@ -83,7 +84,7 @@ stepInfoQuery algoId platformId graphProperties stepProperties = Query{..}
           FROM (SELECT id AS implId
                      , type
                   FROM Implementation
-                 WHERE algorithmId = #{fromSqlKey algoId})
+                 WHERE algorithmId = ?)
          ORDER BY implId
     ),
 
@@ -91,6 +92,12 @@ stepInfoQuery algoId platformId graphProperties stepProperties = Query{..}
         SELECT int64_vector(implId, idx, (SELECT COUNT(*) FROM IndexedImpls))
           FROM IndexedImpls
     )|]]
+
+    params :: [PersistValue]
+    params = [ toPersistValue platformId
+             , toPersistValue $ S.size graphProperties
+             , toPersistValue $ S.size stepProperties
+             , toPersistValue algoId]
 
     queryText = [i|
 SELECT GraphProps.props
@@ -122,7 +129,7 @@ ON Variant.id = Step.variantId
 
 INNER JOIN
 (   SELECT graphId
-         , double_vector(value, idx, #{S.size graphProperties}) AS props
+         , double_vector(value, idx, ?) AS props
     FROM GraphProp
     INNER JOIN IndexedGraphProps AS IdxProps
     ON IdxProps.property = GraphProp.property
@@ -132,7 +139,7 @@ ON GraphProps.graphId = Graph.id
 
 INNER JOIN
 (   SELECT variantId, stepId
-         , double_vector(value, idx, #{S.size stepProperties}) AS props
+         , double_vector(value, idx, ?) AS props
     FROM StepProp
     INNER JOIN IndexedStepProps AS IdxProps
     ON IdxProps.property = StepProp.property

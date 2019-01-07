@@ -27,12 +27,11 @@ timePlotQuery algoId platformId variants = Query{..}
     isExplain :: Bool
     isExplain = False
 
-    params :: [PersistValue]
-    params = [toPersistValue platformId, toPersistValue algoId]
-
-    havingClause = T.intercalate " OR " . map clause . S.toList
+    inExpression :: Set (Key Variant) -> Text
+    inExpression s = "(" <> clauses <> ")"
       where
-        clause k = [i|variantId = #{fromSqlKey k}|]
+        clauses = T.intercalate ", " . map clause . S.toAscList $ s
+        clause = showText . fromSqlKey
 
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
@@ -43,6 +42,9 @@ timePlotQuery algoId platformId variants = Query{..}
             ] = return $ (graph, VU.zip impls timings)
     convert l = logThrowM . Error . T.pack $ "Unexpected value: " ++ show l
 
+    cteParams :: [PersistValue]
+    cteParams = [toPersistValue algoId]
+
     commonTableExpressions :: [Text]
     commonTableExpressions = [[i|
     IndexedImpls(idx, implId, type) AS (
@@ -52,7 +54,7 @@ timePlotQuery algoId platformId variants = Query{..}
           FROM (SELECT id AS implId
                      , type
                   FROM Implementation
-                 WHERE algorithmId = #{fromSqlKey algoId})
+                 WHERE algorithmId = ?)
          ORDER BY implId
     ),
 
@@ -60,6 +62,9 @@ timePlotQuery algoId platformId variants = Query{..}
         SELECT int64_vector(implId, idx, (SELECT COUNT(*) FROM IndexedImpls))
           FROM IndexedImpls
     )|]]
+
+    params :: [PersistValue]
+    params = [toPersistValue platformId, toPersistValue algoId]
 
     queryText = [i|
 SELECT Graph.name
@@ -78,7 +83,7 @@ INNER JOIN
     ON IndexedImpls.implId = TotalTimer.implId
     WHERE platformId = ? AND name = "computation"
     GROUP BY variantId
-    HAVING #{havingClause variants}
+    HAVING variantId IN #{inExpression variants}
 ) AS Total
 ON Variant.id = Total.variantId
 
@@ -94,9 +99,6 @@ levelTimePlotQuery platformId variant = Query{..}
     isExplain :: Bool
     isExplain = False
 
-    params :: [PersistValue]
-    params = [toPersistValue platformId, toPersistValue variant]
-
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
         => [PersistValue] -> m (Int64, Vector (Int64, Double))
@@ -106,6 +108,9 @@ levelTimePlotQuery platformId variant = Query{..}
             ] =
         return $ (stepId, VU.zip impls timings)
     convert l = logThrowM . Error . T.pack $ "Unexpected value: " ++ show l
+
+    cteParams :: [PersistValue]
+    cteParams = [toPersistValue variant]
 
     commonTableExpressions :: [Text]
     commonTableExpressions = [[i|
@@ -120,7 +125,7 @@ levelTimePlotQuery platformId variant = Query{..}
             WHERE algorithmId IN
             (   SELECT algorithmId
                 FROM Variant
-                WHERE id = #{fromSqlKey variant}
+                WHERE id = ?
             )
         )
         ORDER BY implId
@@ -130,6 +135,9 @@ levelTimePlotQuery platformId variant = Query{..}
         SELECT int64_vector(implId, idx, (SELECT COUNT(*) FROM IndexedImpls))
           FROM IndexedImpls
     )|]]
+
+    params :: [PersistValue]
+    params = [toPersistValue platformId, toPersistValue variant]
 
     queryText = [i|
 SELECT stepId

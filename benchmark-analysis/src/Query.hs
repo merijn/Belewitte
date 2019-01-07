@@ -43,6 +43,7 @@ import Utils (byteStringToVector)
 data Query r =
   Query
     { commonTableExpressions :: [Text]
+    , cteParams :: [PersistValue]
     , params :: [PersistValue]
     , convert :: forall m . (MonadIO m, MonadLogger m, MonadThrow m)
               => [PersistValue] -> m r
@@ -76,7 +77,7 @@ explainSqlQuery :: Query r -> Handle -> SqlM ()
 explainSqlQuery originalQuery hnd = do
     liftIO $ do
         T.hPutStrLn hnd $ T.replicate 80 "#"
-        T.hPutStrLn hnd $ toTextQuery originalQuery
+        T.hPutStrLn hnd $ toQueryText originalQuery
         T.hPutStrLn hnd $ ""
 
     runSqlQuery' explainQuery $ printExplainTree hnd
@@ -94,17 +95,23 @@ explainSqlQuery originalQuery hnd = do
 
     explainQuery = originalQuery { convert = explain, isExplain = True }
 
-randomizeQuery :: Int -> Integer -> Query r -> (Query r, Query r)
+randomizeQuery :: Int -> Int -> Query r -> (Query r, Query r)
 randomizeQuery seed trainingSize originalQuery = (training, validation)
   where
     randomizedQuery =
-      [i|SELECT * FROM (#{queryText originalQuery}) ORDER BY random(#{seed}) |]
+      [i|SELECT * FROM (#{queryText originalQuery}) ORDER BY random(?) |]
+
+    extraParams = [toPersistValue seed, toPersistValue trainingSize]
 
     training = originalQuery
-      { queryText = randomizedQuery <> [i|LIMIT #{trainingSize}|] }
+      { params = params originalQuery ++ extraParams
+      , queryText = randomizedQuery <> [i|LIMIT ?|]
+      }
 
     validation = originalQuery
-      { queryText = randomizedQuery <> [i|LIMIT -1 OFFSET #{trainingSize}|] }
+      { params = params originalQuery ++ extraParams
+      , queryText = randomizedQuery <> [i|LIMIT -1 OFFSET ?|]
+      }
 
 runSqlQuery :: Query r -> ConduitT r Void SqlM a -> SqlM a
 runSqlQuery query sink = do
@@ -128,17 +135,19 @@ mIf condition val
     | condition = val
     | otherwise = mempty
 
-toTextQuery :: Query r -> Text
-toTextQuery Query{..} = mconcat $
+toQueryText :: Query r -> Text
+toQueryText Query{..} = mconcat $
     [ mIf isExplain "EXPLAIN QUERY PLAN "
-    , mIf (not $ null commonTableExpressions) "\nWITH\n"
+    , mIf (not $ null commonTableExpressions) "\nWITH"
     ] <> intersperse ",\n\n" commonTableExpressions <> [queryText]
 
 runSqlQuery' :: Query r -> ConduitT r Void SqlM a -> SqlM a
-runSqlQuery' query@Query{convert,params} sink = do
-    srcRes <- liftPersist $ rawQueryRes (toTextQuery query) params
+runSqlQuery' query@Query{convert,cteParams,params} sink = do
+    srcRes <- liftPersist $ rawQueryRes (toQueryText query) queryParams
     (key, src) <- allocateAcquire srcRes
     runConduit (src .| C.mapM convert .| sink) <* release key
+  where
+    queryParams = cteParams ++ params
 
 runSqlQueryCount :: Query r -> SqlM Int
 runSqlQueryCount originalQuery = do
@@ -169,6 +178,9 @@ getDistinctFieldQuery entityField = liftPersist $ do
     isExplain :: Bool
     isExplain = False
 
+    cteParams :: [PersistValue]
+    cteParams = []
+
     commonTableExpressions :: [Text]
     commonTableExpressions = []
 
@@ -194,11 +206,6 @@ variantInfoQuery algoId platformId = Query{..}
     isExplain :: Bool
     isExplain = False
 
-    params :: [PersistValue]
-    params = [ toPersistValue platformId, toPersistValue platformId
-             , toPersistValue algoId
-             ]
-
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
         => [PersistValue] -> m VariantInfo
@@ -220,6 +227,9 @@ variantInfoQuery algoId platformId = Query{..}
 
     convert l = logThrowM . Error . fromString $ "Unexpected value: " ++ show l
 
+    cteParams :: [PersistValue]
+    cteParams = [toPersistValue algoId]
+
     commonTableExpressions :: [Text]
     commonTableExpressions = [[i|
     IndexedImpls(idx, implId, type) AS (
@@ -229,7 +239,7 @@ variantInfoQuery algoId platformId = Query{..}
           FROM (SELECT id AS implId
                      , type
                   FROM Implementation
-                 WHERE algorithmId = #{fromSqlKey algoId})
+                 WHERE algorithmId = ?)
          ORDER BY implId
     ),
 
@@ -237,6 +247,11 @@ variantInfoQuery algoId platformId = Query{..}
         SELECT int64_vector(implId, idx, (SELECT COUNT(*) FROM IndexedImpls))
           FROM IndexedImpls
     )|]]
+
+    params :: [PersistValue]
+    params = [ toPersistValue platformId, toPersistValue platformId
+             , toPersistValue algoId
+             ]
 
     queryText = [i|
 SELECT Variant.id

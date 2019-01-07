@@ -70,7 +70,7 @@ splitQuery
 splitQuery algoId platformId cfg@TrainConfig{..} = do
     rowCount <- runSqlQueryCount query
 
-    let trainingSize :: Integer
+    let trainingSize :: Int
         trainingSize = round (fromIntegral rowCount * trainFraction)
 
     return $ randomizeQuery trainSeed trainingSize query
