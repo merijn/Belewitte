@@ -13,7 +13,7 @@ import Data.Int (Int64)
 import qualified Data.Text as T
 import Data.Typeable (Typeable)
 import Database.Persist.Sql
-    (Migration, PersistField, PersistValue, Single(Single), SqlBackend)
+    (Migration, PersistField, Single(Single), SqlBackend)
 import qualified Database.Persist.Sql as Sql
 import Database.Persist.Sqlite (RawSqlite)
 import GHC.IO.Handle (hDuplicate, hDuplicateTo)

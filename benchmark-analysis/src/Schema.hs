@@ -1,10 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Schema
     ( ByteString
-    , Model
-    , Text
-    , ImplType(..)
     , Hash(..)
+    , ImplType(..)
+    , Model
+    , PersistValue(..)
+    , toPersistValue
+    , Text
     , module Schema.Algorithm
     , module Schema.Graph
     , module Schema.Implementation
@@ -27,7 +29,8 @@ import Data.ByteString (ByteString)
 import Data.Int (Int64)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
-import Database.Persist.Sql (EntityDef, Migration, SqlBackend)
+import Database.Persist.Sql
+    (EntityDef, Migration, PersistValue(..), SqlBackend, toPersistValue)
 
 import Model (Model)
 import Schema.Utils (MigrationAction, mkMigration)

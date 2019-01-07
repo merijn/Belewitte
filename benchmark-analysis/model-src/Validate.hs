@@ -14,6 +14,7 @@ import Evaluate (percent)
 import Model
 import Query
 import Schema
+import StepQuery (StepInfo(..))
 import Train
 
 validateModel

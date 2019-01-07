@@ -39,6 +39,7 @@ import Core
 import Model
 import Query
 import Schema
+import StepQuery (StepInfo(..))
 import Train
 
 percent :: Real n => n -> n -> Text

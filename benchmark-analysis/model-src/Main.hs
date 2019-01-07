@@ -23,6 +23,7 @@ import Model
 import Options
 import Query
 import Schema
+import StepQuery (StepInfo, stepInfoQuery)
 import Train
 import Validate
 
@@ -65,7 +66,7 @@ main = runSqlM commands $ \case
         modelId <- fst <$> trainModel algoId platformId trainConfig
         liftIO $ print (fromSqlKey modelId)
 
-    Query{getModel} -> do
+    QueryModel{getModel} -> do
         modelId <- fst <$> getModel
         getModelStats modelId >>= reportModelStats
 

@@ -46,6 +46,7 @@ import Model
 import Paths_benchmark_analysis (getDataFileName)
 import Query
 import Schema
+import StepQuery (StepInfo(..), stepInfoQuery)
 
 data ModelStats = ModelStats
      { modelGraphPropImportance :: Map Text Double

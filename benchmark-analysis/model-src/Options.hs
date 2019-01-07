@@ -23,7 +23,7 @@ import Core
 import Evaluate (Report(..), RelativeTo(..), SortBy(..))
 import Model (Model)
 import OptionParsers
-import Query
+import Query (getDistinctFieldQuery, runSqlQuery)
 import Schema
 import Train (TrainingConfig(..))
 
@@ -46,7 +46,7 @@ data ModelCommand
       , getPlatformId :: SqlM (Key Platform)
       , getConfig :: SqlM TrainingConfig
       }
-    | Query
+    | QueryModel
       { getModel :: SqlM (Key PredictionModel, Model) }
     | Validate
       { getAlgoId :: SqlM (Key Algorithm)
@@ -82,7 +82,7 @@ commands name = (,) docs . (<|>) hiddenCommands . hsubparser $ mconcat
         "Train a new model" $
         Train <$> algorithmParser <*> platformParser <*> trainingConfig
     , subCommand "query" "report model info"
-        "Report model info & statistics" $ Query <$> modelParser
+        "Report model info & statistics" $ QueryModel <$> modelParser
     , subCommand "validate" "validate model accuracy"
         "Compute and report a model's accuracy on validation dataset and full \
         \dataset" $ Validate <$> algorithmParser <*> platformParser

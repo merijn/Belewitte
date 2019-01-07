@@ -36,6 +36,7 @@ import System.Process
 import Core
 import OptionParsers
 import Paths_benchmark_analysis (getDataFileName)
+import PlotQuery (timePlotQuery, levelTimePlotQuery)
 import Query
 import Schema
 
