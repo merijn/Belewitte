@@ -252,13 +252,13 @@ runSqlMWithOptions Options{..} work = do
                 int64_vector_step
                 int64_vector_finalise
 
-            checkMigration migrateSchema
+            didMigrate <- checkMigration migrateSchema
 
             -- Wait longer before timing out query steps
             rawExecute "PRAGMA busy_timeout = 1000" []
 
             -- Compacts and reindexes the database when request
-            when vacuumDb $ rawExecute "VACUUM" []
+            when (vacuumDb || didMigrate) $ rawExecute "VACUUM" []
 
             workResult <- work task
 

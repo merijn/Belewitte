@@ -62,14 +62,14 @@ checkSchema schema = Sql.liftPersist $ do
 
 validateSchema
     :: (MonadCatch m, MonadIO m, MonadLogger m, MonadThrow m)
-    => Bool -> Int64 -> SqlM m ()
+    => Bool -> Int64 -> SqlM m Bool
 validateSchema _ v
     | v > schemaVersion = throwM $ TooNew v
-    | v == schemaVersion = checkSchema currentSchema
+    | v == schemaVersion = False <$ checkSchema currentSchema
 
 validateSchema migrateSchema version
     | not migrateSchema = throwM $ MigrationNeeded version
-    | otherwise = do
+    | otherwise = True <$ do
         Log.logInfoN $ "Migrating schema."
         forM_ [version..schemaVersion - 1] $ \n -> do
             Log.logInfoN $ mconcat
@@ -104,14 +104,14 @@ validateSchema migrateSchema version
 
 checkMigration
     :: (MonadCatch m, MonadIO m, MonadLogger m, MonadThrow m)
-    => Bool -> SqlM m ()
+    => Bool -> SqlM m Bool
 checkMigration migrateSchema = do
     tableCount <- querySingleValue "SELECT COUNT(*) FROM sqlite_master" []
     case tableCount :: Int64 of
         0 -> do
             Sql.liftPersist $ Sql.runMigrationSilent currentSchema
             checkSchema currentSchema
-            setPragma "user_version" schemaVersion
+            False <$ setPragma "user_version" schemaVersion
         _ -> do
             version <- querySingleValue "PRAGMA user_version" []
             validateSchema migrateSchema version
