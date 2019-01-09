@@ -46,6 +46,7 @@ Library
                         Schema.Timers
                         Schema.Utils
                         Schema.Variant
+                        SQLiteExts
                         Types
                         Utils
 

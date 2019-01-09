@@ -1,4 +1,3 @@
-{-# LANGUAGE CApiFFI #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -29,7 +28,7 @@ module Core
     ) where
 
 import Control.Exception (Exception(displayException))
-import Control.Monad ((>=>), join, when)
+import Control.Monad (join, when)
 import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow, handle, throwM)
 import Control.Monad.Fail (MonadFail(fail))
 import Control.Monad.IO.Unlift
@@ -39,7 +38,6 @@ import qualified Control.Monad.Logger as Log
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Reader (ReaderT(..), asks)
 import Control.Monad.Trans.Resource (MonadResource, ResourceT, runResourceT)
-import qualified Data.ByteString as BS
 import Data.Conduit (ConduitT, (.|), runConduitRes)
 import qualified Data.Conduit.Combinators as C
 import Data.IntMap (IntMap)
@@ -51,11 +49,9 @@ import Database.Sqlite.Internal
 import Data.Int (Int64)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Text (Text)
-import Data.Text.Encoding (decodeUtf8')
 import qualified Data.Text as T
 import Data.Typeable (Typeable)
-import Foreign (Ptr, FunPtr, nullPtr, nullFunPtr)
-import Foreign.C (CInt(..), CString, withCString)
+import Foreign (Ptr)
 import GHC.Conc.Sync
     (getNumProcessors, setNumCapabilities, setUncaughtExceptionHandler)
 import qualified Lens.Micro as Lens
@@ -67,6 +63,7 @@ import System.IO
 
 import Migration
 import Schema
+import SQLiteExts
 
 data Abort = Abort deriving (Show, Typeable)
 instance Exception Abort where
@@ -136,81 +133,6 @@ instance MonadUnliftIO BaseM where
   askUnliftIO = BaseM $ withUnliftIO $ \u ->
                             return (UnliftIO (unliftIO u . runBaseM))
 
-foreign import ccall "sqlite-functions.h &randomFun"
-    randomFun :: FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
-
-foreign import ccall "sqlite-functions.h &int64_vector_step"
-    int64_vector_step :: FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
-
-foreign import ccall "sqlite-functions.h &int64_vector_finalise"
-    int64_vector_finalise :: FunPtr (Ptr () -> IO ())
-
-foreign import ccall "sqlite-functions.h &double_vector_step"
-    double_vector_step :: FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
-
-foreign import ccall "sqlite-functions.h &double_vector_finalise"
-    double_vector_finalise :: FunPtr (Ptr () -> IO ())
-
-foreign import capi "sqlite3.h value SQLITE_ANY"
-    sqliteAny :: CInt
-
-foreign import capi "sqlite3.h value SQLITE_OK"
-    sqliteOk :: CInt
-
-foreign import ccall "sqlite3.h sqlite3_extended_errcode"
-    getExtendedError :: Ptr () -> IO CInt
-
-foreign import ccall "sqlite3.h sqlite3_errstr"
-    getErrorString :: CInt -> IO CString
-
-foreign import ccall "sqlite3.h sqlite3_create_function"
-    createFun :: Ptr () -> CString -> CInt -> CInt -> Ptr ()
-              -> FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
-              -> FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
-              -> FunPtr (Ptr () -> IO ())
-              -> IO CInt
-
-createSqliteFun
-    :: (MonadIO m, MonadLogger m, MonadThrow m)
-    => Ptr ()
-    -> CInt
-    -> String
-    -> FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
-    -> FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
-    -> FunPtr (Ptr () -> IO ())
-    -> m ()
-createSqliteFun sqlPtr nArgs strName sqlFun aggStep aggFinal = do
-    result <- liftIO . withCString strName $ \name -> do
-        createFun sqlPtr name nArgs sqliteAny nullPtr sqlFun aggStep aggFinal
-    when (result /= sqliteOk) $ do
-        bs <- liftIO $ unpackError sqlPtr
-        case decodeUtf8' bs of
-            Left exc -> logThrowM exc
-            Right txt -> Log.logErrorN txt
-  where
-    unpackError = getExtendedError >=> getErrorString >=> BS.packCString
-
-createSqlFun
-    :: (MonadIO m, MonadLogger m, MonadThrow m)
-    => Ptr ()
-    -> CInt
-    -> String
-    -> FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
-    -> m ()
-createSqlFun sqlPtr nArgs name funPtr =
-  createSqliteFun sqlPtr nArgs name funPtr nullFunPtr nullFunPtr
-
-createSqlAggregate
-    :: (MonadIO m, MonadLogger m, MonadThrow m)
-    => Ptr ()
-    -> CInt
-    -> String
-    -> FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
-    -> FunPtr (Ptr () -> IO ())
-    -> m ()
-createSqlAggregate sqlPtr nArgs name =
-  createSqliteFun sqlPtr nArgs name nullFunPtr
-
 data Options a =
   Options
     { database :: Text
@@ -236,21 +158,8 @@ runSqlMWithOptions Options{..} work = do
         ref <- newIORef ""
         withQueryLog $ \mHnd -> runStack (ref, mHnd) $ do
             sqlitePtr <- asks $ getSqlitePtr . Lens.view rawSqliteConnection
-            createSqlFun sqlitePtr 1 "random" randomFun
 
-            createSqlAggregate
-                sqlitePtr
-                3
-                "double_vector"
-                double_vector_step
-                double_vector_finalise
-
-            createSqlAggregate
-                sqlitePtr
-                3
-                "int64_vector"
-                int64_vector_step
-                int64_vector_finalise
+            registerSqlFunctions sqlitePtr
 
             didMigrate <- checkMigration migrateSchema
 
