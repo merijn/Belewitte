@@ -139,7 +139,7 @@ toQueryText :: Query r -> Text
 toQueryText Query{..} = mconcat $
     [ mIf isExplain "EXPLAIN QUERY PLAN "
     , mIf (not $ null commonTableExpressions) "\nWITH"
-    ] <> intersperse ",\n\n" commonTableExpressions <> [queryText]
+    ] <> intersperse ",\n\n" commonTableExpressions <> ["\n", queryText]
 
 runSqlQuery' :: Query r -> ConduitT r Void SqlM a -> SqlM a
 runSqlQuery' query@Query{convert,cteParams,params} sink = do

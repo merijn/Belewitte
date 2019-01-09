@@ -41,12 +41,13 @@ stepInfoQuery algoId platformId graphProperties stepProperties = Query{..}
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
         => [PersistValue] -> m StepInfo
-    convert [ PersistByteString (byteStringToVector -> graphProps)
-            , PersistByteString (byteStringToVector -> rawStepProps)
+    convert [ PersistInt64 (toSqlKey -> stepVariantId)
+            , PersistInt64 stepId
             , PersistInt64 stepBestImpl
-            , PersistInt64 (toSqlKey -> stepVariantId) , PersistInt64 stepId
             , PersistByteString (byteStringToVector -> impls)
             , PersistByteString (byteStringToVector -> timings)
+            , PersistByteString (byteStringToVector -> graphProps)
+            , PersistByteString (byteStringToVector -> rawStepProps)
             ] = return $ StepInfo{..}
       where
         stepProps = graphProps <> rawStepProps
@@ -55,94 +56,87 @@ stepInfoQuery algoId platformId graphProperties stepProperties = Query{..}
     convert l = logThrowM . Error . T.pack $ "Unexpected value: " ++ show l
 
     cteParams :: [PersistValue]
-    cteParams = [toPersistValue algoId]
+    cteParams = [ toPersistValue algoId , toPersistValue platformId ]
 
     commonTableExpressions :: [Text]
     commonTableExpressions = [[i|
-    IndexedGraphProps(idx, property) AS (
-        SELECT ROW_NUMBER() OVER (ORDER BY property)
-             , property
-          FROM (SELECT DISTINCT property
-                 FROM GraphProp
-                WHERE property IN #{inExpression graphProperties})
-         ORDER BY property
-    ),
+IndexedGraphProps(graphId, idx, property, value) AS (
+    SELECT graphId
+         , ROW_NUMBER() OVER (PARTITION BY graphId ORDER BY property)
+         , property
+         , value
+    FROM GraphProp
+    WHERE property IN #{inExpression graphProperties}
+),
 
-    IndexedStepProps(idx, property) AS (
-        SELECT ROW_NUMBER() OVER (ORDER BY property)
-             , property
-          FROM (SELECT DISTINCT property
-                  FROM StepProp
-                 WHERE property IN #{inExpression stepProperties})
-         ORDER BY property
-    ),
+IndexedStepProps(variantId, stepId, idx, property, value) AS (
+    SELECT variantId
+         , stepId
+         , ROW_NUMBER() OVER (PARTITION BY variantId, stepId ORDER BY property)
+         , property
+         , value
+    FROM StepProp
+    WHERE property IN #{inExpression stepProperties}
+),
 
-    IndexedImpls(idx, implId, type) AS (
-        SELECT ROW_NUMBER() OVER (ORDER BY implId)
-             , implId
-             , type
-          FROM (SELECT id AS implId
-                     , type
-                  FROM Implementation
-                 WHERE algorithmId = ?)
-         ORDER BY implId
-    ),
+IndexedImpls(idx, implId, type) AS (
+    SELECT ROW_NUMBER() OVER (ORDER BY id)
+         , id
+         , type
+    FROM Implementation
+    WHERE algorithmId = ?
+),
 
-    ImplVector(impls) AS (
-        SELECT int64_vector(implId, idx, (SELECT COUNT(*) FROM IndexedImpls))
-          FROM IndexedImpls
-    )|]]
+ImplVector(impls) AS (
+    SELECT int64_vector(implId, idx, (SELECT COUNT(*) FROM IndexedImpls))
+    FROM IndexedImpls
+),
 
-    params :: [PersistValue]
-    params = [ toPersistValue platformId
-             , toPersistValue $ S.size graphProperties
-             , toPersistValue $ S.size stepProperties
-             , toPersistValue algoId]
-
-    queryText = [i|
-SELECT GraphProps.props
-     , StepProps.props
-     , Step.implId
-     , Variant.id
-     , Step.stepId
-     , ImplVector.impls
-     , Step.timings
-FROM Variant
-INNER JOIN Graph
-ON Variant.graphId = Graph.id
-
-INNER JOIN
-(   SELECT variantId, stepId, IndexedImpls.implId
+Step(variantId, stepId, implId, minTime, timings) AS (
+    SELECT variantId, stepId, IndexedImpls.implId
          , MIN(CASE IndexedImpls.type
                WHEN "Core" THEN avgTime
                ELSE NULL END)
          , double_vector(avgTime, idx, (SELECT COUNT(*) FROM IndexedImpls))
            AS timings
     FROM StepTimer
+
     INNER JOIN IndexedImpls
     ON StepTimer.implId = IndexedImpls.implId
     WHERE platformId = ?
     GROUP BY variantId, stepId
+)|]]
 
-) AS Step
+    params :: [PersistValue]
+    params = [ toPersistValue $ S.size graphProperties
+             , toPersistValue $ S.size stepProperties
+             , toPersistValue algoId
+             ]
+
+    queryText = [i|
+SELECT Variant.id
+     , Step.stepId
+     , Step.implId
+     , ImplVector.impls
+     , Step.timings
+     , GraphProps.props
+     , StepProps.props
+FROM Variant
+
+INNER JOIN Step
 ON Variant.id = Step.variantId
 
 INNER JOIN
-(   SELECT graphId
-         , double_vector(value, idx, ?) AS props
-    FROM GraphProp
-    INNER JOIN IndexedGraphProps AS IdxProps
-    ON IdxProps.property = GraphProp.property
+(   SELECT graphId, double_vector(value, idx, ?) AS props
+    FROM IndexedGraphProps
     GROUP BY graphId
 ) AS GraphProps
-ON GraphProps.graphId = Graph.id
+ON GraphProps.graphId = Variant.graphId
 
 INNER JOIN
 (   SELECT variantId, stepId
          , double_vector(value, idx, ?) AS props
-    FROM StepProp
-    INNER JOIN IndexedStepProps AS IdxProps
-    ON IdxProps.property = StepProp.property
+    FROM IndexedStepProps
     GROUP BY variantId, stepId
 ) AS StepProps
 ON Variant.id = StepProps.variantId AND Step.stepId = StepProps.stepId
