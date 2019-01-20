@@ -11,13 +11,13 @@ structEdgeListCSR
 
     if (idx < graph->edge_count) {
         edge<unsigned> *edge = &graph->edges[idx];
-        unsigned inEdge = edge->in;
-        unsigned outEdge = edge->out;
-        unsigned *vertices = &graph->vertices[inEdge];
+        unsigned origin = edge->in;
+        unsigned destination = edge->out;
+        unsigned *vertices = &graph->vertices[origin];
 
         unsigned degree = vertices[1] - vertices[0];
         float new_rank = 0.0f;
-        if (degree != 0) new_rank = pagerank[inEdge] / degree;
-        atomicAdd(&new_pagerank[outEdge], new_rank);
+        if (degree != 0) new_rank = pagerank[origin] / degree;
+        atomicAdd(&new_pagerank[destination], new_rank);
     }
 }
