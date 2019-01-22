@@ -62,7 +62,12 @@ NVCCARCHFLAGS?= \
     -gencode arch=compute_35,code=sm_35 \
     -gencode arch=compute_50,code=sm_50 \
     -gencode arch=compute_52,code=sm_52 \
-    -gencode arch=compute_53,code=sm_53
+    -gencode arch=compute_53,code=sm_53 \
+    -gencode arch=compute_60,code=sm_60 \
+    -gencode arch=compute_61,code=sm_61 \
+    -gencode arch=compute_62,code=sm_62 \
+    -gencode arch=compute_70,code=sm_70 \
+    -gencode arch=compute_72,code=sm_72
 
 PTXARCH?=sm_53
 

@@ -1,7 +1,6 @@
 -isystem/home/mverstra/opt/include/
 -I/home/mverstra/opt/include/
--isystem/Developer/NVIDIA/CUDA-7.5/include
--isystem/cm/shared/apps/cuda80/toolkit/8.0.44/include/
+-isystem/cm/shared/apps/cuda91/toolkit/9.1.85/targets/x86_64-linux/include/
 -Wno-exit-time-destructors
 -Wno-global-constructors
 -Wno-reserved-id-macro
