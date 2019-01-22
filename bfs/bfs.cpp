@@ -59,12 +59,11 @@ struct BFSConfig : public Config
 
         for (size_t i = 0; i < run_count; i++) {
             initResults.start();
-            setKernelConfig(work_division::vertex);
-            backend.runKernel(setArray, results, results.size,
-                              std::numeric_limits<int>::max());
+            std::fill(results.begin(), results.end(),
+                      std::numeric_limits<int>::max());
 
-            backend.setWorkSizes(1, {1}, {1});
-            backend.runKernel(set_root, results, root);
+            results[root] = 0;
+            results.copyHostToDev();
             initResults.stop();
 
             bfs.start();

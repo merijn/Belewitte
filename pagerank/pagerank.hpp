@@ -14,9 +14,6 @@ void resetDiff();
 float getDiff();
 
 __global__ void
-setArrayFloat(float *array, size_t size, float val);
-
-__global__ void
 consolidateRank(size_t, float *pagerank, float *new_pagerank);
 
 __global__ void

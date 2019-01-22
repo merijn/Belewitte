@@ -115,12 +115,6 @@ struct BFS<blockreduce> {
     }
 };
 
-__global__ void
-setArray(int *array, size_t size, int val);
-
-__global__ void
-set_root(int *depths, unsigned root);
-
 template<typename BFSVariant>
 __global__ void
 vertexPushBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth);

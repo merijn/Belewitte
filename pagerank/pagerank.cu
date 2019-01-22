@@ -24,13 +24,6 @@ float getDiff()
     return val;
 }
 
-__global__ void
-setArrayFloat(float *array, size_t size, float val)
-{
-    size_t idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-    if (idx < size) array[idx] = val;
-}
-
 static __device__ __forceinline__
 void updateDiff(float val)
 {

@@ -45,9 +45,11 @@ struct PageRankBase : public Config
 
         for (size_t i = 0; i < run_count; i++) {
             initResults.start();
-            setKernelConfig(work_division::vertex);
-            backend.runKernel(setArrayFloat, pageranks, pageranks.size, 1.0f / vertex_count);
-            backend.runKernel(setArrayFloat, new_pageranks, new_pageranks.size, 0.0f);
+            std::fill(pageranks.begin(), pageranks.end(), 1.0f / vertex_count);
+            pageranks.copyHostToDev();
+
+            std::fill(new_pageranks.begin(), new_pageranks.end(), 0.0f);
+            new_pageranks.copyHostToDev();
             initResults.stop();
 
             pagerankTime.start();

@@ -24,12 +24,3 @@ unsigned getFrontier()
     CUDA_CHK(cudaMemcpyFromSymbol(&val, frontier, sizeof val));
     return val;
 }
-
-__global__ void setArray(int *array, size_t size, int val)
-{
-    int idx = (blockIdx.x * blockDim.x) + threadIdx.x;
-    if (idx < size) array[idx] = val;
-}
-
-__global__ void set_root(int *array, unsigned idx)
-{ array[idx] = 0; }
