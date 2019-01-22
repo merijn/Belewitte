@@ -70,6 +70,119 @@ class Backend {
     template<typename T, typename Base>
     class typed_alloc_t : public Base
     {
+        template<bool is_const>
+        class Iterator {
+          public:
+            typedef typename std::conditional
+                <is_const, const typed_alloc_t, typed_alloc_t>::type alloc_t;
+            typedef ptrdiff_t difference_type;
+            typedef typename std::conditional
+                <is_const, const T, T>::type value_type;
+            typedef value_type& reference;
+            typedef value_type* pointer;
+            typedef size_t size_type;
+            typedef std::random_access_iterator_tag iterator_category;
+
+          private:
+            alloc_t& alloc;
+            size_type offset;
+
+          public:
+            Iterator(alloc_t& a, size_type i)
+              : alloc(a), offset(i)
+              {}
+
+            Iterator(const Iterator& it)
+              : alloc(it.alloc), offset(it.offset)
+              {}
+
+            ~Iterator() {}
+
+            Iterator& operator=(const Iterator& it)
+            {
+                checkError(alloc == it.alloc,
+                        "Can only assign iterators for same data!");
+                offset = it.offset;
+                return *this;
+            }
+
+            Iterator& operator++()
+            { ++offset; return *this; }
+
+            Iterator operator++(int)
+            {
+                Iterator tmp(*this);
+                ++*this;
+                return tmp;
+            }
+
+            Iterator& operator--()
+            { --offset; return *this; }
+
+            Iterator operator--(int)
+            {
+                Iterator tmp(*this);
+                --*this;
+                return tmp;
+            }
+
+            Iterator& operator+=(size_type i)
+            { offset += i; return *this; }
+
+            Iterator operator+(size_type i) const
+            {
+                Iterator tmp(*this);
+                tmp += i;
+                return tmp;
+            }
+
+            Iterator& operator-=(size_type i)
+            { offset -= i; return *this; }
+
+            Iterator operator-(size_type i) const
+            {
+                Iterator tmp(*this);
+                tmp -= i;
+                return tmp;
+            }
+
+            difference_type operator-(const Iterator& it) const
+            {
+                difference_type diff = static_cast<difference_type>(offset);
+                diff -= static_cast<difference_type>(it.offset);
+                return diff;
+            }
+
+            reference operator*() const
+            { return alloc[offset]; }
+
+            pointer operator->() const;
+            reference operator[](size_type i) const
+            { return alloc[offset + i]; }
+
+            bool operator==(const Iterator& it) const
+            { return alloc == it.alloc && offset == it.offset; }
+
+            bool operator!=(const Iterator& it) const
+            { return !operator==(it); }
+
+            bool operator<(const Iterator& it) const
+            {
+                checkError(alloc == it.alloc,
+                        "Iterators from different allocations!");
+                return offset < it.offset;
+            }
+
+            bool operator<=(const Iterator& it) const
+            { return operator<(it) || operator==(it); }
+
+            bool operator>(const Iterator& it) const
+            { return !operator<=(it); }
+
+            bool operator>=(const Iterator& it) const
+            { return !operator<(it); }
+        };
+
       protected:
         using Base::hostPtr;
         size_t max;
@@ -126,6 +239,31 @@ class Backend {
                        i, " Max: ", max);
             return static_cast<T*>(hostPtr.get())[i];
         }
+
+        typedef Iterator<false> iterator;
+        typedef Iterator<true> const_iterator;
+        typedef std::reverse_iterator<iterator> reverse_iterator;
+        typedef std::reverse_iterator<const_iterator> const_reverse_iterator;
+
+        iterator begin() { return iterator(*this, 0); }
+        const_iterator begin() const { return const_iterator(*this, 0); }
+        const_iterator cbegin() const { return const_iterator(*this, 0); }
+
+        iterator end() { return iterator(*this, size); }
+        const_iterator end() const { return const_iterator(*this, size); }
+        const_iterator cend() const { return const_iterator(*this, size); }
+
+        reverse_iterator rbegin() { return reverse_iterator(end()); }
+        const_reverse_iterator rbegin() const
+        { return const_reverse_iterator(end()); }
+        const_reverse_iterator crbegin() const
+        { return const_reverse_iterator(end()); }
+
+        reverse_iterator rend() { return reverse_iterator(begin()); }
+        const_reverse_iterator rend() const
+        { return const_reverse_iterator(begin()); }
+        const_reverse_iterator crend() const
+        { return const_reverse_iterator(begin()); }
     };
 
     Backend()
