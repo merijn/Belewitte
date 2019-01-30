@@ -86,6 +86,11 @@ struct DerivedKernel : KernelType
     Kernel kernel;
 
     template<typename... Args>
+    DerivedKernel(Args... args)
+     : KernelType({rep, dir}, args...), kernel(nullptr)
+    {}
+
+    template<typename... Args>
     DerivedKernel(Kernel kern, Args... args)
      : KernelType({rep, dir}, args...), kernel(kern)
     {}
@@ -98,6 +103,8 @@ struct DerivedKernel : KernelType
     typename std::enable_if<std::is_same<WarpKernel,Parent>::value,void>::type
     doRun(GraphLoader<Platform,V,E>& loader, const KernelArgs&... args)
     {
+        if (kernel == nullptr) return;
+
         const auto& graph = loader.template getGraph<rep,dir>();
         backend.runKernel
             ( kernel, this->warp_size.get(), this->chunk_size.get()
@@ -108,6 +115,8 @@ struct DerivedKernel : KernelType
     typename std::enable_if<std::is_same<GraphKernel,Parent>::value,void>::type
     doRun(GraphLoader<Platform,V,E>& loader, const KernelArgs&... args)
     {
+        if (kernel == nullptr) return;
+
         const auto& graph = loader.template getGraph<rep,dir>();
         backend.runKernel(kernel, graph, args...);
     }
