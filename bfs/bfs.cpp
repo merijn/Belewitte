@@ -107,33 +107,37 @@ struct BFSConfig : public Config
     }
 };
 
-template<bfs_variant Variant, typename T>
-static inline void
-insertVariant(T& kernelMap)
+template<bfs_variant Variant>
+static inline auto
+insertVariant()
 {
-    kernelMap.template insert_kernel<Rep::EdgeList>
+    KernelBuilder<CUDABackend,unsigned,unsigned> make_kernel;
+    WarpKernelBuilder<CUDABackend,unsigned,unsigned> make_warp_kernel;
+
+    KernelMap kernelMap
+    { make_kernel_pair
         ( std::string("edge-list") + BFS<Variant>::suffix
-        , edgeListBfs<BFS<Variant>>, work_division::edge);
-
-    kernelMap.template insert_kernel<Rep::EdgeList,Dir::Reverse>
+        , edgeListBfs<BFS<Variant>>, work_division::edge, Rep::EdgeList)
+    , make_kernel_pair
         ( std::string("rev-edge-list") + BFS<Variant>::suffix
-        , revEdgeListBfs<BFS<Variant>>, work_division::edge);
-
-    kernelMap.template insert_kernel<Rep::CSR>
+        , revEdgeListBfs<BFS<Variant>>, work_division::edge, Rep::EdgeList
+        , Dir::Reverse)
+    , make_kernel_pair
         ( std::string("vertex-push") + BFS<Variant>::suffix
-        , vertexPushBfs<BFS<Variant>>, work_division::vertex);
-
-    kernelMap.template insert_kernel<Rep::CSR,Dir::Reverse>
+        , vertexPushBfs<BFS<Variant>>, work_division::vertex, Rep::CSR)
+    , make_kernel_pair
         ( std::string("vertex-pull") + BFS<Variant>::suffix
-        , vertexPullBfs<BFS<Variant>>, work_division::vertex);
-
-    kernelMap.template insert_warp_kernel<Rep::CSR>
+        , vertexPullBfs<BFS<Variant>>, work_division::vertex, Rep::CSR
+        , Dir::Reverse)
+    , make_warp_kernel_pair
         ( std::string("vertex-push-warp") + BFS<Variant>::suffix
-        , vertexPushWarpBfs<BFS<Variant>>
-        , work_division::vertex
-        , [](size_t chunkSize) {
-            return chunkSize * sizeof(int) + (chunkSize+1) * sizeof(unsigned);
-        });
+        , vertexPushWarpBfs<BFS<Variant>>, work_division::vertex
+        , [](size_t chunkSize)
+          { return chunkSize * sizeof(int) + (chunkSize+1) * sizeof(unsigned); }
+        , Rep::CSR)
+    };
+
+    return kernelMap;
 }
 
 extern "C" kernel_register_t cudaDispatch;
@@ -141,13 +145,10 @@ extern "C"
 void
 cudaDispatch(std::map<std::string, AlgorithmConfig*>& result)
 {
-    auto kernelMap = make_kernel_map<CUDABackend,unsigned,unsigned>
-                        (edgeListBfs<BFS<normal>>);
-
-    insertVariant<normal>(kernelMap);
-    insertVariant<bulk>(kernelMap);
-    insertVariant<warpreduce>(kernelMap);
-    insertVariant<blockreduce>(kernelMap);
+    auto kernelMap = insertVariant<normal>();
+    kernelMap += insertVariant<bulk>();
+    kernelMap += insertVariant<warpreduce>();
+    kernelMap += insertVariant<blockreduce>();
 
     for (auto& pair : kernelMap) {
         result[pair.first] = make_config<BFSConfig>(pair.second);

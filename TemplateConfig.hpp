@@ -116,69 +116,113 @@ struct DerivedKernel : KernelType
 template<typename Platform, typename V, typename E, typename... Args>
 using KernelType = std::shared_ptr<GraphKernel<Platform,V,E,Args...>>;
 
-template<typename Platform, typename V, typename E, typename... Args>
-class KernelMap : public std::map<std::string,KernelType<Platform,V,E,Args...>>
+template<typename Platform, typename V, typename E>
+class KernelBuilder
 {
-    using Loader = GraphLoader<Platform,V,E>;
-
-    template<Rep rep, Dir dir, typename Kernel, typename Parent>
-    using Base = DerivedKernel<Platform,V,E,rep,dir,Kernel,Parent,Args...>;
-
-    template<Rep rep, Dir dir, typename Kernel>
-    using GraphKernel = Base<rep,dir,Kernel,GraphKernel<Platform,V,E,Args...>>;
-
-    template<Rep rep, Dir dir, typename Kernel>
-    using WarpKernel = Base<rep,dir,Kernel,WarpKernel<Platform,V,E,Args...>>;
+    template
+    < Rep rep
+    , Dir dir
+    , typename Graph
+    , typename... Args
+    , typename Ptr = typename Platform::template kernel<Graph,Args...>::type
+    , typename Base = GraphKernel<Platform,V,E,Args...>
+    , typename Derived = DerivedKernel<Platform,V,E,rep,dir,Ptr,Base,Args...>
+    >
+    KernelType<Platform,V,E,Args...>
+    make_kernel(Ptr k, work_division w, std::tuple<Args...>)
+    { return std::make_shared<Derived>(k,w); }
 
   public:
-    template
-    < Rep rep
-    , Dir dir = Dir::Forward
-    , typename Graph = typename LoaderRep<rep,Platform,V,E>::GraphType
-    , typename Kernel = typename Platform::template kernel<Graph,Args...>::type
-    >
-    void insert_kernel(const std::string& key, Kernel k, work_division w)
-    {
-        auto ptr = std::make_shared<GraphKernel<rep,dir,Kernel>>(k,w);
-        auto result = this->insert({key, ptr});
-        if (!result.second) throw std::domain_error("Key already exists!");
-    }
+    KernelBuilder() {}
+    ~KernelBuilder() {}
 
     template
     < Rep rep
     , Dir dir = Dir::Forward
+    , typename... Args
     , typename Graph = typename LoaderRep<rep,Platform,V,E>::GraphType
-    , typename Kernel = typename Platform::template kernel<size_t,size_t,Graph,Args...>::type
+    , typename ArgPack = std::tuple
+        < typename Platform::template DevToHost<Args>::type...>
     >
-    void
-    insert_warp_kernel
-        ( const std::string& key, Kernel k, work_division w
-        , std::function<size_t(size_t)> mem)
+    auto
+    operator()(void (*k)(Graph, Args...), work_division w)
+    { return make_kernel<rep,dir,Graph>(k, w, ArgPack()); }
+};
+
+#define make_kernel(kernel, work_div, ...) \
+    make_kernel.operator()<__VA_ARGS__>(kernel, work_div)
+
+#define make_kernel_pair(name, kernel, work_div, ...) \
+    std::pair{name, make_kernel.operator()<__VA_ARGS__>(kernel, work_div)}
+
+template<typename Platform, typename V, typename E>
+class WarpKernelBuilder
+{
+    template
+    < Rep rep
+    , Dir dir
+    , typename Graph
+    , typename... Args
+    , typename Ptr = typename Platform::template kernel<size_t,size_t,Graph,Args...>::type
+    , typename Base = WarpKernel<Platform,V,E,Args...>
+    , typename Derived = DerivedKernel<Platform,V,E,rep,dir,Ptr,Base,Args...>
+    >
+    KernelType<Platform,V,E,Args...>
+    make_warp_kernel(Ptr k, work_division w, std::function<size_t(size_t)> mem, std::tuple<Args...>)
+    { return std::make_shared<Derived>(k,w, mem); }
+
+  public:
+    WarpKernelBuilder() {}
+    ~WarpKernelBuilder() {}
+
+    template
+    < Rep rep
+    , Dir dir = Dir::Forward
+    , typename... Args
+    , typename Graph = typename LoaderRep<rep,Platform,V,E>::GraphType
+    , typename ArgPack = std::tuple
+        < typename Platform::template DevToHost<Args>::type...>
+    >
+    auto
+    operator()(void (*k)(size_t, size_t, Graph, Args...), work_division w, std::function<size_t(size_t)> mem)
+    { return make_warp_kernel<rep,dir,Graph>(k, w, mem, ArgPack()); }
+};
+
+#define make_warp_kernel(kernel, work_div, mem, ...) \
+    make_warp_kernel.operator()<__VA_ARGS__>(kernel, work_div, mem)
+
+#define make_warp_kernel_pair(name, kernel, work_div, mem, ...) \
+    std::pair{name, make_warp_kernel.operator()<__VA_ARGS__>(kernel, work_div, mem) }
+
+template<typename Key, typename T>
+class KernelMap : public std::map<Key,T>
+{
+  public:
+    KernelMap() {}
+
+    KernelMap(std::initializer_list<std::pair<Key,T>> l)
+      : std::map<Key,T>(l.begin(), l.end())
+    {}
+
+    KernelMap&
+    operator+=(const KernelMap& other)
     {
-        auto ptr = std::make_shared<WarpKernel<rep,dir,Kernel>>(k,w, mem);
-        auto result = this->insert({key, ptr});
-        if (!result.second) throw std::domain_error("Key already exists!");
+        for (auto& pair : other) {
+            auto result = this->insert(pair);
+            if (!result.second) throw std::domain_error("Key already exists!");
+        }
+
+        return *this;
     }
 };
 
-template
-< typename Platform
-, typename Vertex
-, typename Edge
-, typename Format
-, typename... Args
-, typename Map = KernelMap
-    < Platform
-    , Vertex
-    , Edge
-    , typename Platform::template DevToHost<Args>::type...>
->
-Map
-make_kernel_map(void (*)(Format, Args...))
-{ return Map(); }
+template<typename T>
+KernelMap(std::initializer_list<std::pair<const char*,T>> l)
+    -> KernelMap<std::string,T>;
 
 template<typename Platform, typename V, typename E, typename... Args>
-struct TemplateConfig : public AlgorithmConfig {
+struct TemplateConfig : public AlgorithmConfig
+{
   using Vertex = V;
   using Edge = E;
   using KernelType = GraphKernel<Platform,V,E,Args...>;
@@ -354,7 +398,7 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
     using Config = TemplateConfig<Platform,V,E,Args...>;
     using KernelType = typename Config::KernelType;
     using WarpKernelType = typename Config::KernelType::WarpVersion;
-    using ConfigArg = std::map<std::string,std::shared_ptr<KernelType>>;
+    using ConfigArg = KernelMap<std::string,std::shared_ptr<KernelType>>;
     using Config::kernel;
     using Config::loader;
     using Config::options;
@@ -686,7 +730,7 @@ template
 , typename Config = Cfg<Base,Args...>
 >
 AlgorithmConfig* make_switch_config
-    ( std::map<std::string,std::shared_ptr<GraphKernel<Platform,Vertex,Edge,KernelArgs...>>> ks
+    ( KernelMap<std::string,std::shared_ptr<GraphKernel<Platform,Vertex,Edge,KernelArgs...>>> ks
     , Args... args)
 { return new Config(ks, args...); }
 #endif

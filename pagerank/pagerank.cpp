@@ -128,44 +128,53 @@ extern "C"
 void
 cudaDispatch(std::map<std::string, AlgorithmConfig*>& result)
 {
-    auto prMap = make_kernel_map<CUDABackend,unsigned,unsigned>
-                        (&edgeListCSR);
+    KernelBuilder<CUDABackend,unsigned,unsigned> make_kernel;
+    WarpKernelBuilder<CUDABackend,unsigned,unsigned> make_warp_kernel;
 
-    prMap.insert_kernel<Rep::EdgeListCSR>
-        ("edge-list", edgeListCSR, work_division::edge);
-
-    prMap.insert_kernel<Rep::StructEdgeListCSR>
-        ("struct-edge-list", structEdgeListCSR, work_division::edge);
-
-    prMap.insert_kernel<Rep::CSR>
-        ("vertex-push", vertexPush, work_division::vertex);
-
-    prMap.insert_kernel<Rep::InverseVertexCSR, Dir::Reverse>
-        ("vertex-pull", vertexPull, work_division::vertex);
-
-    prMap.insert_warp_kernel<Rep::CSR>
-        ("vertex-push-warp", vertexPushWarp, work_division::vertex
-        , [](size_t chunkSize) {
-            return chunkSize * sizeof(float) + (1+chunkSize) * sizeof(unsigned);
-        });
-
-    prMap.insert_warp_kernel<Rep::InverseVertexCSR, Dir::Reverse>
-        ("vertex-pull-warp", vertexPullWarp, work_division::vertex
-        , [](size_t chunkSize) { return (1 + chunkSize) * sizeof(unsigned); });
+    KernelMap prMap
+    { make_kernel_pair
+        ( "edge-list"
+        , edgeListCSR, work_division::edge, Rep::EdgeListCSR)
+    , make_kernel_pair
+        ( "struct-edge-list"
+        , structEdgeListCSR, work_division::edge, Rep::StructEdgeListCSR)
+    , make_kernel_pair
+        ( "vertex-push"
+        , vertexPush, work_division::vertex, Rep::CSR)
+    , make_kernel_pair
+        ( "vertex-pull"
+        , vertexPull, work_division::vertex, Rep::InverseVertexCSR
+        , Dir::Reverse)
+    , make_warp_kernel_pair
+        ( "vertex-push-warp"
+        , vertexPushWarp, work_division::vertex
+        , [](size_t chunkSize)
+          { return chunkSize * sizeof(float) + (1+chunkSize) * sizeof(unsigned); }
+        , Rep::CSR)
+    , make_warp_kernel_pair
+        ( "vertex-pull-warp"
+        , vertexPullWarp, work_division::vertex
+        , [](size_t chunkSize)
+          { return (1 + chunkSize) * sizeof(unsigned); }
+          , Rep::InverseVertexCSR, Dir::Reverse)
+    };
 
     for (auto& pair : prMap) {
         result[pair.first] = make_config<PageRank>(pair.second, consolidateRank);
     }
 
-    auto prNoDivMap = make_kernel_map<CUDABackend,unsigned,unsigned>
-                        (vertexPullNoDiv);
+    KernelMap prNoDivMap
+    { make_kernel_pair
+        ( "vertex-pull-nodiv"
+        , vertexPullNoDiv, work_division::vertex, Rep::InverseVertexCSR
+        , Dir::Reverse)
+    , make_warp_kernel_pair
+        ( "vertex-pull-warp-nodiv"
+        , vertexPullWarpNoDiv, work_division::vertex
+        , [](size_t chunkSize) { return (1 + chunkSize) * sizeof(unsigned); }
+        , Rep::InverseVertexCSR, Dir::Reverse)
+    };
 
-    prNoDivMap.insert_kernel<Rep::InverseVertexCSR, Dir::Reverse>
-        ("vertex-pull-nodiv", vertexPullNoDiv, work_division::vertex);
-
-    prNoDivMap.insert_warp_kernel<Rep::InverseVertexCSR, Dir::Reverse>
-        ("vertex-pull-warp-nodiv", vertexPullWarpNoDiv, work_division::vertex
-        , [](size_t chunkSize) { return (1 + chunkSize) * sizeof(unsigned); });
 
     for (auto& pair : prNoDivMap) {
         result[pair.first] = make_config<PageRankNoDiv>(pair.second, consolidateRankNoDiv);
