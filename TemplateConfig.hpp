@@ -172,12 +172,15 @@ class WarpKernelBuilder
     , Dir dir
     , typename Graph
     , typename... Args
-    , typename Ptr = typename Platform::template kernel<size_t,size_t,Graph,Args...>::type
+    , typename Ptr =
+        typename Platform::template kernel<size_t,size_t,Graph,Args...>::type
     , typename Base = WarpKernel<Platform,V,E,Args...>
     , typename Derived = DerivedKernel<Platform,V,E,rep,dir,Ptr,Base,Args...>
+    , typename SizeFun = std::function<size_t(size_t)>
     >
     KernelType<Platform,V,E,Args...>
-    make_warp_kernel(Ptr k, work_division w, std::function<size_t(size_t)> mem, std::tuple<Args...>)
+    make_warp_kernel
+    (Ptr k, work_division w, SizeFun mem, std::tuple<Args...>)
     { return std::make_shared<Derived>(k,w, mem); }
 
   public:
@@ -191,9 +194,11 @@ class WarpKernelBuilder
     , typename Graph = typename LoaderRep<rep,Platform,V,E>::GraphType
     , typename ArgPack = std::tuple
         < typename Platform::template DevToHost<Args>::type...>
+    , typename SizeFun = std::function<size_t(size_t)>
     >
     auto
-    operator()(void (*k)(size_t, size_t, Graph, Args...), work_division w, std::function<size_t(size_t)> mem)
+    operator()
+    (void (*k)(size_t, size_t, Graph, Args...), work_division w, SizeFun mem)
     { return make_warp_kernel<rep,dir,Graph>(k, w, mem, ArgPack()); }
 };
 
@@ -348,10 +353,11 @@ template
 , typename Config = Cfg<Base,Args...>
 , typename WarpConfig = Cfg<WarpBase,Args...>
 >
-AlgorithmConfig* make_config
-    ( std::shared_ptr<GraphKernel<Platform,Vertex,Edge,KernelArgs...>> k
-    , Args... args
-    )
+AlgorithmConfig*
+make_config
+( std::shared_ptr<GraphKernel<Platform,Vertex,Edge,KernelArgs...>> k
+, Args... args
+)
 {
     typedef WarpKernel<Platform,Vertex,Edge,KernelArgs...> WarpKernel;
 
@@ -738,8 +744,10 @@ template
 , typename Base = SwitchConfig<Platform,Vertex,Edge,KernelArgs...>
 , typename Config = Cfg<Base,Args...>
 >
-AlgorithmConfig* make_switch_config
-    ( KernelMap<std::string,std::shared_ptr<GraphKernel<Platform,Vertex,Edge,KernelArgs...>>> ks
-    , Args... args)
+AlgorithmConfig*
+make_switch_config
+( KernelMap<std::string,std::shared_ptr<GraphKernel<Platform,Vertex,Edge,KernelArgs...>>> ks
+, Args... args
+)
 { return new Config(ks, args...); }
 #endif
