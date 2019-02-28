@@ -227,6 +227,8 @@ class CUDABackend : public Backend {
     ~CUDABackend() override {}
 
   public:
+    typedef void* kernel_type;
+
     template<typename T>
     struct HostToDev { typedef T type; };
 
@@ -235,6 +237,9 @@ class CUDABackend : public Backend {
 
     template<typename T>
     struct HostToDev<alloc_t<T>&> { typedef T* type; };
+
+    template<typename T>
+    struct HostToDev<alloc_t<T>&&> { typedef T* type; };
 
     template<typename T>
     struct DevToHost { typedef T type; };
@@ -289,4 +294,8 @@ class CUDABackend : public Backend {
     dim3 grid;
     size_t sharedMemSize;
 };
+
+template<typename T>
+struct isBackendAllocTrait<CUDABackend::alloc_t<T>> : public std::true_type
+{};
 #endif

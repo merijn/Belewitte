@@ -37,7 +37,7 @@ void updateDiff(float val)
 }
 
 __global__ void
-consolidateRank(size_t size, float *pagerank, float *new_pagerank)
+consolidateRank(size_t size, float *pagerank, float *new_pagerank, bool)
 {
     size_t idx = (blockIdx.x * blockDim.x) + threadIdx.x;
 

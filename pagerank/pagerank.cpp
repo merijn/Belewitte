@@ -14,25 +14,28 @@ roundPrecision(float val, int digitPrecision)
     return std::round(val * rounder) / rounder;
 }
 
-template<typename Config>
-struct PageRankBase : public Config
+template<typename Platform, typename Vertex, typename Edge>
+struct PageRank : public TemplateConfig<Platform,Vertex,Edge>
 {
-    using typename Config::ConfigArg;
+    using Config = TemplateConfig<Platform,Vertex,Edge>;
     using Config::run_count;
     using Config::backend;
     using Config::setKernelConfig;
     using Config::vertex_count;
-    using Config::kernel;
     using Config::options;
 
     template<typename T>
     using alloc_t = typename Config::template alloc_t<T>;
 
-    PageRankBase(ConfigArg k) : Config(k)
-    {}
+    template<typename... Args>
+    using Kernel = typename Config::template GraphKernel<Args...>;
 
-    virtual void
-    callConsolidate(const alloc_t<float>&, const alloc_t<float>&, bool) = 0;
+    Kernel<float*,float*> kernel;
+    Kernel<float*,float*,bool> consolidate;
+
+    PageRank(Kernel<float*,float*> k, Kernel<float*,float*,bool> c)
+      : kernel(k), consolidate(c)
+    {}
 
     virtual void runImplementation(std::ofstream& outputFile) override
     {
@@ -60,8 +63,9 @@ struct PageRankBase : public Config
                 j++;
                 resetDiff();
                 setKernelConfig(kernel);
-                kernel->run(this->loader, pageranks, new_pageranks);
-                callConsolidate(pageranks, new_pageranks, max_iterations > j);
+                kernel(this->loader, pageranks, new_pageranks);
+                setKernelConfig(consolidate);
+                consolidate(this->loader, pageranks, new_pageranks, max_iterations > j);
 
                 diff = getDiff();
             } while (j < max_iterations);
@@ -79,106 +83,115 @@ struct PageRankBase : public Config
     }
 };
 
-template<typename Config, typename Consolidate>
-struct PageRank : public PageRankBase<Config> {
-    using typename PageRankBase<Config>::ConfigArg;
-    using PageRankBase<Config>::backend;
-
-    PageRank(ConfigArg k, Consolidate c)
-     : PageRankBase<Config>(k), consolidate(c)
-    {}
-
-    Consolidate consolidate;
-
-    template<typename T>
-    using alloc_t = typename PageRankBase<Config>::template alloc_t<T>;
-
-    void
-    callConsolidate(const alloc_t<float>& ranks, const alloc_t<float>& new_ranks, bool) override
-    {
-        this->setKernelConfig(work_division::vertex);
-        backend.runKernel(consolidate, this->vertex_count, ranks, new_ranks);
-    }
-};
-
-template<typename Config,typename Consolidate>
-struct PageRankNoDiv : public PageRankBase<Config> {
-    using typename PageRankBase<Config>::ConfigArg;
-    using PageRankBase<Config>::backend;
-    using PageRankBase<Config>::kernel;
-
-    PageRankNoDiv(ConfigArg k, Consolidate c)
-     : PageRankBase<Config>(k), consolidate(c)
-    {}
-
-    Consolidate consolidate;
-
-    template<typename T>
-    using alloc_t = typename PageRankBase<Config>::template alloc_t<T>;
-
-    void callConsolidate(const alloc_t<float>& ranks, const alloc_t<float>& new_ranks, bool notLast) override
-    {
-        this->setKernelConfig(work_division::vertex);
-        backend.runKernel(consolidate, this->loader.template getGraph<Rep::InverseVertexCSR,Dir::Reverse>(), ranks, new_ranks, notLast);
-    }
-};
-
 extern "C" kernel_register_t cudaDispatch;
 extern "C"
 void
 cudaDispatch(std::map<std::string, AlgorithmConfig*>& result)
 {
     KernelBuilder<CUDABackend,unsigned,unsigned> make_kernel;
-    WarpKernelBuilder<CUDABackend,unsigned,unsigned> make_warp_kernel;
+
+    auto consolidate = make_kernel
+        ( consolidateRank
+        , work_division::vertex
+        , tag_t(Rep::VertexCount)
+        );
+
+    auto consolidateNoDiv = make_kernel
+        ( consolidateRankNoDiv
+        , work_division::vertex
+        , tag_t(Rep::InverseVertexCSR)
+        );
 
     KernelMap prMap
-    { make_kernel_pair
-        ( "edge-list"
-        , edgeListCSR, work_division::edge, Rep::EdgeListCSR)
-    , make_kernel_pair
-        ( "struct-edge-list"
-        , structEdgeListCSR, work_division::edge, Rep::StructEdgeListCSR)
-    , make_kernel_pair
-        ( "vertex-push"
-        , vertexPush, work_division::vertex, Rep::CSR)
-    , make_kernel_pair
-        ( "vertex-pull"
-        , vertexPull, work_division::vertex, Rep::InverseVertexCSR
-        , Dir::Reverse)
-    , make_warp_kernel_pair
-        ( "vertex-push-warp"
-        , vertexPushWarp, work_division::vertex
-        , [](size_t chunkSize)
-          { return chunkSize * sizeof(float) + (1+chunkSize) * sizeof(unsigned); }
-        , Rep::CSR)
-    , make_warp_kernel_pair
-        ( "vertex-pull-warp"
-        , vertexPullWarp, work_division::vertex
-        , [](size_t chunkSize)
-          { return (1 + chunkSize) * sizeof(unsigned); }
-          , Rep::InverseVertexCSR, Dir::Reverse)
+    { std::pair
+        { "edge-list"
+        , std::tuple
+            { make_kernel
+                (edgeListCSR, work_division::edge, tag_t(Rep::EdgeListCSR))
+            , consolidate
+            }
+        }
     };
+
+    prMap["struct-edge-list"] =
+        { make_kernel
+            ( structEdgeListCSR
+            , work_division::edge
+            , tag_t(Rep::StructEdgeListCSR)
+            )
+        , consolidate
+        };
+
+    prMap["vertex-push"] =
+        { make_kernel
+            ( vertexPush
+            , work_division::vertex
+            , tag_t(Rep::CSR)
+            )
+        , consolidate
+        };
+
+    prMap["vertex-pull"] =
+        { make_kernel
+            ( vertexPull
+            , work_division::vertex
+            , tag_t(Rep::InverseVertexCSR)
+            , tag_t(Dir::Reverse)
+            )
+        , consolidate
+        };
+
+    prMap["vertex-push-warp"] =
+        { make_kernel
+            ( vertexPushWarp
+            , work_division::vertex
+            , [](size_t chunkSize) {
+                return chunkSize * sizeof(float) + (1+chunkSize) * sizeof(unsigned);
+            }
+            , tag_t(Rep::CSR)
+            )
+        , consolidate
+        };
+
+    prMap["vertex-pull-warp"] =
+        { make_kernel
+            ( vertexPullWarp
+            , work_division::vertex
+            , [](size_t chunkSize) {
+                return (1 + chunkSize) * sizeof(unsigned);
+            }
+            , tag_t(Rep::InverseVertexCSR)
+            , tag_t(Dir::Reverse)
+            )
+        , consolidate
+        };
+
+    prMap["vertex-pull-nodiv"] =
+        { make_kernel
+            ( vertexPullNoDiv
+            , work_division::vertex
+            , tag_t(Rep::InverseVertexCSR)
+            , tag_t(Dir::Reverse)
+            )
+        , consolidateNoDiv
+        };
+
+    prMap["vertex-pull-warp-nodiv"] =
+        { make_kernel
+            ( vertexPullWarpNoDiv
+            , work_division::vertex
+            , [](size_t chunkSize) {
+                return (1 + chunkSize) * sizeof(unsigned);
+            }
+            , tag_t(Rep::InverseVertexCSR)
+            , tag_t(Dir::Reverse)
+            )
+        , consolidateNoDiv
+        };
 
     for (auto& pair : prMap) {
-        result[pair.first] = make_config<PageRank>(pair.second, consolidateRank);
+        result[pair.first] = make_config<PageRank>(pair.second);
     }
 
-    KernelMap prNoDivMap
-    { make_kernel_pair
-        ( "vertex-pull-nodiv"
-        , vertexPullNoDiv, work_division::vertex, Rep::InverseVertexCSR
-        , Dir::Reverse)
-    , make_warp_kernel_pair
-        ( "vertex-pull-warp-nodiv"
-        , vertexPullWarpNoDiv, work_division::vertex
-        , [](size_t chunkSize) { return (1 + chunkSize) * sizeof(unsigned); }
-        , Rep::InverseVertexCSR, Dir::Reverse)
-    };
-
-
-    for (auto& pair : prNoDivMap) {
-        result[pair.first] = make_config<PageRankNoDiv>(pair.second, consolidateRankNoDiv);
-    }
-
-    result["switch"] = make_switch_config<PageRank>(prMap, consolidateRank);
+    result["switch"] = make_switch_config<PageRank>(prMap);
 }

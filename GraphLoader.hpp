@@ -2,10 +2,13 @@
 #define GRAPHLOADER_HPP
 
 #include "utils/Graph.hpp"
+#include "Backend.hpp"
 #include "GraphRep.hpp"
 
 enum class Rep : char
-{ EdgeList
+{ VertexCount
+, EdgeCount
+, EdgeList
 , StructEdgeList
 , EdgeListCSR
 , StructEdgeListCSR
@@ -45,6 +48,12 @@ class GraphLoader
     void runWithGraphRep(GraphRep rep, Args&... args)
     {
         switch (rep.representation) {
+            case Rep::VertexCount:
+                F<Rep::VertexCount>::call(rep.direction, args...);
+                break;
+            case Rep::EdgeCount:
+                F<Rep::EdgeCount>::call(rep.direction, args...);
+                break;
             case Rep::EdgeList:
                 F<Rep::EdgeList>::call(rep.direction, args...);
                 break;
@@ -182,15 +191,29 @@ class GraphLoader
     template<Rep rep>
     struct LoadGraph
     {
-        static void call(Dir dir, GraphLoader& loader, RawData& data)
-        { data.load(get(loader.*LoaderRep<rep>::field, dir), dir); }
+        static void
+        call(Dir dir, GraphLoader& loader, RawData& data)
+        {
+            using GraphType = typename LoaderRep<rep>::GraphType;
+
+            if constexpr (isDeviceAlloc<GraphType>()) {
+                data.load(get(loader.*LoaderRep<rep>::field, dir), dir);
+            }
+        }
     };
 
     template<Rep rep>
     struct TransferGraph
     {
-        static void call(Dir dir, GraphLoader& loader)
-        { get(loader.*LoaderRep<rep>::field, dir).copyHostToDev(); }
+        static void
+        call(Dir dir, GraphLoader& loader)
+        {
+            using GraphType = typename LoaderRep<rep>::GraphType;
+
+            if constexpr (isDeviceAlloc<GraphType>()) {
+                get(loader.*LoaderRep<rep>::field, dir).copyHostToDev();
+            }
+        }
     };
 
     template<typename T>
@@ -222,6 +245,9 @@ class GraphLoader
     {
         RawData data(graph);
 
+        vertexCount = {data.vertex_count, data.vertex_count};
+        edgeCount = {data.edge_count, data.edge_count};
+
         for (auto rep : reps) runWithGraphRep<LoadGraph>(rep, *this, data);
 
         return {data.vertex_count, data.edge_count};
@@ -247,12 +273,32 @@ class GraphLoader
     }
 
   private:
+    pair<size_t> vertexCount;
+    pair<size_t> edgeCount;
     pair<alloc_t<EdgeList<E>>> edgeList;
     pair<alloc_t<StructEdgeList<E>>> structEdgeList;
     pair<alloc_t<EdgeListCSR<V,E>>> edgeListCSR;
     pair<alloc_t<StructEdgeListCSR<V,E>>> structEdgeListCSR;
     pair<alloc_t<CSR<V,E>>> csr;
     pair<alloc_t<InverseVertexCSR<V,E>>> inverseVertexCSR;
+};
+
+template<typename Platform, typename V, typename E>
+struct LoaderRep<Rep::VertexCount, Platform, V, E>
+{
+    using Loader = GraphLoader<Platform,V,E>;
+    static constexpr auto Loader::* field = &Loader::vertexCount;
+    using FieldType = decltype(std::get<0>(std::declval<Loader>().*field));
+    typedef typename std::remove_reference<FieldType>::type GraphType;
+};
+
+template<typename Platform, typename V, typename E>
+struct LoaderRep<Rep::EdgeCount, Platform, V, E>
+{
+    using Loader = GraphLoader<Platform,V,E>;
+    static constexpr auto Loader::* field = &Loader::edgeCount;
+    using FieldType = decltype(std::get<0>(std::declval<Loader>().*field));
+    typedef typename std::remove_reference<FieldType>::type GraphType;
 };
 
 template<typename Platform, typename V, typename E>

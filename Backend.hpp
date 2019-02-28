@@ -320,4 +320,12 @@ class Backend {
     const std::vector<size_t> &maxGridSizes;
     const bool &initialised;
 };
+
+template<typename>
+struct isBackendAllocTrait : public std::false_type
+{};
+
+template<typename T>
+constexpr bool isDeviceAlloc()
+{ return isBackendAllocTrait<typename std::remove_reference<T>::type>::value; }
 #endif

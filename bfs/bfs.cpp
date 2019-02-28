@@ -6,29 +6,37 @@
 
 #include "bfs.hpp"
 
-template<typename Config>
-struct BFSConfig : public Config
+template<typename Platform, typename Vertex, typename Edge>
+struct BFSConfig : public TemplateConfig<Platform,Vertex,Edge>
 {
-    using typename Config::ConfigArg;
+    using Config = TemplateConfig<Platform,Vertex,Edge>;
     using Config::run_count;
     using Config::backend;
     using Config::loader;
     using Config::setKernelConfig;
     using Config::vertex_count;
-    using Config::kernel;
     using Config::options;
     using Config::isSwitching;
+
+    template<typename T>
+    using alloc_t = typename Config::template alloc_t<T>;
+
+    template<typename... Args>
+    using Kernel = typename Config::template GraphKernel<Args...>;
 
     unsigned root;
 
     prop_ref absFrontier, relFrontier, absVisited, relVisited;
 
-    BFSConfig(ConfigArg k)
-    : Config(k), root(0)
+    Kernel<int*,int> kernel;
+
+    BFSConfig(Kernel<int*,int> k)
+    : root(0)
     , absFrontier("frontier abs", *this)
     , relFrontier("frontier rel", *this)
     , absVisited("visited abs", *this)
     , relVisited("visited rel", *this)
+    , kernel(k)
     { options.add('r', "root", "NUM", root, "Starting vertex for BFS."); }
 
     inline void setProps(unsigned frontier)
@@ -85,7 +93,7 @@ struct BFSConfig : public Config
                 auto& levelTimer = levelTimers[static_cast<size_t>(curr)];
                 resetFrontier();
                 levelTimer.start();
-                kernel->run(loader, results, curr++);
+                kernel(loader, results, curr++);
                 frontier = getFrontier();
                 levelTimer.stop();
 
@@ -112,29 +120,55 @@ static inline auto
 insertVariant()
 {
     KernelBuilder<CUDABackend,unsigned,unsigned> make_kernel;
-    WarpKernelBuilder<CUDABackend,unsigned,unsigned> make_warp_kernel;
 
     KernelMap kernelMap
-    { make_kernel_pair
-        ( std::string("edge-list") + BFS<Variant>::suffix
-        , edgeListBfs<BFS<Variant>>, work_division::edge, Rep::EdgeList)
-    , make_kernel_pair
-        ( std::string("rev-edge-list") + BFS<Variant>::suffix
-        , revEdgeListBfs<BFS<Variant>>, work_division::edge, Rep::EdgeList
-        , Dir::Reverse)
-    , make_kernel_pair
-        ( std::string("vertex-push") + BFS<Variant>::suffix
-        , vertexPushBfs<BFS<Variant>>, work_division::vertex, Rep::CSR)
-    , make_kernel_pair
-        ( std::string("vertex-pull") + BFS<Variant>::suffix
-        , vertexPullBfs<BFS<Variant>>, work_division::vertex, Rep::CSR
-        , Dir::Reverse)
-    , make_warp_kernel_pair
-        ( std::string("vertex-push-warp") + BFS<Variant>::suffix
-        , vertexPushWarpBfs<BFS<Variant>>, work_division::vertex
-        , [](size_t chunkSize)
-          { return chunkSize * sizeof(int) + (chunkSize+1) * sizeof(unsigned); }
-        , Rep::CSR)
+    { std::pair
+        { std::string("edge-list") + BFS<Variant>::suffix
+        , std::tuple
+            { make_kernel
+                ( edgeListBfs<BFS<Variant>>
+                , work_division::edge
+                , tag_t(Rep::EdgeList)
+                )
+            }
+        }
+    };
+
+    kernelMap[std::string("rev-edge-list") + BFS<Variant>::suffix] = {
+        make_kernel
+            ( revEdgeListBfs<BFS<Variant>>
+            , work_division::edge
+            , tag_t(Rep::EdgeList)
+            , tag_t(Dir::Reverse)
+            )
+    };
+
+    kernelMap[std::string("vertex-push") + BFS<Variant>::suffix] = {
+        make_kernel
+            ( vertexPushBfs<BFS<Variant>>
+            , work_division::vertex
+            , tag_t(Rep::CSR)
+            )
+    };
+
+    kernelMap[std::string("vertex-pull") + BFS<Variant>::suffix] = {
+        make_kernel
+            ( vertexPullBfs<BFS<Variant>>
+            , work_division::vertex
+            , tag_t(Rep::CSR)
+            , tag_t(Dir::Reverse)
+            )
+    };
+
+    kernelMap[std::string("vertex-push-warp") + BFS<Variant>::suffix] = {
+        make_kernel
+            ( vertexPushWarpBfs<BFS<Variant>>
+            , work_division::vertex
+            , [](size_t chunkSize) {
+                return chunkSize * sizeof(int) + (chunkSize+1) * sizeof(unsigned);
+            }
+            , tag_t(Rep::CSR)
+            )
     };
 
     return kernelMap;

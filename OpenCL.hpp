@@ -306,4 +306,8 @@ class OpenCLBackend : public Backend {
     cl_context ctxt;
     cl_command_queue queue;
 };
+
+template<typename T>
+struct isBackendAllocTrait<OpenCLBackend::alloc_t<T>> : public std::true_type
+{};
 #endif

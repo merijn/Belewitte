@@ -7,64 +7,65 @@
 #include "GraphLoader.hpp"
 #include "Timer.hpp"
 
+#define tag_t(v) (tag_t<decltype(v), v>{})
+
+template<typename T, T value>
+struct tag_t {};
+
 enum class work_division { vertex, edge };
 
-template<typename Platform, typename V, typename E, typename... Args>
-struct WarpKernel;
-
-template<typename Platform, typename V, typename E, typename... Args>
-struct GraphKernel
+template<typename Platform>
+struct BaseKernel
 {
-    template<typename, typename, typename, typename...>
+    template<typename, typename, typename>
     friend struct TemplateConfig;
 
-    using WarpVersion = WarpKernel<Platform,V,E,Args...>;
+    using KernelType = typename Platform::kernel_type;
+
+    template<typename T>
+    using DevToHost = const typename Platform::template DevToHost<T>::type&;
+
+    BaseKernel(KernelType k, GraphRep rep, work_division w, bool warp)
+      : isWarp(warp), representation(rep), workDivision(w), kernel(k)
+      , backend(Platform::get())
+    {}
+
+    virtual ~BaseKernel()
+    {}
+
+    const bool isWarp;
+    const GraphRep representation;
+    const work_division workDivision;
+
+    virtual void
+    setWarpConfig(size_t,size_t)
+    {}
 
   protected:
-    Platform &backend;
-
-  public:
-    virtual void run(GraphLoader<Platform,V,E>&, const Args&...) = 0;
-
-    GraphKernel(GraphRep rep, work_division w)
-     : backend(Platform::get())
-     , representation(rep)
-     , workDivision(w)
-    {}
-
-    virtual ~GraphKernel()
-    {}
-
     virtual size_t getSharedMemSize(size_t)
     { return 0; }
 
-    const GraphRep representation;
-    const work_division workDivision;
+    KernelType kernel;
+    Platform &backend;
 };
 
-template<typename Platform, typename V, typename E, typename... Args>
-struct WarpKernel : GraphKernel<Platform,V,E,Args...>
+namespace internals
 {
-    using GraphKernel<Platform,V,E,Args...>::backend;
-
-    static size_t dummy;
-
-    WarpKernel(GraphRep r, work_division w, std::function<size_t(size_t)> mem)
-     : GraphKernel<Platform,V,E,Args...>(r, w)
-     , warp_size(dummy), chunk_size(dummy), chunkMemory(mem)
-    {}
-
-    std::reference_wrapper<size_t> warp_size, chunk_size;
-
-  protected:
-    virtual size_t getSharedMemSize(size_t blockSize) override
-    { return (blockSize / warp_size.get()) * chunkMemory(chunk_size.get()); }
-
-    std::function<size_t(size_t)> chunkMemory;
-};
-
 template<typename Platform, typename V, typename E, typename... Args>
-size_t WarpKernel<Platform,V,E,Args...>::dummy = 0;
+struct GraphKernel : public BaseKernel<Platform>
+{
+    using typename BaseKernel<Platform>::KernelType;
+
+    template<typename T>
+    using DevToHost = typename BaseKernel<Platform>::template DevToHost<T>;
+
+    virtual void
+    run(GraphLoader<Platform,V,E>&, DevToHost<Args>...) = 0;
+
+    GraphKernel(KernelType k, GraphRep rep, work_division w, bool warp)
+      : BaseKernel<Platform>(k, rep, w, warp)
+    {}
+};
 
 template
 < typename Platform
@@ -72,76 +73,123 @@ template
 , typename E
 , Rep rep
 , Dir dir
-, typename Kernel
-, typename KernelType
-, typename... KernelArgs
+, typename... Args
 >
-struct DerivedKernel : KernelType
+struct GraphKernelImpl : GraphKernel<Platform,V,E,Args...>
 {
-    using KernelType::backend;
-    using KernelType::representation;
-    using GraphKernel = GraphKernel<Platform,V,E,KernelArgs...>;
-    using WarpKernel = WarpKernel<Platform,V,E,KernelArgs...>;
+    using Graph = typename LoaderRep<rep,Platform,V,E>::GraphType;
+    using Kernel = typename Platform::template kernel<Graph,Args...>::type;
+    using typename GraphKernel<Platform,V,E,Args...>::KernelType;
+    using GraphKernel<Platform,V,E,Args...>::backend;
+    using GraphKernel<Platform,V,E,Args...>::kernel;
 
-    Kernel kernel;
+    template<typename T>
+    using DevToHost = typename BaseKernel<Platform>::template DevToHost<T>;
 
-    template<typename... Args>
-    DerivedKernel(Args... args)
-     : KernelType({rep, dir}, args...), kernel(nullptr)
-    {}
-
-    template<typename... Args>
-    DerivedKernel(Kernel kern, Args... args)
-     : KernelType({rep, dir}, args...), kernel(kern)
+    GraphKernelImpl(Kernel k, work_division w)
+      : GraphKernel<Platform,V,E,Args...>
+            (reinterpret_cast<KernelType>(k), {rep, dir}, w, false)
     {}
 
     virtual void
-    run(GraphLoader<Platform,V,E>& loader, const KernelArgs&... args) override
-    { doRun(loader, args...); }
+    run(GraphLoader<Platform,V,E>& loader, DevToHost<Args>... args)
+    {
+        if (kernel == nullptr) return;
 
-    template<class Parent = KernelType>
-    typename std::enable_if<std::is_same<WarpKernel,Parent>::value,void>::type
-    doRun(GraphLoader<Platform,V,E>& loader, const KernelArgs&... args)
+        const auto& graph = loader.template getGraph<rep,dir>();
+        backend.runKernel(reinterpret_cast<Kernel>(kernel), graph, args...);
+    }
+};
+
+template
+< typename Platform
+, typename V
+, typename E
+, Rep rep
+, Dir dir
+, typename... Args
+>
+struct WarpKernel : GraphKernel<Platform,V,E,Args...>
+{
+    using Graph = typename LoaderRep<rep,Platform,V,E>::GraphType;
+    using Kernel = typename Platform::template kernel
+            <size_t,size_t,Graph,Args...>::type;
+    using typename GraphKernel<Platform,V,E,Args...>::KernelType;
+    using GraphKernel<Platform,V,E,Args...>::backend;
+    using GraphKernel<Platform,V,E,Args...>::kernel;
+
+    template<typename T>
+    using DevToHost = typename BaseKernel<Platform>::template DevToHost<T>;
+
+    WarpKernel(Kernel k, work_division w, std::function<size_t(size_t)> mem)
+      : GraphKernel<Platform,V,E,Args...>
+            (reinterpret_cast<KernelType>(k), {rep, dir}, w, true)
+      , chunkMemory(mem), warp_size(32), chunk_size(32)
+    {}
+
+    virtual void
+    run(GraphLoader<Platform,V,E>& loader, DevToHost<Args>... args) override
     {
         if (kernel == nullptr) return;
 
         const auto& graph = loader.template getGraph<rep,dir>();
         backend.runKernel
-            ( kernel, this->warp_size.get(), this->chunk_size.get()
-            , graph, args...);
+            ( reinterpret_cast<Kernel>(kernel)
+            , warp_size
+            , chunk_size
+            , graph
+            , args...);
     }
 
-    template<class Parent = KernelType>
-    typename std::enable_if<std::is_same<GraphKernel,Parent>::value,void>::type
-    doRun(GraphLoader<Platform,V,E>& loader, const KernelArgs&... args)
+    virtual void
+    setWarpConfig(size_t warp, size_t chunk) final
     {
-        if (kernel == nullptr) return;
-
-        const auto& graph = loader.template getGraph<rep,dir>();
-        backend.runKernel(kernel, graph, args...);
+        warp_size = warp;
+        chunk_size = chunk;
     }
+
+  protected:
+    virtual size_t getSharedMemSize(size_t blockSize) override
+    { return (blockSize / warp_size) * chunkMemory(chunk_size); }
+
+    std::function<size_t(size_t)> chunkMemory;
+    size_t warp_size, chunk_size;
+};
+}
+
+template<typename P, typename V, typename E, typename... Args>
+struct GraphKernel : std::shared_ptr<internals::GraphKernel<P,V,E,Args...>>
+{
+    using Base = internals::GraphKernel<P,V,E,Args...>;
+
+    template<typename T>
+    using DevToHost = typename Base::template DevToHost<T>;
+
+    GraphKernel()
+    {}
+
+    GraphKernel(const std::shared_ptr<Base>& f)
+      : std::shared_ptr<Base>(f)
+    {}
+
+    void
+    operator()(GraphLoader<P,V,E>& l, DevToHost<Args>... args)
+    { this->get()->run(l, args...); }
 };
 
-template<typename Platform, typename V, typename E, typename... Args>
-using KernelType = std::shared_ptr<GraphKernel<Platform,V,E,Args...>>;
+template<typename P, typename V, typename E, Rep r, Dir d, typename... Args>
+GraphKernel
+(const std::shared_ptr<internals::GraphKernelImpl<P,V,E,r,d,Args...>>&)
+    -> GraphKernel<P,V,E,Args...>;
+
+template<typename P, typename V, typename E, Rep r, Dir d, typename... Args>
+GraphKernel
+(const std::shared_ptr<internals::WarpKernel<P,V,E,r,d,Args...>>&)
+    -> GraphKernel<P,V,E,Args...>;
 
 template<typename Platform, typename V, typename E>
-class KernelBuilder
+struct KernelBuilder
 {
-    template
-    < Rep rep
-    , Dir dir
-    , typename Graph
-    , typename... Args
-    , typename Ptr = typename Platform::template kernel<Graph,Args...>::type
-    , typename Base = GraphKernel<Platform,V,E,Args...>
-    , typename Derived = DerivedKernel<Platform,V,E,rep,dir,Ptr,Base,Args...>
-    >
-    KernelType<Platform,V,E,Args...>
-    make_kernel(Ptr k, work_division w, std::tuple<Args...>)
-    { return std::make_shared<Derived>(k,w); }
-
-  public:
     KernelBuilder() {}
     ~KernelBuilder() {}
 
@@ -150,63 +198,35 @@ class KernelBuilder
     , Dir dir = Dir::Forward
     , typename... Args
     , typename Graph = typename LoaderRep<rep,Platform,V,E>::GraphType
-    , typename ArgPack = std::tuple
-        < typename Platform::template DevToHost<Args>::type...>
+    , typename KernelImpl = internals::GraphKernelImpl
+            <Platform,V,E,rep,dir,Args...>
     >
     auto
-    operator()(void (*k)(Graph, Args...), work_division w)
-    { return make_kernel<rep,dir,Graph>(k, w, ArgPack()); }
-};
-
-#define make_kernel(kernel, work_div, ...) \
-    make_kernel.operator()<__VA_ARGS__>(kernel, work_div)
-
-#define make_kernel_pair(name, kernel, work_div, ...) \
-    std::pair{name, make_kernel.operator()<__VA_ARGS__>(kernel, work_div)}
-
-template<typename Platform, typename V, typename E>
-class WarpKernelBuilder
-{
-    template
-    < Rep rep
-    , Dir dir
-    , typename Graph
-    , typename... Args
-    , typename Ptr =
-        typename Platform::template kernel<size_t,size_t,Graph,Args...>::type
-    , typename Base = WarpKernel<Platform,V,E,Args...>
-    , typename Derived = DerivedKernel<Platform,V,E,rep,dir,Ptr,Base,Args...>
-    , typename SizeFun = std::function<size_t(size_t)>
-    >
-    KernelType<Platform,V,E,Args...>
-    make_warp_kernel
-    (Ptr k, work_division w, SizeFun mem, std::tuple<Args...>)
-    { return std::make_shared<Derived>(k,w, mem); }
-
-  public:
-    WarpKernelBuilder() {}
-    ~WarpKernelBuilder() {}
+    operator()
+    ( void (*k)(Graph, Args...)
+    , work_division w
+    , tag_t<Rep, rep>
+    , tag_t<Dir, dir> = {}
+    )
+    { return GraphKernel(std::make_shared<KernelImpl>(k,w)); }
 
     template
     < Rep rep
     , Dir dir = Dir::Forward
     , typename... Args
     , typename Graph = typename LoaderRep<rep,Platform,V,E>::GraphType
-    , typename ArgPack = std::tuple
-        < typename Platform::template DevToHost<Args>::type...>
-    , typename SizeFun = std::function<size_t(size_t)>
+    , typename KernelImpl = internals::WarpKernel<Platform,V,E,rep,dir,Args...>
     >
     auto
     operator()
-    (void (*k)(size_t, size_t, Graph, Args...), work_division w, SizeFun mem)
-    { return make_warp_kernel<rep,dir,Graph>(k, w, mem, ArgPack()); }
+    ( void (*k)(size_t, size_t, Graph, Args...)
+    , work_division w
+    , std::function<size_t(size_t)> mem
+    , tag_t<Rep, rep>
+    , tag_t<Dir, dir> = {}
+    )
+    { return GraphKernel(std::make_shared<KernelImpl>(k,w, mem)); }
 };
-
-#define make_warp_kernel(kernel, work_div, mem, ...) \
-    make_warp_kernel.operator()<__VA_ARGS__>(kernel, work_div, mem)
-
-#define make_warp_kernel_pair(name, kernel, work_div, mem, ...) \
-    std::pair{name, make_warp_kernel.operator()<__VA_ARGS__>(kernel, work_div, mem) }
 
 template<typename Key, typename T>
 class KernelMap : public std::map<Key,T>
@@ -234,31 +254,35 @@ template<typename T>
 KernelMap(std::initializer_list<std::pair<const char*,T>> l)
     -> KernelMap<std::string,T>;
 
-template<typename Platform, typename V, typename E, typename... Args>
+template<typename Platform, typename V, typename E>
 struct TemplateConfig : public AlgorithmConfig
 {
-  using Vertex = V;
-  using Edge = E;
-  using KernelType = GraphKernel<Platform,V,E,Args...>;
-  using ConfigArg = std::shared_ptr<KernelType>;
+    typedef V Vertex;
+    typedef E Edge;
+    using AlgorithmConfig::options;
 
-  template<typename T>
-  using alloc_t = typename Platform::template alloc_t<T>;
+    template<typename T>
+    using alloc_t = typename Platform::template alloc_t<T>;
 
-  static constexpr bool isSwitching = false;
+    template<typename... Args>
+    using GraphKernel = GraphKernel<Platform,V,E,Args...>&;
+
+    static constexpr bool isSwitching = false;
 
   protected:
     Platform& backend;
-    size_t vertex_count, edge_count;
-    std::shared_ptr<GraphKernel<Platform,V,E,Args...>> kernel;
-
     GraphLoader<Platform,V,E> loader;
 
-    TemplateConfig(ConfigArg kern)
-    : backend(Platform::get()), kernel(kern)
+    size_t vertex_count, edge_count;
+    size_t warp_size, chunk_size;
+
+    TemplateConfig()
+      : backend(Platform::get())
+      , vertex_count(0), edge_count(0)
+      , warp_size(32), chunk_size(32)
     {}
 
-    void setKernelConfig(std::shared_ptr<KernelType> k)
+    void setKernelConfig(std::shared_ptr<BaseKernel<Platform>> k)
     {
         auto div = getWorkDivision(k->workDivision);
         auto sharedMem = k->getSharedMemSize(div.first);
@@ -271,11 +295,9 @@ struct TemplateConfig : public AlgorithmConfig
         backend.setWorkSizes(1, {div.first}, {div.second}, sharedMem);
     }
 
-    virtual void loadGraph(const Graph<V,E>& graph)
-    { loader.loadGraph(graph, kernel->representation); }
+    virtual void loadGraph(const Graph<V,E>&) = 0;
 
-    virtual void transferGraph()
-    { loader.transferGraph(kernel->representation); }
+    virtual void transferGraph() = 0;
 
     void loadGraph(const std::string filename) override final
     {
@@ -298,77 +320,108 @@ struct TemplateConfig : public AlgorithmConfig
     { loader.freeGraph(); }
 
   private:
-    std::pair<size_t,size_t> vertexDivision, edgeDivision;
-
     const std::pair<size_t,size_t>&
     getWorkDivision(work_division w)
     {
         switch (w) {
-            case work_division::edge: return edgeDivision;
-            case work_division::vertex: return vertexDivision;
+          case work_division::edge: return edgeDivision;
+          case work_division::vertex: return vertexDivision;
         }
     }
+
+    std::pair<size_t,size_t> vertexDivision, edgeDivision;
 };
 
-template<typename Platform, typename V, typename E, typename... Args>
-struct WarpConfig : public TemplateConfig<Platform,V,E,Args...>
+template<typename AlgorithmBase, typename... Kernels>
+struct SimpleConfig : public AlgorithmBase
 {
-    using Config = TemplateConfig<Platform,V,E,Args...>;
-    using Config::options;
-    using KernelType = WarpKernel<Platform,V,E,Args...>;
-    using ConfigArg = std::shared_ptr<KernelType>;
+    using typename AlgorithmBase::Vertex;
+    using typename AlgorithmBase::Edge;
+    using AlgorithmBase::options;
+    using AlgorithmBase::loader;
+    using AlgorithmBase::warp_size;
+    using AlgorithmBase::chunk_size;
 
-    std::function<void()> setWarpConfig;
+    std::tuple<Kernels...> kernels;
 
-    WarpConfig(ConfigArg kernel)
-    : Config(kernel), warp_size(32), chunk_size(32)
+    SimpleConfig(std::tuple<Kernels...> ks)
+      : SimpleConfig(ks, std::index_sequence_for<Kernels...>())
+    {}
+
+    template<size_t... I>
+    SimpleConfig(std::tuple<Kernels...> ks, std::index_sequence<I...>)
+      : AlgorithmBase(std::get<I>(kernels)...)
+      , kernels(ks)
     {
-        options.add('w', "warp", "NUM", warp_size,
-                    "Virtual warp size for warp variants.")
-               .add('c', "chunk", "NUM", chunk_size,
-                    "Work chunk size for warp variants.");
+        if ((std::get<I>(ks)->isWarp && ...)) {
+            options.add('w', "warp", "NUM", warp_size,
+                        "Virtual warp size for warp variants.")
+                   .add('c', "chunk", "NUM", chunk_size,
+                        "Work chunk size for warp variants.");
+        }
+    }
 
-        setWarpConfig = [kernel,this]() {
-            kernel->warp_size = std::ref(warp_size);
-            kernel->chunk_size = std::ref(chunk_size);
+  protected:
+    virtual void loadGraph(const Graph<Vertex,Edge>& graph) override final
+    {
+        std::vector<GraphRep> reps;
+        auto load = [&reps](auto&& kernel) {
+            reps.push_back(kernel->representation);
         };
+
+        mapKernels(load);
+
+        loader.loadGraph(graph, reps);
+    }
+
+    virtual void transferGraph() override final
+    {
+        auto transfer = [this](auto&& k) {
+            loader.transferGraph(k->representation);
+        };
+
+        mapKernels(transfer);
     }
 
   private:
-    virtual void prepareRun() override final
-    { setWarpConfig(); }
+    virtual void prepareRun() override
+    {
+        auto setWarpReferences = [this](auto&& k) {
+            if (k->isWarp) k->setWarpConfig(warp_size, chunk_size);
+        };
 
-    size_t warp_size, chunk_size;
+        mapKernels(setWarpReferences);
+    }
+
+    template<typename Function>
+    void mapKernels(Function f)
+    { mapKernels(f, std::index_sequence_for<Kernels...>()); }
+
+    template<typename Function, size_t... I>
+    void mapKernels(Function f, std::index_sequence<I...>)
+    { (f(std::get<I>(kernels)), ...); }
 };
 
 template
-< template<typename, typename...> class Cfg
+< template<typename,typename,typename> class BaseConfig
 , typename Platform
 , typename Vertex
 , typename Edge
 , typename... KernelArgs
-, typename... Args
-, typename Base = TemplateConfig<Platform,Vertex,Edge,KernelArgs...>
-, typename WarpBase = WarpConfig<Platform,Vertex,Edge,KernelArgs...>
-, typename Config = Cfg<Base,Args...>
-, typename WarpConfig = Cfg<WarpBase,Args...>
+, typename... Kernels
+, typename Config = BaseConfig<Platform,Vertex,Edge>
 >
 AlgorithmConfig*
 make_config
-( std::shared_ptr<GraphKernel<Platform,Vertex,Edge,KernelArgs...>> k
-, Args... args
+( std::tuple
+    <GraphKernel<Platform,Vertex,Edge,KernelArgs...>,Kernels...> kernels
 )
 {
-    typedef WarpKernel<Platform,Vertex,Edge,KernelArgs...> WarpKernel;
-
-    if (auto kern = std::dynamic_pointer_cast<WarpKernel>(k)) {
-        return new WarpConfig(kern, args...);
-    } else {
-        return new Config(k, args...);
-    }
+    using Kernel = GraphKernel<Platform,Vertex,Edge,KernelArgs...>;
+    return new SimpleConfig<Config,Kernel,Kernels...>(kernels);
 }
 
-template<typename Platform, typename V, typename E, typename... Args>
+template<typename AlgorithmBase, typename... Kernels>
 struct SwitchConfig;
 
 class prop_ref : public std::reference_wrapper<double>
@@ -383,10 +436,10 @@ class prop_ref : public std::reference_wrapper<double>
      : std::reference_wrapper<double>(dummyProp)
     {}
 
-    template<typename Platform, typename V, typename E, typename... Args>
+    template<typename AlgorithmBase, typename... Kernels>
     prop_ref
         ( const std::string& name
-        , SwitchConfig<Platform,V,E,Args...>& cfg
+        , SwitchConfig<AlgorithmBase,Kernels...>& cfg
         , bool graphProp = false
         )
         : std::reference_wrapper<double>(dummyProp)
@@ -407,23 +460,22 @@ class prop_ref : public std::reference_wrapper<double>
 
 double prop_ref::dummyProp = 0;
 
-template<typename Platform, typename V, typename E, typename... Args>
-struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
+template<typename AlgorithmBase, typename... Kernels>
+struct SwitchConfig : public AlgorithmBase
 {
-    using Config = TemplateConfig<Platform,V,E,Args...>;
-    using KernelType = typename Config::KernelType;
-    using WarpKernelType = typename Config::KernelType::WarpVersion;
-    using ConfigArg = KernelMap<std::string,std::shared_ptr<KernelType>>;
-    using Config::kernel;
-    using Config::loader;
-    using Config::options;
-    using Config::setKernelConfig;
+    using typename AlgorithmBase::Vertex;
+    using typename AlgorithmBase::Edge;
+    using AlgorithmBase::loader;
+    using AlgorithmBase::options;
+    using AlgorithmBase::setKernelConfig;
 
-    typedef std::set<std::string> prop_set;
+    using prop_set =  std::set<std::string>;
+    using KernelMap = KernelMap<std::string,std::tuple<Kernels...>>;
 
     friend prop_ref;
 
     static constexpr bool isSwitching = true;
+    std::tuple<Kernels...> kernels;
 
     class graph_prop
     {
@@ -434,9 +486,9 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
 
       public:
         graph_prop(std::string prefix, std::string suffix, SwitchConfig& cfg)
-         : absProp(prefix + "abs" + suffix, cfg, true)
-         , inProp(prefix + "in" + suffix, cfg, true)
-         , outProp(prefix + "out" + suffix, cfg, true)
+          : absProp(prefix + "abs" + suffix, cfg, true)
+          , inProp(prefix + "in" + suffix, cfg, true)
+          , outProp(prefix + "out" + suffix, cfg, true)
         {}
 
         prop_ref& operator[](Degrees deg)
@@ -449,39 +501,31 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
         }
     };
 
-    struct implementation
-    {
-        implementation() : kernel(nullptr), warp_size(32), chunk_size(32)
-        {}
+    SwitchConfig(KernelMap ks)
+      : SwitchConfig(ks, std::index_sequence_for<Kernels...>())
+    {}
 
-        implementation(std::shared_ptr<KernelType> k, size_t w, size_t c)
-         : kernel(k), warp_size(w), chunk_size(c)
-        {}
-
-        std::shared_ptr<KernelType> kernel;
-        size_t warp_size;
-        size_t chunk_size;
-    };
-
-    SwitchConfig(std::map<std::string,std::shared_ptr<KernelType>> ks)
-    : Config(nullptr)
-    , modelHandle(nullptr)
-    , kernelMap(ks)
-    , vertices("vertex count", *this, true)
-    , edges("edge count", *this, true)
-    , min("min ", " degree", *this)
-    , lowerQuantile("lower quantile ", " degree", *this)
-    , mean("mean ", " degree", *this)
-    , median("median ", " degree", *this)
-    , upperQuantile("upper quantile ", " degree", *this)
-    , max("max ", " degree", *this)
-    , stdDev("stddev ", " degree", *this), warp_size(32), chunk_size(32)
+    template<size_t... I>
+    SwitchConfig(KernelMap ks, std::index_sequence<I...>)
+      : AlgorithmBase(std::get<I>(kernels)...)
+      , kernels((static_cast<void>(I), nullptr)...)
+      , modelHandle(nullptr)
+      , kernelMap(ks)
+      , vertices("vertex count", *this, true)
+      , edges("edge count", *this, true)
+      , min("min ", " degree", *this)
+      , lowerQuantile("lower quantile ", " degree", *this)
+      , mean("mean ", " degree", *this)
+      , median("median ", " degree", *this)
+      , upperQuantile("upper quantile ", " degree", *this)
+      , max("max ", " degree", *this)
+      , stdDev("stddev ", " degree", *this)
     {
         options.add('m', "model", "FILE", model, "Prediction model to use.");
         options.add('l', "log", "FILE", logFile, "Where to log properties.");
     }
 
-    virtual void loadGraph(const Graph<V,E>& graph) override
+    virtual void loadGraph(const Graph<Vertex,Edge>& graph) override final
     {
         vertices = graph.vertex_count;
         edges = graph.edge_count;
@@ -499,16 +543,25 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
         }
 
         std::vector<GraphRep> reps;
+        auto load = [&reps](auto&& kernel) {
+            reps.push_back(kernel->representation);
+        };
+
         for (auto& impl : implementations) {
-            reps.push_back(impl.kernel->representation);
+            mapKernels(load, impl);
         }
+
         loader.loadGraph(graph, reps);
     }
 
-    virtual void transferGraph() override
+    virtual void transferGraph() override final
     {
+        auto transfer = [this](auto&& k) {
+            loader.transferGraph(k->representation);
+        };
+
         for (auto& impl : implementations) {
-            loader.transferGraph(impl.kernel->representation);
+            mapKernels(transfer, impl);
         }
     }
 
@@ -522,11 +575,8 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
         lastKernel = lookup();
         if (lastKernel == -1) lastKernel = defaultKernel;
 
-        auto& impl = implementations[static_cast<size_t>(lastKernel)];
-        kernel = impl.kernel;
-        warp_size = impl.warp_size;
-        chunk_size = impl.chunk_size;
-        setKernelConfig(kernel);
+        kernels = implementations[static_cast<size_t>(lastKernel)];
+        setKernelConfig(kernels);
     }
 
     void predict()
@@ -536,11 +586,8 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
 
         int32_t result = lookup();
         if (result != -1 && result != lastKernel) {
-            auto& impl = implementations[static_cast<size_t>(result)];
-            kernel = impl.kernel;
-            warp_size = impl.warp_size;
-            chunk_size = impl.chunk_size;
-            setKernelConfig(kernel);
+            kernels = implementations[static_cast<size_t>(result)];
+            setKernelConfig(kernels);
             lastKernel = result;
         }
     }
@@ -566,11 +613,11 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
             lookup = []() { return -1; };
 
             try {
-                kernel = kernelMap.at("edge-list");
+                kernels = kernelMap.at("edge-list");
             } catch (const std::out_of_range&) {
             }
 
-            implementations.emplace_back(kernel, 0, 0);
+            implementations.emplace_back(kernels);
         }
 
         if (!logFile.empty()) {
@@ -580,7 +627,13 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
             logAlgorithmProps = [](){};
         }
 
-        if (kernel == nullptr) {
+        bool anyUninitialised = false;
+        auto checkInitialised = [&anyUninitialised](auto&& k) {
+            if (k == nullptr) anyUninitialised = true;
+        };
+
+        mapKernels(checkInitialised, kernels);
+        if (anyUninitialised) {
             reportError("No edge list implementation found!");
         }
     }
@@ -646,15 +699,19 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
 
         implementations.resize(impls.size());
         for (auto& data : impls) {
-            auto& [ name, idx, warp, chunk ] = data;
+            auto& [ name, idx, warpRef, chunkRef ] = data;
             try {
-                implementations[idx] = { kernelMap.at(name), warp, chunk };
-                if (auto kern = std::dynamic_pointer_cast<WarpKernelType>(implementations[idx].kernel)) {
-                    kern->warp_size = std::ref(warp_size);
-                    kern->chunk_size = std::ref(chunk_size);
-                }
+                implementations[idx] = { kernelMap.at(name) };
+
+                auto warp = warpRef;
+                auto chunk = chunkRef;
+                auto setWarpReferences = [=](auto&& k) {
+                    if (k->isWarp) k->setWarpConfig(warp, chunk);
+                };
+
+                mapKernels(setWarpReferences, implementations[idx]);
                 if (name == "edge-list") {
-                    kernel = implementations[idx].kernel;
+                    kernels = implementations[idx];
                     defaultKernel = static_cast<int32_t>(idx);
                 }
             } catch (const std::out_of_range&) {
@@ -710,6 +767,16 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
         };
     }
 
+    template<typename Fun>
+    void
+    mapKernels(Fun f, std::tuple<Kernels...>& tuple)
+    { mapKernels(f, tuple, std::index_sequence_for<Kernels...>()); }
+
+    template<typename Fun, size_t... I>
+    void
+    mapKernels(Fun f, std::tuple<Kernels...>& ks, std::index_sequence<I...>)
+    { (f(std::get<I>(ks)), ...); }
+
     std::string logFile;
     std::string model;
 
@@ -723,31 +790,37 @@ struct SwitchConfig : public TemplateConfig<Platform,V,E,Args...>
     int32_t lastKernel;
     int32_t defaultKernel;
 
-    std::vector<implementation> implementations;
-    std::map<std::string,std::shared_ptr<KernelType>> kernelMap;
+    std::vector<std::tuple<Kernels...>> implementations;
+    std::map<std::string,std::tuple<Kernels...>> kernelMap;
 
     refmap<std::string,prop_ref> graphProperties;
     refmap<std::string,prop_ref> algorithmProperties;
 
     prop_ref vertices, edges;
     graph_prop min, lowerQuantile, mean, median, upperQuantile, max, stdDev;
-    size_t stepNum, warp_size, chunk_size;
+    size_t stepNum;
 };
 
 template
-< template<typename, typename...> class Cfg
+< template<typename, typename, typename> class AlgorithmBase
 , typename Platform
 , typename Vertex
 , typename Edge
 , typename... KernelArgs
-, typename... Args
-, typename Base = SwitchConfig<Platform,Vertex,Edge,KernelArgs...>
-, typename Config = Cfg<Base,Args...>
+, typename... Kernels
+, typename Config = AlgorithmBase<Platform,Vertex,Edge>
 >
 AlgorithmConfig*
 make_switch_config
-( KernelMap<std::string,std::shared_ptr<GraphKernel<Platform,Vertex,Edge,KernelArgs...>>> ks
-, Args... args
+( KernelMap
+  < std::string
+  , std::tuple<GraphKernel<Platform,Vertex,Edge,KernelArgs...>,Kernels...>
+  > ks
 )
-{ return new Config(ks, args...); }
+{
+    using KernelRef = decltype(std::get<0>(ks[""]));
+    using Kernel = typename std::remove_reference<KernelRef>::type;
+
+    return new SwitchConfig<Config,Kernel,Kernels...>(ks);
+}
 #endif
