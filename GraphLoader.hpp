@@ -25,6 +25,50 @@ struct GraphRep
     Dir direction;
 };
 
+inline std::ostream& operator<<(std::ostream& os, const Rep& p)
+{
+    switch (p) {
+      case Rep::VertexCount:
+        os << "VertexCount";
+        break;
+      case Rep::EdgeCount:
+        os << "EdgeCount";
+        break;
+      case Rep::EdgeList:
+        os << "EdgeList";
+        break;
+      case Rep::StructEdgeList:
+        os << "StructEdgeList";
+        break;
+      case Rep::EdgeListCSR:
+        os << "EdgeListCSR";
+        break;
+      case Rep::StructEdgeListCSR:
+        os << "StructEdgeListCSR";
+        break;
+      case Rep::CSR:
+        os << "CSR";
+        break;
+      case Rep::InverseVertexCSR:
+        os << "InverseVertexCSR";
+        break;
+    }
+    return os;
+}
+
+inline std::ostream& operator<<(std::ostream& os, const Dir& p)
+{
+    switch (p) {
+      case Dir::Forward:
+        os << "Forward";
+        break;
+      case Dir::Reverse:
+        os << "Reverse";
+        break;
+    }
+    return os;
+}
+
 template<Rep rep, typename Platform, typename V, typename E>
 struct LoaderRep;
 
