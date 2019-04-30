@@ -95,10 +95,9 @@ withProcessPool n (Platform name _) f = do
             return Process{..}
         proc <$ logInfoN ("Started new process: " <> showText procId)
       where
-        opts timeout exePath libPath = intercalate " " . ("prun":) $ timeout ++
-            [ "-np", "1" , "-native","\"-C " ++ T.unpack name ++"\""
-            , "CUDA_VISIBLE_DEVICES=\"0,1,2,3,4,5,6,7,8,9,10\""
-            , exePath, "-L", libPath, "-W", "-S"
+        opts timeout exePath libPath = intercalate " " . ("srun":) $ timeout ++
+            [ "-Q", "--gres=gpu:1", "-C ", T.unpack name, exePath
+            , "-L", libPath, "-W", "-S"
             ]
 
     destroyProcess
