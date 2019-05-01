@@ -20,7 +20,7 @@ $(PRINTF) " NVLINK\t$@\n"
 $(AT)$(NVLINK) $(NVCCXXFLAGS) --device-link $^ --output-file $@
 endef
 
-ifeq ($(findstring clang++, $(CXX)), "")
+ifneq ($(CXX), clang++)
 santargets = $(1)
 sanobjects = $(1).o
 else
