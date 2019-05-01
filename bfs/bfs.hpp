@@ -22,7 +22,7 @@ __device__ __forceinline__
 unsigned warpReduceSum(unsigned val)
 {
     for (int offset = warpSize/2; offset > 0; offset /= 2) {
-        val += __shfl_down(val, offset);
+        val += __shfl_down_sync(0xffffffff, val, offset);
      }
 
     return val;

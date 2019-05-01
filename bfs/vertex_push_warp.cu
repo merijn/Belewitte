@@ -1,4 +1,4 @@
-#include <math_functions.h>
+#include <cuda_runtime_api.h>
 #include "bfs.hpp"
 
 template<typename T>

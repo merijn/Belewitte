@@ -30,7 +30,7 @@ void updateDiff(float val)
     int lane = threadIdx.x % warpSize;
 
     for (int offset = warpSize/2; offset > 0; offset /= 2) {
-        val += __shfl_down(val, offset);
+        val += __shfl_down_sync(0xffffffff, val, offset);
     }
 
     if (lane == 0) atomicAdd(&diff, val);
