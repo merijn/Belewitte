@@ -17,7 +17,7 @@ $(call santargets,main): \
                -L$(CUDA_PATH)/lib64 -lcudart
 endif
 
-ifeq ($(CXX),clang++)
+ifdef CXX_IS_CLANG
 $(call santargets,main): LDFLAGS += -rpath $(CUDA_PATH)/lib/
 else ifeq ($(CXX),g++)
 $(call santargets,main): LDFLAGS += -Wl,-rpath -Wl,$(CUDA_PATH)/lib/
@@ -33,6 +33,9 @@ tsan: $(foreach exe,$(EXES),$(exe).tsan)
 
 $(call sanobjects,$(DEST)/main) $(call sanobjects,$(DEST)/normalise-graph) \
     $(call sanobjects,$(DEST)/graph-details): CXXFLAGS+=$(BOOST_CXX_FLAGS)
+
+$(call sanobjects,$(DEST)/main) $(call sanobjects,$(DEST)/normalise-graph) \
+    $(call sanobjects,$(DEST)/graph-details): $(BOOST_PREREQ)
 
 $(call santargets,main): main% : $(DEST)/main%.o $(DEST)/AlgorithmConfig%.o \
       $(DEST)/Backend%.o $(DEST)/CUDA%.o $(DEST)/OpenCL%.o $(DEST)/Timer%.o \

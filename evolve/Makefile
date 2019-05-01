@@ -3,7 +3,9 @@ SRCDIR := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
 
 all: $(SRCDIR)/gen-graph $(SRCDIR)/evolve haskell-dependencies
 
-$(DEST)/evolve.o: CXXFLAGS+=-I$(BOOST_PATH)/include -isystem$(BOOST_PATH)/include
+$(DEST)/evolve.o: CXXFLAGS+=$(BOOST_CXX_FLAGS)
+$(DEST)/evolve.o: $(BOOST_PREREQ)
+
 ifdef $(shell command -v icc 2>/dev/null)
 $(DEST)/Connectivity.o: CPATH:=$(ICC_CPATH):$(CPATH)
 $(DEST)/Connectivity.o: CXX=icc
