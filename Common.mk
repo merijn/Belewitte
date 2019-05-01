@@ -121,11 +121,16 @@ $(BUILD)/kernels/ $(DOWNLOAD)/ $(PREFIX)/:
 	$(PRINTF) " MKDIR\t$@\n"
 	$(AT)mkdir -p $@
 
+CABAL:=$(shell command -v cabal 2> /dev/null)
 .PHONY: haskell-dependencies
 haskell-dependencies:
+ifndef CABAL
+	$(PRINTF) "cabal-install not found, skipping Haskell parts\n"
+else
 	$(PRINTF) " CABAL\t$@\n"
 	$(AT)cabal --builddir="$(abspath $(BUILD)/haskell/)" \
 	    new-build all $(if $(AT),2>/dev/null >/dev/null,)
+endif
 
 BOOST_VERSION:=1.70.0
 BOOST_NAME:=boost_1_70_0
