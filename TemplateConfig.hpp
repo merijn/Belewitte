@@ -365,8 +365,8 @@ struct SimpleConfig : public AlgorithmBase
     virtual void loadGraph(const Graph<Vertex,Edge>& graph) override final
     {
         std::vector<GraphRep> reps;
-        auto load = [&reps](auto&& kernel) {
-            reps.push_back(kernel->representation);
+        auto load = [&reps](auto&& k) {
+            reps.push_back(k->representation);
         };
 
         mapKernels(load);
@@ -543,8 +543,8 @@ struct SwitchConfig : public AlgorithmBase
         }
 
         std::vector<GraphRep> reps;
-        auto load = [&reps](auto&& kernel) {
-            reps.push_back(kernel->representation);
+        auto load = [&reps](auto&& k) {
+            reps.push_back(k->representation);
         };
 
         for (auto& impl : implementations) {

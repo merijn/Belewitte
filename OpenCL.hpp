@@ -23,7 +23,7 @@ using std::endl;
 
 const char *openCLErrorToString(const cl_int code);
 
-#define OPENCL_CHK(ans) { openCLAssert((ans), __FILE__, __LINE__); }
+#define OPENCL_CHK(ans) openCLAssert((ans), __FILE__, __LINE__)
 inline void openCLAssert(const cl_int code, const char *file, const int line)
 {
     if (code != CL_SUCCESS) {

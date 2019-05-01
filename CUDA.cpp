@@ -6,21 +6,23 @@ using std::endl;
 
 void cudaAssert(const cudaError_t code, const char *file, const int line)
 {
-    cout.flush();
-    cerr << "CUDA error #"
-            << code
-            << " ("
-            << file
-            << ":"
-            << line
-            << "):"
-            << endl
-            << cudaGetErrorString(code)
-            << endl
-            << endl
-            << "Callstack:"
-            << endl;
-    dump_stack_trace(code);
+    if (code != cudaSuccess) {
+        cout.flush();
+        cerr << "CUDA error #"
+                << code
+                << " ("
+                << file
+                << ":"
+                << line
+                << "):"
+                << endl
+                << cudaGetErrorString(code)
+                << endl
+                << endl
+                << "Callstack:"
+                << endl;
+        dump_stack_trace(code);
+    }
 }
 
 CUDABackend::cuda_alloc_t::~cuda_alloc_t()
