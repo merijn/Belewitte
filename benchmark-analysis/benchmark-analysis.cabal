@@ -36,6 +36,7 @@ Library
                         Model
                         OptionParsers
                         Query
+                        RuntimeData
                         Schema
                         Schema.Algorithm
                         Schema.Graph
@@ -50,6 +51,9 @@ Library
                         Types
                         Utils
 
+  Autogen-Modules:      Paths_benchmark_analysis
+  Other-Modules:        Paths_benchmark_analysis
+
   C-Sources:            cbits/sqlite-functions.c
   CC-Options:           -Wall -Wextra -pedantic -std=c11 -g
   Include-Dirs:         cbits
@@ -62,7 +66,9 @@ Library
                ,        conduit == 1.3.*
                ,        containers == 0.5.*
                ,        data-interval == 1.3.*
+               ,        directory == 1.3.*
                ,        exceptions == 0.10.*
+               ,        filepath == 1.4.*
                ,        haskeline >= 0.7.4.2 && < 0.8
                ,        interpolate == 0.1.1
                ,        megaparsec == 6.5.*
@@ -88,11 +94,9 @@ Executable Ingest
   GHC-Prof-Options:     -fprof-auto
   Hs-Source-Dirs:       ingest-src
   Main-Is:              Main.hs
-  Autogen-Modules:      Paths_benchmark_analysis
   Other-Modules:        Jobs
                         Parsers
                         ProcessPool
-                        Paths_benchmark_analysis
 
   Build-Depends:        base
                ,        benchmark-analysis
@@ -126,12 +130,10 @@ Executable Model
   GHC-Prof-Options:     -fprof-auto
   Hs-Source-Dirs:       model-src
   Main-Is:              Main.hs
-  Autogen-Modules:      Paths_benchmark_analysis
   Other-Modules:        Evaluate
                         Options
                         Train
                         Validate
-                        Paths_benchmark_analysis
                         StepQuery
 
   Build-Depends:        base
@@ -163,9 +165,7 @@ Executable Plot
   GHC-Prof-Options:     -fprof-auto
   Hs-Source-Dirs:       plot-src
   Main-Is:              Plot.hs
-  Autogen-Modules:      Paths_benchmark_analysis
-  Other-Modules:        Paths_benchmark_analysis
-                        PlotQuery
+  Other-Modules:        PlotQuery
 
   Build-Depends:        base
                ,        benchmark-analysis

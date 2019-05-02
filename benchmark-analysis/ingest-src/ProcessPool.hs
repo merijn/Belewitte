@@ -31,7 +31,7 @@ import System.Process (CreateProcess(..), ProcessHandle, Pid, StdStream(..))
 import qualified System.Process as Proc
 
 import Core
-import Paths_benchmark_analysis (getDataFileName)
+import RuntimeData (getKernelExecutable, getKernelLibPath)
 import Schema
 
 data Timeout = Timeout deriving (Show)
@@ -82,8 +82,8 @@ withProcessPool n (Platform name _) f = do
     allocateProcess = do
         proc@Process{procId} <- liftIO $ do
             timeout <- getJobTimeOut
-            exePath <- getDataFileName "runtime-data/main"
-            libPath <- getDataFileName "runtime-data/kernels"
+            exePath <- getKernelExecutable
+            libPath <- getKernelLibPath
             let p = (Proc.shell (opts timeout exePath libPath))
                     { std_in = CreatePipe, std_out = CreatePipe }
             (Just inHandle, Just outHandle, Nothing, procHandle) <-

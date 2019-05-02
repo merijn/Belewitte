@@ -6,7 +6,7 @@
 {-# LANGUAGE TypeFamilies #-}
 module Main(main) where
 
-import Control.Monad (forM_, guard)
+import Control.Monad (forM_, guard, void)
 import Control.Monad.Catch
     (MonadMask, displayException, fromException, onError, try)
 import Control.Monad.Reader (ask, local)
@@ -40,8 +40,8 @@ import Core
 import Jobs
 import OptionParsers
 import Parsers
-import Paths_benchmark_analysis (getDataFileName)
 import ProcessPool
+import qualified RuntimeData
 import Schema
 
 data Completer m
@@ -58,12 +58,21 @@ withCompletion completion = mapInputT $ local (const completion)
 
 withProcessCompletion :: MonadIO m => [String] -> Input m a -> Input m a
 withProcessCompletion args act = do
-    exePath <- liftIO $ getDataFileName "runtime-data/main"
-    kernelDir <- liftIO $ getDataFileName "runtime-data/kernels"
-    let process = (Process.proc exePath $ ["-L",kernelDir] ++ args)
-            { std_out = CreatePipe }
-    withCompletion (SimpleCompletion $ processCompleter process) act
+    completionBracket <- mkCompletionBracket
+        <$> RuntimeData.getKernelExecutableMaybe
+        <*> RuntimeData.getKernelLibPathMaybe
+
+    completionBracket act
   where
+    mkCompletionBracket (Just exe) (Just libDir) =
+        withCompletion (SimpleCompletion $ processCompleter process)
+      where
+        process :: CreateProcess
+        process = (Process.proc exe $ ["-L",libDir] ++ args)
+          { std_out = CreatePipe }
+
+    mkCompletionBracket _ _ = id
+
     readOutput Nothing (Just hnd) Nothing procHandle =
       T.hGetContents hnd <* hClose hnd <* Process.waitForProcess procHandle
     readOutput _ _ _ _ = throwM Abort
@@ -275,6 +284,11 @@ runTask Process{..} (label, x, y, z, cmd) = handleError $ do
 
 runBenchmarks :: Int -> Int -> Input SqlM ()
 runBenchmarks numNodes numRuns = liftSql $ do
+    -- Error out if C++ code hasn't been compiled
+    void $ do
+        RuntimeData.getKernelExecutable
+        RuntimeData.getKernelLibPath
+
     -- FIXME hardcoded Platform
     withProcessPool numNodes (Platform "TitanX" Nothing) $ \procPool ->
         runConduit $ propertyJobs

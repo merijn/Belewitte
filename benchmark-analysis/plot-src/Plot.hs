@@ -35,9 +35,9 @@ import System.Process
 
 import Core
 import OptionParsers
-import Paths_benchmark_analysis (getDataFileName)
 import PlotQuery (timePlotQuery, levelTimePlotQuery)
 import Query
+import RuntimeData (getBarPlotScript)
 import Schema
 
 queryVariants :: Key Algorithm -> Set Text -> SqlM (Set (Key Variant))
@@ -225,8 +225,7 @@ plot
 plot PlotConfig{..} plotName impls query convert
   | printStdout = doWithHandle stdout
   | otherwise = do
-        scriptProc <- liftIO $
-            proc <$> getDataFileName "runtime-data/scripts/bar-plot.py"
+        scriptProc <- proc <$> getBarPlotScript
 
         let plotProc = (scriptProc args) { std_in = CreatePipe }
 

@@ -43,8 +43,8 @@ import Text.Megaparsec.Char.Lexer (decimal)
 
 import Core
 import Model
-import Paths_benchmark_analysis (getDataFileName)
 import Query
+import RuntimeData (getModelScript)
 import Schema
 import StepQuery (StepInfo(..), stepInfoQuery)
 
@@ -155,8 +155,7 @@ trainModel algoId platId trainCfg@TrainConfig{..} = do
 
     Just propCount <- fmap (VU.length . fst) <$> runSqlQuery trainQuery C.head
 
-    scriptProc <- liftIO $
-        proc <$> getDataFileName "runtime-data/scripts/model.py"
+    scriptProc <- proc <$> getModelScript
 
     let process :: Fd -> CreateProcess
         process fd = scriptProc
