@@ -8,7 +8,7 @@ module Main(main) where
 
 import Control.Monad (forM_, guard, void)
 import Control.Monad.Catch
-    (MonadMask, displayException, fromException, onError, try)
+    (displayException, fromException, handleIOError, onError, try)
 import Control.Monad.Reader (ask, local)
 import Control.Monad.Trans (lift)
 import Data.Bool (bool)
@@ -56,7 +56,9 @@ liftSql = lift . lift
 withCompletion :: Monad m => Completer m -> Input m a -> Input m a
 withCompletion completion = mapInputT $ local (const completion)
 
-withProcessCompletion :: MonadIO m => [String] -> Input m a -> Input m a
+withProcessCompletion
+    :: (MonadCatch m, MonadIO m, MonadLogger m)
+    => [String] -> Input m a -> Input m a
 withProcessCompletion args act = do
     completionBracket <- mkCompletionBracket
         <$> RuntimeData.getKernelExecutableMaybe
@@ -75,12 +77,16 @@ withProcessCompletion args act = do
 
     readOutput Nothing (Just hnd) Nothing procHandle =
       T.hGetContents hnd <* hClose hnd <* Process.waitForProcess procHandle
-    readOutput _ _ _ _ = throwM Abort
 
-    processCompleter process s = liftIO $ do
-        txt <- Process.withCreateProcess process readOutput
+    readOutput _ _ _ _ = throwM $ userError "Error running external process"
+
+    processCompleter process s = do
+        txt <- handleIO . liftIO $ Process.withCreateProcess process readOutput
         let relevant = filter (T.isPrefixOf (T.pack s)) $ T.lines txt
         return $ map (simpleCompletion . T.unpack) relevant
+      where
+        handleIO = handleIOError $ \_ ->
+            "" <$ logWarnN "External process for tab-completion failed to run"
 
 getInputWith
     :: MonadException m => (Text -> m (Maybe a)) -> Text -> Text -> InputT m a

@@ -19,6 +19,8 @@ module Core
     , Log.logInfoN
     , Log.logDebugN
     , MonadResource
+    , MonadCatch
+    , MonadMask
     , MonadThrow(throwM)
     , MonadUnliftIO
     , withUnliftIO
