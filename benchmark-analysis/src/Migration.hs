@@ -3,7 +3,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Migration (checkMigration) where
 
-import Control.Exception (Exception(displayException), bracket)
+import Control.Exception (Exception(..), bracket)
 import Control.Monad (forM_, unless)
 import Control.Monad.Catch (MonadCatch, MonadThrow, catch, throwM)
 import Control.Monad.IO.Unlift (MonadIO, MonadUnliftIO, withRunInIO)
@@ -20,6 +20,7 @@ import Database.Persist.Sqlite (RawSqlite)
 import GHC.IO.Handle (hDuplicate, hDuplicateTo)
 import System.IO (Handle, IOMode(WriteMode), hClose, stderr, withFile)
 
+import Exceptions
 import Schema
 
 type SqlM m = ReaderT (RawSqlite SqlBackend) m
@@ -54,7 +55,7 @@ querySingleValue query args = do
     result <- Sql.liftPersist $ Sql.rawSql query args
     case result of
         [Single v] -> return v
-        v -> throwM . QueryError query $ show v
+        v -> throwM . ExpectedSingleValue query $ show v
 
 checkSchema :: MonadIO m => Migration -> SqlM m ()
 checkSchema schema = Sql.liftPersist $ do
@@ -117,43 +118,26 @@ checkMigration migrateSchema = do
             version <- querySingleValue "PRAGMA user_version" []
             validateSchema migrateSchema version
 
-data QueryError = QueryError Text String
-    deriving (Show, Typeable)
-
-data SchemaWrong = WrongSchema
-    deriving (Show, Typeable)
-
 data SchemaTooNew = TooNew Int64
     deriving (Show, Typeable)
 
-data MigrationNeeded = MigrationNeeded Int64
-    deriving (Show, Typeable)
-
-data AbortMigration = AbortMigration
-    deriving (Show, Typeable)
-
-instance Exception QueryError where
-    displayException (QueryError q v) = unlines
-        [ "Query error for: " <> T.unpack q
-        , "Expected a single value query result. Got: " <> v
-        ]
-
-instance Exception SchemaWrong where
-    displayException WrongSchema = "Found wrong schema for schema version!"
-
 instance Exception SchemaTooNew where
+    toException = toSchemaException
+    fromException = fromSchemaException
     displayException (TooNew n) = mconcat
         [ "Schema too new. Expected version ", show schemaVersion
         , ", found version ", show n, "."
         ]
 
+data MigrationNeeded = MigrationNeeded Int64
+    deriving (Show, Typeable)
+
 instance Exception MigrationNeeded where
+    toException = toSchemaException
+    fromException = fromSchemaException
     displayException (MigrationNeeded v) = mconcat
         [ "Schema migration needed.\nFound version ", show v
         , ", current version is ", show schemaVersion, ".\nUse --migrate"
         , " to run an automatic migration.\n\nCAUTION: Make sure to back up"
         , " the data before migrating!"
         ]
-
-instance Exception AbortMigration where
-    displayException AbortMigration = "Aborted: Migration failed!"

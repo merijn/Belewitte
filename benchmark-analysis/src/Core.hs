@@ -28,11 +28,12 @@ module Core
     , ReaderT(..)
     , Text
     , module Core
+    , module Exceptions
     ) where
 
 import Control.Exception (Exception(displayException))
 import Control.Monad (join, when)
-import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow, handle, throwM)
+import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow, throwM)
 import Control.Monad.Fail (MonadFail(fail))
 import Control.Monad.IO.Unlift
     (MonadIO(liftIO), MonadUnliftIO(..), UnliftIO(..), withUnliftIO)
@@ -47,7 +48,6 @@ import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 import Data.Proxy (Proxy(Proxy))
 import Database.Persist.Sqlite hiding (Connection)
-import Database.Sqlite (SqliteException(..))
 import Database.Sqlite.Internal
 import Data.Int (Int64)
 import Data.IORef (IORef, newIORef, readIORef, writeIORef)
@@ -64,6 +64,7 @@ import System.Console.Haskeline.MonadException (MonadException(..), RunIO(..))
 import System.IO
     (Handle, IOMode(WriteMode), hPutStrLn, stdout, stderr, withFile)
 
+import Exceptions
 import Migration
 import Schema
 import SQLiteExts
@@ -73,15 +74,6 @@ instance Exception Abort where
 
 data Error = Error Text deriving (Show)
 instance Exception Error
-
-newtype PrettySqliteError = Pretty SqliteException
-    deriving (Show, Typeable)
-
-instance Exception PrettySqliteError where
-    displayException (Pretty SqliteException{..}) = T.unpack $ mconcat
-        [ T.replace "\\\"" "\"" . T.replace "\\n" "\n" $ seFunctionName
-        , "\n\n", showText seError, seDetails
-        ]
 
 type SqlM = ReaderT (RawSqlite SqlBackend) BaseM
 
@@ -156,7 +148,7 @@ logQueryExplanation queryLogger = do
 runSqlMWithOptions :: Options a -> (a -> SqlM b) -> IO b
 runSqlMWithOptions Options{..} work = do
     setUncaughtExceptionHandler (hPutStrLn stderr . displayException)
-    handle wrapSqliteException $ do
+    mapException PrettySqliteException $ do
         getNumProcessors >>= setNumCapabilities
         ref <- newIORef ""
         withQueryLog $ \mHnd -> runStack (ref, mHnd) $ do
@@ -179,9 +171,6 @@ runSqlMWithOptions Options{..} work = do
 
             return workResult
   where
-    wrapSqliteException :: SqliteException -> IO a
-    wrapSqliteException exc = throwM $ Pretty exc
-
     runStack
         :: (IORef Text, Maybe Handle) -> SqlM a -> IO a
     runStack config =

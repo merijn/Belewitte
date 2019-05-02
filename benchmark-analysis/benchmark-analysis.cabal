@@ -32,6 +32,7 @@ Library
   GHC-Prof-Options:     -fprof-auto
   Hs-Source-Dirs:       src
   Exposed-Modules:      Core
+                        Exceptions
                         Migration
                         Model
                         OptionParsers
