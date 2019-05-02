@@ -1,4 +1,5 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE TemplateHaskell #-}
 module Types where
 

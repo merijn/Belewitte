@@ -1,3 +1,4 @@
+{-# LANGUAGE MonadFailDesugaring #-}
 module RuntimeData
     ( getKernelExecutableMaybe
     , getKernelExecutable

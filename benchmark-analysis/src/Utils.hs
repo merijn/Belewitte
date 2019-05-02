@@ -1,4 +1,5 @@
 {-# LANGUAGE MagicHash #-}
+{-# LANGUAGE MonadFailDesugaring #-}
 module Utils(byteStringToVector, vectorToByteString) where
 
 import Data.ByteString (ByteString)

@@ -1,3 +1,4 @@
+{-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Schema
     ( ByteString

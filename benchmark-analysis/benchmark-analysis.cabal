@@ -59,6 +59,29 @@ Library
   Include-Dirs:         cbits
   Includes:             sqlite-functions.h
 
+  Other-Extensions:     BangPatterns
+                        CApiFFI
+                        ConstraintKinds
+                        DeriveGeneric
+                        FlexibleContexts
+                        FlexibleInstances
+                        GADTs
+                        GeneralizedNewtypeDeriving
+                        LambdaCase
+                        MagicHash
+                        MonadFailDesugaring
+                        MultiParamTypeClasses
+                        NamedFieldPuns
+                        OverloadedStrings
+                        QuasiQuotes
+                        RankNTypes
+                        RecordWildCards
+                        ScopedTypeVariables
+                        TemplateHaskell
+                        TupleSections
+                        TypeFamilies
+                        ViewPatterns
+
   Build-Depends:        base
                ,        bytestring
                ,        binary >= 0.8.4
@@ -98,6 +121,15 @@ Executable Ingest
                         Parsers
                         ProcessPool
 
+  Other-Extensions:     LambdaCase
+                        MonadFailDesugaring
+                        NamedFieldPuns
+                        OverloadedStrings
+                        RecordWildCards
+                        ScopedTypeVariables
+                        TupleSections
+                        TypeFamilies
+
   Build-Depends:        base
                ,        benchmark-analysis
                ,        broadcast-chan-conduit == 0.2.0
@@ -136,6 +168,17 @@ Executable Model
                         Validate
                         StepQuery
 
+  Other-Extensions:     BangPatterns
+                        FlexibleContexts
+                        LambdaCase
+                        MonadFailDesugaring
+                        NamedFieldPuns
+                        OverloadedStrings
+                        QuasiQuotes
+                        RecordWildCards
+                        TypeFamilies
+                        ViewPatterns
+
   Build-Depends:        base
                ,        benchmark-analysis
                ,        binary >= 0.8.4
@@ -166,6 +209,16 @@ Executable Plot
   Hs-Source-Dirs:       plot-src
   Main-Is:              Plot.hs
   Other-Modules:        PlotQuery
+
+  Other-Extensions:     ApplicativeDo
+                        FlexibleContexts
+                        LambdaCase
+                        MonadFailDesugaring
+                        NamedFieldPuns
+                        OverloadedStrings
+                        QuasiQuotes
+                        RecordWildCards
+                        ViewPatterns
 
   Build-Depends:        base
                ,        benchmark-analysis

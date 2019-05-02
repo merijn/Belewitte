@@ -1,4 +1,5 @@
 {-# LANGUAGE CApiFFI #-}
+{-# LANGUAGE MonadFailDesugaring #-}
 module SQLiteExts (registerSqlFunctions) where
 
 import Control.Monad ((>=>), when)

@@ -1,3 +1,4 @@
+{-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE ViewPatterns #-}
 module Schema.Utils
     ( Int64
