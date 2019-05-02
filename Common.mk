@@ -124,6 +124,7 @@ $(BUILD)/kernels/ $(DOWNLOAD)/ $(PREFIX)/:
 	$(AT)mkdir -p $@
 
 CABAL:=$(shell command -v cabal 2> /dev/null)
+PKG_CONFIG_PATH:=$(patsubst :%,%,$(patsubst %:,%,$(PKG_CONFIG_PATH)))
 .PHONY: haskell-dependencies
 haskell-dependencies:
 ifndef CABAL
