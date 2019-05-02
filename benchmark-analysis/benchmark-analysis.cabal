@@ -6,7 +6,7 @@ Bug-Reports:
 
 Author:              Merijn Verstraaten
 Maintainer:          Merijn Verstraaten <merijn@inconsistent.nl>
-Copyright:           Copyright © 2017 Merijn Verstraaten
+Copyright:           Copyright © 2017-2019 Merijn Verstraaten
 
 License:             GPL-3
 License-File:        LICENSE
@@ -14,7 +14,7 @@ License-File:        LICENSE
 Category:            System
 Cabal-Version:       >= 1.10
 Build-Type:          Simple
-Tested-With:         GHC == 8.4
+Tested-With:         GHC == 8.6
 
 Synopsis:            
 
@@ -63,7 +63,7 @@ Library
                ,        containers == 0.5.*
                ,        data-interval == 1.3.*
                ,        exceptions == 0.10.*
-               ,        haskeline == 0.7.4.2
+               ,        haskeline >= 0.7.4.2 && < 0.8
                ,        interpolate == 0.1.1
                ,        megaparsec == 6.5.*
                ,        microlens == 0.4.8.*
@@ -78,7 +78,7 @@ Library
                ,        text
                ,        time == 1.9
                ,        transformers
-               ,        unliftio-core == 0.1.1.*
+               ,        unliftio-core >= 0.1.1 && < 0.2
                ,        vector == 0.12.0.1
 
 Executable Ingest
@@ -97,7 +97,7 @@ Executable Ingest
   Build-Depends:        base
                ,        benchmark-analysis
                ,        broadcast-chan-conduit == 0.2.0
-               ,        attoparsec == 0.13.1.*
+               ,        attoparsec >= 0.13.1 && < 0.14
                ,        conduit == 1.3.*
                ,        conduit-extra == 1.3.*
                ,        cryptonite == 0.25.*
@@ -105,7 +105,7 @@ Executable Ingest
                ,        directory == 1.3.*
                ,        exceptions == 0.10.*
                ,        filepath == 1.4.*
-               ,        haskeline == 0.7.4.2
+               ,        haskeline >= 0.7.4.2 && < 0.8
                ,        hostname == 1.0
                ,        microlens == 0.4.8.*
                ,        monad-logger == 0.3.28.*
@@ -181,7 +181,7 @@ Executable Plot
                ,        resourcet == 1.2.*
                ,        split == 0.2.*
                ,        text
-               ,        unliftio-core == 0.1.1.*
+               ,        unliftio-core >= 0.1.1 && < 0.2
                ,        vector == 0.12.0.1
 
 Source-Repository head

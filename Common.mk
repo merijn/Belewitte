@@ -131,7 +131,7 @@ ifndef CABAL
 else
 	$(PRINTF) " CABAL\t$@\n"
 	$(AT)cabal --builddir="$(abspath $(BUILD)/haskell/)" \
-	    new-build all $(if $(AT),2>/dev/null >/dev/null,)
+	    v2-build all $(if $(AT),2>/dev/null >/dev/null,)
 endif
 
 BOOST_VERSION:=1.70.0
