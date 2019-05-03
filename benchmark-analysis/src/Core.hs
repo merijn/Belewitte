@@ -37,7 +37,7 @@ import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow, throwM)
 import Control.Monad.Fail (MonadFail(fail))
 import Control.Monad.IO.Unlift
     (MonadIO(liftIO), MonadUnliftIO(..), UnliftIO(..), withUnliftIO)
-import Control.Monad.Logger (LoggingT, LogLevel, LogSource, MonadLogger)
+import Control.Monad.Logger (LoggingT, LogLevel(..), LogSource, MonadLogger)
 import qualified Control.Monad.Logger as Log
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Reader (ReaderT(..), asks)
@@ -132,7 +132,7 @@ data Options a =
   Options
     { database :: Text
     , vacuumDb :: Bool
-    , logVerbosity :: LogSource -> LogLevel -> Bool
+    , logVerbosity :: Int
     , queryMode :: QueryMode
     , migrateSchema :: Bool
     , task :: a
@@ -183,7 +183,7 @@ runSqlMWithOptions Options{..} work = do
         ExplainLog p -> withFile p WriteMode $ f . Just
 
     runLog :: LoggingT IO a -> IO a
-    runLog = Log.runStderrLoggingT . Log.filterLogger logVerbosity
+    runLog = Log.runStderrLoggingT . Log.filterLogger logFilter
 
     runBase :: (IORef Text, Maybe Handle) -> BaseM a -> LoggingT IO a
     runBase cfg = runResourceT . (`runReaderT` cfg) . runBaseM
@@ -193,6 +193,15 @@ runSqlMWithOptions Options{..} work = do
 
     getSqlitePtr :: Connection -> Ptr ()
     getSqlitePtr (Connection _ (Connection' ptr)) = ptr
+
+    logFilter :: LogSource -> LogLevel -> Bool
+    logFilter
+        | logVerbosity <= 0 = \_ _ -> False
+        | otherwise = \_ lvl -> lvl >= verbosity
+      where
+        verbosity = levels !! logVerbosity
+        levels = LevelError : LevelWarn : LevelInfo : repeat LevelDebug
+
 
 logThrowM :: (Exception e, MonadLogger m, MonadThrow m) => e -> m r
 logThrowM exc = do

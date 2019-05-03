@@ -11,7 +11,6 @@ module OptionParsers
     , module Options.Applicative
     ) where
 
-import Control.Monad.Logger (LogLevel(..), LogSource)
 import Data.Char (toLower)
 import Data.Function (on)
 import Data.Int (Int64)
@@ -119,13 +118,12 @@ queryOption = explainFlag <|> ExplainLog <$> explainOpt <|> pure Normal
         [ metavar "FILE", long "explain-log"
         , help "Log query plans to log file." ]
 
-verbosityOption :: Parser (LogSource -> LogLevel -> Bool)
-verbosityOption = logFilter . (levels !!) <$> verb
+verbosityOption :: Parser Int
+verbosityOption = quiet <|> verb
   where
-    logFilter verbosity = \_ lvl -> lvl >= verbosity
-
-    levels = LevelError : LevelWarn : LevelInfo : repeat LevelDebug
-
     verb = option auto . mconcat $
         [ short 'v', long "verbose", help "Enable more verbose logging."
-        , value 0, metavar "N", showDefault ]
+        , value 1, metavar "N", showDefault ]
+
+    quiet = flag' 0 . mconcat $
+        [ short 'q', long "quiet", help "Disable all logging." ]
