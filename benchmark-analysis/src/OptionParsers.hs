@@ -3,7 +3,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
 module OptionParsers
-    ( platformParser
+    ( platformIdParser
+    , platformParser
+    , algorithmIdParser
     , algorithmParser
     , intervalReader
     , optionParserFromValues
@@ -33,7 +35,10 @@ import Text.Megaparsec.Char.Lexer (decimal)
 import Core
 import Schema
 
-platformParser :: Parser (SqlM (Key Platform))
+platformIdParser :: Parser (SqlM (Key Platform))
+platformIdParser = fmap entityKey <$> platformParser
+
+platformParser :: Parser (SqlM (Entity Platform))
 platformParser = queryPlatform <$> platformOpt
   where
     platformOpt :: Parser (Either Text Int64)
@@ -41,14 +46,20 @@ platformParser = queryPlatform <$> platformOpt
         [ metavar "ID", short 'p', long "platform"
         , help "Platform results to use, numeric or textual" ]
 
-    queryPlatform :: Either Text Int64 -> SqlM (Key Platform)
-    queryPlatform (Right n) = validateKey n
+    queryPlatform :: Either Text Int64 -> SqlM (Entity Platform)
+    queryPlatform (Right n) = do
+        Just entity <- logIfFail "No Platform with id" (showText n) $
+                Sql.getEntity $ toSqlKey n
+        return entity
     queryPlatform (Left name) = do
-        Just Entity{entityKey} <- logIfFail "No Platform with name" name $
+        Just entity <- logIfFail "No Platform with name" name $
             Sql.getBy $ UniqPlatform name
-        return entityKey
+        return entity
 
-algorithmParser :: Parser (SqlM (Key Algorithm))
+algorithmIdParser :: Parser (SqlM (Key Algorithm))
+algorithmIdParser = fmap entityKey <$> algorithmParser
+
+algorithmParser :: Parser (SqlM (Entity Algorithm))
 algorithmParser = queryAlgorithm <$> algorithmOpt
   where
     algorithmOpt :: Parser (Either Text Int64)
@@ -56,13 +67,15 @@ algorithmParser = queryAlgorithm <$> algorithmOpt
         [ metavar "ID", short 'a', long "algorithm"
         , help "Algorithm to use, numeric or textual id" ]
 
-    queryAlgorithm :: Either Text Int64 -> SqlM (Key Algorithm)
-    queryAlgorithm (Right n) = validateKey n
+    queryAlgorithm :: Either Text Int64 -> SqlM (Entity Algorithm)
+    queryAlgorithm (Right n) = do
+        Just entity <- logIfFail "No algorithm with id" (showText n) $
+                Sql.getEntity $ toSqlKey n
+        return entity
     queryAlgorithm (Left name) = do
-        Just Entity{entityKey} <-
-            logIfFail "No algorithm with name" name $
+        Just entity <- logIfFail "No algorithm with name" name $
                 Sql.getBy $ UniqAlgorithm name
-        return entityKey
+        return entity
 
 intervalReader :: ReadM (IntervalSet Int64)
 intervalReader = maybeReader . parseMaybe $

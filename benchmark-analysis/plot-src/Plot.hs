@@ -70,14 +70,14 @@ data PlotOptions
       , plotConfig :: PlotConfig
       }
     | QueryTest
-      { getAlgoId :: SqlM (Key Algorithm)
+      { getAlgorithm :: SqlM (Entity Algorithm)
       , getPlatformId :: SqlM (Key Platform)
       , outputSuffix :: Maybe FilePath
       }
 
 plotOptions :: PlotType -> Parser PlotOptions
 plotOptions plottype =
-  PlotOptions plottype <$> algorithmParser <*> platformParser <*> graphs
+  PlotOptions plottype <$> algorithmIdParser <*> platformIdParser <*> graphs
                        <*> impls <*> config
   where
     baseConfig = case plottype of
@@ -145,7 +145,7 @@ commands name = (,) mempty . (<|>) hiddenCommands . hsubparser $ mconcat
     hiddenCommands = hsubparser . mappend internal $
         subCommand "query-test" "check query output"
             "Dump query output to files to validate results" $
-            QueryTest <$> algorithmParser <*> platformParser
+            QueryTest <$> algorithmParser <*> platformIdParser
                       <*> (suffixParser <|> pure Nothing)
 
     suffixReader :: String -> Maybe (Maybe String)
@@ -308,8 +308,8 @@ main = runSqlM commands $ \case
             plot plotConfig "times-vs-optimal" impls variantQuery $
                 C.filter variantFilter .| C.mapM dataFromVariantInfo
 
-  QueryTest{getAlgoId,getPlatformId,outputSuffix} -> do
-    algoId <- getAlgoId
+  QueryTest{getAlgorithm,getPlatformId,outputSuffix} -> do
+    Entity algoId _algorithm <- getAlgorithm
     platformId <- getPlatformId
     variants <- Sql.selectKeysList [VariantAlgorithmId ==. algoId] []
 

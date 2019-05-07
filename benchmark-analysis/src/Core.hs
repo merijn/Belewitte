@@ -10,6 +10,7 @@
 module Core
     ( Int64
     , Key
+    , Entity(..)
     , fromSqlKey
     , toSqlKey
     , MonadIO(liftIO)
@@ -46,7 +47,6 @@ import Data.Conduit (ConduitT, (.|), runConduitRes)
 import qualified Data.Conduit.Combinators as C
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
-import Data.Proxy (Proxy(Proxy))
 import Database.Persist.Sqlite hiding (Connection)
 import Database.Sqlite.Internal
 import Data.Int (Int64)
@@ -221,20 +221,6 @@ whenNotExists
 whenNotExists filters act = lift (selectFirst filters []) >>= \case
     Just _ -> return ()
     Nothing -> act
-
-validateKey
-    :: forall record
-     . (ToBackendKey SqlBackend record, SqlRecord record)
-    => Int64 -> SqlM (Key record)
-validateKey n = get key >>= \case
-    Just _ -> return key
-    Nothing -> do
-        let name = entityHaskell $ entityDef (Proxy :: Proxy record)
-        Log.logErrorN . mconcat $
-            [ "No ", unHaskellName name, " entry found for id: ", showText n ]
-        throwM Abort
-  where
-    key = toSqlKey n
 
 getUniq :: SqlRecord record => record -> SqlM (Key record)
 getUniq record = do

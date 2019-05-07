@@ -80,24 +80,25 @@ commands :: String -> (InfoMod a, Parser ModelCommand)
 commands name = (,) docs . (<|>) hiddenCommands . hsubparser $ mconcat
     [ subCommand "train" "train a model"
         "Train a new model" $
-        Train <$> algorithmParser <*> platformParser <*> trainingConfig
+        Train <$> algorithmIdParser <*> platformIdParser <*> trainingConfig
     , subCommand "query" "report model info"
         "Report model info & statistics" $ QueryModel <$> modelParser
     , subCommand "validate" "validate model accuracy"
         "Compute and report a model's accuracy on validation dataset and full \
-        \dataset" $ Validate <$> algorithmParser <*> platformParser
+        \dataset" $ Validate <$> algorithmIdParser <*> platformIdParser
                              <*> modelParser
     , subCommand "evaluate" "evaluate model performance"
         "Evaluate BDT model performance on full dataset and compare against \
         \performance of other implementations" $
-        Evaluate <$> algorithmParser <*> platformParser <*> modelParser
+        Evaluate <$> algorithmIdParser <*> platformIdParser <*> modelParser
                  <*> defaultImplParser <*> reportParser False
     , subCommand "compare" "compare implementation performance"
         "Compare the performance of different implementations" $
-        Compare <$> algorithmParser <*> platformParser <*> reportParser True
+        Compare <$> algorithmIdParser <*> platformIdParser
+                <*> reportParser True
     , subCommand "export" "export model to C++"
         "Export BDT model to C++ file" $
-        Export <$> algorithmParser <*> modelParser <*> cppFile
+        Export <$> algorithmIdParser <*> modelParser <*> cppFile
     ]
   where
     docs :: InfoMod a
@@ -125,7 +126,7 @@ commands name = (,) docs . (<|>) hiddenCommands . hsubparser $ mconcat
     hiddenCommands = hsubparser . mappend internal $
         subCommand "query-test" "check query output"
             "Dump query output to files to validate results" $
-            QueryTest <$> algorithmParser <*> platformParser
+            QueryTest <$> algorithmIdParser <*> platformIdParser
                       <*> (suffixParser <|> pure Nothing)
 
     suffixReader :: String -> Maybe (Maybe String)
