@@ -67,6 +67,7 @@ Library
                         FlexibleContexts
                         FlexibleInstances
                         GADTs
+                        GADTSyntax
                         GeneralizedNewtypeDeriving
                         LambdaCase
                         MagicHash
@@ -84,6 +85,7 @@ Library
                         ViewPatterns
 
   Build-Depends:        base
+               ,        ansi-terminal == 0.9.*
                ,        bytestring
                ,        binary >= 0.8.4
                ,        clock == 0.7.*
@@ -103,6 +105,8 @@ Library
                ,        persistent == 2.9.*
                ,        persistent-template == 2.6.*
                ,        persistent-sqlite == 2.9.*
+               ,        prettyprinter == 1.2.*
+               ,        prettyprinter-ansi-terminal == 1.1.1.*
                ,        resourcet == 1.2.*
                ,        resource-pool
                ,        text

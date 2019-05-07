@@ -54,7 +54,7 @@ data ModelCommand
       , getModel :: SqlM (Key PredictionModel, Model)
       }
     | Evaluate
-      { getAlgoId :: SqlM (Key Algorithm)
+      { getAlgorithm :: SqlM (Entity Algorithm)
       , getPlatformId :: SqlM (Key Platform)
       , getModel :: SqlM (Key PredictionModel, Model)
       , defaultImpl :: Either Int Text
@@ -90,7 +90,7 @@ commands name = (,) docs . (<|>) hiddenCommands . hsubparser $ mconcat
     , subCommand "evaluate" "evaluate model performance"
         "Evaluate BDT model performance on full dataset and compare against \
         \performance of other implementations" $
-        Evaluate <$> algorithmIdParser <*> platformIdParser <*> modelParser
+        Evaluate <$> algorithmParser <*> platformIdParser <*> modelParser
                  <*> defaultImplParser <*> reportParser False
     , subCommand "compare" "compare implementation performance"
         "Compare the performance of different implementations" $

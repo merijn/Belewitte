@@ -78,12 +78,12 @@ main = runSqlM commands $ \case
         trainConfig <- getModelTrainingConfig modelId
         validateModel algoId platformId model trainConfig
 
-    Evaluate{getAlgoId,getPlatformId,getModel,defaultImpl,reportConfig} -> do
-        algoId <- getAlgoId
+    Evaluate{getAlgorithm,getPlatformId,getModel,defaultImpl,reportConfig} -> do
+        algo <- getAlgorithm
         platId <- getPlatformId
         (modelId, model) <- getModel
         trainConfig <- getModelTrainingConfig modelId
-        evaluateModel algoId platId defaultImpl reportConfig model trainConfig
+        evaluateModel algo platId defaultImpl reportConfig model trainConfig
 
     Compare{getAlgoId,getPlatformId,reportConfig} -> do
         algoId <- getAlgoId

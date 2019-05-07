@@ -3,15 +3,17 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Migration (checkMigration) where
 
-import Control.Exception (Exception(..), bracket)
+import Control.Exception (bracket)
 import Control.Monad (forM_, unless)
-import Control.Monad.Catch (MonadCatch, MonadThrow, catch, throwM)
+import Control.Monad.Catch (MonadCatch, MonadThrow, catch)
 import Control.Monad.IO.Unlift (MonadIO, MonadUnliftIO, withRunInIO)
 import Control.Monad.Logger (MonadLogger)
 import qualified Control.Monad.Logger as Log
 import Control.Monad.Reader (ReaderT)
 import Data.Int (Int64)
 import qualified Data.Text as T
+import Data.Text.Prettyprint.Doc ((<+>))
+import qualified Data.Text.Prettyprint.Doc as Pretty
 import Data.Typeable (Typeable)
 import Database.Persist.Sql
     (Migration, PersistField, Single(Single), SqlBackend)
@@ -47,7 +49,7 @@ silencedUnsafeMigration m = withSilencedHandle stderr $ do
     Sql.runMigrationUnsafe m
 
 querySingleValue
-    :: (MonadIO m, MonadThrow m, PersistField a, Show a)
+    :: (MonadIO m, MonadLogger m, MonadThrow m, PersistField a, Show a)
     => Text
     -> [PersistValue]
     -> SqlM m a
@@ -55,22 +57,23 @@ querySingleValue query args = do
     result <- Sql.liftPersist $ Sql.rawSql query args
     case result of
         [Single v] -> return v
-        v -> throwM . ExpectedSingleValue query $ show v
+        v -> logThrowM . ExpectedSingleValue query $ show v
 
-checkSchema :: MonadIO m => Migration -> SqlM m ()
-checkSchema schema = Sql.liftPersist $ do
-    noChanges <- null <$> Sql.getMigration schema
-    unless noChanges $ throwM WrongSchema
+checkSchema
+    :: (MonadIO m, MonadLogger m, MonadThrow m) => Migration -> SqlM m ()
+checkSchema schema = do
+    noChanges <- null <$> Sql.liftPersist (Sql.getMigration schema)
+    unless noChanges $ logThrowM WrongSchema
 
 validateSchema
     :: (MonadCatch m, MonadIO m, MonadLogger m, MonadThrow m)
     => Bool -> Int64 -> SqlM m Bool
 validateSchema _ v
-    | v > schemaVersion = throwM $ TooNew v
+    | v > schemaVersion = logThrowM $ TooNew v
     | v == schemaVersion = False <$ checkSchema currentSchema
 
 validateSchema migrateSchema version
-    | not migrateSchema = throwM $ MigrationNeeded version
+    | not migrateSchema = logThrowM $ MigrationNeeded version
     | otherwise = True <$ do
         Log.logInfoN $ "Migrating schema."
         forM_ [version..schemaVersion - 1] $ \n -> do
@@ -102,7 +105,7 @@ validateSchema migrateSchema version
             [ "Migration failed while migrating to version ", T.pack (show n)
             , ".\nRolling back to version ", T.pack (show (n-1))
             ]
-        throwM AbortMigration
+        logThrowM AbortMigration
 
 checkMigration
     :: (MonadCatch m, MonadIO m, MonadLogger m, MonadThrow m)
@@ -121,23 +124,32 @@ checkMigration migrateSchema = do
 data SchemaTooNew = TooNew Int64
     deriving (Show, Typeable)
 
+instance Pretty SchemaTooNew where
+    pretty (TooNew n) = Pretty.vsep
+        [ "Schema too new."
+        , "Expected schema version:" <+> pretty schemaVersion
+        , "Found schema version:" <+> pretty n
+        ]
+
 instance Exception SchemaTooNew where
     toException = toSchemaException
     fromException = fromSchemaException
-    displayException (TooNew n) = mconcat
-        [ "Schema too new. Expected version ", show schemaVersion
-        , ", found version ", show n, "."
-        ]
+    displayException = show . pretty
 
 data MigrationNeeded = MigrationNeeded Int64
     deriving (Show, Typeable)
 
+instance Pretty MigrationNeeded where
+    pretty (MigrationNeeded v) = Pretty.vsep
+        [ "Schema migration needed."
+        , "Found schema version:" <+> pretty v
+        , "Current schema version:" <+> pretty schemaVersion
+        , "Use --migrate to run an automatic migration."
+        , ""
+        , "CAUTION: Make sure to back up the data before migrating!"
+        ]
+
 instance Exception MigrationNeeded where
     toException = toSchemaException
     fromException = fromSchemaException
-    displayException (MigrationNeeded v) = mconcat
-        [ "Schema migration needed.\nFound version ", show v
-        , ", current version is ", show schemaVersion, ".\nUse --migrate"
-        , " to run an automatic migration.\n\nCAUTION: Make sure to back up"
-        , " the data before migrating!"
-        ]
+    displayException = show . pretty

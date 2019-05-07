@@ -28,7 +28,7 @@ import Data.Conduit (ConduitT, Void, (.|), await, runConduit)
 import qualified Data.Conduit.Combinators as C
 import Data.List (intersperse)
 import Data.Monoid ((<>))
-import Data.String (fromString)
+import Data.Proxy (Proxy(Proxy))
 import Data.String.Interpolate.IsString (i)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
@@ -57,16 +57,16 @@ instance Functor Query where
     fmap f query@Query{convert} = query { convert = fmap f . convert }
 
 printExplainTree
-    :: (MonadIO m, MonadThrow m)
+    :: (MonadIO m, MonadLogger m, MonadThrow m)
     => Handle -> ConduitT (Int64, Int64, Text) Void m ()
 printExplainTree hnd= do
     liftIO . T.hPutStrLn hnd $ "QUERY PLAN"
     void $ C.foldM renderTree [0]
   where
     renderTree
-        :: (MonadIO m, MonadThrow m)
+        :: (MonadIO m, MonadLogger m, MonadThrow m)
         => [Int64] -> (Int64, Int64, Text) -> m [Int64]
-    renderTree [] _ = throwM $ Error "Something went horribly wrong!"
+    renderTree [] _ = logThrowM $ QueryPlanUnparseable
     renderTree stack@(parent:parents) node@(parentId, nodeId, plan)
       | parent /= parentId = renderTree parents node
       | otherwise = liftIO $ do
@@ -93,7 +93,8 @@ explainSqlQuery originalQuery hnd = do
         , PersistInt64 _
         , PersistText t
         ] = return (parentId, nodeId, t)
-    explain _ = logThrowM $ Error "Explain failed!"
+    explain actualValues = logThrowM $ QueryResultUnparseable actualValues
+        [SqlInt64, SqlInt64, SqlInt64, SqlString]
 
     explainQuery = originalQuery { convert = explain, isExplain = True }
 
@@ -156,19 +157,20 @@ runSqlQueryCount originalQuery = do
     result <- runSqlQuery countQuery await
     case result of
         Just n -> return n
-        Nothing -> logThrowM . Error $ "Missing count result!"
+        Nothing -> logThrowM QueryReturnedZeroResults
   where
     countQuery = originalQuery
         { queryText =
             "SELECT COUNT(*) FROM (" <> queryText originalQuery <> ")"
         , convert = \case
             [PersistInt64 n] -> return $ fromIntegral n
-            _ -> logThrowM . Error $ "Unexpected value in count query"
+            actualValues -> logThrowM $ QueryResultUnparseable actualValues
+                [SqlInt64]
         }
 
 getDistinctFieldQuery
     :: forall a rec
-     . (PersistField a, SqlRecord rec)
+     . (PersistFieldSql a, SqlRecord rec)
      => EntityField rec a
      -> SqlM (Query a)
 getDistinctFieldQuery entityField = liftPersist $ do
@@ -192,7 +194,8 @@ getDistinctFieldQuery entityField = liftPersist $ do
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m) => [PersistValue] -> m a
     convert [v] | Right val <- fromPersistValue v = return val
-    convert l = logThrowM . Error . fromString $ "Unexpected value: " ++ show l
+    convert actualValues = logThrowM $ QueryResultUnparseable actualValues
+        [sqlType (Proxy :: Proxy a)]
 
 data VariantInfo =
   VariantInfo
@@ -227,7 +230,8 @@ variantInfoQuery algoId platformId = Query{..}
               !infinite = 1/0
               variantTimings = VU.zip impls timings
 
-    convert l = logThrowM . Error . fromString $ "Unexpected value: " ++ show l
+    convert actualValues = logThrowM $ QueryResultUnparseable actualValues
+        [SqlInt64, SqlReal, SqlReal, SqlBlob, SqlBlob]
 
     cteParams :: [PersistValue]
     cteParams = [toPersistValue algoId]

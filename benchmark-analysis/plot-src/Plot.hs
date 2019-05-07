@@ -7,7 +7,7 @@
 {-# LANGUAGE ViewPatterns #-}
 module Main (main) where
 
-import Control.Monad (forM, forM_, void)
+import Control.Monad (forM, forM_, void, when)
 import Control.Monad.Fail (MonadFail)
 import Control.Monad.IO.Unlift (withRunInIO)
 import Data.Bifunctor (first, second)
@@ -159,7 +159,7 @@ commands name = (,) mempty . (<|>) hiddenCommands . hsubparser $ mconcat
         [ metavar "SUFFIX" ]
 
 reportData
-    :: (MonadFail m, MonadIO m, MonadThrow m)
+    :: (MonadFail m, MonadIO m, MonadLogger m, MonadThrow m)
     => Handle
     -> Bool
     -> IntMap Implementation
@@ -176,15 +176,12 @@ reportData hnd normalise implMap = do
     toColumnLabels = mconcat . intersperse ":" . map translate . VU.toList
 
     printGraph
-        :: (MonadIO m, MonadThrow m)
+        :: (MonadIO m, MonadLogger m, MonadThrow m)
         => Vector Int64 -> (Text, Vector (Int64, Double)) -> m ()
     printGraph impls (graph, timingsPair)
-        | mismatch = throwM . Error . T.unlines $
-            [ "Implementation mismatch between:"
-            , showText impls
-            , "and"
-            , showText timingImpls
-            ]
+        | mismatch = logThrowM $
+            QueryResultMismatch (VU.toList impls) (VU.toList timingImpls)
+
         | otherwise = liftIO $ do
             T.hPutStr hnd $ graph <> " :"
             VU.forM_ processedTimings $ \time -> hPutStr hnd $ " " ++ show time
@@ -229,8 +226,10 @@ plot PlotConfig{..} plotName impls query convert
 
         let plotProc = (scriptProc args) { std_in = CreatePipe }
 
-        withRunInIO $ \runInIO ->
+        errorOccurred <- withRunInIO $ \runInIO ->
             withCreateProcess plotProc . withProcess $ runInIO . doWithHandle
+
+        when errorOccurred . logThrowM $ ProcessCreationFailed "bar-plot.py"
   where
     args :: [String]
     args = [T.unpack plotName, axisName, show normalise, show slideFormat]
@@ -250,22 +249,23 @@ plot PlotConfig{..} plotName impls query convert
         -> Maybe Handle
         -> Maybe Handle
         -> ProcessHandle
-        -> IO ()
-    withProcess work (Just plotHnd) Nothing Nothing procHandle = void $ do
+        -> IO Bool
+    withProcess work (Just plotHnd) Nothing Nothing procHandle = False <$ do
         work plotHnd
         hClose plotHnd
         waitForProcess procHandle
 
-    withProcess _ _ _ _ _ = throwM . Error $ "Error creating plot process!"
+    withProcess _ _ _ _ _ = return True
 
 runQueryDump
     :: (Foldable f, Show r)
-    => Maybe String -> String -> (a -> Query r) -> f a -> SqlM ()
-runQueryDump Nothing _ mkQuery coll = case toList coll of
+    => Text -> Maybe String -> String -> (a -> Query r) -> f a -> SqlM ()
+runQueryDump algoName Nothing _ mkQuery coll = case toList coll of
     (val:_) -> runSqlQuery (mkQuery val) $ void await
-    _ -> logThrowM $ Error "Unexpectedly found no element!"
+    _ -> logThrowM $
+        UnexpectedMissingData "No variants found for algorithm" algoName
 
-runQueryDump (Just suffix) name mkQuery vals =
+runQueryDump _ (Just suffix) name mkQuery vals =
   withUnliftIO $ \(UnliftIO runInIO) ->
     withFile (name <> suffix) WriteMode $ \hnd ->
         forM_ vals $ \val ->
@@ -309,13 +309,15 @@ main = runSqlM commands $ \case
                 C.filter variantFilter .| C.mapM dataFromVariantInfo
 
   QueryTest{getAlgorithm,getPlatformId,outputSuffix} -> do
-    Entity algoId _algorithm <- getAlgorithm
+    Entity algoId algorithm <- getAlgorithm
     platformId <- getPlatformId
     variants <- Sql.selectKeysList [VariantAlgorithmId ==. algoId] []
 
-    let chunkedVariants = map S.fromList $ chunksOf 500 variants
+    let algoName = getAlgoName algorithm
+
+        chunkedVariants = map S.fromList $ chunksOf 500 variants
         timeQuery = timePlotQuery algoId platformId
         levelTimeQuery = levelTimePlotQuery platformId
 
-    runQueryDump outputSuffix "timeQuery-" timeQuery chunkedVariants
-    runQueryDump outputSuffix "levelTimeQuery-" levelTimeQuery variants
+    runQueryDump algoName outputSuffix "timeQuery-" timeQuery chunkedVariants
+    runQueryDump algoName outputSuffix "levelTimeQuery-" levelTimeQuery variants

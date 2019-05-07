@@ -11,9 +11,9 @@ module ProcessPool
     , withProcess
     ) where
 
-import Control.Exception (Exception, SomeException, try)
+import Control.Exception (SomeException, try)
 import Control.Monad (guard, void)
-import Control.Monad.Catch (MonadMask, bracket, throwM, uninterruptibleMask_)
+import Control.Monad.Catch (MonadMask, bracket, uninterruptibleMask_)
 import Data.Acquire (mkAcquireType, withAcquire, ReleaseType(ReleaseException))
 import Data.List (intercalate)
 import Data.Pool (Pool)
@@ -36,7 +36,14 @@ import RuntimeData (getKernelExecutable, getKernelLibPath)
 import Schema
 
 data Timeout = Timeout deriving (Show)
-instance Exception Timeout
+
+instance Pretty Timeout where
+    pretty Timeout = "Job killed by timeout"
+
+instance Exception Timeout where
+    toException = toRuntimeError
+    fromException = fromRuntimeError
+    displayException = show . pretty
 
 data Process =
   Process
@@ -44,6 +51,7 @@ data Process =
   , outHandle :: Handle
   , procHandle :: ProcessHandle
   , procId :: Pid
+  , procName :: Text
   }
 
 getJobTimeOut :: MonadIO m => m [String]
@@ -81,10 +89,10 @@ withProcessPool n (Platform name _) f = do
 
     allocateProcess :: (MonadLogger m, MonadUnliftIO m) => m Process
     allocateProcess = do
+        exePath <- getKernelExecutable
+        libPath <- getKernelLibPath
         proc@Process{procId} <- liftIO $ do
             timeout <- getJobTimeOut
-            exePath <- getKernelExecutable
-            libPath <- getKernelLibPath
             let p = (Proc.shell (opts timeout exePath libPath))
                     { std_in = CreatePipe, std_out = CreatePipe }
             (Just inHandle, Just outHandle, Nothing, procHandle) <-
@@ -96,6 +104,8 @@ withProcessPool n (Platform name _) f = do
             return Process{..}
         proc <$ logInfoN ("Started new process: " <> showText procId)
       where
+        procName = "kernel runner"
+
         opts timeout exePath libPath = intercalate " " . ("srun":) $ timeout ++
             [ "-Q", "--gres=gpu:1", "-C ", T.unpack name, exePath
             , "-L", libPath, "-W", "-S"
@@ -117,16 +127,16 @@ withProcessPool n (Platform name _) f = do
     tryRemoveFile path =
         void (try $ removeFile path :: IO (Either SomeException ()))
 
-checkProcess :: MonadIO m => Process -> m ()
-checkProcess Process{..} = liftIO $ do
-    result <- Proc.getProcessExitCode procHandle
+checkProcess :: (MonadIO m, MonadLogger m, MonadThrow m) => Process -> m ()
+checkProcess Process{..} = do
+    result <- liftIO $ Proc.getProcessExitCode procHandle
     case result of
-        Just (ExitFailure 2) -> throwM Timeout
-        Just code -> throwM . Error $
-            "Process died with code: " <> showText code
+        Just (ExitFailure 2) -> logThrowM Timeout
+        Just code -> logThrowM $ UnexpectedTermination procName code
         Nothing -> return ()
-    System.hIsReadable outHandle >>= guard
-    System.hIsWritable inHandle >>= guard
+    liftIO $ do
+        System.hIsReadable outHandle >>= guard
+        System.hIsWritable inHandle >>= guard
 
 withResource :: MonadUnliftIO m => Pool a -> (a -> m b) -> m b
 withResource pool f = withAcquire (mkAcquireType alloc clean) $ f . fst

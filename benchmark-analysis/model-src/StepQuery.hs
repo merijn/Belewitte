@@ -54,7 +54,8 @@ stepInfoQuery algoId platformId graphProperties stepProperties = Query{..}
         stepProps = graphProps <> rawStepProps
         stepTimings = VU.zip impls timings
 
-    convert l = logThrowM . Error . T.pack $ "Unexpected value: " ++ show l
+    convert actualValues = logThrowM $ QueryResultUnparseable actualValues
+        [ SqlInt64, SqlInt64, SqlInt64, SqlBlob, SqlBlob, SqlBlob, SqlBlob ]
 
     cteParams :: [PersistValue]
     cteParams = [ toPersistValue algoId , toPersistValue platformId ]

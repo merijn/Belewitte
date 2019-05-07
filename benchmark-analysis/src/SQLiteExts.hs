@@ -3,15 +3,16 @@
 module SQLiteExts (registerSqlFunctions) where
 
 import Control.Monad ((>=>), when)
-import Control.Monad.Catch (MonadThrow, displayException, throwM)
+import Control.Monad.Catch (MonadThrow)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Logger (MonadLogger)
 import qualified Control.Monad.Logger as Log
 import qualified Data.ByteString as BS
-import qualified Data.Text as T
 import Data.Text.Encoding (decodeUtf8')
 import Foreign (Ptr, FunPtr, nullPtr, nullFunPtr)
 import Foreign.C (CInt(..), CString, withCString)
+
+import Exceptions
 
 registerSqlFunctions
     :: (MonadIO m, MonadLogger m, MonadThrow m) => Ptr () -> m ()
@@ -72,9 +73,7 @@ createSqliteFun nArgs strName sqlFun aggStep aggFinal sqlPtr = do
     when (result /= sqliteOk) $ do
         bs <- liftIO $ unpackError sqlPtr
         case decodeUtf8' bs of
-            Left exc -> do
-                Log.logErrorN . T.pack . displayException $ exc
-                throwM exc
+            Left exc -> logThrowM $ PrettyUnicodeException exc
             Right txt -> Log.logErrorN txt
   where
     unpackError = getExtendedError >=> getErrorString >=> BS.packCString

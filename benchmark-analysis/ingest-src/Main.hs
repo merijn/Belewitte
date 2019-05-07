@@ -1,5 +1,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MonadFailDesugaring #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -7,8 +8,8 @@
 module Main(main) where
 
 import Control.Monad (forM_, guard, void)
-import Control.Monad.Catch
-    (displayException, fromException, handleIOError, onError, try)
+import Control.Monad.Catch (onError, throwM, try)
+import qualified Control.Monad.Catch as Except
 import Control.Monad.Reader (ask, local)
 import Control.Monad.Trans (lift)
 import Data.Bool (bool)
@@ -27,7 +28,6 @@ import Database.Persist.Sqlite
 import qualified Database.Persist.Sqlite as Sql
 import Lens.Micro.Extras (view)
 import System.Console.Haskeline hiding (Handler)
-import System.Console.Haskeline.MonadException (throwIO)
 import System.Directory (doesFileExist, removeFile)
 import System.FilePath ((<.>), splitExtension, takeFileName)
 import System.IO (hClose)
@@ -78,22 +78,36 @@ withProcessCompletion args act = do
     readOutput Nothing (Just hnd) Nothing procHandle =
       T.hGetContents hnd <* hClose hnd <* Process.waitForProcess procHandle
 
-    readOutput _ _ _ _ = throwM $ userError "Error running external process"
+    readOutput _ _ _ _ = throwM $ ProcessCreationFailed "external completion"
 
     processCompleter process s = do
-        txt <- handleIO . liftIO $ Process.withCreateProcess process readOutput
+        txt <- warnOnError $ Process.withCreateProcess process readOutput
         let relevant = filter (T.isPrefixOf (T.pack s)) $ T.lines txt
         return $ map (simpleCompletion . T.unpack) relevant
       where
-        handleIO = handleIOError $ \_ ->
-            "" <$ logWarnN "External process for tab-completion failed to run"
+        warnOnError
+            :: (MonadCatch m, MonadIO m, MonadLogger m) => IO Text -> m Text
+        warnOnError runProcess = liftIO runProcess `Except.catches`
+            [ Except.Handler handleFailedProcessCreation
+            , Except.Handler handleIOException
+            ]
+
+        handleFailedProcessCreation
+            :: MonadLogger m => ProcessCreationFailed -> m Text
+        handleFailedProcessCreation (ProcessCreationFailed _) =
+            "" <$ logWarnN "External tab-completion process failed to run"
+
+        handleIOException :: MonadLogger m => IOException -> m Text
+        handleIOException _ =
+            "" <$ logWarnN "External tab-completion process failed to run"
 
 getInputWith
-    :: MonadException m => (Text -> m (Maybe a)) -> Text -> Text -> InputT m a
+    :: (MonadException m, MonadLogger m, MonadThrow m)
+    => (Text -> m (Maybe a)) -> Text -> Text -> InputT m a
 getInputWith convert errText prompt = go
   where
     go = getInputLine (T.unpack prompt ++ ": ") >>= \case
-            Nothing -> throwIO Abort
+            Nothing -> lift $ logThrowM StdinDisappeared
             Just s -> lift (convert . T.stripEnd . T.pack $ s) >>= \case
                 Just r -> return r
                 Nothing -> outputStrLn (T.unpack errText) >> go
@@ -114,7 +128,9 @@ getInputWithSqlCompletion field uniq prompt =
     fromQuery s =
       toCompletions <$> Sql.selectList [field `likeFilter` T.pack s] []
 
-getOptionalInput :: MonadException m => Text -> InputT m (Maybe Text)
+getOptionalInput
+    :: (MonadException m, MonadLogger m, MonadThrow m)
+    => Text -> InputT m (Maybe Text)
 getOptionalInput = getInputWith checkEmpty "" -- Never fails
   where
     checkEmpty :: MonadException m => Text -> m (Maybe (Maybe Text))
@@ -123,8 +139,15 @@ getOptionalInput = getInputWith checkEmpty "" -- Never fails
         | otherwise = return . Just . Just $ txt
 
 getReadInput
-    :: forall a m . (MonadException m, Bounded a, Enum a, Read a, Show a)
-    => (a -> Bool) -> Text -> Input m a
+    :: forall a m .
+    ( MonadException m
+    , MonadLogger m
+    , MonadThrow m
+    , Bounded a
+    , Enum a
+    , Read a
+    , Show a
+    ) => (a -> Bool) -> Text -> Input m a
 getReadInput f prompt = withCompletion (SimpleCompletion completions) $
     getInputWith (return . readMaybe . T.unpack) "Parse error!" prompt
   where
@@ -139,7 +162,8 @@ getReadInput f prompt = withCompletion (SimpleCompletion completions) $
       where
         isPrefix = isPrefixOf `on` map toLower
 
-getInput :: MonadException m => Text -> InputT m Text
+getInput
+    :: (MonadException m, MonadLogger m, MonadThrow m) => Text -> InputT m Text
 getInput = getInputWith checkEmpty "Empty input not allowed!"
   where
     checkEmpty :: MonadException m => Text -> m (Maybe Text)
@@ -268,7 +292,7 @@ runTask
     => Process
     -> (Text, Key Variant, a, b, Text)
     -> m (Key Variant, a, b, Text)
-runTask Process{..} (label, x, y, z, cmd) = handleError $ do
+runTask Process{inHandle,outHandle} (label, x, y, z, cmd) = handleError $ do
     logInfoN $ "Running: " <> cmd
     result <- liftIO $ T.hPutStrLn inHandle cmd >> T.hGetLine outHandle
     logInfoN $ "Finished: " <> cmd
@@ -277,7 +301,9 @@ runTask Process{..} (label, x, y, z, cmd) = handleError $ do
     tryRemoveFile path = do
         result <- try . liftIO $ removeFile path
         case result of
-            Left (SomeException e) -> logErrorN . T.pack $ displayException e
+            Left exc -> case fromException exc of
+                Just (BenchmarkException e) -> logThrowM e
+                Nothing -> displayLogThrowM exc
             Right () -> return ()
 
     fileStem = T.unpack label

@@ -255,14 +255,14 @@ data Report = Report
      }
 
 evaluateModel
-    :: Key Algorithm
+    :: Entity Algorithm
     -> Key Platform
     -> Either Int Text
     -> Report
     -> Model
     -> TrainingConfig
     -> SqlM ()
-evaluateModel algoId platId defImpl reportCfg@Report{..} model trainConfig = do
+evaluateModel algo platId defImpl reportCfg@Report{..} model trainConfig = do
     impls <- queryImplementations algoId
     let lookupByName :: Text -> Maybe Int
         lookupByName t = fmap fst
@@ -273,7 +273,9 @@ evaluateModel algoId platId defImpl reportCfg@Report{..} model trainConfig = do
     defaultImpl <- case defImpl of
         Left i | IM.member i impls -> return i
         Right t | Just i <- lookupByName t -> return i
-        _ -> logThrowM $ Error "Default implementation not found!"
+        _ -> logThrowM $ UnexpectedMissingData
+                "Default implementation not found for algorithm"
+                (getAlgoName algorithm)
 
     stats <- runSqlQuery query $
         foldGroup ((==) `on` stepVariantId) (aggregateSteps defaultImpl model)
@@ -282,6 +284,8 @@ evaluateModel algoId platId defImpl reportCfg@Report{..} model trainConfig = do
 
     printTotalStatistics reportCfg impls stats
   where
+    Entity algoId algorithm = algo
+
     query = getTotalQuery algoId platId trainConfig
 
     addBestNonSwitching

@@ -14,7 +14,7 @@ module Train
     ) where
 
 import Control.Monad (forM, forM_)
-import Control.Monad.Catch (mask_, throwM)
+import Control.Monad.Catch (mask_)
 import Control.Monad.Trans.Resource (register, release)
 import Data.Binary.Get (getDoublehost, getRemainingLazyByteString, runGet)
 import Data.Binary.Put (putDoublehost, putInt64host, runPut)
@@ -29,6 +29,7 @@ import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Set (Set)
 import qualified Data.Set as S
+import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Time.Clock (getCurrentTime)
 import Data.Vector.Unboxed (Vector)
@@ -249,9 +250,10 @@ getResult columnCount = runGet parseBlock . LBS.fromStrict
         bs <- LBS.toStrict <$> getRemainingLazyByteString
         return (dbls, byteStringToModel bs)
 
-getUnknowns :: MonadThrow m => Text -> m (Int, [(Int, Set Int64)])
+getUnknowns
+    :: (MonadLogger m, MonadThrow m) => Text -> m (Int, [(Int, Set Int64)])
 getUnknowns txt = case parse parseUnknowns "getUnknowns" txt of
-    Left e -> throwM e
+    Left e -> logThrowM . ModelInfoParseFailed . T.pack $ show e
     Right r -> return r
 
 parseUnknowns :: Parsec Void Text (Int, [(Int, Set Int64)])

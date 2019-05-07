@@ -1,4 +1,5 @@
 {-# LANGUAGE MonadFailDesugaring #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Schema
     ( ByteString
@@ -19,6 +20,7 @@ module Schema
     , bestNonSwitchingImplId
     , predictedImplId
     , optimalImplId
+    , getAlgoName
     , getImplName
     , schemaVersion
     , currentSchema
@@ -63,9 +65,13 @@ predictedImplId = -2
 optimalImplId :: Integral n => n
 optimalImplId = -3
 
+getAlgoName :: Algorithm -> Text
+getAlgoName Algorithm{algorithmName,algorithmPrettyName} =
+  fromMaybe algorithmName algorithmPrettyName
+
 getImplName :: Implementation -> Text
-getImplName (Implementation _ name prettyName _ _ _) =
-  fromMaybe name prettyName
+getImplName Implementation{implementationName,implementationPrettyName} =
+  fromMaybe implementationName implementationPrettyName
 
 migrations :: [([EntityDef], Int64 -> MigrationAction)]
 migrations =

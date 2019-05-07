@@ -41,7 +41,8 @@ timePlotQuery algoId platformId variants = Query{..}
             , PersistByteString (byteStringToVector -> impls)
             , PersistByteString (byteStringToVector -> timings)
             ] = return $ (graph, VU.zip impls timings)
-    convert l = logThrowM . Error . T.pack $ "Unexpected value: " ++ show l
+    convert actualValues = logThrowM $ QueryResultUnparseable actualValues
+        [ SqlString, SqlBlob, SqlBlob ]
 
     cteParams :: [PersistValue]
     cteParams = [toPersistValue algoId]
@@ -108,7 +109,8 @@ levelTimePlotQuery platformId variant = Query{..}
             , PersistByteString (byteStringToVector -> timings)
             ] =
         return $ (stepId, VU.zip impls timings)
-    convert l = logThrowM . Error . T.pack $ "Unexpected value: " ++ show l
+    convert actualValues = logThrowM $ QueryResultUnparseable actualValues
+        [ SqlInt64, SqlBlob, SqlBlob ]
 
     cteParams :: [PersistValue]
     cteParams = [toPersistValue variant]
