@@ -152,15 +152,15 @@ fromRuntimeError exc = do
     RuntimeError e <- fromException exc
     cast e
 
-data MissingCxxMain = MissingCxxMain
+data MissingCxxKernelRunner = MissingCxxKernelRunner
     deriving (Show, Typeable)
 
-instance Pretty MissingCxxMain where
-    pretty MissingCxxMain = Pretty.reflow
+instance Pretty MissingCxxKernelRunner where
+    pretty MissingCxxKernelRunner = Pretty.reflow
         "Kernel runner executable does not exist. \
         \Perhaps the C++ code was not compiled?"
 
-instance Exception MissingCxxMain where
+instance Exception MissingCxxKernelRunner where
     toException = toRuntimeError
     fromException = fromRuntimeError
     displayException = show . pretty

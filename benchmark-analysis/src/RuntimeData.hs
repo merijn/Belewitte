@@ -21,13 +21,13 @@ import Paths_benchmark_analysis (getDataFileName)
 
 getKernelExecutableMaybe :: MonadIO m => m (Maybe FilePath)
 getKernelExecutableMaybe = liftIO $ do
-    exePath <- getDataFileName "runtime-data/main"
+    exePath <- getDataFileName "runtime-data/kernel-runner"
     bool Nothing (Just exePath) <$> doesFileExist exePath
 
 getKernelExecutable :: (MonadIO m, MonadLogger m, MonadThrow m) => m FilePath
 getKernelExecutable = getKernelExecutableMaybe >>= maybe raiseError return
   where
-    raiseError = logThrowM MissingCxxMain
+    raiseError = logThrowM MissingCxxKernelRunner
 
 getKernelLibPathMaybe :: MonadIO m => m (Maybe FilePath)
 getKernelLibPathMaybe = liftIO $ do

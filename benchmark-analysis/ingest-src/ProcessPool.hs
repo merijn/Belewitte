@@ -119,7 +119,7 @@ withProcessPool n (Platform name _) f = do
             System.hClose inHandle
             System.hClose outHandle
             () <$ Proc.waitForProcess procHandle
-            tryRemoveFile $ "main.0" <.> show procId <.> hostName
+            tryRemoveFile $ "kernel-runner.0" <.> show procId <.> hostName
             tryRemoveFile $ ".PRUN_ENVIRONMENT" <.> show procId <.> hostName
         logInfoN $ "Destroyed process: " <> showText procId
 

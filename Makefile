@@ -5,22 +5,22 @@ BASE := .
 include Common.mk
 include Rules.mk
 
-EXES := main normalise-graph reorder-graph check-degree print-graph \
+EXES := kernel-runner normalise-graph reorder-graph check-degree print-graph \
         graph-details
 
 ifeq ($(UNAME),Darwin)
-$(call santargets,main): \
+$(call santargets,kernel-runner): \
     LDFLAGS += -L$(CUDA_PATH)/lib -framework opencl -lcudart
 else ifeq ($(UNAME),Linux)
-$(call santargets,main): \
+$(call santargets,kernel-runner): \
     LDFLAGS += -Xlinker --export-dynamic -L$(OPENCL_LIB) -lOpenCL \
                -L$(CUDA_PATH)/lib64 -lcudart
 endif
 
 ifdef CXX_IS_CLANG
-$(call santargets,main): LDFLAGS += -rpath $(CUDA_PATH)/lib/
+$(call santargets,kernel-runner): LDFLAGS += -rpath $(CUDA_PATH)/lib/
 else ifeq ($(CXX),g++)
-$(call santargets,main): LDFLAGS += -Wl,-rpath -Wl,$(CUDA_PATH)/lib/
+$(call santargets,kernel-runner): LDFLAGS += -Wl,-rpath -Wl,$(CUDA_PATH)/lib/
 endif
 
 all: $(EXES)
@@ -31,15 +31,18 @@ tsan: $(foreach exe,$(EXES),$(exe).tsan)
 
 -include $(patsubst %.cpp, .build/%.d, $(wildcard *.cpp))
 
-$(call sanobjects,$(DEST)/main) $(call sanobjects,$(DEST)/normalise-graph) \
+$(call sanobjects,$(DEST)/kernel-runner) \
+    $(call sanobjects,$(DEST)/normalise-graph) \
     $(call sanobjects,$(DEST)/graph-details): CXXFLAGS+=$(BOOST_CXX_FLAGS)
 
-$(call sanobjects,$(DEST)/main) $(call sanobjects,$(DEST)/normalise-graph) \
+$(call sanobjects,$(DEST)/kernel-runner) \
+    $(call sanobjects,$(DEST)/normalise-graph) \
     $(call sanobjects,$(DEST)/graph-details): $(BOOST_PREREQ)
 
-$(call santargets,main): main% : $(DEST)/main%.o $(DEST)/AlgorithmConfig%.o \
-      $(DEST)/Backend%.o $(DEST)/CUDA%.o $(DEST)/OpenCL%.o $(DEST)/Timer%.o \
-      $(LIBS)/liboptions%.a $(LIBS)/libutils%.a
+$(call santargets,kernel-runner): kernel-runner% : $(DEST)/kernel-runner%.o \
+    $(DEST)/AlgorithmConfig%.o $(DEST)/Backend%.o $(DEST)/CUDA%.o \
+    $(DEST)/OpenCL%.o $(DEST)/Timer%.o $(LIBS)/liboptions%.a \
+    $(LIBS)/libutils%.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $(BOOST_LD_FLAGS) -lboost_regex -lboost_system -lboost_filesystem $^ -o $@
 
@@ -68,45 +71,46 @@ $(call santargets,graph-details): graph-details%: $(DEST)/graph-details%.o \
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $(BOOST_LD_FLAGS) -lboost_system -lboost_filesystem $^ -o $@
 
-.PHONY: clean-main-objs clean-main-deps clean-main-bins clean-main-%san
+.PHONY: clean-kernel-runner-objs clean-kernel-runner-deps \
+        clean-kernel-runner-bins clean-kernel-runner-%san
 
-clean-main-objs: DEST:=$(DEST)
-clean-main-objs:
-	$(PRINTF) "cleaning objects for: main\n"
+clean-kernel-runner-objs: DEST:=$(DEST)
+clean-kernel-runner-objs:
+	$(PRINTF) "cleaning objects for: kernel-runner\n"
 	$(AT)rm -rf $(DEST)/*.o
 
-clean-main-deps: DEST:=$(DEST)
-clean-main-deps:
-	$(PRINTF) "cleaning dependencies for: main\n"
+clean-kernel-runner-deps: DEST:=$(DEST)
+clean-kernel-runner-deps:
+	$(PRINTF) "cleaning dependencies for: kernel-runner\n"
 	$(AT)rm -rf $(DEST)/*.d
 
-clean-main-bins:
-	$(PRINTF) "cleaning executables for: main\n"
+clean-kernel-runner-bins:
+	$(PRINTF) "cleaning executables for: kernel-runner\n"
 	$(AT)rm -rf $(EXES)
 
-clean-main-asan:
-	$(PRINTF) "cleaning asan for: main\n"
+clean-kernel-runner-asan:
+	$(PRINTF) "cleaning asan for: kernel-runner\n"
 	$(AT)rm -f $(foreach exe,$(EXES),$(exe).asan)
 
-clean-main-msan:
-	$(PRINTF) "cleaning msan for: main\n"
+clean-kernel-runner-msan:
+	$(PRINTF) "cleaning msan for: kernel-runner\n"
 	$(AT)rm -f $(foreach exe,$(EXES),$(exe).msan)
 
-clean-main-ssan:
-	$(PRINTF) "cleaning ssan for: main\n"
+clean-kernel-runner-ssan:
+	$(PRINTF) "cleaning ssan for: kernel-runner\n"
 	$(AT)rm -f $(foreach exe,$(EXES),$(exe).ssan)
 
-clean-main-tsan:
-	$(PRINTF) "cleaning tsan for: main\n"
+clean-kernel-runner-tsan:
+	$(PRINTF) "cleaning tsan for: kernel-runner\n"
 	$(AT)rm -f $(foreach exe,$(EXES),$(exe).tsan)
 
-clean-asan: clean-main-asan
-clean-msan: clean-main-msan
-clean-ssan: clean-main-ssan
-clean-tsan: clean-main-tsan
+clean-asan: clean-kernel-runner-asan
+clean-msan: clean-kernel-runner-msan
+clean-ssan: clean-kernel-runner-ssan
+clean-tsan: clean-kernel-runner-tsan
 
-clean-objs: clean-main-objs
-clean-deps: clean-main-deps
-clean-bins: clean-main-bins
+clean-objs: clean-kernel-runner-objs
+clean-deps: clean-kernel-runner-deps
+clean-bins: clean-kernel-runner-bins
 
 -include $(foreach d, $(wildcard */), $(d)Makefile)

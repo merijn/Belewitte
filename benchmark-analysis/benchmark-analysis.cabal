@@ -20,7 +20,8 @@ Synopsis:
 
 Description:
 
-Data-Files:             runtime-data/main
+Data-Files:             runtime-data/kernel-runner
+                        runtime-data/kernels
                         runtime-data/scripts/model.py
                         runtime-data/scripts/bar-plot.py
 

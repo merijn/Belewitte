@@ -1,6 +1,5 @@
 syntax: glob
-main
-main.dSYM/*
+kernel-runner
 normalise-graph
 reorder-graph
 check-degree

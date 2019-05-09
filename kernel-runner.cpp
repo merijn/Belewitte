@@ -32,7 +32,7 @@ using namespace boost::filesystem;
 enum class framework { cuda, opencl };
 enum class listing { nothing, algorithms, implementations };
 
-static const char *exeName = "main";
+static const char *exeName = "kernel-runner";
 static Options options('h', "help", cout, [](ostream& out)
 {
     out << "Usage:" << endl;
