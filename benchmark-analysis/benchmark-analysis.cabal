@@ -51,7 +51,7 @@ Library
                         Schema.Variant
                         SQLiteExts
                         Types
-                        Utils
+                        VectorUtils
 
   Autogen-Modules:      Paths_benchmark_analysis
   Other-Modules:        Paths_benchmark_analysis

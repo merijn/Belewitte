@@ -1,6 +1,6 @@
 {-# LANGUAGE MagicHash #-}
 {-# LANGUAGE MonadFailDesugaring #-}
-module Utils(byteStringToVector, vectorToByteString) where
+module VectorUtils(byteStringToVector, vectorToByteString) where
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Internal as BS

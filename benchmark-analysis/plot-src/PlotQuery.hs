@@ -16,7 +16,7 @@ import qualified Data.Vector.Unboxed as VU
 import Core
 import Query
 import Schema
-import Utils (byteStringToVector)
+import VectorUtils (byteStringToVector)
 
 timePlotQuery
     :: Key Algorithm
