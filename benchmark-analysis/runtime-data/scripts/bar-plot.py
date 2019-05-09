@@ -189,11 +189,14 @@ def plotBars(ax, xAxisName, columnNames, groups, normalised):
 if __name__ != "__main__":
     exit(1)
 
-if len(argv) != 5:
+if len(argv) < 5:
     print >>stderr, "Not enough arguments!"
     exit(1)
-else:
-    _, outputPDF, xAxisName, normalise, slideFormat = map(isBool, argv)
+elif len(argv) > 5:
+    print >>stderr, "Too many arguments!"
+    exit(1)
+
+_, outputPDF, xAxisName, normalise, slideFormat = map(isBool, argv)
 
 with Plot(outputPDF, slideFormat) as ax:
     lines = stdin.readlines()
