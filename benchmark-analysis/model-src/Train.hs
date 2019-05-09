@@ -42,6 +42,7 @@ import System.Posix.Types (Fd)
 import Text.Megaparsec (Parsec, parse, between, sepBy1, some)
 import Text.Megaparsec.Char (char, eol, string)
 import Text.Megaparsec.Char.Lexer (decimal)
+import Text.Megaparsec.Error (errorBundlePretty)
 
 import Core
 import Model
@@ -253,7 +254,7 @@ getResult columnCount = runGet parseBlock . LBS.fromStrict
 getUnknowns
     :: (MonadLogger m, MonadThrow m) => Text -> m (Int, [(Int, Set Int64)])
 getUnknowns txt = case parse parseUnknowns "getUnknowns" txt of
-    Left e -> logThrowM . ModelInfoParseFailed . T.pack $ show e
+    Left e -> logThrowM . ModelInfoParseFailed . T.pack $ errorBundlePretty e
     Right r -> return r
 
 parseUnknowns :: Parsec Void Text (Int, [(Int, Set Int64)])
