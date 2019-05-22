@@ -5,7 +5,7 @@
 {-# LANGUAGE RecordWildCards #-}
 module ProcessPool
     ( Pool
-    , Process(..)
+    , Process(Process,inHandle,outHandle)
     , Timeout(..)
     , withProcessPool
     , withProcess
@@ -32,6 +32,7 @@ import System.Process (CreateProcess(..), ProcessHandle, Pid, StdStream(..))
 import qualified System.Process as Proc
 
 import Core
+import ProcessUtils (UnexpectedTermination, unexpectedTermination)
 import RuntimeData (getKernelExecutable, getKernelLibPath)
 import Schema
 
@@ -51,7 +52,7 @@ data Process =
   , outHandle :: Handle
   , procHandle :: ProcessHandle
   , procId :: Pid
-  , procName :: Text
+  , procToException :: ExitCode -> UnexpectedTermination
   }
 
 getJobTimeOut :: MonadIO m => m [String]
@@ -95,17 +96,19 @@ withProcessPool n (Platform name _) f = do
             timeout <- getJobTimeOut
             let p = (Proc.shell (opts timeout exePath libPath))
                     { std_in = CreatePipe, std_out = CreatePipe }
+
+                procToException = unexpectedTermination p
+
             (Just inHandle, Just outHandle, Nothing, procHandle) <-
                 Proc.createProcess p
 
             System.hSetBuffering inHandle LineBuffering
             System.hSetBuffering outHandle LineBuffering
             Just procId <- Proc.getPid procHandle
+
             return Process{..}
         proc <$ logInfoN ("Started new process: " <> showText procId)
       where
-        procName = "kernel runner"
-
         opts timeout exePath libPath = intercalate " " . ("srun":) $ timeout ++
             [ "-Q", "--gres=gpu:1", "-C ", T.unpack name, exePath
             , "-L", libPath, "-W", "-S"
@@ -132,7 +135,7 @@ checkProcess Process{..} = do
     result <- liftIO $ Proc.getProcessExitCode procHandle
     case result of
         Just (ExitFailure 2) -> logThrowM Timeout
-        Just code -> logThrowM $ UnexpectedTermination procName code
+        Just code -> logThrowM $ procToException code
         Nothing -> return ()
     liftIO $ do
         System.hIsReadable outHandle >>= guard

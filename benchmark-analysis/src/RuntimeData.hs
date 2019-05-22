@@ -8,7 +8,7 @@ module RuntimeData
     , getModelScript
     ) where
 
-import Control.Monad.Catch (MonadThrow)
+import Control.Monad.Catch (MonadMask, MonadThrow)
 import Control.Monad.Logger (MonadLogger)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Data.Bool (bool)
@@ -16,8 +16,8 @@ import System.Directory (doesFileExist)
 import System.FilePath ((</>))
 
 import Exceptions
-
 import Paths_benchmark_analysis (getDataFileName)
+import ProcessUtils
 
 getKernelExecutableMaybe :: MonadIO m => m (Maybe FilePath)
 getKernelExecutableMaybe = liftIO $ do
@@ -40,13 +40,16 @@ getKernelLibPath = getKernelLibPathMaybe >>= maybe raiseError return
     raiseError = logThrowM MissingKernelLibPath
 
 getPythonScript
-    :: (MonadIO m, MonadLogger m, MonadThrow m) => String -> m FilePath
-getPythonScript script = do
-    scriptPath <- liftIO . getDataFileName $ "runtime-data/scripts" </> script
-    return scriptPath
+    :: (MonadIO m, MonadLogger m, MonadMask m)
+    => String -> [String] -> m CreateProcess
+getPythonScript script args = liftIO $ do
+    scriptPath <- getDataFileName $ "runtime-data/scripts" </> script
+    return $ proc scriptPath args
 
-getBarPlotScript :: (MonadIO m, MonadLogger m, MonadThrow m) => m FilePath
+getBarPlotScript
+    :: (MonadIO m, MonadLogger m, MonadMask m) => [String] -> m CreateProcess
 getBarPlotScript = getPythonScript "bar-plot.py"
 
-getModelScript :: (MonadIO m, MonadLogger m, MonadThrow m) => m FilePath
+getModelScript
+    :: (MonadIO m, MonadLogger m, MonadMask m) => [String] -> m CreateProcess
 getModelScript = getPythonScript "model.py"

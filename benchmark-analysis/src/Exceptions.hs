@@ -24,7 +24,6 @@ import qualified Data.Text.Prettyprint.Doc.Util as Pretty
 import Data.Typeable (Typeable, cast)
 import Database.Persist.Types (SqlType(..), PersistValue(..))
 import Database.Sqlite (SqliteException(..))
-import System.Exit (ExitCode(..))
 
 mapException
     :: (Exception e1, Exception e2, MonadCatch m) => (e1 -> e2) -> m a -> m a
@@ -174,37 +173,6 @@ instance Pretty MissingKernelLibPath where
         \Perhaps CUDA kernels were not compiled?"
 
 instance Exception MissingKernelLibPath where
-    toException = toRuntimeError
-    fromException = fromRuntimeError
-    displayException = show . pretty
-
-data UnexpectedTermination = UnexpectedTermination Text ExitCode
-    deriving (Show, Typeable)
-
-instance Pretty UnexpectedTermination where
-    pretty (UnexpectedTermination name code) = Pretty.group $ mconcat
-        [ Pretty.fillSep
-            [ Pretty.reflow "Unexpected termination of"
-            , pretty name
-            , "process."
-            ]
-        , Pretty.line
-        , "Exit code:" <+> Pretty.viaShow code
-        ]
-
-instance Exception UnexpectedTermination where
-    toException = toRuntimeError
-    fromException = fromRuntimeError
-    displayException = show . pretty
-
-data ProcessCreationFailed = ProcessCreationFailed Text
-    deriving (Show, Typeable)
-
-instance Pretty ProcessCreationFailed where
-    pretty (ProcessCreationFailed name) = Pretty.fillSep
-        [ Pretty.reflow "Process creation failed for" , pretty name ]
-
-instance Exception ProcessCreationFailed where
     toException = toRuntimeError
     fromException = fromRuntimeError
     displayException = show . pretty

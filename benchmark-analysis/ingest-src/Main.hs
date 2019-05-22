@@ -8,7 +8,7 @@
 module Main(main) where
 
 import Control.Monad (forM_, guard, void)
-import Control.Monad.Catch (onError, throwM, try)
+import Control.Monad.Catch (onError, try)
 import qualified Control.Monad.Catch as Except
 import Control.Monad.Reader (ask, local)
 import Control.Monad.Trans (lift)
@@ -30,9 +30,6 @@ import Lens.Micro.Extras (view)
 import System.Console.Haskeline hiding (Handler)
 import System.Directory (doesFileExist, removeFile)
 import System.FilePath ((<.>), splitExtension, takeFileName)
-import System.IO (hClose)
-import System.Process (CreateProcess(std_out), StdStream(CreatePipe))
-import qualified System.Process as Process
 import Text.Read (readMaybe)
 
 import BroadcastChan.Conduit
@@ -41,6 +38,8 @@ import Jobs
 import OptionParsers
 import Parsers
 import ProcessPool
+import ProcessUtils (CreateProcess, UnexpectedTermination(..))
+import qualified ProcessUtils as Process
 import qualified RuntimeData
 import Schema
 
@@ -57,7 +56,7 @@ withCompletion :: Monad m => Completer m -> Input m a -> Input m a
 withCompletion completion = mapInputT $ local (const completion)
 
 withProcessCompletion
-    :: (MonadCatch m, MonadIO m, MonadLogger m)
+    :: (MonadLogger m, MonadMask m, MonadUnliftIO m)
     => [String] -> Input m a -> Input m a
 withProcessCompletion args act = do
     completionBracket <- mkCompletionBracket
@@ -70,31 +69,25 @@ withProcessCompletion args act = do
         withCompletion (SimpleCompletion $ processCompleter process)
       where
         process :: CreateProcess
-        process = (Process.proc exe $ ["-L",libDir] ++ args)
-          { std_out = CreatePipe }
+        process = Process.proc exe $ ["-L",libDir] ++ args
 
     mkCompletionBracket _ _ = id
 
-    readOutput Nothing (Just hnd) Nothing procHandle =
-      T.hGetContents hnd <* hClose hnd <* Process.waitForProcess procHandle
-
-    readOutput _ _ _ _ = throwM $ ProcessCreationFailed "external completion"
-
     processCompleter process s = do
-        txt <- warnOnError $ Process.withCreateProcess process readOutput
+        txt <- warnOnError $ Process.readStdout process
         let relevant = filter (T.isPrefixOf (T.pack s)) $ T.lines txt
         return $ map (simpleCompletion . T.unpack) relevant
       where
         warnOnError
-            :: (MonadCatch m, MonadIO m, MonadLogger m) => IO Text -> m Text
-        warnOnError runProcess = liftIO runProcess `Except.catches`
-            [ Except.Handler handleFailedProcessCreation
+            :: (MonadCatch m, MonadIO m, MonadLogger m) => m Text -> m Text
+        warnOnError runProcess = runProcess `Except.catches`
+            [ Except.Handler handleUnexpectedTermination
             , Except.Handler handleIOException
             ]
 
-        handleFailedProcessCreation
-            :: MonadLogger m => ProcessCreationFailed -> m Text
-        handleFailedProcessCreation (ProcessCreationFailed _) =
+        handleUnexpectedTermination
+            :: MonadLogger m => UnexpectedTermination -> m Text
+        handleUnexpectedTermination (UnexpectedTermination _) =
             "" <$ logWarnN "External tab-completion process failed to run"
 
         handleIOException :: MonadLogger m => IOException -> m Text

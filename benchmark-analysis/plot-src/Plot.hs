@@ -7,9 +7,8 @@
 {-# LANGUAGE ViewPatterns #-}
 module Main (main) where
 
-import Control.Monad (forM, forM_, void, when)
+import Control.Monad (forM, forM_, void)
 import Control.Monad.Fail (MonadFail)
-import Control.Monad.IO.Unlift (withRunInIO)
 import Data.Bifunctor (first, second)
 import Data.Char (isSpace)
 import Data.Conduit as C
@@ -30,12 +29,12 @@ import Database.Persist.Sqlite ((==.))
 import qualified Database.Persist.Sqlite as Sql
 import Data.Vector.Unboxed (Vector)
 import qualified Data.Vector.Unboxed as VU
-import System.IO (Handle, IOMode(WriteMode), hClose, hPutStr, stdout, withFile)
-import System.Process
+import System.IO (Handle, IOMode(WriteMode), hPutStr, stdout, withFile)
 
 import Core
 import OptionParsers
 import PlotQuery (timePlotQuery, levelTimePlotQuery)
+import ProcessUtils (withStdin)
 import Query
 import RuntimeData (getBarPlotScript)
 import Schema
@@ -222,14 +221,8 @@ plot
 plot PlotConfig{..} plotName impls query convert
   | printStdout = doWithHandle stdout
   | otherwise = do
-        scriptProc <- proc <$> getBarPlotScript
-
-        let plotProc = (scriptProc args) { std_in = CreatePipe }
-
-        errorOccurred <- withRunInIO $ \runInIO ->
-            withCreateProcess plotProc . withProcess $ runInIO . doWithHandle
-
-        when errorOccurred . logThrowM $ ProcessCreationFailed "bar-plot.py"
+        plotProcess <- getBarPlotScript args
+        withStdin plotProcess doWithHandle
   where
     args :: [String]
     args = [T.unpack plotName, axisName, show normalise, show slideFormat]
@@ -242,20 +235,6 @@ plot PlotConfig{..} plotName impls query convert
         convert
         .| C.map (second (VU.filter isRelevant))
         .| reportData hnd normalise impls
-
-    withProcess
-        :: (Handle -> IO a)
-        -> Maybe Handle
-        -> Maybe Handle
-        -> Maybe Handle
-        -> ProcessHandle
-        -> IO Bool
-    withProcess work (Just plotHnd) Nothing Nothing procHandle = False <$ do
-        work plotHnd
-        hClose plotHnd
-        waitForProcess procHandle
-
-    withProcess _ _ _ _ _ = return True
 
 runQueryDump
     :: (Foldable f, Show r)

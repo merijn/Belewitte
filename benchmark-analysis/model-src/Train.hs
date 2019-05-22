@@ -23,8 +23,6 @@ import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
-import Data.Conduit.Process
-    (CreateProcess, proc, withCheckedProcessCleanup)
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Set (Set)
@@ -38,7 +36,6 @@ import Database.Persist.Sqlite ((==.))
 import qualified Database.Persist.Sqlite as Sql
 import System.IO (hClose)
 import System.Posix.IO (createPipe, closeFd, fdToHandle)
-import System.Posix.Types (Fd)
 import Text.Megaparsec (Parsec, parse, between, sepBy1, some)
 import Text.Megaparsec.Char (char, eol, string)
 import Text.Megaparsec.Char.Lexer (decimal)
@@ -46,6 +43,7 @@ import Text.Megaparsec.Error (errorBundlePretty)
 
 import Core
 import Model
+import ProcessUtils (withCheckedProcessCleanup)
 import Query
 import RuntimeData (getModelScript)
 import Schema
@@ -158,24 +156,21 @@ trainModel algoId platId trainCfg@TrainConfig{..} = do
 
     Just propCount <- fmap (VU.length . fst) <$> runSqlQuery trainQuery C.head
 
-    scriptProc <- proc <$> getModelScript
-
-    let process :: Fd -> CreateProcess
-        process fd = scriptProc
-            [ "--entries"
-            , show numEntries
-            , "--properties"
-            , show propCount
-            , "--fd"
-            , show fd
-            ]
-
     ((outFd, closeOut), (resultsHnd, closeResults)) <- mask_ $ do
         (fdOut, fdIn) <- liftIO createPipe
         hndIn <- liftIO $ fdToHandle fdIn
         closeIn <- register $ hClose hndIn
         closeOut <- register $ closeFd fdOut
         return ((fdOut, closeOut), (hndIn, closeIn))
+
+    modelProcess <- getModelScript
+        [ "--entries"
+        , show numEntries
+        , "--properties"
+        , show propCount
+        , "--fd"
+        , show outFd
+        ]
 
     let handleStreams (propSink, closeSink) modelHnd errHnd = do
             register $ hClose modelHnd
@@ -217,7 +212,7 @@ trainModel algoId platId trainCfg@TrainConfig{..} = do
 
     timestamp <- liftIO getCurrentTime
     (model, ModelStats{..}) <-
-        withCheckedProcessCleanup (process outFd) handleStreams
+        withCheckedProcessCleanup modelProcess handleStreams
 
     modelId <- Sql.insert $
         PredictionModel platId model trainFraction trainSeed modelUnknownCount
