@@ -131,6 +131,7 @@ withStdin
     => CreateProcess -> (Handle -> m ()) -> m ()
 withStdin process work = withProcess_ process $ \stdin stdout -> do
     work stdin
+    liftIO $ hClose stdin
     info <- liftIO $ T.hGetContents stdout
     unless (T.null info) $ logInfoN info
 
