@@ -27,8 +27,11 @@ parser.add_argument('--properties', metavar='N', type=int, action='store',
                     dest='numProps', help='Number of properties to train on.')
 parser.add_argument('--entries', metavar='N', type=int, action='store',
                     dest='numEntries', help='Number of datapoints.')
-parser.add_argument('--fd', metavar='FD', type=int, action='store', dest='fd',
-                    help='File descriptor to read result values from.')
+parser.add_argument('--results-fd', metavar='FD', type=int, action='store',
+    dest='resultsFd', help='File descriptor to read result values from.')
+
+parser.add_argument('--unknowns-fd', metavar='FD', type=int, action='store',
+    dest='unknownsFd', help='File descriptor to read result values from.')
 
 opts = parser.parse_args()
 
@@ -47,7 +50,7 @@ class ResultReader(threading.Thread):
             self.outputs = ohe.fit_transform(self.outputs).toarray() # one hot encoding
             self.decode_table = lble.inverse_transform(ohe.active_features_)
 
-thread = ResultReader(opts.fd)
+thread = ResultReader(opts.resultsFd)
 thread.start()
 
 inputs = np.fromfile(stdin, dtype=np.float64, count=opts.numProps * opts.numEntries)
@@ -97,9 +100,11 @@ while queue:
         queue.append(right_child)
 
 total = sum(unknown.values())
-print >>stderr, total
-for key, val in sorted(unknown.items(), key=lambda x: x[1], reverse=True):
-    print >>stderr, val, ":", key
+
+with fdopen(opts.unknownsFd, 'wb') as unknownsFile:
+    print >>unknownsFile, total
+    for key, val in sorted(unknown.items(), key=lambda x: x[1], reverse=True):
+        print >>unknownsFile, val, ":", key
 
 def translate(data):
     if data[2] != -1:

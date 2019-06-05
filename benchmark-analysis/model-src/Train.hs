@@ -14,7 +14,7 @@ module Train
     ) where
 
 import Control.Monad (forM, forM_)
-import Control.Monad.Catch (mask_)
+import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Resource (register, release)
 import Data.Binary.Get (getDoublehost, getRemainingLazyByteString, runGet)
 import Data.Binary.Put (putDoublehost, putInt64host, runPut)
@@ -35,7 +35,6 @@ import qualified Data.Vector.Unboxed as VU
 import Database.Persist.Sqlite ((==.))
 import qualified Database.Persist.Sqlite as Sql
 import System.IO (hClose)
-import System.Posix.IO (createPipe, closeFd, fdToHandle)
 import Text.Megaparsec (Parsec, parse, between, sepBy1, some)
 import Text.Megaparsec.Char (char, eol, string)
 import Text.Megaparsec.Char.Lexer (decimal)
@@ -43,7 +42,7 @@ import Text.Megaparsec.Error (errorBundlePretty)
 
 import Core
 import Model
-import ProcessUtils (withCheckedProcessCleanup)
+import ProcessUtils (ReadWrite(..), runProcessCreation, withPipe, withProcess)
 import Query
 import RuntimeData (getModelScript)
 import Schema
@@ -156,25 +155,23 @@ trainModel algoId platId trainCfg@TrainConfig{..} = do
 
     Just propCount <- fmap (VU.length . fst) <$> runSqlQuery trainQuery C.head
 
-    ((outFd, closeOut), (resultsHnd, closeResults)) <- mask_ $ do
-        (fdOut, fdIn) <- liftIO createPipe
-        hndIn <- liftIO $ fdToHandle fdIn
-        closeIn <- register $ hClose hndIn
-        closeOut <- register $ closeFd fdOut
-        return ((fdOut, closeOut), (hndIn, closeIn))
+    timestamp <- liftIO getCurrentTime
+    (model, ModelStats{..}) <- runProcessCreation $ do
+        (resultsFd, resultsHnd) <- withPipe Write
+        (unknownsFd, unknownsHnd) <- withPipe Read
 
-    modelProcess <- getModelScript
-        [ "--entries"
-        , show numEntries
-        , "--properties"
-        , show propCount
-        , "--fd"
-        , show outFd
-        ]
+        modelProcess <- lift $ getModelScript
+            [ "--entries"
+            , show numEntries
+            , "--properties"
+            , show propCount
+            , "--results-fd"
+            , resultsFd
+            , "--unknowns-fd"
+            , unknownsFd
+            ]
 
-    let handleStreams (propSink, closeSink) modelHnd errHnd = do
-            register $ hClose modelHnd
-            release closeOut
+        withProcess modelProcess $ \(propSink, closeSink) modelHnd -> do
             processIn <- register closeSink
 
             let propertySink = ZipSink $ do
@@ -183,7 +180,7 @@ trainModel algoId platId trainCfg@TrainConfig{..} = do
 
                 resultSink = ZipSink $ do
                     C.map (putResults . snd) .| C.sinkHandle resultsHnd
-                    release closeResults
+                    liftIO $ hClose resultsHnd
 
                 combinedSink = getZipSink (propertySink *> resultSink)
 
@@ -192,7 +189,7 @@ trainModel algoId platId trainCfg@TrainConfig{..} = do
             (featureImportance, model) <- liftIO $
                 getResult propCount <$> BS.hGetContents modelHnd
 
-            unknownTxt <- liftIO $ T.hGetContents errHnd
+            unknownTxt <- liftIO $ T.hGetContents unknownsHnd
             (modelUnknownCount, modelUnknownPreds) <- getUnknowns unknownTxt
 
             let (graphProps, stepProps) = VU.splitAt (S.size trainGraphProps)
@@ -209,10 +206,6 @@ trainModel algoId platId trainCfg@TrainConfig{..} = do
                         (VU.toList stepProps)
 
             return (model, ModelStats{..})
-
-    timestamp <- liftIO getCurrentTime
-    (model, ModelStats{..}) <-
-        withCheckedProcessCleanup modelProcess handleStreams
 
     modelId <- Sql.insert $
         PredictionModel platId model trainFraction trainSeed modelUnknownCount

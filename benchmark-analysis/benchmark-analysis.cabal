@@ -204,6 +204,7 @@ Executable Model
                ,        interpolate == 0.1.1
                ,        megaparsec == 7.0.*
                ,        monad-logger == 0.3.28.*
+               ,        mtl == 2.2.1
                ,        persistent-sqlite == 2.9.*
                ,        resourcet == 1.2.*
                ,        streaming-commons == 0.1.*
