@@ -2,7 +2,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-module ProcessUtils
+module Utils.Process
     ( CreateProcess
     , Process.proc
     , ReadWrite(..)

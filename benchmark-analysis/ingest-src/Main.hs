@@ -38,8 +38,8 @@ import Jobs
 import OptionParsers
 import Parsers
 import ProcessPool
-import ProcessUtils (CreateProcess, UnexpectedTermination(..))
-import qualified ProcessUtils as Process
+import Utils.Process (CreateProcess, UnexpectedTermination(..))
+import qualified Utils.Process as Process
 import qualified RuntimeData
 import Schema
 

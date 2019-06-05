@@ -34,7 +34,7 @@ import System.IO (Handle, IOMode(WriteMode), hPutStr, stdout, withFile)
 import Core
 import OptionParsers
 import PlotQuery (timePlotQuery, levelTimePlotQuery)
-import ProcessUtils (withStdin)
+import Utils.Process (withStdin)
 import Query
 import RuntimeData (getBarPlotScript)
 import Schema

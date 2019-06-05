@@ -40,7 +40,7 @@ import System.IO (Handle)
 
 import Core
 import Schema
-import VectorUtils (byteStringToVector)
+import Utils.Vector (byteStringToVector)
 
 data Query r =
   Query

@@ -17,7 +17,7 @@ import System.FilePath ((</>))
 
 import Exceptions
 import Paths_benchmark_analysis (getDataFileName)
-import ProcessUtils
+import Utils.Process
 
 getKernelExecutableMaybe :: MonadIO m => m (Maybe FilePath)
 getKernelExecutableMaybe = liftIO $ do

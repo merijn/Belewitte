@@ -37,7 +37,6 @@ Library
                         Migration
                         Model
                         OptionParsers
-                        ProcessUtils
                         Query
                         RuntimeData
                         Schema
@@ -52,7 +51,8 @@ Library
                         Schema.Variant
                         SQLiteExts
                         Types
-                        VectorUtils
+                        Utils.Process
+                        Utils.Vector
 
   Autogen-Modules:      Paths_benchmark_analysis
   Other-Modules:        Paths_benchmark_analysis

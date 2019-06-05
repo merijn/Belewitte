@@ -42,7 +42,7 @@ import Text.Megaparsec.Error (errorBundlePretty)
 
 import Core
 import Model
-import ProcessUtils (ReadWrite(..), runProcessCreation, withPipe, withProcess)
+import Utils.Process (ReadWrite(..), runProcessCreation, withPipe, withProcess)
 import Query
 import RuntimeData (getModelScript)
 import Schema

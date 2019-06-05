@@ -15,7 +15,7 @@ import qualified Data.Vector.Unboxed as VU
 import Core
 import Query
 import Schema
-import VectorUtils (byteStringToVector)
+import Utils.Vector (byteStringToVector)
 
 data StepInfo =
   StepInfo

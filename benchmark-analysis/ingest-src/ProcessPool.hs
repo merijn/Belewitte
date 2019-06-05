@@ -32,7 +32,7 @@ import System.Process (CreateProcess(..), ProcessHandle, Pid, StdStream(..))
 import qualified System.Process as Proc
 
 import Core
-import ProcessUtils (UnexpectedTermination, unexpectedTermination)
+import Utils.Process (UnexpectedTermination, unexpectedTermination)
 import RuntimeData (getKernelExecutable, getKernelLibPath)
 import Schema
 

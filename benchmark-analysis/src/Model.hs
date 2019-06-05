@@ -32,7 +32,7 @@ import Foreign.Ptr (castPtr)
 import Foreign.Storable (Storable(..))
 import Text.Read (readMaybe)
 
-import VectorUtils (byteStringToVector, vectorToByteString)
+import Utils.Vector (byteStringToVector, vectorToByteString)
 
 newtype Model = Model { getModelVector :: VS.Vector TreeNode }
 
