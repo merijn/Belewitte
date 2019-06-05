@@ -22,8 +22,10 @@ Description:
 
 Data-Files:             runtime-data/kernel-runner
                         runtime-data/kernels
+                        runtime-data/requirements.txt
                         runtime-data/scripts/model.py
                         runtime-data/scripts/bar-plot.py
+                        runtime-data/virtualenv
 
 Extra-Source-Files:     cbits/*.h src/schema
 
