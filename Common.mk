@@ -1,5 +1,18 @@
 .PHONY: all clean debug everything ptx clean-% asan msan ssan tsan
 
+include $(BASE)/Config.mk
+
+# Set defaults if not defined in Config.mk
+ifndef CXX
+CXX:=clang++
+endif
+ifndef CABAL
+CABAL:=$(shell command -v cabal 2> /dev/null)
+endif
+ifndef GHC
+GHC:=$(shell command -v ghc 2> /dev/null)
+endif
+
 all:
 debug: asan msan ssan tsan
 everything: all debug
@@ -19,7 +32,7 @@ clean-tsan:
 clean-all: clean-objs clean-libs clean-deps clean-deps clean-ptx clean-bins \
     clean-debug
 	$(PRINTF) "removing build directory...\n"
-	$(AT)rm -rf $(BUILD)
+	$(AT)rm -rf $(BUILD) $(BASE)/cabal.project.local
 
 .DELETE_ON_ERROR:
 
@@ -46,8 +59,6 @@ CLANGCXXFLAGS=$(COMMON_CXXFLAGS) $(CLANGWFLAGS) -ftrapv
 ICCWFLAGS=-Wall -Wremarks -Wcheck -Werror -diag-disable=869,981,10382,11074,11076
 ICC_CXXFLAGS=$(COMMON_CXXFLAGS) $(ICCWFLAGS) -xHost
 
-
-CXX?=clang++
 CXXFLAGS=$(if $(findstring clang++, $(CXX)), $(CLANGCXXFLAGS), \
             $(if $(findstring icc, $(CXX)), $(ICC_CXXFLAGS), $(COMMON_CXXFLAGS)))
 
@@ -123,16 +134,32 @@ $(BUILD)/kernels/ $(DOWNLOAD)/ $(PREFIX)/:
 	$(PRINTF) " MKDIR\t$@\n"
 	$(AT)mkdir -p $@
 
-CABAL:=$(shell command -v cabal 2> /dev/null)
 PKG_CONFIG_PATH:=$(patsubst :%,%,$(patsubst %:,%,$(PKG_CONFIG_PATH)))
+
+ifdef CABAL
+CABALCONFIG:=$(BASE)/cabal.project.local
+endif
+
 .PHONY: haskell-dependencies
-haskell-dependencies:
+haskell-dependencies: $(CABALCONFIG)
 ifndef CABAL
 	$(PRINTF) "cabal-install not found, skipping Haskell parts\n"
 else
 	$(PRINTF) " CABAL\t$@\n"
-	$(AT)cabal --builddir="$(abspath $(BUILD)/haskell/)" \
+	$(AT)$(CABAL) --builddir="$(abspath $(BUILD)/haskell/)" \
 	    v2-build all $(if $(AT),2>/dev/null >/dev/null,)
+
+$(CABALCONFIG): $(BASE)/Config.mk
+	$(PRINTF) " CABAL\tconfigure\n"
+	$(AT)$(CABAL) --builddir="$(abspath $(BUILD)/haskell/)" v2-update \
+	    $(if $(AT),2>/dev/null >/dev/null,)
+	$(AT)$(CABAL) --builddir="$(abspath $(BUILD)/haskell/)" \
+	    --with-compiler="$(GHC)" -j24 v2-configure \
+	    $(if $(AT),2>/dev/null >/dev/null,)
+
+.PHONY: report-cabal
+report-cabal:
+	$(PRINTF) "$(CABAL)"
 endif
 
 BOOST_VERSION:=1.70.0
