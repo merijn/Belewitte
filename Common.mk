@@ -4,13 +4,19 @@ include $(BASE)/Config.mk
 
 # Set defaults if not defined in Config.mk
 ifndef CXX
-CXX:=clang++
+CXX:=$(shell command -v clang++ 2> /dev/null)
 endif
 ifndef CABAL
 CABAL:=$(shell command -v cabal 2> /dev/null)
 endif
 ifndef GHC
 GHC:=$(shell command -v ghc 2> /dev/null)
+endif
+ifndef NVCC
+NVCC:=$(shell command -v nvcc 2> /dev/null)
+endif
+ifndef ICC
+ICC:=$(shell command -v icc 2> /dev/null)
 endif
 
 all:
@@ -46,6 +52,10 @@ ifeq ($(V), 1)
 else
     PRINTF := @printf
 endif
+
+.PHONY: missing-cuda
+missing-cuda:
+	$(PRINTF) "nvcc not found, skipping GPU kernel libraries\n"
 
 COMMON_CXXFLAGS=-MMD -MP -std=c++17 -g -I$(BASE)
 

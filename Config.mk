@@ -1,3 +1,5 @@
 CXX:=
 CABAL:=
 GHC:=
+NVCC:=
+ICC:=

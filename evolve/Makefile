@@ -6,21 +6,25 @@ all: $(SRCDIR)/gen-graph $(SRCDIR)/evolve haskell-dependencies
 $(DEST)/evolve.o: CXXFLAGS+=$(BOOST_CXX_FLAGS)
 $(DEST)/evolve.o: $(BOOST_PREREQ)
 
-ifdef $(shell command -v icc 2>/dev/null)
 $(DEST)/Connectivity.o: CPATH:=$(ICC_CPATH):$(CPATH)
 $(DEST)/Connectivity.o: CXX=icc
 
 $(SRCDIR)/evolve: LDFLAGS+=-ltbb
 $(SRCDIR)/evolve: LD=icc
-endif
 
 $(SRCDIR)/gen-graph: $(DEST)/gen-graph.o $(LIBS)/libutils.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
+ifndef ICC
+.PHONY: $(SRCDIR)/evolve
+$(SRCDIR)/evolve:
+	$(PRINTF) "Intel ICC not found, skipping evolve executable\n"
+else
 $(SRCDIR)/evolve: $(DEST)/evolve.o $(DEST)/Connectivity.o $(LIBS)/libutils.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $^ -o $@
+endif
 
 .PHONY: clean-$(NAME)-bins
 

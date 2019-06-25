@@ -39,12 +39,22 @@ $(call sanobjects,$(DEST)/kernel-runner) \
     $(call sanobjects,$(DEST)/normalise-graph) \
     $(call sanobjects,$(DEST)/graph-details): $(BOOST_PREREQ)
 
+ifndef NVCC
+.PHONY: $(call santargets,kernel-runner)
+$(call santargets,kernel-runner):
+	$(PRINTF) "nvcc not found, skipping kernel-runner\n"
+else ifndef OPENCL_LIB
+.PHONY: $(call santargets,kernel-runner)
+$(call santargets,kernel-runner):
+	$(PRINTF) "OpenCL not found, skipping kernel-runner\n"
+else
 $(call santargets,kernel-runner): kernel-runner% : $(DEST)/kernel-runner%.o \
     $(DEST)/AlgorithmConfig%.o $(DEST)/Backend%.o $(DEST)/CUDA%.o \
     $(DEST)/OpenCL%.o $(DEST)/Timer%.o $(LIBS)/liboptions%.a \
     $(LIBS)/libutils%.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $(BOOST_LD_FLAGS) -lboost_regex -lboost_system -lboost_filesystem $^ -o $@
+endif
 
 $(call santargets,normalise-graph): normalise-graph%: $(DEST)/normalise-graph%.o \
       $(LIBS)/libutils%.a

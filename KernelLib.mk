@@ -8,6 +8,7 @@ $(NAME)_CUDA_PTXS:=$(patsubst %.cu, $(SRCDIR)/%.ptx, $($(NAME)_CUDA_SRCS))
 $($(NAME)_CUDA_OBJS): | $(DEST)/
 $($(NAME)_CUDA_DEBUG_OBJS): | $(DEST)/
 
+ifdef NVCC
 all: $(BUILD)/kernels/lib$(NAME)kernel.so \
     $(BUILD)/kernels/lib$(NAME)kerneldebug.so
 
@@ -24,6 +25,14 @@ tsan: $(BUILD)/kernels/lib$(NAME)kernel.tsan.so \
     $(BUILD)/kernels/lib$(NAME)kerneldebug.tsan.so
 
 ptx: $($(NAME)_CUDA_PTXS)
+else
+all: missing-cuda
+asan: missing-cuda
+msan: missing-cuda
+ssan: missing-cuda
+tsan: missing-cuda
+ptx: missing-cuda
+endif
 
 ifeq ($(UNAME),Linux)
 $(foreach obj,$($(NAME)_CPP_OBJS), $(call sanobjects,$(obj:.o=))): CXXFLAGS+=-fPIC
