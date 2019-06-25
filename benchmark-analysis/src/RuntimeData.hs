@@ -10,12 +10,16 @@ module RuntimeData
     ) where
 
 import Control.Monad (unless)
-import Control.Monad.Catch (MonadMask, MonadThrow)
+import Control.Monad.Catch (MonadMask, MonadThrow, mask_)
 import Control.Monad.Logger (MonadLogger, logInfoN)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Data.Bool (bool)
-import System.Directory (canonicalizePath, doesDirectoryExist, doesFileExist)
+import System.Directory (canonicalizePath, doesFileExist)
 import System.FilePath ((</>))
+import qualified System.Posix.Files as Posix
+import System.Posix.IO (OpenMode(WriteOnly))
+import qualified System.Posix.IO as Posix
+import System.Posix.Types (Fd)
 
 import Exceptions
 import Paths_benchmark_analysis (getDataFileName)
@@ -52,18 +56,32 @@ getPythonScript script args = do
         requirements <- getDataFileName "runtime-data/requirements.txt"
         return (virtualenv, requirements)
 
-    exists <- liftIO $ doesDirectoryExist virtualenv
+    exists <- liftIO . doesFileExist $ virtualenv </> "bin" </> "python2.7"
+
     unless exists $ do
+        logInfoN $ "Creating virtualenv"
+        runProcess "virtualenv-2.7" [virtualenv]
+
+    let initialisedFile = virtualenv </> "initialised"
+
+    virtualenvInitialised <- liftIO $ doesFileExist $ initialisedFile
+    unless virtualenvInitialised $ do
         logInfoN $ "Initialising virtualenv"
-        runProcess "virtualenv" [virtualenv]
         pipExe <- liftIO $ getDataFileName "runtime-data/virtualenv/bin/pip"
         runProcess pipExe ["install", "--upgrade", "pip"]
         runProcess pipExe ["install", "-r", requirements]
+        mask_ . liftIO $ touchFile initialisedFile >>= Posix.closeFd
 
     liftIO $ do
-        pythonPath <- getDataFileName $ "runtime-data/virtualenv/bin/python"
+        pythonPath <- getDataFileName $ "runtime-data/virtualenv/bin/python2.7"
         scriptPath <- getDataFileName $ "runtime-data/scripts" </> script
         return $ proc pythonPath (scriptPath : args)
+  where
+    touchFile :: MonadIO m => FilePath -> m Fd
+    touchFile path = liftIO $
+        Posix.openFd path WriteOnly (Just Posix.stdFileMode) flags
+      where
+        flags = Posix.defaultFileFlags{Posix.exclusive = True}
 
 getBarPlotScript
     :: (MonadIO m, MonadLogger m, MonadMask m) => [String] -> m CreateProcess
