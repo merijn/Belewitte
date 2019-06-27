@@ -22,6 +22,8 @@ usage(int exitCode = EXIT_FAILURE)
     out << execName << " [--help | -h]" << endl;
     out << execName << " normalise [--directed | -d] [--undirected | -u] "
         << "<graph> [<graphs>...]" << endl;
+    out << execName << " mtx <graph> [<graphs>...]" << endl;
+    out << execName << " edge-list <graph> [<graphs>...]" << endl;
     out << execName << " lookup <map> <id> [<id>...]" << endl;
     out << execName << " revlookup <map> <id> [<id>...]" << endl;
     exit(exitCode);
