@@ -1,5 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 module InteractiveInput
@@ -7,18 +9,20 @@ module InteractiveInput
     , Input
     , runInput
     , liftSql
-    , withCompletion
-    , withProcessCompletion
-    , getInputWith
-    , getInputWithSqlCompletion
-    , getOptionalInput
-    , getReadInput
-    , getInput
+    , getInteractive
+    , getManyInteractive
+    , processCompleterText
+    , filepathInput
+    , sqlInput
+    , optionalInput
+    , readInput
+    , textInput
     ) where
 
 import qualified Control.Monad.Catch as Except
 import Control.Monad.Reader (ask, local)
 import Control.Monad.Trans (lift)
+import Data.Bool (bool)
 import Data.Char (toLower)
 import Data.Function (on)
 import Data.List (isPrefixOf)
@@ -27,6 +31,7 @@ import Database.Persist.Sqlite (Entity(..), EntityField, Unique)
 import qualified Database.Persist.Sqlite as Sql
 import Lens.Micro.Extras (view)
 import System.Console.Haskeline hiding (Handler)
+import System.Directory (doesFileExist)
 import Text.Read (readMaybe)
 
 import Core
@@ -37,6 +42,12 @@ import qualified RuntimeData
 data Completer m
     = SimpleCompletion (String -> m [Completion])
     | FileCompletion
+
+data InputQuery m a = InputQuery
+    { inputConvert :: Text -> m (Maybe a)
+    , inputCompleter :: forall x . Input m x -> Input m x
+    , inputError :: Text
+    }
 
 type Input m = InputT (ReaderT (Completer m) m)
 
@@ -97,55 +108,104 @@ withProcessCompletion args act = do
         handleIOException _ =
             "" <$ logWarnN "External tab-completion process failed to run"
 
-getInputWith
-    :: (MonadException m, MonadLogger m, MonadThrow m)
-    => (Text -> m (Maybe a)) -> Text -> Text -> InputT m a
-getInputWith convert errText prompt = go
+getInteractive
+    :: forall a m . (MonadException m, MonadIO m, MonadLogger m, MonadThrow m)
+    => InputQuery m a -> Text -> Input m a
+getInteractive InputQuery{..} prompt = inputCompleter go
   where
     go = getInputLine (T.unpack prompt ++ ": ") >>= \case
-            Nothing -> lift $ logThrowM StdinDisappeared
-            Just s -> lift (convert . T.stripEnd . T.pack $ s) >>= \case
+        Nothing -> lift $ logThrowM StdinDisappeared
+        Just s -> do
+            converter s >>= \case
                 Just r -> return r
-                Nothing -> outputStrLn (T.unpack errText) >> go
+                Nothing -> outputStrLn (T.unpack inputError) >> go
 
-getInputWithSqlCompletion
+    converter s = lift . lift $ inputConvert . T.stripEnd . T.pack $ s
+
+getManyInteractive
+    :: forall a m . (MonadException m, MonadIO m, MonadLogger m, MonadThrow m)
+    => InputQuery m a -> Text -> Input m [a]
+getManyInteractive InputQuery{..} prompt = inputCompleter $ do
+    outputStrLn (T.unpack prompt ++ ":\n")
+    go id
+  where
+    go results = getInputLine "> " >>= \case
+        Nothing -> lift $ logThrowM StdinDisappeared
+        Just "" -> return $ results []
+        Just s -> converter s >>= \case
+                Just r -> go (results . (r:))
+                Nothing -> do
+                    outputStrLn (T.unpack inputError <> "Empty line to end.")
+                    go results
+
+    converter s = lift . lift $ inputConvert . T.stripEnd . T.pack $ s
+
+
+processCompleterText
+    :: (MonadLogger m, MonadMask m, MonadUnliftIO m)
+    => [String] -> InputQuery m Text
+processCompleterText args = InputQuery
+    { inputConvert = checkEmpty
+    , inputCompleter = withProcessCompletion args
+    , inputError = "Name not found in database!"
+    }
+  where
+    checkEmpty :: Applicative m => Text -> m (Maybe Text)
+    checkEmpty txt
+        | T.null txt = pure Nothing
+        | otherwise = pure $ Just txt
+
+filepathInput
+    :: MonadIO m => InputQuery m FilePath
+filepathInput = InputQuery
+    { inputConvert = checkExists
+    , inputCompleter = withCompletion FileCompletion
+    , inputError = "Non-existent file!"
+    }
+  where
+    checkExists :: MonadIO m => Text -> m (Maybe FilePath)
+    checkExists txt = bool Nothing (Just path) <$> liftIO (doesFileExist path)
+      where
+        path = T.unpack txt
+
+sqlInput
     :: SqlRecord record
     => EntityField record Text
     -> (Text -> Unique record)
-    -> Text
-    -> Input SqlM (Entity record)
-getInputWithSqlCompletion field uniq prompt =
-  withCompletion (SimpleCompletion fromQuery) $
-    getInputWith (lift . Sql.getBy . uniq) err prompt
+    -> InputQuery SqlM (Entity record)
+sqlInput field uniq = InputQuery
+    { inputConvert = Sql.getBy . uniq
+    , inputCompleter = withCompletion (SimpleCompletion fromQuery)
+    , inputError = "Name not found in database!"
+    }
   where
-    err = "Name not found in database!"
     getFieldValue = view (Sql.fieldLens field)
     toCompletions = map $ simpleCompletion . T.unpack . getFieldValue
     fromQuery s =
       toCompletions <$> Sql.selectList [field `likeFilter` T.pack s] []
 
-getOptionalInput
-    :: (MonadException m, MonadLogger m, MonadThrow m)
-    => Text -> InputT m (Maybe Text)
-getOptionalInput = getInputWith checkEmpty "" -- Never fails
+optionalInput
+    :: (Applicative m)
+    => InputQuery m (Maybe Text)
+optionalInput = InputQuery
+    { inputConvert = checkEmpty
+    , inputCompleter = id
+    , inputError = ""
+    }
   where
-    checkEmpty :: MonadException m => Text -> m (Maybe (Maybe Text))
+    checkEmpty :: Applicative m => Text -> m (Maybe (Maybe Text))
     checkEmpty txt
-        | T.null txt = return $ Just Nothing
-        | otherwise = return . Just . Just $ txt
+        | T.null txt = pure $ Just Nothing
+        | otherwise = pure . Just . Just $ txt
 
-getReadInput
-    :: forall a m .
-    ( MonadException m
-    , MonadLogger m
-    , MonadThrow m
-    , Bounded a
-    , Enum a
-    , Read a
-    , Show a
-    ) => (a -> Bool) -> Text -> Input m a
-getReadInput f prompt = withCompletion (SimpleCompletion completions) $
-    getInputWith (return . readMaybe . T.unpack) "Parse error!" prompt
+readInput
+    :: forall a m . (Bounded a, Enum a, Read a, Show a, Monad m)
+    => (a -> Bool) -> InputQuery m a
+readInput f = InputQuery
+    { inputConvert = return . readMaybe . T.unpack
+    , inputCompleter = withCompletion (SimpleCompletion completions)
+    , inputError = "Parse error!"
+    }
   where
     allValues :: [a]
     allValues = filter f [minBound .. maxBound]
@@ -158,11 +218,14 @@ getReadInput f prompt = withCompletion (SimpleCompletion completions) $
       where
         isPrefix = isPrefixOf `on` map toLower
 
-getInput
-    :: (MonadException m, MonadLogger m, MonadThrow m) => Text -> InputT m Text
-getInput = getInputWith checkEmpty "Empty input not allowed!"
+textInput :: Applicative m => InputQuery m Text
+textInput = InputQuery
+    { inputConvert = checkEmpty
+    , inputCompleter = id
+    , inputError = "Empty input not allowed!"
+    }
   where
-    checkEmpty :: MonadException m => Text -> m (Maybe Text)
+    checkEmpty :: Applicative m => Text -> m (Maybe Text)
     checkEmpty txt
-        | T.null txt = return Nothing
-        | otherwise = return $ Just txt
+        | T.null txt = pure Nothing
+        | otherwise = pure $ Just txt

@@ -9,7 +9,6 @@ module Main(main) where
 
 import Control.Monad (forM_, guard, void)
 import Control.Monad.Catch (SomeException, onError, try)
-import Data.Bool (bool)
 import Data.Conduit ((.|), runConduit)
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.Text as C
@@ -34,13 +33,13 @@ import Schema
 
 addPlatform :: Input SqlM ()
 addPlatform = do
-    platformName <- getInput "Platform Slurm Name"
-    prettyName <- getOptionalInput "Platform Pretty Name"
+    platformName <- getInteractive textInput "Platform Slurm Name"
+    prettyName <- getInteractive optionalInput "Platform Pretty Name"
     liftSql . Sql.insert_ $ Platform platformName prettyName
 
 addGraphs :: [FilePath] -> Input SqlM ()
 addGraphs paths = do
-    datasetTag <- getInput "Dataset Tag"
+    datasetTag <- getInteractive textInput "Dataset Tag"
     liftSql . forM_ paths $ \path -> do
         liftIO $ doesFileExist path >>= guard
         let (graphName, ext) = splitExtension $ takeFileName path
@@ -49,55 +48,50 @@ addGraphs paths = do
 
 addAlgorithm :: Input SqlM ()
 addAlgorithm = do
-    algoName <- withProcessCompletion ["list","algorithms"] $
-        getInput "Algorithm Name"
-    prettyName <- getOptionalInput "Algorithm Pretty Name"
+    algoName <- getInteractive input "Algorithm Name"
+    prettyName <- getInteractive optionalInput "Algorithm Pretty Name"
     liftSql . Sql.insert_ $ Algorithm algoName prettyName
+  where
+    input = processCompleterText ["list","algorithms"]
 
 addImplementation :: Input SqlM ()
 addImplementation = do
-    Entity algoId Algorithm{..} <- getInputWithSqlCompletion
-        AlgorithmName UniqAlgorithm "Algorithm Name"
+    Entity algoId Algorithm{..} <- getInteractive algoInput "Algorithm Name"
+    implName <- getInteractive (implInput algorithmName) "Implementation Name"
 
-    let args = ["list","implementations","-a",T.unpack algorithmName]
-    implName <- withProcessCompletion args $ getInput "Implementation Name"
+    prettyName <- getInteractive optionalInput "Implementation Pretty Name"
+    flags <- getInteractive optionalInput "Flags"
 
-    prettyName <- getOptionalInput "Implementation Pretty Name"
-    flags <- getOptionalInput "Flags"
-
-    implType <- getReadInput (/=Builtin) "Implementation type"
-    runnable <- getReadInput (const True) "Runnable"
+    implType <- getInteractive (readInput (/=Builtin)) "Implementation type"
+    runnable <- getInteractive (readInput (const True)) "Runnable"
 
     liftSql . Sql.insert_ $
         Implementation algoId implName prettyName flags implType runnable
+  where
+    algoInput = sqlInput AlgorithmName UniqAlgorithm
+    implInput algorithmName = processCompleterText
+        ["list","implementations","-a",T.unpack algorithmName]
 
 addVariant :: Input SqlM ()
 addVariant = do
-    Entity algoId _ <- getInputWithSqlCompletion
-        AlgorithmName UniqAlgorithm "Algorithm Name"
-
-    variantName <- getInput "Variant Name"
-    flags <- getOptionalInput "Flags"
+    Entity algoId _ <- getInteractive algoInput "Algorithm Name"
+    variantName <- getInteractive textInput "Variant Name"
+    flags <- getInteractive optionalInput "Flags"
 
     let mkVariant gId = Variant gId algoId variantName flags Nothing False 0
 
     liftSql . runConduit $
-        Sql.selectKeys [] []
-        .| C.mapM_ (Sql.insert_ . mkVariant)
+        Sql.selectKeys [] [] .| C.mapM_ (Sql.insert_ . mkVariant)
+  where
+    algoInput = sqlInput AlgorithmName UniqAlgorithm
 
 importResults :: Input SqlM ()
 importResults = do
-    Entity platformId _ <- getInputWithSqlCompletion
-        PlatformName UniqPlatform "Platform Name"
+    Entity platformId _ <- getInteractive platformInput "Platform Name"
+    Entity algoId _ <- getInteractive algoInput "Algorithm Name"
+    Entity implId _ <- getInteractive (implInput algoId) "Implementation Name"
 
-    Entity algoId _ <- getInputWithSqlCompletion
-        AlgorithmName UniqAlgorithm "Algorithm Name"
-
-    Entity implId _ <- getInputWithSqlCompletion
-        ImplementationName (UniqImpl algoId) "Implementation Name"
-
-    filepath <- withCompletion FileCompletion $
-        getInputWith checkExists "Non-existent file!" "Result File"
+    filepath <- getInteractive filepathInput "Result File"
 
     timestamp <- liftIO getCurrentTime
     liftSql . runConduit $
@@ -107,10 +101,9 @@ importResults = do
         .| conduitParse externalResult
         .| C.mapM_ (insertResult platformId algoId implId timestamp)
   where
-    checkExists :: MonadIO m => Text -> m (Maybe FilePath)
-    checkExists txt = bool Nothing (Just path) <$> liftIO (doesFileExist path)
-      where
-        path = T.unpack txt
+    platformInput = sqlInput PlatformName UniqPlatform
+    algoInput = sqlInput AlgorithmName UniqAlgorithm
+    implInput algoId = sqlInput ImplementationName (UniqImpl algoId)
 
     insertResult
         :: Key Platform
