@@ -36,6 +36,7 @@ Library
   Hs-Source-Dirs:       src
   Exposed-Modules:      Core
                         Exceptions
+                        InteractiveInput
                         Migration
                         Model
                         OptionParsers
