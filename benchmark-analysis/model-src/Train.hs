@@ -3,7 +3,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 module Train
-    ( ModelStats(..)
+    ( ModelDescription(..)
+    , ModelStats(..)
     , TrainingConfig(..)
     , getTotalQuery
     , getTrainingQuery
@@ -60,6 +61,13 @@ data TrainingConfig = TrainConfig
     , trainStepProps :: Set Text
     , trainFraction :: Double
     , trainSeed :: Int
+    }
+
+data ModelDescription = ModelDesc
+    { modelName :: Text
+    , modelPrettyName :: Maybe Text
+    , modelDescription :: Maybe Text
+    , modelTrainConfig :: TrainingConfig
     }
 
 splitQuery
@@ -147,10 +155,13 @@ getModelStats modelId = do
 trainModel
     :: Key Algorithm
     -> Key Platform
-    -> TrainingConfig
+    -> ModelDescription
     -> SqlM (Key PredictionModel, Model)
-trainModel algoId platId trainCfg@TrainConfig{..} = do
-    trainQuery <- fmap reduceInfo <$> getTrainingQuery algoId platId trainCfg
+trainModel algoId platId ModelDesc{..} = do
+    let TrainConfig{..} = modelTrainConfig
+    trainQuery <- fmap reduceInfo <$>
+        getTrainingQuery algoId platId modelTrainConfig
+
     numEntries <- runSqlQueryCount trainQuery
 
     Just propCount <- fmap (VU.length . fst) <$> runSqlQuery trainQuery C.head
@@ -207,9 +218,17 @@ trainModel algoId platId trainCfg@TrainConfig{..} = do
 
             return (model, ModelStats{..})
 
-    modelId <- Sql.insert $
-        PredictionModel platId model trainFraction trainSeed modelUnknownCount
-                        timestamp
+    modelId <- Sql.insert $ PredictionModel
+        { predictionModelPlatformId = platId
+        , predictionModelName = modelName
+        , predictionModelPrettyName = modelPrettyName
+        , predictionModelDescription = modelDescription
+        , predictionModelModel = model
+        , predictionModelTrainFraction = trainFraction
+        , predictionModelTrainSeed = trainSeed
+        , predictionModelTotalUnknownCount = modelUnknownCount
+        , predictionModelTimestamp = timestamp
+        }
 
     forM_ (M.toList modelGraphPropImportance) $
         Sql.insert_ . uncurry (ModelGraphProperty modelId)

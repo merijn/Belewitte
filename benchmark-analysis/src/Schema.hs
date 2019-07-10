@@ -86,7 +86,7 @@ migrations =
     ]
 
 schemaVersion :: Int64
-schemaVersion = 1
+schemaVersion = 2
 
 currentSchema :: Migration
 currentSchema = mkMigration . map fst $ migrations

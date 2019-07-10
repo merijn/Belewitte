@@ -26,10 +26,14 @@ import Schema.Platform (PlatformId)
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
 PredictionModel
     platformId PlatformId
+    name Text
+    prettyName Text Maybe
+    description Text Maybe
     model Model
     trainFraction Double
     trainSeed Int
     totalUnknownCount Int
+    UniqModel name
     timestamp UTCTime
 
 ModelGraphProperty
@@ -63,5 +67,12 @@ migrations = mkMigrationLookup schema
     [ 0 .= schema $ do
         Sql.rawExecute [i|
 ALTER TABLE 'PredictionModel' RENAME COLUMN 'gpuId' TO 'platformId'
+|] []
+    , 1 .= schema $ do
+        Sql.rawExecute [i|
+ALTER TABLE 'PredictionModel' ADD COLUMN 'name' VARCHAR
+|] []
+        Sql.rawExecute [i|
+UPDATE 'PredictionModel' SET 'name' = "Model-" || id
 |] []
     ]

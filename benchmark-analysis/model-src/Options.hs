@@ -42,10 +42,7 @@ dropProps input db
 
 data ModelCommand
     = Train
-      { getAlgoId :: SqlM (Key Algorithm)
-      , getPlatformId :: SqlM (Key Platform)
-      , getConfig :: SqlM TrainingConfig
-      }
+      { getConfig :: SqlM TrainingConfig }
     | QueryModel
       { getModel :: SqlM (Key PredictionModel, Model) }
     | Validate
@@ -78,9 +75,8 @@ data ModelCommand
 
 commands :: String -> (InfoMod a, Parser ModelCommand)
 commands name = (,) docs . (<|>) hiddenCommands . hsubparser $ mconcat
-    [ subCommand "train" "train a model"
-        "Train a new model" $
-        Train <$> algorithmIdParser <*> platformIdParser <*> trainingConfig
+    [ subCommand "train" "train a model" "Train a new model" $
+        Train <$> trainingConfig
     , subCommand "query" "report model info"
         "Report model info & statistics" $ QueryModel <$> modelParser
     , subCommand "validate" "validate model accuracy"

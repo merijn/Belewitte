@@ -20,6 +20,7 @@ import qualified Data.Text.IO as T
 
 import Core
 import Evaluate (evaluateModel, compareImplementations, percent)
+import InteractiveInput
 import Model
 import Options
 import Query
@@ -60,11 +61,25 @@ querySink (Just suffix) name =
 
 main :: IO ()
 main = runSqlM commands $ \case
-    Train{getAlgoId,getPlatformId,getConfig} -> do
-        algoId <- getAlgoId
-        platformId <- getPlatformId
-        trainConfig <- getConfig
-        modelId <- fst <$> trainModel algoId platformId trainConfig
+    Train{getConfig} -> runInput $ do
+        let algoInput = sqlInput AlgorithmName UniqAlgorithm
+            platformInput = sqlInput PlatformName UniqPlatform
+
+        Entity algoId _ <- getInteractive algoInput "Algorithm Name"
+        Entity platformId _ <- getInteractive platformInput "Platform Name"
+
+        modelName <- getInteractive textInput "Model Name"
+        modelPrettyName <- getInteractive optionalInput "Model Pretty Name"
+
+        desc <- T.unlines <$> getManyInteractive textInput "Model Description"
+        let modelDescription
+                | T.null desc = Nothing
+                | otherwise = Just desc
+
+        modelTrainConfig <- liftSql getConfig
+
+        modelId <- liftSql $ fst <$> trainModel algoId platformId ModelDesc{..}
+
         liftIO $ print (fromSqlKey modelId)
 
     QueryModel{getModel} -> do
