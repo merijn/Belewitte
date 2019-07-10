@@ -27,6 +27,6 @@ mkMigration ents = mapM_ (migrate embeddedEnts) embeddedEnts
 mkMigrationLookup
     :: [EntityDef] -> [(Int64, MigrationAction)] -> Int64 -> MigrationAction
 mkMigrationLookup latestSchema (M.fromList -> migrationMap) = \i ->
-    case M.lookupLE i migrationMap of
+    case M.lookup i migrationMap of
         Nothing -> return latestSchema
-        Just (_, m) -> m
+        Just m -> m
