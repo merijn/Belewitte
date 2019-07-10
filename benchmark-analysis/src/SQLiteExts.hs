@@ -1,14 +1,15 @@
 {-# LANGUAGE CApiFFI #-}
 {-# LANGUAGE MonadFailDesugaring #-}
-module SQLiteExts (registerSqlFunctions) where
+module SQLiteExts (registerSqlFunctions, wrapSqliteExceptions) where
 
 import Control.Monad ((>=>), when)
-import Control.Monad.Catch (MonadThrow)
+import Control.Monad.Catch (MonadCatch, MonadThrow, handle, throwM)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Logger (MonadLogger)
 import qualified Control.Monad.Logger as Log
 import qualified Data.ByteString as BS
 import Data.Text.Encoding (decodeUtf8')
+import Database.Sqlite (SqliteException(..))
 import Foreign (Ptr, FunPtr, nullPtr, nullFunPtr)
 import Foreign.C (CInt(..), CString, withCString)
 
@@ -23,6 +24,19 @@ registerSqlFunctions sqlitePtr = mapM_ ($sqlitePtr)
     , createSqlAggregate 3 "int64_vector"
         int64_vector_step int64_vector_finalise
     ]
+
+wrapSqliteExceptions :: (MonadLogger m, MonadCatch m) => m r -> m r
+wrapSqliteExceptions = handle logUnwrappedSqliteException
+  where
+    logUnwrappedSqliteException exc
+        | Just (BenchmarkException e) <- fromException exc
+        = throwM e
+
+        | Just e@SqliteException{} <- fromException exc
+        = logThrowM $ PrettySqliteException e
+
+        | otherwise
+        = throwM exc
 
 foreign import ccall "sqlite-functions.h &randomFun"
     randomFun :: FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())

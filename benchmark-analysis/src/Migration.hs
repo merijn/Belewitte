@@ -3,9 +3,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Migration (checkMigration) where
 
-import Control.Exception (bracket)
 import Control.Monad (forM_, unless)
-import Control.Monad.Catch (MonadCatch, MonadThrow, catch)
+import Control.Monad.Catch (MonadMask, MonadThrow, bracket, catch, onError)
 import Control.Monad.IO.Unlift (MonadIO, MonadUnliftIO, withRunInIO)
 import Control.Monad.Logger (MonadLogger)
 import qualified Control.Monad.Logger as Log
@@ -27,10 +26,13 @@ import Schema
 
 type SqlM m = ReaderT (RawSqlite SqlBackend) m
 
+showText :: Show a => a -> Text
+showText = T.pack . show
+
 setPragma :: (MonadIO m, Show v) => Text -> v -> SqlM m ()
 setPragma pragma val = Sql.liftPersist $ Sql.rawExecute query []
   where
-    query = "PRAGMA " <> pragma <> " = " <> T.pack (show val)
+    query = "PRAGMA " <> pragma <> " = " <> showText val
 
 withSilencedHandle :: MonadUnliftIO m => Handle -> m a -> m a
 withSilencedHandle hnd action = withRunInIO $ \runInIO ->
@@ -66,7 +68,7 @@ checkSchema schema = do
     unless noChanges $ logThrowM WrongSchema
 
 validateSchema
-    :: (MonadCatch m, MonadIO m, MonadLogger m, MonadThrow m)
+    :: (MonadIO m, MonadLogger m, MonadMask m)
     => Bool -> Int64 -> SqlM m Bool
 validateSchema _ v
     | v > schemaVersion = logThrowM $ TooNew v
@@ -78,37 +80,43 @@ validateSchema migrateSchema version
         Log.logInfoN $ "Migrating schema."
         forM_ [version..schemaVersion - 1] $ \n -> do
             Log.logInfoN $ mconcat
-                [ "Migrating file from schema version ", T.pack (show n)
-                , " to version " , T.pack (show (n+1)), "." ]
+                [ "Migrating file from schema version ", showText n
+                , " to version " , showText (n+1), "." ]
 
-            Sql.rawExecute "BEGIN TRANSACTION" []
-            setPragma "defer_foreign_keys" (1 :: Int64)
-            migration <- Sql.liftPersist $ do
-                migration <- schemaUpdateForVersion n
-                migration <$ silencedUnsafeMigration migration
+            reportMigrationFailure n $ do
+                Sql.rawExecute "BEGIN TRANSACTION" []
+                setPragma "defer_foreign_keys" (1 :: Int64)
+                migration <- Sql.liftPersist $ do
+                    migration <- schemaUpdateForVersion n
+                    migration <$ silencedUnsafeMigration migration
 
-            checkSchema migration `catch` migrationFailed (n+1)
-            Sql.rawExecute "COMMIT TRANSACTION" []
-            setPragma "user_version" $ (n + 1 :: Int64)
+                checkSchema migration `catch` migrationFailed
+
+                Sql.rawExecute "COMMIT TRANSACTION" []
+                setPragma "user_version" $ (n + 1 :: Int64)
 
             Log.logInfoN $ mconcat
-                [ "Succesfully migrated to version ", T.pack (show (n+1)), "!"]
+                [ "Succesfully migrated to version ", showText (n+1), "!"]
 
         Log.logInfoN $ "Migration complete!"
   where
-    migrationFailed
-        :: (MonadIO m, MonadLogger m, MonadThrow m)
-        => Int64 -> SchemaWrong -> SqlM m a
-    migrationFailed n WrongSchema = do
+    reportMigrationFailure
+        :: (MonadIO m, MonadLogger m, MonadMask m)
+        => Int64 -> SqlM m a -> SqlM m a
+    reportMigrationFailure n act = onError act $ do
         Sql.rawExecute "ROLLBACK TRANSACTION" []
         Log.logErrorN $ mconcat
-            [ "Migration failed while migrating to version ", T.pack (show n)
-            , ".\nRolling back to version ", T.pack (show (n-1))
+            [ "Migration failed while migrating to version ", showText (n+1)
+            , ".\nRolling back to version ", showText n
             ]
-        logThrowM AbortMigration
+
+    migrationFailed
+        :: (MonadIO m, MonadLogger m, MonadThrow m)
+        => SchemaWrong -> SqlM m a
+    migrationFailed WrongSchema = logThrowM AbortMigration
 
 checkMigration
-    :: (MonadCatch m, MonadIO m, MonadLogger m, MonadThrow m)
+    :: (MonadIO m, MonadLogger m, MonadMask m)
     => Bool -> SqlM m Bool
 checkMigration migrateSchema = do
     tableCount <- querySingleValue "SELECT COUNT(*) FROM sqlite_master" []

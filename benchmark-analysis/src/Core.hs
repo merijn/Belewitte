@@ -171,32 +171,33 @@ topLevelHandler quiet exc
 runSqlMWithOptions :: Options a -> (a -> SqlM b) -> IO b
 runSqlMWithOptions Options{..} work = do
     setUncaughtExceptionHandler $ topLevelHandler (logVerbosity > 0)
-    mapException PrettySqliteException $ do
-        getNumProcessors >>= setNumCapabilities
-        withQueryLog $ \mHnd -> runStack (Nothing, mHnd) $ do
-            sqlitePtr <- asks $ getSqlitePtr . Lens.view rawSqliteConnection
+    getNumProcessors >>= setNumCapabilities
+    withQueryLog $ \mHnd -> runStack mHnd . wrapSqliteExceptions $ do
+        sqlitePtr <- asks $ getSqlitePtr . Lens.view rawSqliteConnection
 
-            registerSqlFunctions sqlitePtr
+        registerSqlFunctions sqlitePtr
 
-            didMigrate <- checkMigration migrateSchema
+        didMigrate <- checkMigration migrateSchema
 
-            -- Wait longer before timing out query steps
-            rawExecute "PRAGMA busy_timeout = 1000" []
+        -- Wait longer before timing out query steps
+        rawExecute "PRAGMA busy_timeout = 1000" []
 
-            -- Compacts and reindexes the database when request
-            when (vacuumDb || didMigrate) $ rawExecute "VACUUM" []
+        -- Compacts and reindexes the database when request
+        when (vacuumDb || didMigrate) $ rawExecute "VACUUM" []
 
-            workResult <- work task
+        workResult <- work task
 
-            -- Runs the ANALYZE command and updates query planner
-            rawExecute "PRAGMA optimize" []
+        -- Runs the ANALYZE command and updates query planner
+        rawExecute "PRAGMA optimize" []
 
-            return workResult
+        return workResult
   where
     runStack
-        :: (Maybe Text, Maybe Handle) -> SqlM a -> IO a
-    runStack config =
+        :: Maybe Handle -> SqlM a -> IO a
+    runStack mHnd =
       runLog . runBase config . withRawSqliteConnInfo connInfo . runReaderT
+      where
+        config = (Nothing, mHnd)
 
     withQueryLog :: (Maybe Handle -> IO r) -> IO r
     withQueryLog f = case queryMode of

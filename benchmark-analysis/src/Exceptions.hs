@@ -10,8 +10,7 @@ module Exceptions
     , module Exceptions
     ) where
 
-import Control.Monad.Catch
-    (Exception(..), MonadCatch, MonadThrow, SomeException)
+import Control.Monad.Catch (Exception(..), MonadThrow, SomeException)
 import Control.Monad.Logger (MonadLogger, logErrorN)
 import qualified Control.Monad.Catch as Except
 import Data.Text (Text)
@@ -24,10 +23,6 @@ import qualified Data.Text.Prettyprint.Doc.Util as Pretty
 import Data.Typeable (Typeable, cast)
 import Database.Persist.Types (SqlType(..), PersistValue(..))
 import Database.Sqlite (SqliteException(..))
-
-mapException
-    :: (Exception e1, Exception e2, MonadCatch m) => (e1 -> e2) -> m a -> m a
-mapException f = Except.handle (Except.throwM . f)
 
 logThrowM :: (Exception e, MonadLogger m, MonadThrow m, Pretty e) => e -> m r
 logThrowM exc = do
