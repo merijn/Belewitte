@@ -188,9 +188,10 @@ BOOST_PREREQ:=$(PREFIX)/include/boost/
 BOOST_CXX_FLAGS:=-I$(PREFIX)/include -isystem$(PREFIX)/include
 BOOST_LD_FLAGS:=-L$(PREFIX)/lib -L$(PREFIX)/lib64
 ifdef CXX_IS_CLANG
-BOOST_LD_FLAGS+= -rpath $(PREFIX)/lib -rpath $(PREFIX)/lib64
+BOOST_LD_FLAGS+= -rpath $(abspath $(PREFIX))/lib -rpath $(abspath $(PREFIX))/lib64
 else
-BOOST_LD_FLAGS+= -Wl,-rpath -Wl,$(PREFIX)/lib -Wl,-rpath -Wl,$(PREFIX)/lib64
+BOOST_LD_FLAGS+= -Wl,-rpath -Wl,$(abspath $(PREFIX))/lib -Wl,-rpath \
+                 -Wl,$(abspath $(PREFIX))/lib64
 endif
 
 $(DOWNLOAD)/$(BOOST_NAME).tar.gz: | $(DOWNLOAD)/
