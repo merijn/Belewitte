@@ -5,7 +5,7 @@
 {-# LANGUAGE TupleSections #-}
 module Jobs (propertyJobs, processProperty, timingJobs, processTiming) where
 
-import Control.Monad (when)
+import Control.Monad (unless, when)
 import Control.Monad.Trans (lift)
 import Crypto.Hash (Digest, MD5)
 import Crypto.Hash.Conduit (hashFile)
@@ -167,33 +167,38 @@ processTiming platformId (varId, implId, hash, var) = do
     logInfoN $ "Timing: " <> var
     timestamp <- liftIO getCurrentTime
     resultHash <- computeHash outputFile
+    liftIO $ removeFile outputFile
 
-    if resultHash /= hash
-       then do
-           logErrorN . mconcat $
+    let correct = resultHash == hash
+        mWrongHash
+            | correct = Nothing
+            | otherwise = Just resultHash
+
+    unless correct $ do
+        logErrorN . mconcat $
             [ "Implementation #", showSqlKey implId
             , " has wrong results for variant #", showSqlKey varId
             , " on Platform #", showSqlKey platformId ]
-        else do
-            liftIO $ removeFile outputFile
-            runConduit $
-                C.sourceFile timingFile
-                .| C.decode C.utf8
-                .| C.map (T.replace "," "")
-                .| conduitParse timer
-                .| C.mapM_ (insertTiming timestamp)
-            liftIO $ removeFile timingFile
+
+    runConduit $
+        C.sourceFile timingFile
+        .| C.decode C.utf8
+        .| C.map (T.replace "," "")
+        .| conduitParse timer
+        .| C.mapM_ (insertTiming timestamp mWrongHash)
+
+    liftIO $ removeFile timingFile
 
     logInfoN $ "Timing done: " <> var
   where
     timingFile = T.unpack var <> ".timings"
     outputFile = T.unpack var <> ".output"
 
-    insertTiming :: UTCTime -> Timer -> SqlM ()
-    insertTiming ts (TotalTiming Timing{..}) = Sql.insert_ $
+    insertTiming :: UTCTime -> Maybe Hash -> Timer -> SqlM ()
+    insertTiming ts mWrongHash (TotalTiming Timing{..}) = Sql.insert_ $
         TotalTimer platformId varId implId name minTime avgTime maxTime stddev
-                   ts
+                   ts mWrongHash
 
-    insertTiming ts (StepTiming n Timing{..}) = Sql.insert_ $
+    insertTiming ts mWrongHash (StepTiming n Timing{..})= Sql.insert_ $
         StepTimer platformId varId n implId name minTime avgTime maxTime stddev
-                  ts
+                  ts mWrongHash

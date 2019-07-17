@@ -25,6 +25,7 @@ import qualified Schema.Utils as Utils
 import Schema.Implementation (ImplementationId)
 import Schema.Platform (PlatformId)
 import Schema.Variant (VariantId)
+import Types
 
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
 TotalTimer
@@ -37,6 +38,7 @@ TotalTimer
     maxTime Double
     stdDev Double
     timestamp UTCTime
+    wrongResult Hash Maybe
     Primary platformId variantId implId name
     deriving Eq Show
 
@@ -51,6 +53,7 @@ StepTimer
     maxTime Double
     stdDev Double
     timestamp UTCTime
+    wrongResult Hash Maybe
     Primary platformId variantId stepId implId name
     deriving Eq Show
 |]

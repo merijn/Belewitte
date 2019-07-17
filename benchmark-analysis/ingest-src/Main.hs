@@ -123,6 +123,7 @@ importResults = do
 
         Sql.insert_ $
           TotalTimer platId varId implId name minTime avgTime maxTime stddev ts
+                     Nothing
       where
         --FIXME get from command
         variantName
