@@ -159,7 +159,7 @@ else
 	$(AT)$(CABAL) --builddir="$(abspath $(BUILD)/haskell/)" \
 	    v2-build all $(if $(AT),2>/dev/null >/dev/null,)
 
-$(CABALCONFIG): $(BASE)/Config.mk
+$(CABALCONFIG): $(BASE)/Config.mk $(BASE)/cabal.project.freeze
 	$(PRINTF) " CABAL\tconfigure\n"
 	$(AT)$(CABAL) --builddir="$(abspath $(BUILD)/haskell/)" v2-update \
 	    $(if $(AT),2>/dev/null >/dev/null,)
