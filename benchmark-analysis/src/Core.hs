@@ -47,7 +47,7 @@ import Data.Conduit (ConduitT, (.|), runConduitRes)
 import qualified Data.Conduit.Combinators as C
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
-import Database.Persist.Sqlite hiding (Connection)
+import Database.Persist.Sqlite
 import Database.Sqlite.Internal
 import Data.Int (Int64)
 import Data.Maybe (fromMaybe)
@@ -230,7 +230,7 @@ showSqlKey = showText . fromSqlKey
 
 likeFilter :: EntityField record Text -> Text -> Filter record
 likeFilter field val =
-  Filter field (Left $ T.concat ["%", val, "%"]) (BackendSpecificFilter "like")
+  Filter field (FilterValue $ T.concat ["%", val, "%"]) (BackendSpecificFilter "like")
 
 whenNotExists
     :: SqlRecord record
@@ -239,7 +239,9 @@ whenNotExists filters act = lift (selectFirst filters []) >>= \case
     Just _ -> return ()
     Nothing -> act
 
-getUniq :: SqlRecord record => record -> SqlM (Key record)
+getUniq
+    :: (SqlRecord record, OnlyOneUniqueKey record)
+    => record -> SqlM (Key record)
 getUniq record = do
     result <- getBy =<< onlyUnique record
     case result of
@@ -247,7 +249,7 @@ getUniq record = do
         Just (Entity k _) -> return k
 
 insertUniq
-    :: (SqlRecord record, Eq record, Show record)
+    :: (SqlRecord record, AtLeastOneUniqueKey record, Eq record, Show record)
     => record -> SqlM ()
 insertUniq record = do
     result <- insertBy record

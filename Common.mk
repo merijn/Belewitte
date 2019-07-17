@@ -166,6 +166,7 @@ $(CABALCONFIG): $(BASE)/Config.mk $(BASE)/cabal.project.freeze
 	$(AT)$(CABAL) --builddir="$(abspath $(BUILD)/haskell/)" \
 	    --with-compiler="$(GHC)" -j24 v2-configure \
 	    $(if $(AT),2>/dev/null >/dev/null,)
+	$(AT)rm $(CABALCONFIG)~
 
 .PHONY: report-cabal
 report-cabal:

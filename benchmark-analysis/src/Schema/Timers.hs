@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -8,6 +9,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Schema.Timers where
 
 import Data.String.Interpolate.IsString (i)
@@ -17,7 +19,8 @@ import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Schema.Utils (Int64, MigrationAction, (.=), mkMigrationLookup)
+import Schema.Utils (EntityDef, Int64, MonadMigrate, (.=))
+import qualified Schema.Utils as Utils
 
 import Schema.Implementation (ImplementationId)
 import Schema.Platform (PlatformId)
@@ -52,13 +55,13 @@ StepTimer
     deriving Eq Show
 |]
 
-migrations :: Int64 -> MigrationAction
-migrations = mkMigrationLookup schema
+migrations :: MonadMigrate m => Int64 -> m [EntityDef]
+migrations = Utils.mkMigrationLookup schema
     [ 0 .= schema $ do
-        Sql.rawExecute [i|
+        Utils.executeMigrationSql [i|
 ALTER TABLE 'TotalTimer' RENAME COLUMN 'gpuId' TO 'platformId'
-|] []
-        Sql.rawExecute [i|
+|]
+        Utils.executeMigrationSql [i|
 ALTER TABLE 'StepTimer' RENAME COLUMN 'gpuId' TO 'platformId'
-|] []
+|]
     ]

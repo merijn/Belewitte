@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MonadFailDesugaring #-}
@@ -5,13 +6,15 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Schema.Algorithm where
 
 import Data.Text (Text)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Schema.Utils (Int64, MigrationAction, mkMigrationLookup)
+import Schema.Utils (EntityDef, Int64, MonadMigrate)
+import qualified Schema.Utils as Utils
 
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
 Algorithm
@@ -21,5 +24,5 @@ Algorithm
     deriving Eq Show
 |]
 
-migrations :: Int64 -> MigrationAction
-migrations = mkMigrationLookup schema []
+migrations :: MonadMigrate m => Int64 -> m [EntityDef]
+migrations = Utils.mkMigrationLookup schema []

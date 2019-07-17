@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -6,6 +7,9 @@ module Schema
     , Hash(..)
     , ImplType(..)
     , Model
+    , MonadMigrate
+    , executeMigrationSql
+    , liftMigration
     , PersistValue(..)
     , toPersistValue
     , Text
@@ -34,9 +38,11 @@ import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Database.Persist.Sql
     (EntityDef, Migration, PersistValue(..), SqlBackend, toPersistValue)
+import Database.Persist.Sqlite (RawSqlite)
 
 import Model (Model)
-import Schema.Utils (MigrationAction, mkMigration)
+import Schema.Utils
+    (MonadMigrate, executeMigrationSql, liftMigration, mkMigration)
 import Types
 
 import Schema.Algorithm hiding (migrations, schema)
@@ -73,7 +79,7 @@ getImplName :: Implementation -> Text
 getImplName Implementation{implementationName,implementationPrettyName} =
   fromMaybe implementationName implementationPrettyName
 
-migrations :: [([EntityDef], Int64 -> MigrationAction)]
+migrations :: MonadMigrate m => [([EntityDef], Int64 -> m [EntityDef])]
 migrations =
     [ (Platform.schema, Platform.migrations)
     , (Graph.schema, Graph.migrations)
@@ -88,8 +94,11 @@ migrations =
 schemaVersion :: Int64
 schemaVersion = 2
 
-currentSchema :: Migration
-currentSchema = mkMigration . map fst $ migrations
+type MigrationAction = ReaderT (RawSqlite SqlBackend) IO [EntityDef]
 
-schemaUpdateForVersion :: Int64 -> ReaderT SqlBackend IO Migration
+currentSchema :: Migration
+currentSchema = mkMigration $ map fst
+    (migrations :: [([EntityDef], Int64 -> MigrationAction)])
+
+schemaUpdateForVersion :: MonadMigrate m => Int64 -> m Migration
 schemaUpdateForVersion n = mkMigration <$> mapM (($n) . snd) migrations

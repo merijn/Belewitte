@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
@@ -7,13 +8,15 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Schema.Properties where
 
 import Data.Text (Text)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Schema.Utils (Int64, MigrationAction, mkMigrationLookup)
+import Schema.Utils (EntityDef, Int64, MonadMigrate)
+import qualified Schema.Utils as Utils
 
 import Schema.Graph (GraphId)
 import Schema.Variant (VariantId)
@@ -24,6 +27,7 @@ GraphProp
     property Text
     value Double
     Primary graphId property
+    UniqGraphProp graphId property
     deriving Eq Show
 
 StepProp
@@ -32,8 +36,9 @@ StepProp
     property Text
     value Double
     Primary variantId stepId property
+    UniqStepProp variantId stepId property
     deriving Eq Show
 |]
 
-migrations :: Int64 -> MigrationAction
-migrations = mkMigrationLookup schema []
+migrations :: MonadMigrate m => Int64 -> m [EntityDef]
+migrations = Utils.mkMigrationLookup schema []

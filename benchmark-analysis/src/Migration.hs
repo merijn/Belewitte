@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -5,32 +6,27 @@ module Migration (checkMigration) where
 
 import Control.Monad (forM_, unless)
 import Control.Monad.Catch (MonadMask, MonadThrow, bracket, catch, onError)
-import Control.Monad.IO.Unlift (MonadIO, MonadUnliftIO, withRunInIO)
+import Control.Monad.IO.Unlift (MonadUnliftIO, withRunInIO)
 import Control.Monad.Logger (MonadLogger)
 import qualified Control.Monad.Logger as Log
-import Control.Monad.Reader (ReaderT)
 import Data.Int (Int64)
 import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc ((<+>))
 import qualified Data.Text.Prettyprint.Doc as Pretty
 import Data.Typeable (Typeable)
-import Database.Persist.Sql
-    (Migration, PersistField, Single(Single), SqlBackend)
+import Database.Persist.Sql (Migration, PersistField, Single(Single))
 import qualified Database.Persist.Sql as Sql
-import Database.Persist.Sqlite (RawSqlite)
 import GHC.IO.Handle (hDuplicate, hDuplicateTo)
 import System.IO (Handle, IOMode(WriteMode), hClose, stderr, withFile)
 
 import Exceptions
 import Schema
 
-type SqlM m = ReaderT (RawSqlite SqlBackend) m
-
 showText :: Show a => a -> Text
 showText = T.pack . show
 
-setPragma :: (MonadIO m, Show v) => Text -> v -> SqlM m ()
-setPragma pragma val = Sql.liftPersist $ Sql.rawExecute query []
+setPragma :: (MonadMigrate m, Show v) => Text -> v -> m ()
+setPragma pragma val = executeMigrationSql query
   where
     query = "PRAGMA " <> pragma <> " = " <> showText val
 
@@ -46,30 +42,30 @@ withSilencedHandle hnd action = withRunInIO $ \runInIO ->
         hDuplicateTo oldStdErr hnd
         hClose oldStdErr
 
-silencedUnsafeMigration :: Migration -> ReaderT SqlBackend IO ()
-silencedUnsafeMigration m = withSilencedHandle stderr $ do
+silencedUnsafeMigration :: MonadMigrate m => Migration -> m ()
+silencedUnsafeMigration m = liftMigration . withSilencedHandle stderr $ do
     Sql.runMigrationUnsafe m
 
 querySingleValue
-    :: (MonadIO m, MonadLogger m, MonadThrow m, PersistField a, Show a)
+    :: (MonadMigrate m, MonadLogger m, MonadThrow m, PersistField a, Show a)
     => Text
     -> [PersistValue]
-    -> SqlM m a
+    -> m a
 querySingleValue query args = do
-    result <- Sql.liftPersist $ Sql.rawSql query args
+    result <- liftMigration $ Sql.rawSql query args
     case result of
         [Single v] -> return v
         v -> logThrowM . ExpectedSingleValue query $ show v
 
 checkSchema
-    :: (MonadIO m, MonadLogger m, MonadThrow m) => Migration -> SqlM m ()
+    :: (MonadMigrate m, MonadLogger m, MonadThrow m) => Migration -> m ()
 checkSchema schema = do
-    noChanges <- null <$> Sql.liftPersist (Sql.getMigration schema)
+    noChanges <- null <$> liftMigration (Sql.getMigration schema)
     unless noChanges $ logThrowM WrongSchema
 
 validateSchema
-    :: (MonadIO m, MonadLogger m, MonadMask m)
-    => Bool -> Int64 -> SqlM m Bool
+    :: (MonadMigrate m, MonadLogger m, MonadMask m)
+    => Bool -> Int64 -> m Bool
 validateSchema _ v
     | v > schemaVersion = logThrowM $ TooNew v
     | v == schemaVersion = False <$ checkSchema currentSchema
@@ -84,15 +80,15 @@ validateSchema migrateSchema version
                 , " to version " , showText (n+1), "." ]
 
             reportMigrationFailure n $ do
-                Sql.rawExecute "BEGIN TRANSACTION" []
+                executeMigrationSql "BEGIN TRANSACTION"
                 setPragma "defer_foreign_keys" (1 :: Int64)
-                migration <- Sql.liftPersist $ do
-                    migration <- schemaUpdateForVersion n
-                    migration <$ silencedUnsafeMigration migration
+
+                migration <- schemaUpdateForVersion n
+                silencedUnsafeMigration migration
 
                 checkSchema migration `catch` migrationFailed
 
-                Sql.rawExecute "COMMIT TRANSACTION" []
+                executeMigrationSql "COMMIT TRANSACTION"
                 setPragma "user_version" $ (n + 1 :: Int64)
 
             Log.logInfoN $ mconcat
@@ -101,28 +97,26 @@ validateSchema migrateSchema version
         Log.logInfoN $ "Migration complete!"
   where
     reportMigrationFailure
-        :: (MonadIO m, MonadLogger m, MonadMask m)
-        => Int64 -> SqlM m a -> SqlM m a
+        :: (MonadMigrate m, MonadLogger m, MonadMask m) => Int64 -> m a -> m a
     reportMigrationFailure n act = onError act $ do
-        Sql.rawExecute "ROLLBACK TRANSACTION" []
+        executeMigrationSql "ROLLBACK TRANSACTION"
         Log.logErrorN $ mconcat
             [ "Migration failed while migrating to version ", showText (n+1)
             , ".\nRolling back to version ", showText n
             ]
 
     migrationFailed
-        :: (MonadIO m, MonadLogger m, MonadThrow m)
-        => SchemaWrong -> SqlM m a
+        :: (MonadMigrate m, MonadLogger m, MonadThrow m) => SchemaWrong -> m a
     migrationFailed WrongSchema = logThrowM AbortMigration
 
 checkMigration
-    :: (MonadIO m, MonadLogger m, MonadMask m)
-    => Bool -> SqlM m Bool
+    :: (MonadMigrate m, MonadLogger m, MonadMask m)
+    => Bool -> m Bool
 checkMigration migrateSchema = do
     tableCount <- querySingleValue "SELECT COUNT(*) FROM sqlite_master" []
     case tableCount :: Int64 of
         0 -> do
-            Sql.liftPersist $ Sql.runMigrationSilent currentSchema
+            liftMigration $ Sql.runMigrationSilent currentSchema
             checkSchema currentSchema
             False <$ setPragma "user_version" schemaVersion
         _ -> do

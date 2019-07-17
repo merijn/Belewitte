@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MonadFailDesugaring #-}
@@ -6,6 +7,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Schema.Platform where
 
 import Data.String.Interpolate.IsString (i)
@@ -14,7 +16,8 @@ import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Schema.Utils (Int64, MigrationAction, (.=), mkMigrationLookup)
+import Schema.Utils (EntityDef, Int64, MonadMigrate, (.=))
+import qualified Schema.Utils as Utils
 
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
 Platform
@@ -24,10 +27,10 @@ Platform
     deriving Eq Show
 |]
 
-migrations :: Int64 -> MigrationAction
-migrations = mkMigrationLookup schema
+migrations :: MonadMigrate m => Int64 -> m [EntityDef]
+migrations = Utils.mkMigrationLookup schema
     [ 0 .= schema $ do
-        Sql.rawExecute [i|
+        Utils.executeMigrationSql [i|
 ALTER TABLE 'GPU' RENAME TO 'Platform'
-|] []
+|]
     ]
