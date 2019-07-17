@@ -14,7 +14,7 @@ import Control.Monad.Catch (MonadMask, MonadThrow, mask_)
 import Control.Monad.Logger (MonadLogger, logInfoN)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Data.Bool (bool)
-import System.Directory (canonicalizePath, doesFileExist)
+import System.Directory (canonicalizePath, doesDirectoryExist, doesFileExist)
 import System.FilePath ((</>))
 import qualified System.Posix.Files as Posix
 import System.Posix.IO (OpenMode(WriteOnly))
@@ -38,7 +38,7 @@ getKernelExecutable = getKernelExecutableMaybe >>= maybe raiseError return
 getKernelLibPathMaybe :: MonadIO m => m (Maybe FilePath)
 getKernelLibPathMaybe = liftIO $ do
     libPath <- getDataFileName "runtime-data/kernels"
-    bool Nothing (Just libPath) <$> doesFileExist libPath
+    bool Nothing (Just libPath) <$> doesDirectoryExist libPath
 
 getKernelLibPath :: (MonadIO m, MonadLogger m, MonadThrow m) => m FilePath
 getKernelLibPath = getKernelLibPathMaybe >>= maybe raiseError return
