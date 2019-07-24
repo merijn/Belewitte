@@ -4,8 +4,12 @@
 #include "options/Options.hpp"
 
 struct AlgorithmConfig {
+    const std::string commit;
+
   protected:
-    AlgorithmConfig() : run_count(1)
+    AlgorithmConfig(const std::string& commitHash)
+      : commit(commitHash)
+      , run_count(1)
     {
         options.add('n', "count", "NUM", run_count,
                     "Number of times to run algorithm.");

@@ -40,6 +40,16 @@ $($(NAME)_CUDA_OBJS) $(DEST)/device.o: NVCCHOSTCXXFLAGS+=-fPIC
 $($(NAME)_CUDA_DEBUG_OBJS) $(DEST)/device-debug.o: NVCCHOSTCXXFLAGS+=-fPIC
 endif
 
+$(DEST)/version: NAME:=$(NAME)
+$(DEST)/version: $(patsubst %, $(SRCDIR)/%, $($(NAME)_CPP_HEADERS) \
+                                            $($(NAME)_CPP_SRCS) \
+                                            $($(NAME)_CUDA_SRCS)) | $(DEST)/
+	$(PRINTF) " HASH\t$(NAME)\n"
+	$(AT)$(BASE)/report-kernel-commit.sh $(NAME) >$@
+
+$($(NAME)_CPP_OBJS): $(DEST)/version
+$($(NAME)_CPP_OBJS): CXXFLAGS+=-DKERNEL_COMMIT=\"$$(cat $(DEST)/version)\"
+
 $(BUILD)/kernels/lib$(NAME)kernel.so: $($(NAME)_CPP_OBJS) $($(NAME)_CUDA_OBJS) \
     $(DEST)/device.o | $(BUILD)/kernels/
 	$(make-dynamic)

@@ -31,7 +31,8 @@ struct BFSConfig : public TemplateConfig<Platform,Vertex,Edge>
     Kernel<int*,int> kernel;
 
     BFSConfig(Kernel<int*,int> k)
-    : root(0)
+    : Config(KERNEL_COMMIT)
+    , root(0)
     , absFrontier("frontier abs", *this)
     , relFrontier("frontier rel", *this)
     , absVisited("visited abs", *this)

@@ -15,6 +15,7 @@ endif
 
 include $(BASE)/Rules.mk
 
+$(NAME)_CPP_HEADERS:=$(notdir $(wildcard $(SRCDIR)/*.hpp))
 $(NAME)_CPP_SRCS:=$(notdir $(wildcard $(SRCDIR)/*.cpp))
 $(NAME)_CPP_OBJS:=$(patsubst %.cpp, $(DEST)/%.o, $($(NAME)_CPP_SRCS))
 

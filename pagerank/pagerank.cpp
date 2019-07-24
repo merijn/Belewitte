@@ -34,7 +34,7 @@ struct PageRank : public TemplateConfig<Platform,Vertex,Edge>
     Kernel<float*,float*,bool> consolidate;
 
     PageRank(Kernel<float*,float*> k, Kernel<float*,float*,bool> c)
-      : kernel(k), consolidate(c)
+      : Config(KERNEL_COMMIT), kernel(k), consolidate(c)
     {}
 
     virtual void runImplementation(std::ofstream& outputFile) override
