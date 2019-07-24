@@ -52,7 +52,7 @@ $(BUILD)/kernels/lib$(NAME)kerneldebug.so: $($(NAME)_CPP_OBJS) \
     $($(NAME)_CUDA_DEBUG_OBJS) $(DEST)/device-debug.o | $(BUILD)/kernels/
 	$(make-dynamic)
 
-$(BUILD)/kernels/lib$(NAME)kerneldebug%.so: $($(NAME)_CPP_OBJS:.0=%.o) \
+$(BUILD)/kernels/lib$(NAME)kerneldebug%.so: $($(NAME)_CPP_OBJS:.o=%.o) \
     $($(NAME)_CUDA_DEBUG_OBJS) $(DEST)/device-debug.o | $(BUILD)/kernels/
 	$(make-dynamic)
 
