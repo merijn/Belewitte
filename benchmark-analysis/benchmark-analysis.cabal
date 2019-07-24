@@ -111,7 +111,7 @@ Library
                ,        optparse-applicative == 0.14.0.*
                ,        persistent == 2.10.*
                ,        persistent-template >= 2.7.2 && < 2.8
-               ,        persistent-sqlite >= 2.10.2 && < 2.11
+               ,        persistent-sqlite >= 2.10.4 && < 2.11
                ,        prettyprinter == 1.2.*
                ,        prettyprinter-ansi-terminal == 1.1.1.*
                ,        process == 1.6.*
@@ -162,7 +162,7 @@ Executable Ingest
                ,        monad-logger == 0.3.28.*
                ,        memory == 0.14.*
                ,        mtl == 2.2.1
-               ,        persistent-sqlite >= 2.10.2 && < 2.11
+               ,        persistent-sqlite >= 2.10.4 && < 2.11
                ,        process == 1.6.*
                ,        resourcet == 1.2.*
                ,        resource-pool
@@ -209,7 +209,7 @@ Executable Model
                ,        megaparsec == 7.0.*
                ,        monad-logger == 0.3.28.*
                ,        mtl == 2.2.1
-               ,        persistent-sqlite >= 2.10.2 && < 2.11
+               ,        persistent-sqlite >= 2.10.4 && < 2.11
                ,        resourcet == 1.2.*
                ,        streaming-commons == 0.1.*
                ,        text
@@ -245,7 +245,7 @@ Executable Plot
                ,        interpolate == 0.1.1
                ,        monad-logger == 0.3.28.*
                ,        optparse-applicative == 0.14.0.*
-               ,        persistent-sqlite >= 2.10.2 && < 2.11
+               ,        persistent-sqlite >= 2.10.4 && < 2.11
                ,        resourcet == 1.2.*
                ,        split == 0.2.*
                ,        text
