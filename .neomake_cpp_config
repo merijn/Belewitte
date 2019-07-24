@@ -6,3 +6,4 @@
 -Wno-reserved-id-macro
 -I.
 -I..
+-std=c++17
