@@ -10,14 +10,15 @@ This repository is made up of 5 (mostly) independent components:
 
 `Kernel Runner`_
     Executable for finding, loading, and executing GPU kernel libraries on
-    input graphs.
+    input graphs. [PELGA2015]_ [ARXIV2017]_ [IAAA2018]_
 
 `Benchmark Analysis Tools`_
     Tool for managing and manipulating experimental setups, tracking
     experimental results, performing result analysis, and generating models.
+    [ARXIV2017]_ [IAAA2018]_
 
 `Evolutionary Graph Generation`_
-    Tool for generating graphs using evolutionary computing.
+    Tool for generating graphs using evolutionary computing. [PELGA2016]_
 
 `Graph Plotting`_
     Tool for plotting the connectivity matrix of a graph.
@@ -274,3 +275,37 @@ cabal-install 2.4
 .. [KONECT] http://konect.uni-koblenz.de/networks/
 
 .. _indirect: `DAS 5 Instructions`_
+
+.. [PELGA2015]
+    :Title: “Quantifying the Performance Impact of Graph Structure on Neighbour Iteration Strategies for PageRank”
+    :Authors: Merijn Verstraaten, Ana Lucia Varbanescu, and Cees de Laat
+    :Workshop: 1:superscript:`st` Workshop on Performance Engineering for Large Scale Graph Analytics
+    :Proceedings: European Conference on Parallel Processing
+    :Pages: 528–540
+    :Year: 2015
+    :Publisher: Springer, Cham
+
+.. [PELGA2016]
+    :Title: “Synthetic Graph Generation for Sys- tematic Exploration of Graph Structural Properties”
+    :Authors: Merijn Verstraaten, Ana Lucia Varbanescu, and Cees de Laat
+    :Workshop: 2:superscript:`nd` Workshop on Performance Engineering for Large Scale Graph Analytics
+    :Proceedings: European Conference on Parallel Processing
+    :Pages: 557–570
+    :Year: 2016
+    :Publisher: Springer, Cham
+
+.. [ARXIV2017]
+    :Title: “Using Graph Properties to Speed-up GPU-based Graph Traversal: A Model-driven Approach”
+    :Authors: Merijn Verstraaten, Ana Lucia Varbanescu, and Cees de Laat
+    :Year: 2017
+    :eprint: arXiv:1708.01159
+    :URL: https://arxiv.org/abs/1708.01159
+
+.. [IAAA2018]
+    :Title: “Mix-and-Match: A Model-driven Runtime Optimisation Strategy for BFS on GPUs”
+    :Authors: Merijn Verstraaten, Ana Lucia Varbanescu, and Cees de Laat
+    :Workshop: 8:superscript:`th` Workshop on Irregular Applications: Architectures and Algorithms
+    :Proceedings: 2018 IEEE/ACM 8th Workshop on Irregular Applications: Architectures and Algorithms
+    :Pages: 53-60
+    :Year: 2018
+    :Publisher: IEEE
