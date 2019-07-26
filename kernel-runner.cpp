@@ -20,7 +20,7 @@
 #include "Timer.hpp"
 #include "utils/Util.hpp"
 
-#define str(a) xstr(a)
+#define TO_STRING(a) xstr(a)
 #define xstr(a) #a
 #ifndef VERSION
 #define VERSION
@@ -30,7 +30,6 @@ using namespace std;
 using namespace boost::filesystem;
 
 enum class framework { cuda, opencl };
-enum class listing { nothing, algorithms, implementations };
 
 static const char *exeName = "kernel-runner";
 static Options options('h', "help", cout, [](ostream& out)
@@ -53,8 +52,10 @@ static Options options('h', "help", cout, [](ostream& out)
     out << exeName << " query device [-p NUM | --platform NUM] "
         << "[-d NUM | --device NUM] [-v | --verbose]" << endl;
 
-    out << exeName << " <graph file(s)>" << endl << endl;
-    out << "Options:" << endl;
+    out << exeName << " -S" << endl;
+    out << exeName << " -a ALGORITHM -k KERNEL [OPTIONS] <graph file(s)>"
+        << endl;
+    out << endl << "Options:" << endl;
 });
 
 static void __attribute__((noreturn))
@@ -76,8 +77,8 @@ loadAlgorithms
     }
 
     boost::smatch match;
-    const char *regex = "lib(.*)kernel" str(VERSION) "\\.so";
-    const char *debug_regex = "lib(.*)kerneldebug" str(VERSION) "\\.so";
+    const char *regex = "lib(.*)kernel" TO_STRING(VERSION) "\\.so";
+    const char *debug_regex = "lib(.*)kerneldebug" TO_STRING(VERSION) "\\.so";
     const boost::regex lib_regex(debug ? debug_regex : regex);
 
     for (auto p_str : paths) {
@@ -122,20 +123,43 @@ getConfig
 , string algorithmName
 , string kernelName)
 {
+    std::string errorMsg;
+    std::ostringstream names;
+
     try {
         auto algorithm = algorithms.at(algorithmName);
         try {
             return *algorithm.at(kernelName);
         } catch (const out_of_range &) {
-            reportError("No kernel named \"", kernelName,
-                        "\" for algorithm \"", algorithmName, "\"!");
+            for (auto kernel : algorithm) {
+                names << "    " << kernel.first << endl;
+            }
+
+            if (kernelName.empty()) {
+                errorMsg = "Kernel name not specified!";
+            } else {
+                errorMsg = "No kernel named \"" + kernelName +
+                           "\" for algorithm \"" + algorithmName + "\"!";
+            }
+
+            reportError(errorMsg, "\n\nSupported kernels:\n", names.str());
         }
     } catch (const out_of_range &) {
-        reportError("No algorithm named \"", algorithmName, "\"!");
+        for (auto algorithm : algorithms) {
+            names << "    " << algorithm.first << endl;
+        }
+
+        if (algorithmName.empty()) {
+            errorMsg = "Algorithm name not specified!";
+        } else {
+            errorMsg = "No algorithm named \"" + algorithmName + "\"!";
+        }
+
+        reportError(errorMsg, "\n\nSupported algorithms:\n", names.str());
     }
 }
 
-static listing listOptions;
+static map<string, map<string, AlgorithmConfig*>> algorithms;
 static bool debug = false;
 static bool verbose = false;
 static bool warnings = false;
@@ -149,56 +173,45 @@ static string algorithmName = "";
 static string kernelName = "";
 static vector<string> paths = { "." };
 
-static listing run_with_backend(Backend& backend, const vector<string>& args)
+static void print_query_results(Backend& backend, const vector<string>& args)
 {
-    if (!fromStdin) {
-        if (args.size() < 1) usage();
+    if (args.size() < 1) return;
+    if (args[0] != "list" && args[0] != "query") return;
 
-        if (args[0] == "list") {
-            if (args.size() < 2) {
-                usage();
-            } else if (args[1] ==  "platforms") {
+    if (args.size() < 2) usage();
 
-                backend.listPlatforms(verbose);
-                exit(static_cast<int>(backend.platformCount()));
-
-            } else if (args[1] == "devices") {
-
-                backend.listDevices(platform, verbose);
-                exit(backend.deviceCount(platform));
-
-            } else if (args[1] == "algorithms") {
-                return listing::algorithms;
-            } else if (args[1] == "implementations") {
-                return listing::implementations;
-            } else {
-                usage();
-            }
-
-        } else if (args[0] == "query") {
-            if (args.size() < 2) {
-                usage();
-            } else if (args[1] == "platform") {
-
-                backend.queryPlatform(platform, verbose);
-                exit(backend.deviceCount(platform));
-
-            } else if (args[1] == "device") {
-
-                backend.queryDevice(platform, device, verbose);
-                exit(EXIT_SUCCESS);
-            } else {
-                usage();
+    if (args[0] == "list" && args[1] ==  "platforms") {
+        backend.listPlatforms(verbose);
+        exit(static_cast<int>(backend.platformCount()));
+    } else if (args[0] == "list" && args[1] == "devices") {
+        backend.listDevices(platform, verbose);
+        exit(backend.deviceCount(platform));
+    } else if (args[0] == "list" && args[1] == "algorithms") {
+        for (auto algorithm : algorithms) {
+            cout << algorithm.first << endl;
+            if (verbose) {
+                for (auto &kernel : algorithm.second) {
+                    cout << "    " << kernel.first << endl;
+                    kernel.second->help(cout, "\t");
+                }
             }
         }
+        exit(EXIT_SUCCESS);
+    } else if (args[0] == "list" && args[1] == "implementations") {
+        for (auto &kernel : algorithms[algorithmName]) {
+            cout << kernel.first << endl;
+            if (verbose) kernel.second->help(cout, "    ");
+        }
+        exit(EXIT_SUCCESS);
+    } else if (args[0] == "query" && args[1] == "platform") {
+        backend.queryPlatform(platform, verbose);
+        exit(backend.deviceCount(platform));
+    } else if (args[0] == "query" && args[1] == "device") {
+        backend.queryDevice(platform, device, verbose);
+        exit(EXIT_SUCCESS);
+    } else {
+        usage();
     }
-
-    if (!backend.initialised) {
-        cerr << "Backend not initialised: No devices?" << endl;
-        exit(EXIT_FAILURE);
-    }
-    backend.setDevice(platform, device);
-    return listing::nothing;
 }
 
 static void
@@ -228,7 +241,7 @@ runJob
 
 int main(int argc, char * const *argv)
 {
-    vector<string> remainingArgs;
+    std::reference_wrapper<Backend> activeBackend(CUDA);
 
     options.add('d', "device", "NUM", device, "Device to use.")
            .add('f', "framework", fw, framework::opencl, "Use OpenCL.")
@@ -260,12 +273,11 @@ int main(int argc, char * const *argv)
     limits.rlim_max = RLIM_INFINITY;
     setrlimit(RLIMIT_CORE, &limits);
 
-    remainingArgs = options.parseArgs(argc, argv);
+    auto optionResult = options.parseArgsNoUsage(argc, argv);
 
-    map<string, map<string, AlgorithmConfig*>> algorithms;
     switch (fw) {
       case framework::opencl: {
-        listOptions = run_with_backend(OpenCL, remainingArgs);
+        activeBackend = OpenCL;
         algorithms = loadAlgorithms("openclDispatch", paths, warnings, debug);
         {
             //array<const char*,1> files {{&_binary_kernel_cl_start}};
@@ -277,36 +289,35 @@ int main(int argc, char * const *argv)
         break;
       }
       case framework::cuda: {
-        listOptions = run_with_backend(CUDA, remainingArgs);
         algorithms = loadAlgorithms("cudaDispatch", paths, warnings, debug);
         break;
       }
     }
 
-    switch (listOptions) {
-        case listing::algorithms:
-            for (auto algorithm : algorithms) {
-                cout << algorithm.first << endl;
-                if (verbose) {
-                    for (auto &kernel : algorithm.second) {
-                        cout << "    " << kernel.first << endl;
-                        kernel.second->help(cout, "\t");
-                    }
-                }
-            }
-            exit(EXIT_SUCCESS);
-        case listing::implementations:
-            for (auto &kernel : algorithms[algorithmName]) {
-                cout << kernel.first << endl;
-                if (verbose) kernel.second->help(cout, "    ");
-            }
-            exit(EXIT_SUCCESS);
-        case listing::nothing: break;
+    Backend& backend = activeBackend;
+
+    print_query_results(backend, optionResult.remainingArgs);
+
+    if (optionResult.usageRequested) {
+        options.usage(cout, "    ");
+        if (!algorithmName.empty() && !kernelName.empty()) {
+            auto& kernel = getConfig(algorithms, algorithmName, kernelName);
+            kernel.help(cout, "    ");
+        }
+
+        exit(EXIT_SUCCESS);
     }
+
+    if (!backend.initialised) {
+        cerr << "Backend not initialised: No devices?" << endl;
+        exit(EXIT_FAILURE);
+    }
+    backend.setDevice(platform, device);
 
     if (fromStdin) {
         string line;
         wordexp_t newArgv;
+        vector<string> remainingArgs;
 
         while (getline(cin, line)) {
             if (wordexp(line.c_str(), &newArgv, WRDE_NOCMD | WRDE_UNDEF)) {
@@ -322,13 +333,9 @@ int main(int argc, char * const *argv)
             kernelParser.reset();
             wordfree(&newArgv);
         }
-    } else if (algorithmName.empty()) {
-        reportError("Algorithm name not specified!");
-    } else if (kernelName.empty()) {
-        reportError("Kernel name not specified!");
     } else {
         auto& kernel = getConfig(algorithms, algorithmName, kernelName);
-        runJob(kernel, remainingArgs);
+        runJob(kernel, optionResult.remainingArgs);
     }
 
     for (auto& [key, kvmap] : algorithms) {
