@@ -50,32 +50,59 @@ Options::add(char so, const char *lo, string arg, string &var, string help)
 
 vector<string>
 Options::parseArgs(const vector<string>& args)
-{ return parseArgs(args, false); }
+{
+    auto result = parseArgs(args, false, true);
+    assert(!result.usageRequested);
+    return result.remainingArgs;
+}
 
 vector<string>
 Options::parseArgs(int argc, char * const *argv)
-{ return parseArgs(argc, argv, false); }
+{
+    auto result = parseArgs(argc, argv, false, true);
+    assert(!result.usageRequested);
+    return result.remainingArgs;
+}
+
+Options::OptionResult
+Options::parseArgsNoUsage(const vector<string>& args)
+{ return parseArgs(args, false, false); }
+
+Options::OptionResult
+Options::parseArgsNoUsage(int argc, char * const *argv)
+{ return parseArgs(argc, argv, false, false); }
 
 vector<string>
 Options::parseArgsFinal(const vector<string>& args)
-{ return parseArgs(args, true); }
+{
+    auto result = parseArgs(args, true, true);
+    assert(!result.usageRequested);
+    return result.remainingArgs;
+}
 
 vector<string>
 Options::parseArgsFinal(int argc, char * const *argv)
-{ return parseArgs(argc, argv, true); }
+{
+    auto result = parseArgs(argc, argv, true, true);
+    assert(!result.usageRequested);
+    return result.remainingArgs;
+}
 
-vector<string>
-Options::parseArgs(int argc, char * const *argv, bool exitUnknown)
+Options::OptionResult
+Options::parseArgs
+(int argc, char * const *argv, bool exitUnknown, bool exitUsage)
 {
     vector<string> args;
     args.reserve(static_cast<unsigned long>(argc));
     for (int i = 1; i < argc; i++) args.emplace_back(argv[i]);
-    return parseArgs(args, exitUnknown);
+    return parseArgs(args, exitUnknown, exitUsage);
 }
 
-vector<string>
-Options::parseArgs(const vector<string>& args, bool exitUnknown)
+Options::OptionResult
+Options::parseArgs
+(const vector<string>& args, bool exitUnknown, bool exitUsage)
 {
+    bool usageRequested = false;
     string empty = "";
     vector<string> remainingArgs;
     map<string, Option> optionParsers;
@@ -89,6 +116,17 @@ Options::parseArgs(const vector<string>& args, bool exitUnknown)
     };
 
     if (hasUsage) {
+        if (exitUsage) {
+            usageFlag.action = [this](std::string) {
+                this->usage(usageOutput);
+                exit(EXIT_SUCCESS);
+            };
+        } else {
+            usageFlag.action = [&usageRequested](std::string) {
+                    usageRequested = true;
+            };
+        }
+
         addOption("-" + string(1,usageFlag.shortOption), usageFlag);
         addOption("--" + usageFlag.longOption, usageFlag);
     }
@@ -124,7 +162,7 @@ Options::parseArgs(const vector<string>& args, bool exitUnknown)
         }
     }
 
-    return remainingArgs;
+    return {remainingArgs, usageRequested};
 }
 
 void

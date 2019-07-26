@@ -9,6 +9,11 @@
 #include <vector>
 
 class Options {
+    struct OptionResult {
+        std::vector<std::string> remainingArgs;
+        bool usageRequested;
+    };
+
     class Option {
         friend class Options;
 
@@ -60,8 +65,11 @@ class Options {
 
     std::map<int, Option> options;
 
-    std::vector<std::string> parseArgs(const std::vector<std::string>&, bool);
-    std::vector<std::string> parseArgs(int, char * const *, bool);
+    OptionResult
+    parseArgs(const std::vector<std::string>&, bool, bool);
+
+    OptionResult
+    parseArgs(int, char * const *, bool, bool);
 
   public:
     Options()
@@ -138,6 +146,9 @@ class Options {
 
     std::vector<std::string> parseArgs(const std::vector<std::string>&);
     std::vector<std::string> parseArgs(int, char * const *);
+
+    OptionResult parseArgsNoUsage(const std::vector<std::string>&);
+    OptionResult parseArgsNoUsage(int, char * const *);
 
     std::vector<std::string> parseArgsFinal(const std::vector<std::string>&);
     std::vector<std::string> parseArgsFinal(int, char * const *);
