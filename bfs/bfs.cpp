@@ -178,7 +178,7 @@ insertVariant()
 extern "C" kernel_register_t cudaDispatch;
 extern "C"
 void
-cudaDispatch(std::map<std::string, ImplementationBase*>& result)
+cudaDispatch(std::map<std::string, std::unique_ptr<ImplementationBase>>& result)
 {
     auto kernelMap = insertVariant<normal>();
     kernelMap += insertVariant<bulk>();

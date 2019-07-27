@@ -23,7 +23,7 @@
 struct ImplementationBase;
 
 typedef void kernel_register_t
-    ( std::map<std::string, ImplementationBase*>& kernels);
+    ( std::map<std::string, std::unique_ptr<ImplementationBase>>& kernels);
 
 constexpr std::size_t operator "" _sz (unsigned long long int x);
 constexpr std::size_t operator "" _sz (unsigned long long int x)

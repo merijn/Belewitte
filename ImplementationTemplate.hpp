@@ -412,14 +412,15 @@ template
 , typename... Kernels
 , typename Impl = BaseImpl<Platform,Vertex,Edge>
 >
-ImplementationBase*
+std::unique_ptr<ImplementationBase>
 make_implementation
 ( std::tuple
     <GraphKernel<Platform,Vertex,Edge,KernelArgs...>,Kernels...> kernels
 )
 {
     using Kernel = GraphKernel<Platform,Vertex,Edge,KernelArgs...>;
-    return new SimpleImplementation<Impl,Kernel,Kernels...>(kernels);
+    using SimpleImpl = SimpleImplementation<Impl,Kernel,Kernels...>;
+    return std::make_unique<SimpleImpl>(kernels);
 }
 
 template<typename AlgorithmBase, typename... Kernels>
@@ -812,7 +813,7 @@ template
 , typename... Kernels
 , typename Impl = AlgorithmBase<Platform,Vertex,Edge>
 >
-ImplementationBase*
+std::unique_ptr<ImplementationBase>
 make_switch_implementation
 ( KernelMap
   < std::string
@@ -822,7 +823,8 @@ make_switch_implementation
 {
     using KernelRef = decltype(std::get<0>(ks[""]));
     using Kernel = typename std::remove_reference<KernelRef>::type;
+    using SwitchImpl = SwitchImplementation<Impl,Kernel,Kernels...>;
 
-    return new SwitchImplementation<Impl,Kernel,Kernels...>(ks);
+    return std::make_unique<SwitchImpl>(ks);
 }
 #endif

@@ -65,12 +65,12 @@ usage(int exitCode = EXIT_FAILURE)
     exit(exitCode);
 }
 
-static map<string, map<string, ImplementationBase*>>
+static map<string, map<string, std::unique_ptr<ImplementationBase>>>
 loadAlgorithms
 (const char *sym, vector<string> &paths, bool warn, bool debug)
 {
     map<string, string> libs;
-    map<string, map<string, ImplementationBase*>> result;
+    map<string, map<string, std::unique_ptr<ImplementationBase>>> result;
 
     if (is_directory("./.build/kernels/")) {
         paths.insert(paths.begin(), "./.build/kernels/");
@@ -119,7 +119,7 @@ loadAlgorithms
 
 static ImplementationBase&
 getConfig
-( map<string, map<string, ImplementationBase*>>& algorithms
+( map<string, map<string, std::unique_ptr<ImplementationBase>>>& algorithms
 , string algorithmName
 , string kernelName)
 {
@@ -127,11 +127,11 @@ getConfig
     std::ostringstream names;
 
     try {
-        auto algorithm = algorithms.at(algorithmName);
+        auto& algorithm = algorithms.at(algorithmName);
         try {
             return *algorithm.at(kernelName);
         } catch (const out_of_range &) {
-            for (auto kernel : algorithm) {
+            for (auto& kernel : algorithm) {
                 names << "    " << kernel.first << endl;
             }
 
@@ -145,7 +145,7 @@ getConfig
             reportError(errorMsg, "\n\nSupported kernels:\n", names.str());
         }
     } catch (const out_of_range &) {
-        for (auto algorithm : algorithms) {
+        for (auto& algorithm : algorithms) {
             names << "    " << algorithm.first << endl;
         }
 
@@ -159,7 +159,7 @@ getConfig
     }
 }
 
-static map<string, map<string, ImplementationBase*>> algorithms;
+static map<string, map<string, std::unique_ptr<ImplementationBase>>> algorithms;
 static bool debug = false;
 static bool verbose = false;
 static bool warnings = false;
@@ -187,7 +187,7 @@ static void print_query_results(Backend& backend, const vector<string>& args)
         backend.listDevices(platform, verbose);
         exit(backend.deviceCount(platform));
     } else if (args[0] == "list" && args[1] == "algorithms") {
-        for (auto algorithm : algorithms) {
+        for (auto& algorithm : algorithms) {
             cout << algorithm.first << endl;
             if (verbose) {
                 for (auto &kernel : algorithm.second) {
@@ -340,7 +340,7 @@ int main(int argc, char * const *argv)
 
     for (auto& [key, kvmap] : algorithms) {
         for (auto& [key, val] : kvmap) {
-            delete val;
+            val.reset();
         }
     }
     return 0;

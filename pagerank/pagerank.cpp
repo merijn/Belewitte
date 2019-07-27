@@ -86,7 +86,7 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
 extern "C" kernel_register_t cudaDispatch;
 extern "C"
 void
-cudaDispatch(std::map<std::string, ImplementationBase*>& result)
+cudaDispatch(std::map<std::string, std::unique_ptr<ImplementationBase>>& result)
 {
     KernelBuilder<CUDABackend,unsigned,unsigned> make_kernel;
 
