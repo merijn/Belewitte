@@ -1,5 +1,6 @@
 #include <fstream>
 
+#include "Algorithm.hpp"
 #include "CUDA.hpp"
 #include "ImplementationTemplate.hpp"
 #include "Timer.hpp"
@@ -175,19 +176,17 @@ insertVariant()
     return kernelMap;
 }
 
-extern "C" kernel_register_t cudaDispatch;
-extern "C"
-void
-cudaDispatch(std::map<std::string, std::unique_ptr<ImplementationBase>>& result)
+extern "C" register_algorithm_t registerCUDA;
+extern "C" void registerCUDA(Algorithm& result)
 {
     auto kernelMap = insertVariant<normal>();
     kernelMap += insertVariant<bulk>();
     kernelMap += insertVariant<warpreduce>();
     kernelMap += insertVariant<blockreduce>();
 
-    for (auto& pair : kernelMap) {
-        result[pair.first] = make_implementation<BFS>(pair.second);
+    for (auto& [name, kernel] : kernelMap) {
+        result.addImplementation(name, make_implementation<BFS>(kernel));
     }
 
-    result["switch"] = make_switch_implementation<BFS>(kernelMap);
+    result.addImplementation("switch", make_switch_implementation<BFS>(kernelMap));
 }

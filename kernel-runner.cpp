@@ -12,9 +12,10 @@
 #include <boost/filesystem.hpp>
 #include <boost/regex.hpp>
 
-#include "ImplementationBase.hpp"
+#include "Algorithm.hpp"
 #include "Backend.hpp"
 #include "CUDA.hpp"
+#include "ImplementationBase.hpp"
 #include "OpenCL.hpp"
 #include "options/Options.hpp"
 #include "Timer.hpp"
@@ -65,12 +66,12 @@ usage(int exitCode = EXIT_FAILURE)
     exit(exitCode);
 }
 
-static map<string, map<string, std::unique_ptr<ImplementationBase>>>
+static map<string, Algorithm>
 loadAlgorithms
 (const char *sym, vector<string> &paths, bool warn, bool debug)
 {
     map<string, string> libs;
-    map<string, map<string, std::unique_ptr<ImplementationBase>>> result;
+    map<string, Algorithm> result;
 
     if (is_directory("./.build/kernels/")) {
         paths.insert(paths.begin(), "./.build/kernels/");
@@ -105,9 +106,9 @@ loadAlgorithms
             continue;
         }
 
-        auto dispatch = reinterpret_cast<kernel_register_t*>(dlsym(hnd, sym));
+        auto getAlgo = reinterpret_cast<register_algorithm_t*>(dlsym(hnd, sym));
 
-        if (dispatch != nullptr) dispatch(result[lib.first]);
+        if (getAlgo != nullptr) getAlgo(result[lib.first]);
         else if (warn) {
             cerr << "dlsym() failed: " << sym << " (" << lib.second << ") "
                  << endl << dlerror() << endl;
@@ -117,33 +118,14 @@ loadAlgorithms
     return result;
 }
 
-static ImplementationBase&
-getConfig
-( map<string, map<string, std::unique_ptr<ImplementationBase>>>& algorithms
-, string algorithmName
-, string kernelName)
+static Algorithm&
+getAlgorithm(map<string, Algorithm>& algorithms, string algorithmName)
 {
     std::string errorMsg;
     std::ostringstream names;
 
     try {
-        auto& algorithm = algorithms.at(algorithmName);
-        try {
-            return *algorithm.at(kernelName);
-        } catch (const out_of_range &) {
-            for (auto& kernel : algorithm) {
-                names << "    " << kernel.first << endl;
-            }
-
-            if (kernelName.empty()) {
-                errorMsg = "Kernel name not specified!";
-            } else {
-                errorMsg = "No kernel named \"" + kernelName +
-                           "\" for algorithm \"" + algorithmName + "\"!";
-            }
-
-            reportError(errorMsg, "\n\nSupported kernels:\n", names.str());
-        }
+        return algorithms.at(algorithmName);
     } catch (const out_of_range &) {
         for (auto& algorithm : algorithms) {
             names << "    " << algorithm.first << endl;
@@ -159,7 +141,7 @@ getConfig
     }
 }
 
-static map<string, map<string, std::unique_ptr<ImplementationBase>>> algorithms;
+static map<string, Algorithm> algorithms;
 static bool debug = false;
 static bool verbose = false;
 static bool warnings = false;
@@ -198,7 +180,8 @@ static void print_query_results(Backend& backend, const vector<string>& args)
         }
         exit(EXIT_SUCCESS);
     } else if (args[0] == "list" && args[1] == "implementations") {
-        for (auto &kernel : algorithms[algorithmName]) {
+        auto& algorithm = getAlgorithm(algorithms, algorithmName);
+        for (auto &kernel : algorithm) {
             cout << kernel.first << endl;
             if (verbose) kernel.second->help(cout, "    ");
         }
@@ -216,9 +199,15 @@ static void print_query_results(Backend& backend, const vector<string>& args)
 
 static void
 runJob
-(ImplementationBase& kernel, vector<string> args, const string& tag = string())
+( std::string algoName
+, std::string kernName
+, vector<string> args
+, const string& tag = string()
+)
 {
-    auto graphs = kernel.setup(args);
+    auto& algorithm = getAlgorithm(algorithms, algoName);
+    algorithm.selectKernel(kernName);
+    auto graphs = algorithm.setup(args);
 
     if (!tag.empty() && graphs.size() > 1) {
         reportError("Tagged output with more than 1 graph!");
@@ -232,7 +221,7 @@ runJob
 
         {
             Epoch epoch(printStdOut ? "/dev/stdout" : timeFile.string(), verbose);
-            kernel(graph, outputFile.string());
+            algorithm(graph, outputFile.string());
         }
 
         cout << label << endl;
@@ -278,7 +267,7 @@ int main(int argc, char * const *argv)
     switch (fw) {
       case framework::opencl: {
         activeBackend = OpenCL;
-        algorithms = loadAlgorithms("openclDispatch", paths, warnings, debug);
+        algorithms = loadAlgorithms("registerOpenCL", paths, warnings, debug);
         {
             //array<const char*,1> files {{&_binary_kernel_cl_start}};
             //array<size_t,1> sizes {{(size_t) &_binary_kernel_cl_size}};
@@ -289,7 +278,7 @@ int main(int argc, char * const *argv)
         break;
       }
       case framework::cuda: {
-        algorithms = loadAlgorithms("cudaDispatch", paths, warnings, debug);
+        algorithms = loadAlgorithms("registerCUDA", paths, warnings, debug);
         break;
       }
     }
@@ -300,9 +289,9 @@ int main(int argc, char * const *argv)
 
     if (optionResult.usageRequested) {
         options.usage(cout, "    ");
-        if (!algorithmName.empty() && !kernelName.empty()) {
-            auto& kernel = getConfig(algorithms, algorithmName, kernelName);
-            kernel.help(cout, "    ");
+        if (!algorithmName.empty()) {
+            auto& algorithm = getAlgorithm(algorithms, algorithmName);
+            algorithm.help(cout, "    ");
         }
 
         exit(EXIT_SUCCESS);
@@ -315,6 +304,7 @@ int main(int argc, char * const *argv)
     backend.setDevice(platform, device);
 
     if (fromStdin) {
+        string tag;
         string line;
         wordexp_t newArgv;
         vector<string> remainingArgs;
@@ -327,21 +317,15 @@ int main(int argc, char * const *argv)
             remainingArgs = kernelParser.parseArgs
                     (static_cast<int>(newArgv.we_wordc), newArgv.we_wordv);
 
-            auto& kernel = getConfig(algorithms, algorithmName, kernelName);
-            runJob(kernel, remainingArgs, string(newArgv.we_wordv[0]));
+            tag = newArgv.we_wordv[0];
+            runJob(algorithmName, kernelName, remainingArgs, tag);
 
             kernelParser.reset();
             wordfree(&newArgv);
         }
     } else {
-        auto& kernel = getConfig(algorithms, algorithmName, kernelName);
-        runJob(kernel, optionResult.remainingArgs);
+        runJob(algorithmName, kernelName, optionResult.remainingArgs);
     }
 
-    for (auto& [key, kvmap] : algorithms) {
-        for (auto& [key, val] : kvmap) {
-            val.reset();
-        }
-    }
     return 0;
 }

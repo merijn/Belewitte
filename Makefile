@@ -49,9 +49,9 @@ $(call santargets,kernel-runner):
 	$(PRINTF) "OpenCL not found, skipping kernel-runner\n"
 else
 $(call santargets,kernel-runner): kernel-runner% : $(DEST)/kernel-runner%.o \
-    $(DEST)/ImplementationBase%.o $(DEST)/Backend%.o $(DEST)/CUDA%.o \
-    $(DEST)/OpenCL%.o $(DEST)/Timer%.o $(LIBS)/liboptions%.a \
-    $(LIBS)/libutils%.a
+    $(DEST)/Algorithm%.o $(DEST)/Backend%.o $(DEST)/CUDA%.o \
+    $(DEST)/ImplementationBase%.o $(DEST)/OpenCL%.o $(DEST)/Timer%.o \
+    $(LIBS)/liboptions%.a $(LIBS)/libutils%.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $(BOOST_LD_FLAGS) -lboost_regex -lboost_system -lboost_filesystem $^ -o $@
 endif

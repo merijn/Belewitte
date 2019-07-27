@@ -1,6 +1,7 @@
 #include <fstream>
 #include <iomanip>
 
+#include "Algorithm.hpp"
 #include "CUDA.hpp"
 #include "ImplementationTemplate.hpp"
 #include "Timer.hpp"
@@ -83,10 +84,8 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
     }
 };
 
-extern "C" kernel_register_t cudaDispatch;
-extern "C"
-void
-cudaDispatch(std::map<std::string, std::unique_ptr<ImplementationBase>>& result)
+extern "C" register_algorithm_t registerCUDA;
+extern "C" void registerCUDA(Algorithm& result)
 {
     KernelBuilder<CUDABackend,unsigned,unsigned> make_kernel;
 
@@ -189,9 +188,9 @@ cudaDispatch(std::map<std::string, std::unique_ptr<ImplementationBase>>& result)
         , consolidateNoDiv
         };
 
-    for (auto& pair : prMap) {
-        result[pair.first] = make_implementation<PageRank>(pair.second);
+    for (auto& [name, kernel] : prMap) {
+        result.addImplementation(name, make_implementation<PageRank>(kernel));
     }
 
-    result["switch"] = make_switch_implementation<PageRank>(prMap);
+    result.addImplementation("switch", make_switch_implementation<PageRank>(prMap));
 }
