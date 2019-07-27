@@ -21,14 +21,14 @@ edgeListBfs(EdgeList<unsigned> *graph, int *levels, int depth)
 
 #ifndef __APPLE__
 template __global__ void
-edgeListBfs<BFS<normal>>(EdgeList<unsigned> *, int *, int);
+edgeListBfs<Reduction<normal>>(EdgeList<unsigned> *, int *, int);
 
 template __global__ void
-edgeListBfs<BFS<bulk>>(EdgeList<unsigned> *, int *, int);
+edgeListBfs<Reduction<bulk>>(EdgeList<unsigned> *, int *, int);
 
 template __global__ void
-edgeListBfs<BFS<warpreduce>>(EdgeList<unsigned> *, int *, int);
+edgeListBfs<Reduction<warpreduce>>(EdgeList<unsigned> *, int *, int);
 
 template __global__ void
-edgeListBfs<BFS<blockreduce>>(EdgeList<unsigned> *, int *, int);
+edgeListBfs<Reduction<blockreduce>>(EdgeList<unsigned> *, int *, int);
 #endif

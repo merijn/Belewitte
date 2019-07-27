@@ -20,10 +20,10 @@
 #define FALLTHROUGH
 #endif
 
-struct AlgorithmConfig;
+struct ImplementationBase;
 
 typedef void kernel_register_t
-    ( std::map<std::string, AlgorithmConfig*>& kernels);
+    ( std::map<std::string, ImplementationBase*>& kernels);
 
 constexpr std::size_t operator "" _sz (unsigned long long int x);
 constexpr std::size_t operator "" _sz (unsigned long long int x)

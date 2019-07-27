@@ -49,7 +49,7 @@ $(call santargets,kernel-runner):
 	$(PRINTF) "OpenCL not found, skipping kernel-runner\n"
 else
 $(call santargets,kernel-runner): kernel-runner% : $(DEST)/kernel-runner%.o \
-    $(DEST)/AlgorithmConfig%.o $(DEST)/Backend%.o $(DEST)/CUDA%.o \
+    $(DEST)/ImplementationBase%.o $(DEST)/Backend%.o $(DEST)/CUDA%.o \
     $(DEST)/OpenCL%.o $(DEST)/Timer%.o $(LIBS)/liboptions%.a \
     $(LIBS)/libutils%.a
 	$(PRINTF) " LD\t$@\n"

@@ -62,18 +62,18 @@ vertexPushWarpBfs
 
 #ifndef __APPLE__
 template __global__ void
-vertexPushWarpBfs<BFS<normal>>
+vertexPushWarpBfs<Reduction<normal>>
 (size_t, size_t, CSR<unsigned,unsigned> *, int *, int);
 
 template __global__ void
-vertexPushWarpBfs<BFS<bulk>>
+vertexPushWarpBfs<Reduction<bulk>>
 (size_t, size_t, CSR<unsigned,unsigned> *, int *, int);
 
 template __global__ void
-vertexPushWarpBfs<BFS<warpreduce>>
+vertexPushWarpBfs<Reduction<warpreduce>>
 (size_t, size_t, CSR<unsigned,unsigned> *, int *, int);
 
 template __global__ void
-vertexPushWarpBfs<BFS<blockreduce>>
+vertexPushWarpBfs<Reduction<blockreduce>>
 (size_t, size_t, CSR<unsigned,unsigned> *, int *, int);
 #endif

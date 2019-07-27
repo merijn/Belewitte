@@ -26,14 +26,14 @@ vertexPushBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth)
 
 #ifndef __APPLE__
 template __global__ void
-vertexPushBfs<BFS<normal>>(CSR<unsigned,unsigned> *, int *, int);
+vertexPushBfs<Reduction<normal>>(CSR<unsigned,unsigned> *, int *, int);
 
 template __global__ void
-vertexPushBfs<BFS<bulk>>(CSR<unsigned,unsigned> *, int *, int);
+vertexPushBfs<Reduction<bulk>>(CSR<unsigned,unsigned> *, int *, int);
 
 template __global__ void
-vertexPushBfs<BFS<warpreduce>>(CSR<unsigned,unsigned> *, int *, int);
+vertexPushBfs<Reduction<warpreduce>>(CSR<unsigned,unsigned> *, int *, int);
 
 template __global__ void
-vertexPushBfs<BFS<blockreduce>>(CSR<unsigned,unsigned> *, int *, int);
+vertexPushBfs<Reduction<blockreduce>>(CSR<unsigned,unsigned> *, int *, int);
 #endif

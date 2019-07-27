@@ -30,7 +30,7 @@ unsigned warpReduceSum(unsigned val)
 #endif
 
 template<bfs_variant variant>
-struct BFS {
+struct Reduction {
     static constexpr const char * suffix = "";
     __device__ __forceinline__ void update()
     {
@@ -43,11 +43,11 @@ struct BFS {
 };
 
 template<>
-struct BFS<bulk> {
+struct Reduction<bulk> {
     static constexpr const char * suffix = "-bulk";
     unsigned count;
 
-    __device__ BFS<bulk>() : count(0U) {}
+    __device__ Reduction<bulk>() : count(0U) {}
 
     __device__ __forceinline__ void update()
     { count++; }
@@ -61,11 +61,11 @@ struct BFS<bulk> {
 };
 
 template<>
-struct BFS<warpreduce> {
+struct Reduction<warpreduce> {
     static constexpr const char * suffix = "-warpreduce";
     unsigned count;
 
-    __device__ BFS<warpreduce>() : count(0U) {}
+    __device__ Reduction<warpreduce>() : count(0U) {}
 
     __device__ __forceinline__ void update()
     { count++; }
@@ -82,11 +82,11 @@ struct BFS<warpreduce> {
 };
 
 template<>
-struct BFS<blockreduce> {
+struct Reduction<blockreduce> {
     static constexpr const char * suffix = "-blockreduce";
     unsigned count;
 
-    __device__ BFS<blockreduce>() : count(0U) {}
+    __device__ Reduction<blockreduce>() : count(0U) {}
 
     __device__ __forceinline__ void update()
     { count++; }
@@ -120,32 +120,32 @@ __global__ void
 vertexPushBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth);
 
 extern template __global__ void
-vertexPushBfs<BFS<normal>>(CSR<unsigned,unsigned> *, int *, int);
+vertexPushBfs<Reduction<normal>>(CSR<unsigned,unsigned> *, int *, int);
 
 extern template __global__ void
-vertexPushBfs<BFS<bulk>>(CSR<unsigned,unsigned> *, int *, int);
+vertexPushBfs<Reduction<bulk>>(CSR<unsigned,unsigned> *, int *, int);
 
 extern template __global__ void
-vertexPushBfs<BFS<warpreduce>>(CSR<unsigned,unsigned> *, int *, int);
+vertexPushBfs<Reduction<warpreduce>>(CSR<unsigned,unsigned> *, int *, int);
 
 extern template __global__ void
-vertexPushBfs<BFS<blockreduce>>(CSR<unsigned,unsigned> *, int *, int);
+vertexPushBfs<Reduction<blockreduce>>(CSR<unsigned,unsigned> *, int *, int);
 
 template<typename BFSVariant>
 __global__ void
 vertexPullBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth);
 
 extern template __global__ void
-vertexPullBfs<BFS<normal>>(CSR<unsigned,unsigned> *, int *, int);
+vertexPullBfs<Reduction<normal>>(CSR<unsigned,unsigned> *, int *, int);
 
 extern template __global__ void
-vertexPullBfs<BFS<bulk>>(CSR<unsigned,unsigned> *, int *, int);
+vertexPullBfs<Reduction<bulk>>(CSR<unsigned,unsigned> *, int *, int);
 
 extern template __global__ void
-vertexPullBfs<BFS<warpreduce>>(CSR<unsigned,unsigned> *, int *, int);
+vertexPullBfs<Reduction<warpreduce>>(CSR<unsigned,unsigned> *, int *, int);
 
 extern template __global__ void
-vertexPullBfs<BFS<blockreduce>>(CSR<unsigned,unsigned> *, int *, int);
+vertexPullBfs<Reduction<blockreduce>>(CSR<unsigned,unsigned> *, int *, int);
 
 template<typename BFSVariant>
 __global__ void
@@ -153,19 +153,19 @@ vertexPushWarpBfs
 (size_t, size_t, CSR<unsigned,unsigned> *graph, int *levels, int depth);
 
 extern template __global__ void
-vertexPushWarpBfs<BFS<normal>>
+vertexPushWarpBfs<Reduction<normal>>
 (size_t, size_t, CSR<unsigned,unsigned> *, int *, int);
 
 extern template __global__ void
-vertexPushWarpBfs<BFS<bulk>>
+vertexPushWarpBfs<Reduction<bulk>>
 (size_t, size_t, CSR<unsigned,unsigned> *, int *, int);
 
 extern template __global__ void
-vertexPushWarpBfs<BFS<warpreduce>>
+vertexPushWarpBfs<Reduction<warpreduce>>
 (size_t, size_t, CSR<unsigned,unsigned> *, int *, int);
 
 extern template __global__ void
-vertexPushWarpBfs<BFS<blockreduce>>
+vertexPushWarpBfs<Reduction<blockreduce>>
 (size_t, size_t, CSR<unsigned,unsigned> *, int *, int);
 
 template<typename BFSVariant>
@@ -173,30 +173,30 @@ __global__ void
 edgeListBfs(EdgeList<unsigned> *graph, int *levels, int depth);
 
 extern template __global__ void
-edgeListBfs<BFS<normal>>(EdgeList<unsigned> *, int *, int);
+edgeListBfs<Reduction<normal>>(EdgeList<unsigned> *, int *, int);
 
 extern template __global__ void
-edgeListBfs<BFS<bulk>>(EdgeList<unsigned> *, int *, int);
+edgeListBfs<Reduction<bulk>>(EdgeList<unsigned> *, int *, int);
 
 extern template __global__ void
-edgeListBfs<BFS<warpreduce>>(EdgeList<unsigned> *, int *, int);
+edgeListBfs<Reduction<warpreduce>>(EdgeList<unsigned> *, int *, int);
 
 extern template __global__ void
-edgeListBfs<BFS<blockreduce>>(EdgeList<unsigned> *, int *, int);
+edgeListBfs<Reduction<blockreduce>>(EdgeList<unsigned> *, int *, int);
 
 template<typename BFSVariant>
 __global__ void
 revEdgeListBfs(EdgeList<unsigned> *graph, int *levels, int depth);
 
 extern template __global__ void
-revEdgeListBfs<BFS<normal>>(EdgeList<unsigned> *, int *, int);
+revEdgeListBfs<Reduction<normal>>(EdgeList<unsigned> *, int *, int);
 
 extern template __global__ void
-revEdgeListBfs<BFS<bulk>>(EdgeList<unsigned> *, int *, int);
+revEdgeListBfs<Reduction<bulk>>(EdgeList<unsigned> *, int *, int);
 
 extern template __global__ void
-revEdgeListBfs<BFS<warpreduce>>(EdgeList<unsigned> *, int *, int);
+revEdgeListBfs<Reduction<warpreduce>>(EdgeList<unsigned> *, int *, int);
 
 extern template __global__ void
-revEdgeListBfs<BFS<blockreduce>>(EdgeList<unsigned> *, int *, int);
+revEdgeListBfs<Reduction<blockreduce>>(EdgeList<unsigned> *, int *, int);
 #endif

@@ -2,7 +2,7 @@
 #include <iomanip>
 
 #include "CUDA.hpp"
-#include "TemplateConfig.hpp"
+#include "ImplementationTemplate.hpp"
 #include "Timer.hpp"
 
 #include "pagerank.hpp"
@@ -15,26 +15,26 @@ roundPrecision(float val, int digitPrecision)
 }
 
 template<typename Platform, typename Vertex, typename Edge>
-struct PageRank : public TemplateConfig<Platform,Vertex,Edge>
+struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
 {
-    using Config = TemplateConfig<Platform,Vertex,Edge>;
-    using Config::run_count;
-    using Config::backend;
-    using Config::setKernelConfig;
-    using Config::vertex_count;
-    using Config::options;
+    using Impl = ImplementationTemplate<Platform,Vertex,Edge>;
+    using Impl::run_count;
+    using Impl::backend;
+    using Impl::setKernelConfig;
+    using Impl::vertex_count;
+    using Impl::options;
 
     template<typename T>
-    using alloc_t = typename Config::template alloc_t<T>;
+    using alloc_t = typename Impl::template alloc_t<T>;
 
     template<typename... Args>
-    using Kernel = typename Config::template GraphKernel<Args...>;
+    using Kernel = typename Impl::template GraphKernel<Args...>;
 
     Kernel<float*,float*> kernel;
     Kernel<float*,float*,bool> consolidate;
 
     PageRank(Kernel<float*,float*> k, Kernel<float*,float*,bool> c)
-      : Config(KERNEL_COMMIT), kernel(k), consolidate(c)
+      : Impl(KERNEL_COMMIT), kernel(k), consolidate(c)
     {}
 
     virtual void runImplementation(std::ofstream& outputFile) override
@@ -86,7 +86,7 @@ struct PageRank : public TemplateConfig<Platform,Vertex,Edge>
 extern "C" kernel_register_t cudaDispatch;
 extern "C"
 void
-cudaDispatch(std::map<std::string, AlgorithmConfig*>& result)
+cudaDispatch(std::map<std::string, ImplementationBase*>& result)
 {
     KernelBuilder<CUDABackend,unsigned,unsigned> make_kernel;
 
@@ -190,8 +190,8 @@ cudaDispatch(std::map<std::string, AlgorithmConfig*>& result)
         };
 
     for (auto& pair : prMap) {
-        result[pair.first] = make_config<PageRank>(pair.second);
+        result[pair.first] = make_implementation<PageRank>(pair.second);
     }
 
-    result["switch"] = make_switch_config<PageRank>(prMap);
+    result["switch"] = make_switch_implementation<PageRank>(prMap);
 }

@@ -1,28 +1,28 @@
 #include <fstream>
 
 #include "CUDA.hpp"
-#include "TemplateConfig.hpp"
+#include "ImplementationTemplate.hpp"
 #include "Timer.hpp"
 
 #include "bfs.hpp"
 
 template<typename Platform, typename Vertex, typename Edge>
-struct BFSConfig : public TemplateConfig<Platform,Vertex,Edge>
+struct BFS : public ImplementationTemplate<Platform,Vertex,Edge>
 {
-    using Config = TemplateConfig<Platform,Vertex,Edge>;
-    using Config::run_count;
-    using Config::backend;
-    using Config::loader;
-    using Config::setKernelConfig;
-    using Config::vertex_count;
-    using Config::options;
-    using Config::isSwitching;
+    using Impl = ImplementationTemplate<Platform,Vertex,Edge>;
+    using Impl::run_count;
+    using Impl::backend;
+    using Impl::loader;
+    using Impl::setKernelConfig;
+    using Impl::vertex_count;
+    using Impl::options;
+    using Impl::isSwitching;
 
     template<typename T>
-    using alloc_t = typename Config::template alloc_t<T>;
+    using alloc_t = typename Impl::template alloc_t<T>;
 
     template<typename... Args>
-    using Kernel = typename Config::template GraphKernel<Args...>;
+    using Kernel = typename Impl::template GraphKernel<Args...>;
 
     unsigned root;
 
@@ -30,8 +30,8 @@ struct BFSConfig : public TemplateConfig<Platform,Vertex,Edge>
 
     Kernel<int*,int> kernel;
 
-    BFSConfig(Kernel<int*,int> k)
-    : Config(KERNEL_COMMIT)
+    BFS(Kernel<int*,int> k)
+    : Impl(KERNEL_COMMIT)
     , root(0)
     , absFrontier("frontier abs", *this)
     , relFrontier("frontier rel", *this)
@@ -124,10 +124,10 @@ insertVariant()
 
     KernelMap kernelMap
     { std::pair
-        { std::string("edge-list") + BFS<Variant>::suffix
+        { std::string("edge-list") + Reduction<Variant>::suffix
         , std::tuple
             { make_kernel
-                ( edgeListBfs<BFS<Variant>>
+                ( edgeListBfs<Reduction<Variant>>
                 , work_division::edge
                 , tag_t(Rep::EdgeList)
                 )
@@ -135,35 +135,35 @@ insertVariant()
         }
     };
 
-    kernelMap[std::string("rev-edge-list") + BFS<Variant>::suffix] = {
+    kernelMap[std::string("rev-edge-list") + Reduction<Variant>::suffix] = {
         make_kernel
-            ( revEdgeListBfs<BFS<Variant>>
+            ( revEdgeListBfs<Reduction<Variant>>
             , work_division::edge
             , tag_t(Rep::EdgeList)
             , tag_t(Dir::Reverse)
             )
     };
 
-    kernelMap[std::string("vertex-push") + BFS<Variant>::suffix] = {
+    kernelMap[std::string("vertex-push") + Reduction<Variant>::suffix] = {
         make_kernel
-            ( vertexPushBfs<BFS<Variant>>
+            ( vertexPushBfs<Reduction<Variant>>
             , work_division::vertex
             , tag_t(Rep::CSR)
             )
     };
 
-    kernelMap[std::string("vertex-pull") + BFS<Variant>::suffix] = {
+    kernelMap[std::string("vertex-pull") + Reduction<Variant>::suffix] = {
         make_kernel
-            ( vertexPullBfs<BFS<Variant>>
+            ( vertexPullBfs<Reduction<Variant>>
             , work_division::vertex
             , tag_t(Rep::CSR)
             , tag_t(Dir::Reverse)
             )
     };
 
-    kernelMap[std::string("vertex-push-warp") + BFS<Variant>::suffix] = {
+    kernelMap[std::string("vertex-push-warp") + Reduction<Variant>::suffix] = {
         make_kernel
-            ( vertexPushWarpBfs<BFS<Variant>>
+            ( vertexPushWarpBfs<Reduction<Variant>>
             , work_division::vertex
             , [](size_t chunkSize) {
                 return chunkSize * sizeof(int) + (chunkSize+1) * sizeof(unsigned);
@@ -178,7 +178,7 @@ insertVariant()
 extern "C" kernel_register_t cudaDispatch;
 extern "C"
 void
-cudaDispatch(std::map<std::string, AlgorithmConfig*>& result)
+cudaDispatch(std::map<std::string, ImplementationBase*>& result)
 {
     auto kernelMap = insertVariant<normal>();
     kernelMap += insertVariant<bulk>();
@@ -186,8 +186,8 @@ cudaDispatch(std::map<std::string, AlgorithmConfig*>& result)
     kernelMap += insertVariant<blockreduce>();
 
     for (auto& pair : kernelMap) {
-        result[pair.first] = make_config<BFSConfig>(pair.second);
+        result[pair.first] = make_implementation<BFS>(pair.second);
     }
 
-    result["switch"] = make_switch_config<BFSConfig>(kernelMap);
+    result["switch"] = make_switch_implementation<BFS>(kernelMap);
 }

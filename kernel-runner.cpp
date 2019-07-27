@@ -12,7 +12,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/regex.hpp>
 
-#include "AlgorithmConfig.hpp"
+#include "ImplementationBase.hpp"
 #include "Backend.hpp"
 #include "CUDA.hpp"
 #include "OpenCL.hpp"
@@ -65,12 +65,12 @@ usage(int exitCode = EXIT_FAILURE)
     exit(exitCode);
 }
 
-static map<string, map<string, AlgorithmConfig*>>
+static map<string, map<string, ImplementationBase*>>
 loadAlgorithms
 (const char *sym, vector<string> &paths, bool warn, bool debug)
 {
     map<string, string> libs;
-    map<string, map<string, AlgorithmConfig*>> result;
+    map<string, map<string, ImplementationBase*>> result;
 
     if (is_directory("./.build/kernels/")) {
         paths.insert(paths.begin(), "./.build/kernels/");
@@ -117,9 +117,9 @@ loadAlgorithms
     return result;
 }
 
-static AlgorithmConfig&
+static ImplementationBase&
 getConfig
-( map<string, map<string, AlgorithmConfig*>>& algorithms
+( map<string, map<string, ImplementationBase*>>& algorithms
 , string algorithmName
 , string kernelName)
 {
@@ -159,7 +159,7 @@ getConfig
     }
 }
 
-static map<string, map<string, AlgorithmConfig*>> algorithms;
+static map<string, map<string, ImplementationBase*>> algorithms;
 static bool debug = false;
 static bool verbose = false;
 static bool warnings = false;
@@ -216,7 +216,7 @@ static void print_query_results(Backend& backend, const vector<string>& args)
 
 static void
 runJob
-(AlgorithmConfig& kernel, vector<string> args, const string& tag = string())
+(ImplementationBase& kernel, vector<string> args, const string& tag = string())
 {
     auto graphs = kernel.setup(args);
 

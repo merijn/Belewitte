@@ -1,9 +1,9 @@
-#ifndef TEMPLATECONFIG_HPP
-#define TEMPLATECONFIG_HPP
+#ifndef IMPLEMENTATIONTEMPLATE_HPP
+#define IMPLEMENTATIONTEMPLATE_HPP
 
 #include <fstream>
 
-#include "AlgorithmConfig.hpp"
+#include "ImplementationBase.hpp"
 #include "GraphLoader.hpp"
 #include "Timer.hpp"
 
@@ -18,7 +18,7 @@ template<typename Platform>
 struct BaseKernel
 {
     template<typename, typename, typename>
-    friend struct TemplateConfig;
+    friend struct ImplementationTemplate;
 
     using KernelType = typename Platform::kernel_type;
 
@@ -255,11 +255,11 @@ KernelMap(std::initializer_list<std::pair<const char*,T>> l)
     -> KernelMap<std::string,T>;
 
 template<typename Platform, typename V, typename E>
-struct TemplateConfig : public AlgorithmConfig
+struct ImplementationTemplate : public ImplementationBase
 {
     typedef V Vertex;
     typedef E Edge;
-    using AlgorithmConfig::options;
+    using ImplementationBase::options;
 
     template<typename T>
     using alloc_t = typename Platform::template alloc_t<T>;
@@ -276,8 +276,8 @@ struct TemplateConfig : public AlgorithmConfig
     size_t vertex_count, edge_count;
     size_t warp_size, chunk_size;
 
-    TemplateConfig(const std::string& commitHash)
-      : AlgorithmConfig(commitHash)
+    ImplementationTemplate(const std::string& commitHash)
+      : ImplementationBase(commitHash)
       , backend(Platform::get())
       , vertex_count(0), edge_count(0)
       , warp_size(32), chunk_size(32)
@@ -334,7 +334,7 @@ struct TemplateConfig : public AlgorithmConfig
 };
 
 template<typename AlgorithmBase, typename... Kernels>
-struct SimpleConfig : public AlgorithmBase
+struct SimpleImplementation : public AlgorithmBase
 {
     using typename AlgorithmBase::Vertex;
     using typename AlgorithmBase::Edge;
@@ -345,12 +345,12 @@ struct SimpleConfig : public AlgorithmBase
 
     std::tuple<Kernels...> kernels;
 
-    SimpleConfig(std::tuple<Kernels...> ks)
-      : SimpleConfig(ks, std::index_sequence_for<Kernels...>())
+    SimpleImplementation(std::tuple<Kernels...> ks)
+      : SimpleImplementation(ks, std::index_sequence_for<Kernels...>())
     {}
 
     template<size_t... I>
-    SimpleConfig(std::tuple<Kernels...> ks, std::index_sequence<I...>)
+    SimpleImplementation(std::tuple<Kernels...> ks, std::index_sequence<I...>)
       : AlgorithmBase(std::get<I>(kernels)...)
       , kernels(ks)
     {
@@ -404,26 +404,26 @@ struct SimpleConfig : public AlgorithmBase
 };
 
 template
-< template<typename,typename,typename> class BaseConfig
+< template<typename,typename,typename> class BaseImpl
 , typename Platform
 , typename Vertex
 , typename Edge
 , typename... KernelArgs
 , typename... Kernels
-, typename Config = BaseConfig<Platform,Vertex,Edge>
+, typename Impl = BaseImpl<Platform,Vertex,Edge>
 >
-AlgorithmConfig*
-make_config
+ImplementationBase*
+make_implementation
 ( std::tuple
     <GraphKernel<Platform,Vertex,Edge,KernelArgs...>,Kernels...> kernels
 )
 {
     using Kernel = GraphKernel<Platform,Vertex,Edge,KernelArgs...>;
-    return new SimpleConfig<Config,Kernel,Kernels...>(kernels);
+    return new SimpleImplementation<Impl,Kernel,Kernels...>(kernels);
 }
 
 template<typename AlgorithmBase, typename... Kernels>
-struct SwitchConfig;
+struct SwitchImplementation;
 
 class prop_ref : public std::reference_wrapper<double>
 {
@@ -433,14 +433,14 @@ class prop_ref : public std::reference_wrapper<double>
     prop_ref(prop_ref&&) = delete;
     prop_ref(const prop_ref&) = delete;
 
-    prop_ref(const std::string&, AlgorithmConfig&)
+    prop_ref(const std::string&, ImplementationBase&)
      : std::reference_wrapper<double>(dummyProp)
     {}
 
     template<typename AlgorithmBase, typename... Kernels>
     prop_ref
         ( const std::string& name
-        , SwitchConfig<AlgorithmBase,Kernels...>& cfg
+        , SwitchImplementation<AlgorithmBase,Kernels...>& cfg
         , bool graphProp = false
         )
         : std::reference_wrapper<double>(dummyProp)
@@ -462,7 +462,7 @@ class prop_ref : public std::reference_wrapper<double>
 double prop_ref::dummyProp = 0;
 
 template<typename AlgorithmBase, typename... Kernels>
-struct SwitchConfig : public AlgorithmBase
+struct SwitchImplementation : public AlgorithmBase
 {
     using typename AlgorithmBase::Vertex;
     using typename AlgorithmBase::Edge;
@@ -486,7 +486,8 @@ struct SwitchConfig : public AlgorithmBase
         prop_ref absProp, inProp, outProp;
 
       public:
-        graph_prop(std::string prefix, std::string suffix, SwitchConfig& cfg)
+        graph_prop
+          (std::string prefix, std::string suffix, SwitchImplementation& cfg)
           : absProp(prefix + "abs" + suffix, cfg, true)
           , inProp(prefix + "in" + suffix, cfg, true)
           , outProp(prefix + "out" + suffix, cfg, true)
@@ -502,12 +503,12 @@ struct SwitchConfig : public AlgorithmBase
         }
     };
 
-    SwitchConfig(KernelMap ks)
-      : SwitchConfig(ks, std::index_sequence_for<Kernels...>())
+    SwitchImplementation(KernelMap ks)
+      : SwitchImplementation(ks, std::index_sequence_for<Kernels...>())
     {}
 
     template<size_t... I>
-    SwitchConfig(KernelMap ks, std::index_sequence<I...>)
+    SwitchImplementation(KernelMap ks, std::index_sequence<I...>)
       : AlgorithmBase(std::get<I>(kernels)...)
       , kernels((static_cast<void>(I), nullptr)...)
       , modelHandle(nullptr)
@@ -809,10 +810,10 @@ template
 , typename Edge
 , typename... KernelArgs
 , typename... Kernels
-, typename Config = AlgorithmBase<Platform,Vertex,Edge>
+, typename Impl = AlgorithmBase<Platform,Vertex,Edge>
 >
-AlgorithmConfig*
-make_switch_config
+ImplementationBase*
+make_switch_implementation
 ( KernelMap
   < std::string
   , std::tuple<GraphKernel<Platform,Vertex,Edge,KernelArgs...>,Kernels...>
@@ -822,6 +823,6 @@ make_switch_config
     using KernelRef = decltype(std::get<0>(ks[""]));
     using Kernel = typename std::remove_reference<KernelRef>::type;
 
-    return new SwitchConfig<Config,Kernel,Kernels...>(ks);
+    return new SwitchImplementation<Impl,Kernel,Kernels...>(ks);
 }
 #endif

@@ -1,13 +1,13 @@
-#ifndef ALGORITHMCONFIG_HPP
-#define ALGORITHMCONFIG_HPP
+#ifndef IMPLEMENTATIONBASE_HPP
+#define IMPLEMENTATIONBASE_HPP
 
 #include "options/Options.hpp"
 
-struct AlgorithmConfig {
+struct ImplementationBase {
     const std::string commit;
 
   protected:
-    AlgorithmConfig(const std::string& commitHash)
+    ImplementationBase(const std::string& commitHash)
       : commit(commitHash)
       , run_count(1)
     {
@@ -15,8 +15,8 @@ struct AlgorithmConfig {
                     "Number of times to run algorithm.");
     }
 
-    AlgorithmConfig(const AlgorithmConfig&) = delete;
-    void operator=(const AlgorithmConfig&) = delete;
+    ImplementationBase(const ImplementationBase&) = delete;
+    void operator=(const ImplementationBase&) = delete;
 
     Options options;
     size_t run_count;
@@ -33,6 +33,6 @@ struct AlgorithmConfig {
     void help(std::ostream& out, std::string prefix);
     std::vector<std::string> setup(std::vector<std::string> args);
 
-    virtual ~AlgorithmConfig();
+    virtual ~ImplementationBase();
 };
 #endif
