@@ -276,9 +276,8 @@ struct ImplementationTemplate : public ImplementationBase
     size_t vertex_count, edge_count;
     size_t warp_size, chunk_size;
 
-    ImplementationTemplate(const std::string& commitHash)
-      : ImplementationBase(commitHash)
-      , backend(Platform::get())
+    ImplementationTemplate()
+      : backend(Platform::get())
       , vertex_count(0), edge_count(0)
       , warp_size(32), chunk_size(32)
     {}

@@ -40,6 +40,7 @@ Algorithm::selectKernel(const std::string& kernelName)
         kernelMissing = true;
     }
 
+    if (commitHash.empty()) reportError("Algorithm version not specified!");
     if (kernelMissing) {
         if (kernelName.empty()) {
             errorMsg = "Kernel name not specified!";

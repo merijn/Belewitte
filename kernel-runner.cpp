@@ -287,7 +287,7 @@ int main(int argc, char * const *argv)
 
     print_query_results(backend, optionResult.remainingArgs);
 
-    if (optionResult.usageRequested) {
+    if (optionResult.usageRequested || optionResult.remainingArgs.empty()) {
         options.usage(cout, "    ");
         if (!algorithmName.empty()) {
             auto& algorithm = getAlgorithm(algorithms, algorithmName);

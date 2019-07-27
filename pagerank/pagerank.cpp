@@ -35,7 +35,7 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
     Kernel<float*,float*,bool> consolidate;
 
     PageRank(Kernel<float*,float*> k, Kernel<float*,float*,bool> c)
-      : Impl(KERNEL_COMMIT), kernel(k), consolidate(c)
+      : kernel(k), consolidate(c)
     {}
 
     virtual void runImplementation(std::ofstream& outputFile) override
@@ -87,6 +87,7 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
 extern "C" register_algorithm_t registerCUDA;
 extern "C" void registerCUDA(Algorithm& result)
 {
+    INITIALISE_ALGORITHM(result);
     KernelBuilder<CUDABackend,unsigned,unsigned> make_kernel;
 
     auto consolidate = make_kernel

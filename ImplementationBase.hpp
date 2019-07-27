@@ -4,12 +4,8 @@
 #include "options/Options.hpp"
 
 struct ImplementationBase {
-    const std::string commit;
-
   protected:
-    ImplementationBase(const std::string& commitHash)
-      : commit(commitHash)
-      , run_count(1)
+    ImplementationBase() : run_count(1)
     {
         options.add('n', "count", "NUM", run_count,
                     "Number of times to run algorithm.");

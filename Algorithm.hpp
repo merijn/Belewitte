@@ -5,6 +5,8 @@
 
 #include "ImplementationBase.hpp"
 
+#define INITIALISE_ALGORITHM(x) x = Algorithm(KERNEL_COMMIT)
+
 class Algorithm {
     using ImplMap = std::map<std::string, std::unique_ptr<ImplementationBase>>;
 

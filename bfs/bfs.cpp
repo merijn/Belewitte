@@ -32,8 +32,7 @@ struct BFS : public ImplementationTemplate<Platform,Vertex,Edge>
     Kernel<int*,int> kernel;
 
     BFS(Kernel<int*,int> k)
-    : Impl(KERNEL_COMMIT)
-    , root(0)
+    : root(0)
     , absFrontier("frontier abs", *this)
     , relFrontier("frontier rel", *this)
     , absVisited("visited abs", *this)
@@ -179,6 +178,8 @@ insertVariant()
 extern "C" register_algorithm_t registerCUDA;
 extern "C" void registerCUDA(Algorithm& result)
 {
+    INITIALISE_ALGORITHM(result);
+
     auto kernelMap = insertVariant<normal>();
     kernelMap += insertVariant<bulk>();
     kernelMap += insertVariant<warpreduce>();
