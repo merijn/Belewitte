@@ -67,6 +67,8 @@ static Options options('h', "help", cout, [](ostream& out)
     out << exeName << " query device [-p NUM | --platform NUM] "
         << "[-d NUM | --device NUM] [-v | --verbose]" << endl;
 
+    out << exeName << " query algorithm [-a NAME | --algorithm NAME]" << endl;
+
     out << exeName << " -S" << endl;
     out << exeName << " -a ALGORITHM -k KERNEL [OPTIONS] <graph file(s)>"
         << endl;
@@ -155,7 +157,8 @@ getAlgorithm(string algoName)
     }
 }
 
-static void print_query_results(Backend& backend, const vector<string>& args)
+static void
+handle_subcommands(Backend& backend, const vector<string>& args)
 {
     if (args.size() < 1) return;
     if (args[0] != "list" && args[0] != "query") return;
@@ -191,6 +194,10 @@ static void print_query_results(Backend& backend, const vector<string>& args)
         exit(backend.deviceCount(platform));
     } else if (args[0] == "query" && args[1] == "device") {
         backend.queryDevice(platform, device, verbose);
+        exit(EXIT_SUCCESS);
+    } else if (args[0] == "query" && args[1] == "algorithm") {
+        auto& algorithm = getAlgorithm(algorithmName);
+        cout << algorithmName << " " << algorithm.commit() << endl;
         exit(EXIT_SUCCESS);
     } else {
         usage();
@@ -285,7 +292,7 @@ int main(int argc, char * const *argv)
 
     Backend& backend = activeBackend;
 
-    print_query_results(backend, optionResult.remainingArgs);
+    handle_subcommands(backend, optionResult.remainingArgs);
 
     if (optionResult.usageRequested || optionResult.remainingArgs.empty()) {
         options.usage(cout, "    ");
