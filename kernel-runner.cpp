@@ -32,6 +32,20 @@ using namespace boost::filesystem;
 
 enum class framework { cuda, opencl };
 
+static map<string, Algorithm> algorithms;
+static bool debug = false;
+static bool verbose = false;
+static bool warnings = false;
+static bool printStdOut = false;
+static bool fromStdin = false;
+static framework fw = framework::cuda;
+static int device = 0;
+static size_t platform = 0;
+static string outputDir(".");
+static string algorithmName = "";
+static string kernelName = "";
+static vector<string> libPaths = { "." };
+
 static const char *exeName = "kernel-runner";
 static Options options('h', "help", cout, [](ostream& out)
 {
@@ -68,7 +82,7 @@ usage(int exitCode = EXIT_FAILURE)
 
 static map<string, Algorithm>
 loadAlgorithms
-(const char *sym, vector<string> &paths, bool warn, bool debug)
+(const char *sym, vector<string> &paths)
 {
     map<string, string> libs;
     map<string, Algorithm> result;
@@ -99,7 +113,7 @@ loadAlgorithms
     for (auto lib : libs) {
         void *hnd = dlopen(lib.second.c_str(), RTLD_NOW);
         if (!hnd) {
-            if (warn) {
+            if (warnings) {
                 cerr << "dlopen() failed: " << lib.second << endl
                      << dlerror() << endl;
             }
@@ -109,7 +123,7 @@ loadAlgorithms
         auto getAlgo = reinterpret_cast<register_algorithm_t*>(dlsym(hnd, sym));
 
         if (getAlgo != nullptr) getAlgo(result[lib.first]);
-        else if (warn) {
+        else if (warnings) {
             cerr << "dlsym() failed: " << sym << " (" << lib.second << ") "
                  << endl << dlerror() << endl;
         }
@@ -119,41 +133,27 @@ loadAlgorithms
 }
 
 static Algorithm&
-getAlgorithm(map<string, Algorithm>& algorithms, string algorithmName)
+getAlgorithm(string algoName)
 {
     std::string errorMsg;
     std::ostringstream names;
 
     try {
-        return algorithms.at(algorithmName);
+        return algorithms.at(algoName);
     } catch (const out_of_range &) {
         for (auto& algorithm : algorithms) {
             names << "    " << algorithm.first << endl;
         }
 
-        if (algorithmName.empty()) {
+        if (algoName.empty()) {
             errorMsg = "Algorithm name not specified!";
         } else {
-            errorMsg = "No algorithm named \"" + algorithmName + "\"!";
+            errorMsg = "No algorithm named \"" + algoName + "\"!";
         }
 
         reportError(errorMsg, "\n\nSupported algorithms:\n", names.str());
     }
 }
-
-static map<string, Algorithm> algorithms;
-static bool debug = false;
-static bool verbose = false;
-static bool warnings = false;
-static bool printStdOut = false;
-static bool fromStdin = false;
-static framework fw = framework::cuda;
-static int device = 0;
-static size_t platform = 0;
-static string outputDir(".");
-static string algorithmName = "";
-static string kernelName = "";
-static vector<string> paths = { "." };
 
 static void print_query_results(Backend& backend, const vector<string>& args)
 {
@@ -180,7 +180,7 @@ static void print_query_results(Backend& backend, const vector<string>& args)
         }
         exit(EXIT_SUCCESS);
     } else if (args[0] == "list" && args[1] == "implementations") {
-        auto& algorithm = getAlgorithm(algorithms, algorithmName);
+        auto& algorithm = getAlgorithm(algorithmName);
         for (auto &kernel : algorithm) {
             cout << kernel.first << endl;
             if (verbose) kernel.second->help(cout, "    ");
@@ -205,7 +205,7 @@ runJob
 , const string& tag = string()
 )
 {
-    auto& algorithm = getAlgorithm(algorithms, algoName);
+    auto& algorithm = getAlgorithm(algoName);
     algorithm.selectKernel(kernName);
     auto graphs = algorithm.setup(args);
 
@@ -234,7 +234,7 @@ int main(int argc, char * const *argv)
 
     options.add('d', "device", "NUM", device, "Device to use.")
            .add('f', "framework", fw, framework::opencl, "Use OpenCL.")
-           .add('L', "lib", "PATH", paths, "\".\"",
+           .add('L', "lib", "PATH", libPaths, "\".\"",
                 "Search path for algorithm libraries.")
            .add('o', "output-dir", "DIR", outputDir,
                 "Location to use for writing algorithm output.")
@@ -267,7 +267,7 @@ int main(int argc, char * const *argv)
     switch (fw) {
       case framework::opencl: {
         activeBackend = OpenCL;
-        algorithms = loadAlgorithms("registerOpenCL", paths, warnings, debug);
+        algorithms = loadAlgorithms("registerOpenCL", libPaths);
         {
             //array<const char*,1> files {{&_binary_kernel_cl_start}};
             //array<size_t,1> sizes {{(size_t) &_binary_kernel_cl_size}};
@@ -278,7 +278,7 @@ int main(int argc, char * const *argv)
         break;
       }
       case framework::cuda: {
-        algorithms = loadAlgorithms("registerCUDA", paths, warnings, debug);
+        algorithms = loadAlgorithms("registerCUDA", libPaths);
         break;
       }
     }
@@ -290,7 +290,7 @@ int main(int argc, char * const *argv)
     if (optionResult.usageRequested || optionResult.remainingArgs.empty()) {
         options.usage(cout, "    ");
         if (!algorithmName.empty()) {
-            auto& algorithm = getAlgorithm(algorithms, algorithmName);
+            auto& algorithm = getAlgorithm(algorithmName);
             algorithm.help(cout, "    ");
         }
 
