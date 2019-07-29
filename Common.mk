@@ -177,6 +177,12 @@ freeze:
 	$(PRINTF) "Generating frozen config.\n"
 	$(AT)$(CABAL) --builddir="$(abspath $(BUILD)/haskell/)" \
 	    v2-freeze $(if $(AT),2>/dev/null >/dev/null,)
+
+.PHONY: haskell-%
+haskell-%: $(CABALCONFIG)
+	$(PRINTF) " CABAL\t$@\n"
+	$(AT)$(CABAL) --builddir="$(abspath $(BUILD)/haskell/)" \
+	    v2-build $* $(if $(AT),2>/dev/null >/dev/null,)
 endif
 
 BOOST_VERSION:=1.70.0
