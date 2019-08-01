@@ -6,3 +6,6 @@ optimization: 2
 documentation: False
 
 allow-newer: time
+
+package benchmark-analysis
+    Ghc-Options: -freverse-errors
