@@ -40,6 +40,7 @@ import Model
 import Query
 import Schema
 import StepQuery (StepInfo(..))
+import Sql (queryImplementations)
 import Train
 
 percent :: Real n => n -> n -> Text

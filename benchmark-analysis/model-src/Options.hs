@@ -17,7 +17,6 @@ import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import qualified Database.Persist.Sqlite as Sql
 
 import Core
 import Evaluate (Report(..), RelativeTo(..), SortBy(..))
@@ -25,6 +24,8 @@ import Model (Model)
 import OptionParsers
 import Query (getDistinctFieldQuery, runSqlQuery)
 import Schema
+import Sql (SqlField)
+import qualified Sql
 import Train (TrainingConfig(..))
 
 readProps :: MonadIO m => FilePath -> m (Set Text)

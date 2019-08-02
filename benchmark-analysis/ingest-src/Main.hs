@@ -16,8 +16,6 @@ import Data.Monoid ((<>))
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Time.Clock (UTCTime, getCurrentTime)
-import Database.Persist.Sqlite (Filter, Key, Entity(..), (=.), (==.), (+=.))
-import qualified Database.Persist.Sqlite as Sql
 import System.Directory (doesFileExist, removeFile)
 import System.FilePath ((<.>), splitExtension, takeFileName)
 
@@ -30,6 +28,8 @@ import Parsers
 import ProcessPool
 import qualified RuntimeData
 import Schema
+import Sql (Filter, Key, Entity(..), (=.), (==.), (+=.))
+import qualified Sql
 
 addPlatform :: Input SqlM ()
 addPlatform = do

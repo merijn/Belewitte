@@ -25,6 +25,7 @@ import Model
 import Options
 import Query
 import Schema
+import Sql (queryImplementations)
 import StepQuery (StepInfo, stepInfoQuery)
 import Train
 import Validate

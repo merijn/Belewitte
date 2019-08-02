@@ -24,8 +24,6 @@ import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Text (Text)
 import qualified Data.Text as T
-import Database.Persist.Sqlite (Key, Entity(..))
-import qualified Database.Persist.Sqlite as Sql
 import Options.Applicative hiding (Completer)
 import System.Environment (getProgName)
 import Text.Megaparsec (Parsec, parseMaybe, sepBy1, try)
@@ -34,6 +32,8 @@ import Text.Megaparsec.Char.Lexer (decimal)
 
 import Core
 import Schema
+import Sql (Key, Entity(..))
+import qualified Sql
 
 platformIdParser :: Parser (SqlM (Key Platform))
 platformIdParser = fmap entityKey <$> platformParser

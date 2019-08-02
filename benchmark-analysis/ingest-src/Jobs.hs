@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -17,13 +18,13 @@ import qualified Data.Conduit.Text as C
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import Data.Time.Clock (UTCTime, getCurrentTime)
-import Database.Persist.Sqlite (Key, Entity(..), (=.), (==.))
-import qualified Database.Persist.Sqlite as Sql
 import System.Directory (removeFile)
 
 import Core
 import Parsers
 import Schema
+import Sql (Key, Entity(..), (=.), (==.))
+import qualified Sql
 
 (.|>) :: Monad m
       => ConduitT () b m ()
@@ -112,10 +113,10 @@ processProperty (varId, graphId, hash, var) = do
 
     insertProperty :: Property -> SqlM ()
     insertProperty (GraphProperty name val) =
-        insertUniq $ GraphProp graphId name val
+        Sql.insertUniq $ GraphProp graphId name val
 
     insertProperty (StepProperty n name val) =
-        insertUniq $ StepProp varId n name val
+        Sql.insertUniq $ StepProp varId n name val
 
     insertProperty Prediction{} = return ()
 
@@ -144,7 +145,7 @@ timingJobs numRuns platformId = do
         = Sql.selectSource [ImplementationAlgorithmId ==. algId] [] .|> runImpl
       where
         runImpl (Entity implId (Implementation _ name _ implFlags _ _)) = do
-            whenNotExists (filters ++ [TotalTimerImplId ==. implId]) $ do
+            Sql.whenNotExists (filters ++ [TotalTimerImplId ==. implId]) $ do
                 Graph _ _ path _ <- lift $ Sql.getJust graphId
                 Algorithm algo _ <- lift $ Sql.getJust algId
 

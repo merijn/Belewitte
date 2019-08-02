@@ -1,8 +1,10 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MonadFailDesugaring #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -13,6 +15,7 @@ module Core
     , Entity(..)
     , fromSqlKey
     , toSqlKey
+    , showSqlKey
     , MonadIO(liftIO)
     , MonadLogger
     , Log.logErrorN
@@ -39,16 +42,11 @@ import Control.Monad.IO.Unlift
     (MonadIO(liftIO), MonadUnliftIO(..), UnliftIO(..), withUnliftIO)
 import Control.Monad.Logger (LoggingT, LogLevel(..), LogSource, MonadLogger)
 import qualified Control.Monad.Logger as Log
-import Control.Monad.Trans (lift)
+import Control.Monad.Reader (MonadReader(..), ReaderT(..), asks)
 import Control.Monad.Trans.Maybe (MaybeT(..))
-import Control.Monad.Trans.Reader (ReaderT(..), asks, local, mapReaderT)
 import Control.Monad.Trans.Resource (MonadResource, ResourceT, runResourceT)
-import Data.Conduit (ConduitT, (.|), runConduitRes)
-import qualified Data.Conduit.Combinators as C
-import Data.IntMap (IntMap)
-import qualified Data.IntMap.Strict as IM
-import Database.Persist.Sqlite
-import Database.Sqlite.Internal
+import qualified Database.Persist.Sqlite as Sqlite
+import Database.Sqlite.Internal (Connection(..), Connection'(..))
 import Data.Int (Int64)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
@@ -72,39 +70,53 @@ import qualified System.IO as System
 import Exceptions
 import Migration
 import Schema
+import Sql
 import SQLiteExts
 
-type SqlM = ReaderT (RawSqlite SqlBackend) BaseM
-
-type SqlRecord rec = (PersistRecordBackend rec (RawSqlite SqlBackend))
-type SqlField rec field = (PersistField field, SqlRecord rec)
+data Config = Config
+    { explainHandle :: Maybe Handle
+    , failTag :: Maybe Text
+    , sqliteHandle :: RawSqlite SqlBackend
+    }
 
 data QueryMode = Normal | Explain | ExplainLog FilePath
     deriving (Eq, Read, Show)
 
-newtype BaseM a = BaseM
-  { runBaseM :: ReaderT (Maybe Text, Maybe Handle)
-                        (ResourceT (LoggingT IO))
-                        a
-  }
+newtype SqlM a = SqlM (ReaderT Config (ResourceT (LoggingT IO)) a)
   deriving
   ( Applicative, Functor, Monad, MonadCatch, MonadIO, MonadLogger, MonadMask
   , MonadResource, MonadThrow)
 
-instance MonadException BaseM where
+instance MonadException SqlM where
     controlIO f = join (withUnliftIO (f . unliftToRunIO))
       where
         unliftToRunIO :: Monad m => UnliftIO m -> RunIO m
         unliftToRunIO (UnliftIO g) = RunIO (fmap return . g)
 
+instance MonadFail SqlM where
+    fail s = SqlM $ do
+        asks failTag >>= \case
+            Nothing -> logThrowM . PatternFailed . Left $ T.pack s
+            Just msg -> logThrowM . PatternFailed $ Right msg
+
+instance MonadReader (RawSqlite SqlBackend) SqlM where
+    ask = SqlM $ asks sqliteHandle
+    local f (SqlM act) = SqlM $ local apply act
+      where
+        apply cfg = cfg { sqliteHandle = f (sqliteHandle cfg) }
+
+instance MonadUnliftIO SqlM where
+  askUnliftIO = SqlM $ withUnliftIO $ \u ->
+                            return (UnliftIO (\(SqlM m) -> unliftIO u m))
+
 showText :: Show a => a -> Text
 showText = T.pack . show
 
 logIfFail :: Show v => Text -> v -> SqlM a -> SqlM a
-logIfFail tag val = mapReaderT . setTag $ tag <> ": " <> showText val
+logIfFail tag val = setTag $ tag <> ": " <> showText val
   where
-    setTag :: Text -> BaseM a -> BaseM a
-    setTag t = BaseM . local (\(_, v) -> (Just t, v)) . runBaseM
+    setTag :: Text -> SqlM a -> SqlM a
+    setTag t (SqlM m) = SqlM $ local (\cfg -> cfg { failTag = Just t }) m
 
 withTime :: MonadIO m => m a -> m (Double, a)
 withTime act = do
@@ -114,16 +126,6 @@ withTime act = do
     let wallTime :: Integer
         wallTime = toNanoSecs (diffTimeSpec start end)
     return $ (fromIntegral wallTime / 1e9, r)
-
-instance MonadFail BaseM where
-    fail s = BaseM $ do
-        asks fst >>= \case
-            Nothing -> logThrowM . PatternFailed . Left $ T.pack s
-            Just msg -> logThrowM . PatternFailed $ Right msg
-
-instance MonadUnliftIO BaseM where
-  askUnliftIO = BaseM $ withUnliftIO $ \u ->
-                            return (UnliftIO (unliftIO u . runBaseM))
 
 data Options a =
   Options
@@ -137,7 +139,7 @@ data Options a =
 
 logQueryExplanation :: (Handle -> SqlM ()) -> SqlM ()
 logQueryExplanation queryLogger = do
-    queryHandle <- lift . BaseM $ asks snd
+    queryHandle <- SqlM $ asks explainHandle
     case queryHandle of
         Nothing -> return ()
         Just hnd -> queryLogger hnd
@@ -173,7 +175,7 @@ runSqlMWithOptions Options{..} work = do
     setUncaughtExceptionHandler $ topLevelHandler (logVerbosity > 0)
     getNumProcessors >>= setNumCapabilities
     withQueryLog $ \mHnd -> runStack mHnd . wrapSqliteExceptions $ do
-        sqlitePtr <- asks $ getSqlitePtr . Lens.view rawSqliteConnection
+        sqlitePtr <- asks $ getSqlitePtr . Lens.view Sqlite.rawSqliteConnection
 
         registerSqlFunctions sqlitePtr
 
@@ -194,10 +196,10 @@ runSqlMWithOptions Options{..} work = do
   where
     runStack
         :: Maybe Handle -> SqlM a -> IO a
-    runStack mHnd =
-      runLog . runBase config . withRawSqliteConnInfo connInfo . runReaderT
+    runStack mHnd act =
+      runLog . Sqlite.withRawSqliteConnInfo connInfo $ runSql act . config
       where
-        config = (Nothing, mHnd)
+        config = Config mHnd Nothing
 
     withQueryLog :: (Maybe Handle -> IO r) -> IO r
     withQueryLog f = case queryMode of
@@ -208,11 +210,12 @@ runSqlMWithOptions Options{..} work = do
     runLog :: LoggingT IO a -> IO a
     runLog = Log.runStderrLoggingT . Log.filterLogger logFilter
 
-    runBase :: (Maybe Text, Maybe Handle) -> BaseM a -> LoggingT IO a
-    runBase cfg = runResourceT . (`runReaderT` cfg) . runBaseM
+    runSql :: SqlM a -> Config -> LoggingT IO a
+    runSql (SqlM act) cfg = runResourceT $ runReaderT act cfg
 
     connInfo :: SqliteConnectionInfo
-    connInfo = Lens.set fkEnabled True $ mkSqliteConnectionInfo database
+    connInfo =
+        Lens.set Sqlite.fkEnabled True $ Sqlite.mkSqliteConnectionInfo database
 
     getSqlitePtr :: Connection -> Ptr ()
     getSqlitePtr (Connection _ (Connection' ptr)) = ptr
@@ -224,56 +227,3 @@ runSqlMWithOptions Options{..} work = do
       where
         verbosity = levels !! logVerbosity
         levels = LevelError : LevelWarn : LevelInfo : repeat LevelDebug
-
-showSqlKey :: ToBackendKey SqlBackend record => Key record -> Text
-showSqlKey = showText . fromSqlKey
-
-likeFilter :: EntityField record Text -> Text -> Filter record
-likeFilter field val =
-  Filter field (FilterValue $ T.concat ["%", val, "%"]) (BackendSpecificFilter "like")
-
-whenNotExists
-    :: SqlRecord record
-    => [Filter record] -> ConduitT i a SqlM () -> ConduitT i a SqlM ()
-whenNotExists filters act = lift (selectFirst filters []) >>= \case
-    Just _ -> return ()
-    Nothing -> act
-
-getUniq
-    :: (SqlRecord record, OnlyOneUniqueKey record)
-    => record -> SqlM (Key record)
-getUniq record = do
-    result <- getBy =<< onlyUnique record
-    case result of
-        Nothing -> insert record
-        Just (Entity k _) -> return k
-
-insertUniq
-    :: (SqlRecord record, AtLeastOneUniqueKey record, Eq record, Show record)
-    => record -> SqlM ()
-insertUniq record = do
-    result <- insertBy record
-    case result of
-        Left (Entity _ r) | record /= r -> Log.logErrorN . T.pack $ mconcat
-            ["Unique insert failed:\nFound: ", show r, "\nNew: ", show record]
-        _ -> return ()
-
-queryImplementations :: Key Algorithm -> SqlM (IntMap Implementation)
-queryImplementations algoId = fmap (IM.union builtinImpls) . runConduitRes $
-    selectImpls algoId .| C.foldMap toIntMap
-  where
-    selectImpls aId = selectSource [ ImplementationAlgorithmId ==. aId ] []
-
-    toIntMap :: Entity Implementation -> IntMap Implementation
-    toIntMap (Entity k val) = IM.singleton (fromIntegral $ fromSqlKey k) val
-
-    mkImpl :: Text -> Text -> Implementation
-    mkImpl short long =
-        Implementation algoId short (Just long) Nothing Builtin False
-
-    builtinImpls :: IntMap Implementation
-    builtinImpls = IM.fromList
-        [ (predictedImplId, mkImpl "predicted" "Predicted")
-        , (bestNonSwitchingImplId, mkImpl "best" "Best Non-switching")
-        , (optimalImplId, mkImpl "optimal" "Optimal")
-        ]

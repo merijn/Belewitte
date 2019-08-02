@@ -27,14 +27,14 @@ import Data.Char (toLower)
 import Data.Function (on)
 import Data.List (isPrefixOf)
 import qualified Data.Text as T
-import Database.Persist.Sqlite (Entity(..), EntityField, Unique)
-import qualified Database.Persist.Sqlite as Sql
 import Lens.Micro.Extras (view)
 import System.Console.Haskeline hiding (Handler)
 import System.Directory (doesFileExist)
 import Text.Read (readMaybe)
 
 import Core
+import Sql (Entity(..), EntityField, SqlRecord, Unique)
+import qualified Sql
 import Utils.Process (CreateProcess, UnexpectedTermination(..))
 import qualified Utils.Process as Process
 import qualified RuntimeData
@@ -182,7 +182,7 @@ sqlInput field uniq = InputQuery
     getFieldValue = view (Sql.fieldLens field)
     toCompletions = map $ simpleCompletion . T.unpack . getFieldValue
     fromQuery s =
-      toCompletions <$> Sql.selectList [field `likeFilter` T.pack s] []
+      toCompletions <$> Sql.selectList [field `Sql.likeFilter` T.pack s] []
 
 optionalInput
     :: (Applicative m)

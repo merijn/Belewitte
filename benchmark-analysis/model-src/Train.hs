@@ -33,8 +33,6 @@ import qualified Data.Text.IO as T
 import Data.Time.Clock (getCurrentTime)
 import Data.Vector.Unboxed (Vector)
 import qualified Data.Vector.Unboxed as VU
-import Database.Persist.Sqlite ((==.))
-import qualified Database.Persist.Sqlite as Sql
 import System.IO (hClose)
 import Text.Megaparsec (Parsec, parse, between, sepBy1, some)
 import Text.Megaparsec.Char (char, eol, string)
@@ -48,6 +46,8 @@ import Query
 import RuntimeData (getModelScript)
 import Schema
 import StepQuery (StepInfo(..), stepInfoQuery)
+import Sql ((==.))
+import qualified Sql
 
 data ModelStats = ModelStats
      { modelGraphPropImportance :: Map Text Double

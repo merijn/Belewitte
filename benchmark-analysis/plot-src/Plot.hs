@@ -25,8 +25,6 @@ import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import Database.Persist.Sqlite ((==.))
-import qualified Database.Persist.Sqlite as Sql
 import Data.Vector.Unboxed (Vector)
 import qualified Data.Vector.Unboxed as VU
 import System.IO (Handle, IOMode(WriteMode), hPutStr, stdout, withFile)
@@ -38,6 +36,8 @@ import Utils.Process (withStdin)
 import Query
 import RuntimeData (getBarPlotScript)
 import Schema
+import Sql ((==.))
+import qualified Sql
 
 queryVariants :: Key Algorithm -> Set Text -> SqlM (Set (Key Variant))
 queryVariants algoId graphs = do
@@ -105,7 +105,7 @@ plotOptions plottype =
     impls = do
         keepImpls <- readSet "implementations"
         return $ \algoId ->
-            filterImpls <$> keepImpls <*> queryImplementations algoId
+            filterImpls <$> keepImpls <*> Sql.queryImplementations algoId
 
     readSet :: FilePath -> Parser (SqlM (Set Text))
     readSet s = fmap readText . strOption $ mconcat
