@@ -278,7 +278,7 @@ evaluateModel algo platId defImpl reportCfg@Report{..} model trainConfig = do
                 "Default implementation not found for algorithm"
                 (getAlgoName algorithm)
 
-    stats <- runSqlQuery query $
+    stats <- runSqlQueryConduit query $
         foldGroup ((==) `on` stepVariantId) (aggregateSteps defaultImpl model)
         .| C.map (addBestNonSwitching impls)
         .| aggregateVariants reportVariants reportRelativeTo impls
@@ -310,7 +310,7 @@ compareImplementations
     :: Key Algorithm -> Key Platform -> Report -> SqlM ()
 compareImplementations algoId platformId reportConfig@Report{..} = do
     impls <- queryImplementations algoId
-    stats <- runSqlQuery query $
+    stats <- runSqlQueryConduit query $
         C.map addBestNonSwitching
         .| aggregateVariants reportVariants reportRelativeTo impls
 

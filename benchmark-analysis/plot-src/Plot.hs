@@ -41,7 +41,7 @@ import qualified Sql
 
 queryVariants :: Key Algorithm -> Set Text -> SqlM (Set (Key Variant))
 queryVariants algoId graphs = do
-    gids <- runConduitRes $ Sql.selectSource [] []
+    gids <- runConduit $ Sql.selectSource [] []
         .| C.filter (\i -> S.member (graphName (Sql.entityVal i)) graphs)
         .| C.map Sql.entityKey
         .| C.foldMap S.singleton
@@ -231,7 +231,7 @@ plot PlotConfig{..} plotName impls query convert
     isRelevant (i, _) = IM.member (fromIntegral i) impls
 
     doWithHandle :: Handle -> SqlM ()
-    doWithHandle hnd = runSqlQuery query $
+    doWithHandle hnd = runSqlQueryConduit query $
         convert
         .| C.map (second (VU.filter isRelevant))
         .| reportData hnd normalise impls
@@ -240,19 +240,18 @@ runQueryDump
     :: (Foldable f, Show r)
     => Text -> Maybe String -> String -> (a -> Query r) -> f a -> SqlM ()
 runQueryDump algoName Nothing _ mkQuery coll = case toList coll of
-    (val:_) -> runSqlQuery (mkQuery val) $ void await
+    (val:_) -> void $ runSqlQueryConduit (mkQuery val) await
     _ -> logThrowM $
         UnexpectedMissingData "No variants found for algorithm" algoName
 
 runQueryDump _ (Just suffix) name mkQuery vals =
   withUnliftIO $ \(UnliftIO runInIO) ->
     withFile (name <> suffix) WriteMode $ \hnd ->
-        forM_ vals $ \val ->
-            runInIO . runSqlQuery (mkQuery val) $
-                C.map showText
-                .| C.map (`T.snoc` '\n')
-                .| C.encode C.utf8
-                .| C.sinkHandle hnd
+        forM_ vals $ \val -> runInIO . runSqlQueryConduit (mkQuery val) $
+            C.map showText
+            .| C.map (`T.snoc` '\n')
+            .| C.encode C.utf8
+            .| C.sinkHandle hnd
 
 main :: IO ()
 main = runSqlM commands $ \case

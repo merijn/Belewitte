@@ -7,7 +7,6 @@
 module Jobs (propertyJobs, processProperty, timingJobs, processTiming) where
 
 import Control.Monad (unless, when)
-import Control.Monad.Trans (lift)
 import Crypto.Hash (Digest, MD5)
 import Crypto.Hash.Conduit (hashFile)
 import qualified Data.ByteArray (convert)

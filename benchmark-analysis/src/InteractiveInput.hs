@@ -1,4 +1,8 @@
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GeneralisedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE Rank2Types #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -8,7 +12,6 @@ module InteractiveInput
     ( Completer(..)
     , Input
     , runInput
-    , liftSql
     , getInteractive
     , getManyInteractive
     , processCompleterText
@@ -20,8 +23,11 @@ module InteractiveInput
     ) where
 
 import qualified Control.Monad.Catch as Except
-import Control.Monad.Reader (ask, local)
-import Control.Monad.Trans (lift)
+import Control.Monad.Fail (MonadFail)
+import qualified Control.Monad.Fail as Fail
+import Control.Monad.Reader (MonadReader, ask, local, mapReaderT)
+import Control.Monad.Trans (MonadTrans(lift))
+import Control.Monad.Trans.Resource (MonadResource(..))
 import Data.Bool (bool)
 import Data.Char (toLower)
 import Data.Function (on)
@@ -33,7 +39,7 @@ import System.Directory (doesFileExist)
 import Text.Read (readMaybe)
 
 import Core
-import Sql (Entity(..), EntityField, SqlRecord, Unique)
+import Sql (Entity(..), EntityField, RawSqlite, SqlBackend, SqlRecord, Unique)
 import qualified Sql
 import Utils.Process (CreateProcess, UnexpectedTermination(..))
 import qualified Utils.Process as Process
@@ -49,7 +55,28 @@ data InputQuery m a = InputQuery
     , inputError :: Text
     }
 
-type Input m = InputT (ReaderT (Completer m) m)
+newtype Input m a = Input { unInput :: InputT (ReaderT (Completer m) m) a }
+    deriving ( Applicative, Functor, Monad, MonadIO)
+
+type Backend = RawSqlite SqlBackend
+instance MonadReader Backend m => MonadReader Backend (Input m) where
+    ask = Input . lift . lift $ ask
+    local f = Input . mapInputT (mapReaderT (local f)) . unInput
+
+instance MonadResource m => MonadResource (Input m) where
+    liftResourceT = Input . lift . liftResourceT
+
+instance MonadThrow m => MonadThrow (Input m) where
+    throwM = Input . lift . Except.throwM
+
+instance MonadFail m => MonadFail (Input m) where
+    fail = Input . lift . lift . Fail.fail
+
+instance MonadTagFail m => MonadTagFail (Input m) where
+    logIfFail s v = Input . mapInputT (mapReaderT (logIfFail s v)) . unInput
+
+instance MonadTrans Input where
+    lift = Input . lift . lift
 
 dynCompleter :: CompletionFunc (ReaderT (Completer SqlM) SqlM)
 dynCompleter completeArgs = do
@@ -58,16 +85,13 @@ dynCompleter completeArgs = do
         FileCompletion -> completeFilename completeArgs
 
 runInput :: Input SqlM a -> SqlM a
-runInput = (`runReaderT` emptyCompletion) . runInputT settings
+runInput (Input act) = runReaderT (runInputT settings act) emptyCompletion
   where
     emptyCompletion = SimpleCompletion $ const (return [])
     settings = setComplete dynCompleter defaultSettings
 
-liftSql :: SqlM a -> Input SqlM a
-liftSql = lift . lift
-
 withCompletion :: Monad m => Completer m -> Input m a -> Input m a
-withCompletion completion = mapInputT $ local (const completion)
+withCompletion completion = Input . mapInputT (local (const completion)) . unInput
 
 withProcessCompletion
     :: (MonadLogger m, MonadMask m, MonadUnliftIO m)
@@ -111,7 +135,7 @@ withProcessCompletion args act = do
 getInteractive
     :: forall a m . (MonadException m, MonadIO m, MonadLogger m, MonadThrow m)
     => InputQuery m a -> Text -> Input m a
-getInteractive InputQuery{..} prompt = inputCompleter go
+getInteractive InputQuery{..} prompt = inputCompleter $ Input go
   where
     go = getInputLine (T.unpack prompt ++ ": ") >>= \case
         Nothing -> lift $ logThrowM StdinDisappeared
@@ -125,7 +149,7 @@ getInteractive InputQuery{..} prompt = inputCompleter go
 getManyInteractive
     :: forall a m . (MonadException m, MonadIO m, MonadLogger m, MonadThrow m)
     => InputQuery m a -> Text -> Input m [a]
-getManyInteractive InputQuery{..} prompt = inputCompleter $ do
+getManyInteractive InputQuery{..} prompt = inputCompleter . Input $ do
     outputStrLn (T.unpack prompt ++ ":\n")
     go id
   where

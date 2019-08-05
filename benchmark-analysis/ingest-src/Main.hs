@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -28,19 +29,19 @@ import Parsers
 import ProcessPool
 import qualified RuntimeData
 import Schema
-import Sql (Filter, Key, Entity(..), (=.), (==.), (+=.))
+import Sql (Entity(..), Filter, Key, MonadSql, (=.), (==.), (+=.))
 import qualified Sql
 
 addPlatform :: Input SqlM ()
 addPlatform = do
     platformName <- getInteractive textInput "Platform Slurm Name"
     prettyName <- getInteractive optionalInput "Platform Pretty Name"
-    liftSql . Sql.insert_ $ Platform platformName prettyName
+    Sql.insert_ $ Platform platformName prettyName
 
 addGraphs :: [FilePath] -> Input SqlM ()
 addGraphs paths = do
     datasetTag <- getInteractive textInput "Dataset Tag"
-    liftSql . forM_ paths $ \path -> do
+    forM_ paths $ \path -> do
         liftIO $ doesFileExist path >>= guard
         let (graphName, ext) = splitExtension $ takeFileName path
         liftIO $ guard (ext == ".graph")
@@ -50,7 +51,7 @@ addAlgorithm :: Input SqlM ()
 addAlgorithm = do
     algoName <- getInteractive input "Algorithm Name"
     prettyName <- getInteractive optionalInput "Algorithm Pretty Name"
-    liftSql . Sql.insert_ $ Algorithm algoName prettyName
+    Sql.insert_ $ Algorithm algoName prettyName
   where
     input = processCompleterText ["list","algorithms"]
 
@@ -65,7 +66,7 @@ addImplementation = do
     implType <- getInteractive (readInput (/=Builtin)) "Implementation type"
     runnable <- getInteractive (readInput (const True)) "Runnable"
 
-    liftSql . Sql.insert_ $
+    Sql.insert_ $
         Implementation algoId implName prettyName flags implType runnable
   where
     algoInput = sqlInput AlgorithmName UniqAlgorithm
@@ -80,8 +81,7 @@ addVariant = do
 
     let mkVariant gId = Variant gId algoId variantName flags Nothing False 0
 
-    liftSql . runConduit $
-        Sql.selectKeys [] [] .| C.mapM_ (Sql.insert_ . mkVariant)
+    runConduit $ Sql.selectKeys [] [] .| C.mapM_ (Sql.insert_ . mkVariant)
   where
     algoInput = sqlInput AlgorithmName UniqAlgorithm
 
@@ -94,7 +94,7 @@ importResults = do
     filepath <- getInteractive filepathInput "Result File"
 
     timestamp <- liftIO getCurrentTime
-    liftSql . runConduit $
+    runConduit $
         C.sourceFile filepath
         .| C.decode C.utf8
         .| C.map (T.replace "," "")
@@ -106,12 +106,13 @@ importResults = do
     implInput algoId = sqlInput ImplementationName (UniqImpl algoId)
 
     insertResult
-        :: Key Platform
+        :: (MonadSql m, MonadTagFail m)
+        => Key Platform
         -> Key Algorithm
         -> Key Implementation
         -> UTCTime
         -> ExternalResult
-        -> SqlM ()
+        -> m ()
     insertResult platId algoId implId ts (Result gname varName Timing{..}) = do
         [graphId] <- logIfFail "More than one graph found for" gname $
             Sql.selectKeysList [GraphName ==. gname] []
@@ -170,7 +171,7 @@ runTask Process{inHandle,outHandle} (label, x, y, z, cmd) = handleError $ do
 
 
 runBenchmarks :: Int -> Int -> Input SqlM ()
-runBenchmarks numNodes numRuns = liftSql $ do
+runBenchmarks numNodes numRuns = lift $ do
     -- Error out if C++ code hasn't been compiled
     void $ do
         RuntimeData.getKernelExecutable
@@ -189,20 +190,20 @@ runBenchmarks numNodes numRuns = liftSql $ do
             .| parMapM taskHandler numNodes (withProcess procPool runTask)
             .| C.mapM_ (processTiming platformId)
 
-resetRetries :: SqlM ()
+resetRetries :: MonadSql m => m ()
 resetRetries = Sql.updateWhere [] [VariantRetryCount =. 0]
 
-resetProperties :: SqlM ()
+resetProperties :: MonadSql m => m ()
 resetProperties = do
     Sql.deleteWhere ([] :: [Filter GraphProp])
     Sql.deleteWhere ([] :: [Filter StepProp])
 
-resetMeasurements :: SqlM ()
+resetMeasurements :: MonadSql m => m ()
 resetMeasurements = do
     Sql.deleteWhere ([] :: [Filter StepTimer])
     Sql.deleteWhere ([] :: [Filter TotalTimer])
 
-resetModels :: SqlM ()
+resetModels :: MonadSql m => m ()
 resetModels = do
     Sql.deleteWhere ([] :: [Filter PredictionModel])
     Sql.deleteWhere ([] :: [Filter ModelGraphProperty])
@@ -231,16 +232,16 @@ commands name = (,) docs . hsubparser $ mconcat
                  runBenchmarks <$> parallelism <*> numRuns
     , subCommand "reset-retries" "resets the retry count"
                  "Reset the retry count for failed experiments" $
-                 pure $ liftSql resetRetries
+                 pure $ resetRetries
     , subCommand "reset-properties" "deletes logged properties"
                  "Deletes the properties stored for each variant" $
-                 pure $ liftSql resetProperties
+                 pure $ resetProperties
     , subCommand "reset-measurements" "deletes timing measurements"
                  "Delete all timing measurements" $
-                 pure $ liftSql resetMeasurements
+                 pure $ resetMeasurements
     , subCommand "reset-models" "deletes models"
                  "Delete all stored models" $
-                 pure $ liftSql resetModels
+                 pure $ resetModels
     ]
   where
     docs = mconcat

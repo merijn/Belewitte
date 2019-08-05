@@ -63,7 +63,7 @@ import Database.Persist.Types (PersistValue)
 
 import Schema
 
-type MonadSql m = (MonadReader (RawSqlite SqlBackend) m, MonadIO m)
+type MonadSql m = (MonadIO m, MonadReader (RawSqlite SqlBackend) m)
 type SqlRecord rec = (PersistRecordBackend rec (RawSqlite SqlBackend))
 type SqlField rec field = (PersistField field, SqlRecord rec)
 

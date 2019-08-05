@@ -30,7 +30,7 @@ validateModel algoId platformId model config = do
     total = getTotalQuery algoId platformId config
 
     computeResults name query = do
-        result <- runSqlQuery predictions $ C.foldl aggregate (0,0,0)
+        result <- runSqlQueryConduit predictions $ C.foldl aggregate (0,0,0)
         report name result
       where
         predictions = first (predict model) <$> query

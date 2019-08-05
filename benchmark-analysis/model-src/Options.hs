@@ -22,7 +22,7 @@ import Core
 import Evaluate (Report(..), RelativeTo(..), SortBy(..))
 import Model (Model)
 import OptionParsers
-import Query (getDistinctFieldQuery, runSqlQuery)
+import Query (getDistinctFieldQuery, runSqlQueryConduit)
 import Schema
 import Sql (SqlField)
 import qualified Sql
@@ -271,4 +271,4 @@ trainingConfig = getCompose $
         => Sql.EntityField rec Text -> SqlParser (Set Text)
     gatherProps field = Compose . pure $ do
         query <- getDistinctFieldQuery field
-        runSqlQuery query $ C.foldMap S.singleton
+        runSqlQueryConduit query $ C.foldMap S.singleton

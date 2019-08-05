@@ -1,4 +1,5 @@
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MonadFailDesugaring #-}
@@ -11,19 +12,19 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 module Query
-    ( Query(..)
+    ( MonadQuery
+    , Query(..)
     , VariantInfo(..)
     , explainSqlQuery
     , randomizeQuery
     , runSqlQuery
+    , runSqlQueryConduit
     , runSqlQueryCount
     , getDistinctFieldQuery
     , variantInfoQuery
     ) where
 
 import Control.Monad (void)
-import Control.Monad.Trans.Resource (release)
-import Data.Acquire (allocateAcquire)
 import Data.Conduit (ConduitT, Void, (.|), await, runConduit)
 import qualified Data.Conduit.Combinators as C
 import Data.List (intersperse)
@@ -40,8 +41,16 @@ import System.IO (Handle)
 
 import Core
 import Schema
-import Sql (SqlRecord)
+import Sql (MonadSql, SqlRecord)
 import Utils.Vector (byteStringToVector)
+
+type MonadQuery m =
+    ( MonadSql m
+    , MonadExplain m
+    , MonadLogger m
+    , MonadResource m
+    , MonadThrow m
+    )
 
 data Query r =
   Query
@@ -76,14 +85,14 @@ printExplainTree hnd= do
       where
         branches = mconcat $ intersperse "  " $ replicate (length stack) "|"
 
-explainSqlQuery :: Query r -> Handle -> SqlM ()
+explainSqlQuery :: MonadQuery m => Query r -> Handle -> m ()
 explainSqlQuery originalQuery hnd = do
     liftIO $ do
         T.hPutStrLn hnd $ T.replicate 80 "#"
         T.hPutStrLn hnd $ toQueryText originalQuery
         T.hPutStrLn hnd $ ""
 
-    runSqlQuery' explainQuery $ printExplainTree hnd
+    runConduit $ runSqlQuery' explainQuery .| printExplainTree hnd
   where
     explain
         :: (MonadIO m, MonadLogger m, MonadThrow m)
@@ -117,22 +126,23 @@ randomizeQuery seed trainingSize originalQuery = (training, validation)
       , queryText = randomizedQuery <> [i|LIMIT -1 OFFSET ?|]
       }
 
-runSqlQuery :: Query r -> ConduitT r Void SqlM a -> SqlM a
-runSqlQuery query sink = do
+runSqlQuery :: MonadQuery m => Query r -> ConduitT () r m ()
+runSqlQuery query = do
     logQueryExplanation $ explainSqlQuery query
-    (timing, result) <- withTime $ runSqlQuery' query sink
+    (timing, ()) <- withTime $ runSqlQuery' query
 
     let formattedTime :: Text
         formattedTime = T.pack $ showGFloat (Just 3) timing "s"
 
     logInfoN $ "Query time: " <> formattedTime
 
-    logQueryExplanation $ \hnd -> do
-        liftIO $ do
-            T.hPutStrLn hnd $ "\nQuery time: " <> formattedTime
-            T.hPutStrLn hnd $ ""
-            T.hPutStrLn hnd $ T.replicate 80 "#"
-    return result
+    logQueryExplanation $ \hnd -> liftIO $ do
+        T.hPutStrLn hnd $ "\nQuery time: " <> formattedTime
+        T.hPutStrLn hnd $ ""
+        T.hPutStrLn hnd $ T.replicate 80 "#"
+
+runSqlQueryConduit :: MonadQuery m => Query r -> ConduitT r Void m a -> m a
+runSqlQueryConduit query sink = runConduit $ runSqlQuery query .| sink
 
 mIf :: Monoid m => Bool -> m -> m
 mIf condition val
@@ -145,17 +155,17 @@ toQueryText Query{..} = mconcat $
     , mIf (not $ null commonTableExpressions) "\nWITH"
     ] <> intersperse ",\n\n" commonTableExpressions <> ["\n", queryText]
 
-runSqlQuery' :: Query r -> ConduitT r Void SqlM a -> SqlM a
-runSqlQuery' query@Query{convert,cteParams,params} sink = do
-    srcRes <- liftPersist $ rawQueryRes (toQueryText query) queryParams
-    (key, src) <- allocateAcquire srcRes
-    runConduit (src .| C.mapM convert .| sink) <* release key
+runSqlQuery'
+    :: (MonadLogger m, MonadResource m, MonadSql m, MonadThrow m)
+    => Query r -> ConduitT () r m ()
+runSqlQuery' query@Query{convert,cteParams,params} = do
+    rawQuery (toQueryText query) queryParams .| C.mapM convert
   where
     queryParams = cteParams ++ params
 
-runSqlQueryCount :: Query r -> SqlM Int
+runSqlQueryCount :: MonadQuery m => Query r -> m Int
 runSqlQueryCount originalQuery = do
-    result <- runSqlQuery countQuery await
+    result <- runConduit $ runSqlQuery countQuery .| await
     case result of
         Just n -> return n
         Nothing -> logThrowM QueryReturnedZeroResults
@@ -170,10 +180,10 @@ runSqlQueryCount originalQuery = do
         }
 
 getDistinctFieldQuery
-    :: forall a rec
-     . (PersistFieldSql a, SqlRecord rec)
+    :: forall a m rec
+     . (MonadSql m, PersistFieldSql a, SqlRecord rec)
      => EntityField rec a
-     -> SqlM (Query a)
+     -> m (Query a)
 getDistinctFieldQuery entityField = liftPersist $ do
     table <- getTableName (undefined :: rec)
     field <- getFieldName entityField
@@ -193,7 +203,7 @@ getDistinctFieldQuery entityField = liftPersist $ do
     params = []
 
     convert
-        :: (MonadIO m, MonadLogger m, MonadThrow m) => [PersistValue] -> m a
+        :: (MonadIO n, MonadLogger n, MonadThrow n) => [PersistValue] -> n a
     convert [v] | Right val <- fromPersistValue v = return val
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
         [sqlType (Proxy :: Proxy a)]

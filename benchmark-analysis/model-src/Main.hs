@@ -77,9 +77,9 @@ main = runSqlM commands $ \case
                 | T.null desc = Nothing
                 | otherwise = Just desc
 
-        modelTrainConfig <- liftSql getConfig
+        modelTrainConfig <- lift getConfig
 
-        modelId <- liftSql $ fst <$> trainModel algoId platformId ModelDesc{..}
+        modelId <- lift $ fst <$> trainModel algoId platformId ModelDesc{..}
 
         liftIO $ print (fromSqlKey modelId)
 
@@ -121,8 +121,8 @@ main = runSqlM commands $ \case
         graphPropQuery <- getDistinctFieldQuery GraphPropProperty
         stepPropQuery <- getDistinctFieldQuery StepPropProperty
 
-        graphprops <- runSqlQuery graphPropQuery $ C.foldMap S.singleton
-        stepprops <- runSqlQuery stepPropQuery $ C.foldMap S.singleton
+        graphprops <- runSqlQueryConduit graphPropQuery $ C.foldMap S.singleton
+        stepprops <- runSqlQueryConduit stepPropQuery $ C.foldMap S.singleton
 
         let stepQuery :: Query StepInfo
             stepQuery = stepInfoQuery algoId platformId graphprops stepprops
@@ -130,5 +130,5 @@ main = runSqlM commands $ \case
             variantQuery :: Query VariantInfo
             variantQuery = variantInfoQuery algoId platformId
 
-        runSqlQuery stepQuery $ querySink outputSuffix "stepInfoQuery-"
-        runSqlQuery variantQuery $ querySink outputSuffix "variantInfoQuery-"
+        runSqlQueryConduit stepQuery $ querySink outputSuffix "stepInfoQuery-"
+        runSqlQueryConduit variantQuery $ querySink outputSuffix "variantInfoQuery-"

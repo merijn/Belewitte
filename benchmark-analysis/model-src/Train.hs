@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -15,7 +16,6 @@ module Train
     ) where
 
 import Control.Monad (forM, forM_)
-import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Resource (register, release)
 import Data.Binary.Get (getDoublehost, getRemainingLazyByteString, runGet)
 import Data.Binary.Put (putDoublehost, putInt64host, runPut)
@@ -46,7 +46,7 @@ import Query
 import RuntimeData (getModelScript)
 import Schema
 import StepQuery (StepInfo(..), stepInfoQuery)
-import Sql ((==.))
+import Sql (MonadSql, (==.))
 import qualified Sql
 
 data ModelStats = ModelStats
@@ -71,10 +71,11 @@ data ModelDescription = ModelDesc
     }
 
 splitQuery
-    :: Key Algorithm
+    :: MonadQuery m
+    => Key Algorithm
     -> Key Platform
     -> TrainingConfig
-    -> SqlM (Query StepInfo, Query StepInfo)
+    -> m (Query StepInfo, Query StepInfo)
 splitQuery algoId platformId cfg@TrainConfig{..} = do
     rowCount <- runSqlQueryCount query
 
@@ -86,11 +87,13 @@ splitQuery algoId platformId cfg@TrainConfig{..} = do
     query = getTotalQuery algoId platformId cfg
 
 getTrainingQuery
-    :: Key Algorithm -> Key Platform -> TrainingConfig -> SqlM (Query StepInfo)
+    :: MonadQuery m
+    => Key Algorithm -> Key Platform -> TrainingConfig -> m (Query StepInfo)
 getTrainingQuery algoId platformId = fmap fst . splitQuery algoId platformId
 
 getValidationQuery
-    :: Key Algorithm -> Key Platform -> TrainingConfig -> SqlM (Query StepInfo)
+    :: MonadQuery m
+    => Key Algorithm -> Key Platform -> TrainingConfig -> m (Query StepInfo)
 getValidationQuery algoId platformId = fmap snd . splitQuery algoId platformId
 
 getTotalQuery
@@ -98,16 +101,17 @@ getTotalQuery
 getTotalQuery algoId platformId TrainConfig{..} =
   stepInfoQuery algoId platformId trainGraphProps trainStepProps
 
-getModelTrainingConfig :: Key PredictionModel -> SqlM TrainingConfig
+getModelTrainingConfig
+    :: (MonadResource m, MonadSql m) => Key PredictionModel -> m TrainingConfig
 getModelTrainingConfig modelId = do
     PredictionModel{..} <- Sql.getJust modelId
 
-    graphProps <- runConduitRes $
+    graphProps <- runConduit $
         Sql.selectSource [ModelGraphPropertyModelId ==. modelId] []
         .| C.map (modelGraphPropertyProperty . Sql.entityVal)
         .| C.foldMap S.singleton
 
-    stepProps <- runConduitRes $
+    stepProps <- runConduit $
         Sql.selectSource [ModelStepPropertyModelId ==. modelId] []
         .| C.map (modelStepPropertyProperty . Sql.entityVal)
         .| C.foldMap S.singleton
@@ -124,11 +128,11 @@ getModelStats modelId = do
     modelUnknownCount <-
         predictionModelTotalUnknownCount <$> Sql.getJust modelId
 
-    modelGraphPropImportance <- runConduitRes $
+    modelGraphPropImportance <- runConduit $
         Sql.selectSource [ModelGraphPropertyModelId ==. modelId] []
         .| C.foldMap (graphPropMap . Sql.entityVal)
 
-    modelStepPropImportance <- runConduitRes $
+    modelStepPropImportance <- runConduit $
         Sql.selectSource [ModelStepPropertyModelId ==. modelId] []
         .| C.foldMap (stepPropMap . Sql.entityVal)
 
@@ -153,10 +157,11 @@ getModelStats modelId = do
     toImplSet UnknownSet{..} = S.singleton $ fromSqlKey unknownSetImplId
 
 trainModel
-    :: Key Algorithm
+    :: (MonadMask m, MonadQuery m, MonadTagFail m)
+    => Key Algorithm
     -> Key Platform
     -> ModelDescription
-    -> SqlM (Key PredictionModel, Model)
+    -> m (Key PredictionModel, Model)
 trainModel algoId platId ModelDesc{..} = do
     let TrainConfig{..} = modelTrainConfig
     trainQuery <- fmap reduceInfo <$>
@@ -164,7 +169,8 @@ trainModel algoId platId ModelDesc{..} = do
 
     numEntries <- runSqlQueryCount trainQuery
 
-    Just propCount <- fmap (VU.length . fst) <$> runSqlQuery trainQuery C.head
+    Just propCount <- logIfFail "Unable to compute property count" empty $
+        fmap (VU.length . fst) <$> runSqlQueryConduit trainQuery C.head
 
     timestamp <- liftIO getCurrentTime
     (model, ModelStats{..}) <- runProcessCreation $ do
@@ -195,7 +201,7 @@ trainModel algoId platId ModelDesc{..} = do
 
                 combinedSink = getZipSink (propertySink *> resultSink)
 
-            runSqlQuery trainQuery combinedSink
+            runSqlQueryConduit trainQuery combinedSink
 
             (featureImportance, model) <- liftIO $
                 getResult propCount <$> BS.hGetContents modelHnd
@@ -243,6 +249,9 @@ trainModel algoId platId ModelDesc{..} = do
     return (modelId, model)
   where
     reduceInfo StepInfo{..} = (stepProps, stepBestImpl)
+
+    empty :: String
+    empty = ""
 
 putProps :: Vector Double -> ByteString
 putProps = LBS.toStrict . runPut . VU.mapM_ putDoublehost

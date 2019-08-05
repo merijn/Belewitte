@@ -17,6 +17,7 @@ module Core
     , toSqlKey
     , showSqlKey
     , MonadIO(liftIO)
+    , lift
     , MonadLogger
     , Log.logErrorN
     , Log.logWarnN
@@ -43,10 +44,12 @@ import Control.Monad.IO.Unlift
 import Control.Monad.Logger (LoggingT, LogLevel(..), LogSource, MonadLogger)
 import qualified Control.Monad.Logger as Log
 import Control.Monad.Reader (MonadReader(..), ReaderT(..), asks)
+import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Maybe (MaybeT(..))
 import Control.Monad.Trans.Resource (MonadResource, ResourceT, runResourceT)
 import qualified Database.Persist.Sqlite as Sqlite
 import Database.Sqlite.Internal (Connection(..), Connection'(..))
+import Data.Conduit (ConduitT)
 import Data.Int (Int64)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
@@ -109,14 +112,17 @@ instance MonadUnliftIO SqlM where
   askUnliftIO = SqlM $ withUnliftIO $ \u ->
                             return (UnliftIO (\(SqlM m) -> unliftIO u m))
 
+class MonadFail m => MonadTagFail m where
+    logIfFail :: Show v => Text -> v -> m a -> m a
+
+instance MonadTagFail SqlM where
+    logIfFail tag val = setTag $ tag <> ": " <> showText val
+      where
+        setTag :: Text -> SqlM a -> SqlM a
+        setTag t (SqlM m) = SqlM $ local (\cfg -> cfg { failTag = Just t }) m
+
 showText :: Show a => a -> Text
 showText = T.pack . show
-
-logIfFail :: Show v => Text -> v -> SqlM a -> SqlM a
-logIfFail tag val = setTag $ tag <> ": " <> showText val
-  where
-    setTag :: Text -> SqlM a -> SqlM a
-    setTag t (SqlM m) = SqlM $ local (\cfg -> cfg { failTag = Just t }) m
 
 withTime :: MonadIO m => m a -> m (Double, a)
 withTime act = do
@@ -137,12 +143,18 @@ data Options a =
     , task :: a
     }
 
-logQueryExplanation :: (Handle -> SqlM ()) -> SqlM ()
-logQueryExplanation queryLogger = do
-    queryHandle <- SqlM $ asks explainHandle
-    case queryHandle of
-        Nothing -> return ()
-        Just hnd -> queryLogger hnd
+class Monad m => MonadExplain m where
+    logQueryExplanation :: (Handle -> SqlM ()) -> m ()
+
+instance MonadExplain SqlM where
+    logQueryExplanation queryLogger = do
+        queryHandle <- SqlM $ asks explainHandle
+        case queryHandle of
+            Nothing -> return ()
+            Just hnd -> queryLogger hnd
+
+instance MonadExplain m => MonadExplain (ConduitT a b m) where
+    logQueryExplanation = lift . logQueryExplanation
 
 topLevelHandler :: Bool -> SomeException -> IO ()
 topLevelHandler quiet exc
