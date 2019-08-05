@@ -6,10 +6,11 @@
 #include "utils/Util.hpp"
 
 Algorithm::Algorithm()
+  : selectedKernel(nullptr)
 {}
 
 Algorithm::Algorithm(const std::string& commit)
-  : commitHash(commit)
+  : commitHash(commit), selectedKernel(nullptr)
 {}
 
 Algorithm::Algorithm(Algorithm&& other)

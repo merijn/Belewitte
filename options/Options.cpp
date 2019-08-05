@@ -168,7 +168,7 @@ Options::parseArgs
 void
 Options::usage(ostream& out, string prefix)
 {
-    auto renderOpt = [&](Option opt) {
+    auto renderOpt = [&](const Option& opt) {
         out << prefix << '-' << opt.shortOption;
         if (opt.hasArg) out << " " << opt.argName;
         out << " | " << "--" << opt.longOption;
