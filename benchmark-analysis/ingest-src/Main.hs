@@ -13,12 +13,14 @@ import Control.Monad.Catch (SomeException, onError, try)
 import Data.Conduit ((.|), runConduit)
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.Text as C
+import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Time.Clock (UTCTime, getCurrentTime)
 import System.Directory (doesFileExist, removeFile)
 import System.FilePath ((<.>), splitExtension, takeFileName)
+import System.IO.Error (isDoesNotExistError)
 
 import BroadcastChan.Conduit
 import Core
@@ -154,12 +156,15 @@ runTask Process{inHandle,outHandle} (label, x, y, z, cmd) = handleError $ do
     logInfoN $ "Finished: " <> cmd
     return (x, y, z, result)
   where
+    checkNotExist :: SomeException -> Bool
+    checkNotExist e = fromMaybe False $ isDoesNotExistError <$> fromException e
+
     tryRemoveFile path = do
         result <- try . liftIO $ removeFile path
         case result of
-            Left exc -> case fromException exc of
-                Just (BenchmarkException e) -> logThrowM e
-                Nothing -> displayLogThrowM exc
+            Left exc
+                | checkNotExist exc -> return ()
+                | otherwise -> logErrorN . T.pack $ displayException exc
             Right () -> return ()
 
     fileStem = T.unpack label
