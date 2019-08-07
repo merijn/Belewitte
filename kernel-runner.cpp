@@ -294,7 +294,8 @@ int main(int argc, char * const *argv)
 
     handle_subcommands(backend, optionResult.remainingArgs);
 
-    if (optionResult.usageRequested || optionResult.remainingArgs.empty()) {
+    bool missingArgs = !fromStdin && optionResult.remainingArgs.empty();
+    if (optionResult.usageRequested || missingArgs) {
         options.usage(cout, "    ");
         if (!algorithmName.empty()) {
             auto& algorithm = getAlgorithm(algorithmName);
