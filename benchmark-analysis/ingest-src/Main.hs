@@ -22,7 +22,6 @@ import System.Directory (doesFileExist, removeFile)
 import System.FilePath ((<.>), splitExtension, takeFileName)
 import System.IO.Error (isDoesNotExistError)
 
-import BroadcastChan.Conduit
 import Core
 import InteractiveInput
 import Jobs
@@ -31,7 +30,7 @@ import Parsers
 import ProcessPool
 import qualified RuntimeData
 import Schema
-import Sql (Entity(..), Filter, Key, MonadSql, (=.), (==.), (+=.))
+import Sql (Entity(..), Filter, Key, MonadSql, (=.), (==.))
 import qualified Sql
 
 addPlatform :: Input SqlM ()
@@ -133,18 +132,6 @@ importResults = do
             | varName == "0" = "default"
             | otherwise = "Root " <> varName
 
-taskHandler :: Handler SqlM (Text, Key Variant, a, b, Text)
-taskHandler = Handle handler
-  where
-    handler :: (Text, Key Variant, a, b, Text) -> SomeException -> SqlM Action
-    handler (_, varId, _, _, _) exc
-      | Just Timeout <- fromException exc = return Retry
-      | otherwise = do
-          retries <- variantRetryCount <$> Sql.getJust varId
-          if retries >= 5
-             then return Drop
-             else Retry <$ Sql.update varId [ VariantRetryCount +=. 1 ]
-
 runTask
     :: (MonadMask m, MonadIO m, MonadLogger m)
     => Process
@@ -183,17 +170,15 @@ runBenchmarks numNodes numRuns = lift $ do
         RuntimeData.getKernelLibPath
 
     -- FIXME hardcoded Platform
-    withProcessPool numNodes (Platform "TitanX" Nothing) $ \procPool ->
-        runConduit $ propertyJobs
-        .| parMapM taskHandler numNodes (withProcess procPool runTask)
+    runConduit $ propertyJobs
+        .| mapWithProcessPool numNodes (Platform "TitanX" Nothing) runTask
         .| C.mapM_ processProperty
 
     platforms <- Sql.selectList [] []
-    forM_ platforms $ \(Entity platformId platform) -> do
-        withProcessPool numNodes platform $ \procPool -> runConduit $
-            timingJobs numRuns platformId
-            .| parMapM taskHandler numNodes (withProcess procPool runTask)
-            .| C.mapM_ (processTiming platformId)
+    forM_ platforms $ \(Entity platformId platform) -> runConduit $
+        timingJobs numRuns platformId
+        .| mapWithProcessPool numNodes platform runTask
+        .| C.mapM_ (processTiming platformId)
 
 resetRetries :: MonadSql m => m ()
 resetRetries = Sql.updateWhere [] [VariantRetryCount =. 0]

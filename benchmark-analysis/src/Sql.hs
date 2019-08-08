@@ -15,7 +15,6 @@ module Sql
     , Update
     , fromSqlKey
     , toSqlKey
-    , selectSource
     , Sqlite.selectKeys
     , Sqlite.fieldLens
     , (Sqlite.=.)
@@ -28,7 +27,8 @@ import Control.Monad.IO.Unlift (MonadIO, MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger)
 import qualified Control.Monad.Logger as Log
 import Control.Monad.Reader (MonadReader)
-import Data.Conduit (ConduitT, (.|), runConduitRes)
+import Control.Monad.Trans.Resource (MonadResource)
+import Data.Conduit (ConduitT, (.|), runConduitRes, toProducer)
 import qualified Data.Conduit.Combinators as C
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
@@ -56,7 +56,6 @@ import Database.Persist.Sqlite
     , liftPersist
     , fromSqlKey
     , toSqlKey
-    , selectSource
     )
 import qualified Database.Persist.Sqlite as Sqlite
 import Database.Persist.Types (PersistValue)
@@ -155,6 +154,11 @@ selectList
     :: (MonadSql m, SqlRecord rec)
     => [Filter rec] -> [SelectOpt rec] -> m [Entity rec]
 selectList filters select = liftPersist $ Sqlite.selectList filters select
+
+selectSource
+    :: (MonadResource m, MonadSql m, SqlRecord rec)
+    => [Filter rec] -> [SelectOpt rec] -> ConduitT a (Entity rec) m ()
+selectSource filters select = toProducer $ Sqlite.selectSource filters select
 
 update :: (MonadSql m, SqlRecord rec) => Key rec -> [Update rec] -> m ()
 update key = liftPersist . Sqlite.update key

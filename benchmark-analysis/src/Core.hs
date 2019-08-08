@@ -41,7 +41,8 @@ import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow, SomeException)
 import Control.Monad.Fail (MonadFail(fail))
 import Control.Monad.IO.Unlift
     (MonadIO(liftIO), MonadUnliftIO(..), UnliftIO(..), withUnliftIO)
-import Control.Monad.Logger (LoggingT, LogLevel(..), LogSource, MonadLogger)
+import Control.Monad.Logger
+    (LoggingT, LogLevel(..), LogSource, MonadLogger, MonadLoggerIO)
 import qualified Control.Monad.Logger as Log
 import Control.Monad.Reader (MonadReader(..), ReaderT(..), asks)
 import Control.Monad.Trans (lift)
@@ -87,8 +88,8 @@ data QueryMode = Normal | Explain | ExplainLog FilePath
 
 newtype SqlM a = SqlM (ReaderT Config (ResourceT (LoggingT IO)) a)
   deriving
-  ( Applicative, Functor, Monad, MonadCatch, MonadIO, MonadLogger, MonadMask
-  , MonadResource, MonadThrow)
+  ( Applicative, Functor, Monad, MonadCatch, MonadIO, MonadLogger
+  , MonadLoggerIO, MonadMask, MonadResource, MonadThrow)
 
 instance MonadException SqlM where
     controlIO f = join (withUnliftIO (f . unliftToRunIO))

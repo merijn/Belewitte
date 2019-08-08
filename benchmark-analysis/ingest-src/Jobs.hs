@@ -10,8 +10,7 @@ import Control.Monad (unless, when)
 import Crypto.Hash (Digest, MD5)
 import Crypto.Hash.Conduit (hashFile)
 import qualified Data.ByteArray (convert)
-import Data.Conduit
-    (ConduitT, (.|), awaitForever, runConduit, toProducer, yield)
+import Data.Conduit (ConduitT, (.|), awaitForever, runConduit, yield)
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.Text as C
 import Data.Maybe (fromMaybe)
@@ -22,14 +21,15 @@ import System.Directory (removeFile)
 import Core
 import Parsers
 import Schema
-import Sql (Key, Entity(..), (=.), (==.))
+import Sql (Entity(..), Key, MonadSql, (=.), (==.))
 import qualified Sql
 
-(.|>) :: Monad m
-      => ConduitT () b m ()
+(.>) :: Monad m
+      => ConduitT a b m ()
       -> (b -> ConduitT b c m r)
       -> ConduitT a c m ()
-producer .|> consumer = toProducer producer .| awaitForever consumer
+producer .> consumer = producer .| awaitForever consumer
+infixl 3 .>
 
 computeHash :: MonadIO m => FilePath -> m Hash
 computeHash path = do
@@ -38,7 +38,7 @@ computeHash path = do
 
 propertyJobs
     :: ConduitT () (Text, Key Variant, Key Graph, Maybe Hash, Text) SqlM ()
-propertyJobs = Sql.selectSource [] [] .|> toPropJob
+propertyJobs = Sql.selectSource [] [] .> toPropJob
   where
     toPropJob
         :: Entity Variant
@@ -123,8 +123,8 @@ timingJobs
     :: Int -> Key Platform
     -> ConduitT () (Text, Key Variant, Key Implementation, Hash, Text) SqlM ()
 timingJobs numRuns platformId = do
-    Sql.selectKeys [] [] .|> \algoKey ->
-        Sql.selectSource [VariantAlgorithmId ==. algoKey] [] .|> toTimingJob
+    Sql.selectKeys [] [] .> \algoKey ->
+        Sql.selectSource [VariantAlgorithmId ==. algoKey] [] .> toTimingJob
   where
     toTimingJob
         :: Entity Variant
@@ -141,7 +141,7 @@ timingJobs numRuns platformId = do
 
     toTimingJob
         (Entity varId (Variant graphId algId _ varFlags (Just hash) _ _))
-        = Sql.selectSource [ImplementationAlgorithmId ==. algId] [] .|> runImpl
+        = Sql.selectSource [ImplementationAlgorithmId ==. algId] [] .> runImpl
       where
         runImpl (Entity implId (Implementation _ name _ implFlags _ _)) = do
             Sql.whenNotExists (filters ++ [TotalTimerImplId ==. implId]) $ do
@@ -162,7 +162,8 @@ timingJobs numRuns platformId = do
         tag name = mconcat [ showSqlKey varId, " ", name]
 
 processTiming
-    :: Key Platform -> (Key Variant, Key Implementation, Hash, Text) -> SqlM ()
+    :: (MonadLogger m, MonadResource m, MonadSql m, MonadThrow m)
+    => Key Platform -> (Key Variant, Key Implementation, Hash, Text) -> m ()
 processTiming platformId (varId, implId, hash, var) = do
     logInfoN $ "Timing: " <> var
     timestamp <- liftIO getCurrentTime
@@ -194,7 +195,7 @@ processTiming platformId (varId, implId, hash, var) = do
     timingFile = T.unpack var <> ".timings"
     outputFile = T.unpack var <> ".output"
 
-    insertTiming :: UTCTime -> Maybe Hash -> Timer -> SqlM ()
+    insertTiming :: MonadSql m => UTCTime -> Maybe Hash -> Timer -> m ()
     insertTiming ts mWrongHash (TotalTiming Timing{..}) = Sql.insert_ $
         TotalTimer platformId varId implId name minTime avgTime maxTime stddev
                    ts mWrongHash

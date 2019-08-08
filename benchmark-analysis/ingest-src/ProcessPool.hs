@@ -1,20 +1,22 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RecordWildCards #-}
 module ProcessPool
-    ( Pool
-    , Process(Process,inHandle,outHandle)
-    , Timeout(..)
-    , withProcessPool
-    , withProcess
+    ( Process(Process,inHandle,outHandle)
+    , mapWithProcessPool
     ) where
 
-import Control.Exception (SomeException, try)
+import Control.Exception (SomeException, try, uninterruptibleMask_)
 import Control.Monad (guard, void)
-import Control.Monad.Catch (MonadMask, bracket, uninterruptibleMask_)
-import Data.Acquire (mkAcquireType, withAcquire, ReleaseType(ReleaseException))
+import Control.Monad.Logger
+    (Loc, LogLevel, LogSource, LogStr, LoggingT, MonadLoggerIO)
+import qualified Control.Monad.Logger as Log
+import Control.Monad.Trans.Resource (allocate, release)
+import Data.Conduit (ConduitT)
+import Data.Acquire
+    (withAcquire, mkAcquireType, ReleaseType(ReleaseException))
 import Data.List (intercalate)
 import Data.Pool (Pool)
 import qualified Data.Pool as Pool
@@ -31,10 +33,13 @@ import System.Posix.Signals (sigKILL, signalProcess)
 import System.Process (CreateProcess(..), ProcessHandle, Pid, StdStream(..))
 import qualified System.Process as Proc
 
+import BroadcastChan.Conduit
 import Core
 import Utils.Process (UnexpectedTermination, unexpectedTermination)
 import RuntimeData (getKernelExecutable, getKernelLibPath)
 import Schema
+import Sql (MonadSql, (+=.))
+import qualified Sql
 
 data Timeout = Timeout deriving (Show)
 
@@ -69,26 +74,33 @@ getJobTimeOut = liftIO $ do
     timeoutFlag :: Int -> [String]
     timeoutFlag h = ["-t", show h ++ ":00:00"]
 
+type LogFun = Loc -> LogSource -> LogLevel -> LogStr -> IO ()
+
 withProcessPool
-    :: forall a m . (MonadLogger m, MonadMask m, MonadUnliftIO m)
+    :: (MonadLoggerIO m, MonadResource m)
     => Int -> Platform -> (Pool Process -> m a) -> m a
 withProcessPool n (Platform name _) f = do
     hostName <- liftIO getHostName
-    bracket (createProcessPool hostName) destroyProcessPool f
+    logFun <- Log.askLoggerIO
+    (releaseKey, pool) <-
+        allocate (createProcessPool logFun hostName) destroyProcessPool
+
+    f pool <* release releaseKey
   where
-    createProcessPool :: MonadIO m => String -> m (Pool Process)
-    createProcessPool hostName = withUnliftIO $ \(UnliftIO runInIO) ->
-        Pool.createPool
-            (runInIO allocateProcess)
-            (runInIO . destroyProcess hostName)
+    createProcessPool :: LogFun -> String -> IO (Pool Process)
+    createProcessPool logFun hostName = Pool.createPool
+            (unLog allocateProcess)
+            (unLog . destroyProcess hostName)
             1
             3153600000
             n
+      where
+        unLog act = Log.runLoggingT act logFun
 
-    destroyProcessPool :: MonadIO m => Pool Process -> m ()
+    destroyProcessPool :: Pool Process -> IO ()
     destroyProcessPool = liftIO . Pool.destroyAllResources
 
-    allocateProcess :: (MonadLogger m, MonadUnliftIO m) => m Process
+    allocateProcess :: LoggingT IO Process
     allocateProcess = do
         exePath <- getKernelExecutable
         libPath <- getKernelLibPath
@@ -114,8 +126,7 @@ withProcessPool n (Platform name _) f = do
             , "-L", libPath, "-W", "-S"
             ]
 
-    destroyProcess
-        :: (MonadLogger m, MonadUnliftIO m) => String -> Process -> m ()
+    destroyProcess :: String -> Process -> LoggingT IO ()
     destroyProcess hostName Process{..} = do
         liftIO . uninterruptibleMask_ $ do
             Proc.getPid procHandle >>= mapM_ (signalProcess sigKILL)
@@ -150,8 +161,36 @@ withResource pool f = withAcquire (mkAcquireType alloc clean) $ f . fst
         _                -> Pool.putResource localPool res
 
 withProcess
-    :: (Show a, MonadMask m, MonadLogger m, MonadUnliftIO m)
+    :: (MonadLogger m, MonadThrow m, MonadUnliftIO m)
     => Pool Process -> (Process -> a -> m b) -> a -> m b
 withProcess pool f x = withResource pool $ \process@Process{..} -> do
     checkProcess process
     f process x
+
+mapWithProcessPool
+    :: ( MonadLoggerIO m
+       , MonadResource m
+       , MonadSql m
+       , MonadThrow m
+       , MonadUnliftIO m
+       )
+    => Int
+    -> Platform
+    -> (Process -> (a, Key Variant, b, c, d) -> m e)
+    -> ConduitT (a, Key Variant, b, c, d) e m ()
+mapWithProcessPool numNodes platform f =
+    withProcessPool numNodes platform $ \procPool ->
+        parMapM taskHandler numNodes (withProcess procPool f)
+
+taskHandler :: MonadSql m => Handler m (a, Key Variant, b, c, d)
+taskHandler = Handle handler
+  where
+    handler
+        :: MonadSql m => (a, Key Variant, b, c, d) -> SomeException -> m Action
+    handler (_, varId, _, _, _) exc
+      | Just Timeout <- fromException exc = return Retry
+      | otherwise = do
+          retries <- variantRetryCount <$> Sql.getJust varId
+          if retries >= 5
+             then return Drop
+             else Retry <$ Sql.update varId [ VariantRetryCount +=. 1 ]
