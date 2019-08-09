@@ -41,7 +41,7 @@ data Property
     | Prediction Int Int
     deriving (Show, Eq)
 
-data ExternalResult = Result Text Text Timing
+data ExternalResult = ExternalResult Text Text Timing
     deriving (Show, Eq)
 
 property :: Parser Property
@@ -88,4 +88,4 @@ externalResult :: Parser ExternalResult
 externalResult = do
     name <- takeWhile1 (/=':') <* char ':'
     variant <- takeWhile1 (/=':') <* char ':'
-    Result name variant <$> timing
+    ExternalResult name variant <$> timing

@@ -9,18 +9,14 @@
 module Main(main) where
 
 import Control.Monad (forM_, guard, void)
-import Control.Monad.Catch (SomeException, onError, try)
 import Data.Conduit ((.|), runConduit)
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.Text as C
-import Data.Maybe (fromMaybe)
 import Data.Monoid ((<>))
 import qualified Data.Text as T
-import qualified Data.Text.IO as T
 import Data.Time.Clock (UTCTime, getCurrentTime)
-import System.Directory (doesFileExist, removeFile)
-import System.FilePath ((<.>), splitExtension, takeFileName)
-import System.IO.Error (isDoesNotExistError)
+import System.Directory (doesFileExist)
+import System.FilePath (splitExtension, takeFileName)
 
 import Core
 import InteractiveInput
@@ -114,7 +110,7 @@ importResults = do
         -> UTCTime
         -> ExternalResult
         -> m ()
-    insertResult platId algoId implId ts (Result gname varName Timing{..}) = do
+    insertResult platId algoId implId ts (ExternalResult gname varName Timing{..}) = do
         [graphId] <- logIfFail "More than one graph found for" gname $
             Sql.selectKeysList [GraphName ==. gname] []
 
@@ -132,36 +128,6 @@ importResults = do
             | varName == "0" = "default"
             | otherwise = "Root " <> varName
 
-runTask
-    :: (MonadMask m, MonadIO m, MonadLogger m)
-    => Process
-    -> (Text, Key Variant, a, b, Text)
-    -> m (Key Variant, a, b, Text)
-runTask Process{inHandle,outHandle} (label, x, y, z, cmd) = handleError $ do
-    logInfoN $ "Running: " <> cmd
-    result <- liftIO $ T.hPutStrLn inHandle cmd >> T.hGetLine outHandle
-    logInfoN $ "Finished: " <> cmd
-    return (x, y, z, result)
-  where
-    checkNotExist :: SomeException -> Bool
-    checkNotExist e = fromMaybe False $ isDoesNotExistError <$> fromException e
-
-    tryRemoveFile path = do
-        result <- try . liftIO $ removeFile path
-        case result of
-            Left exc
-                | checkNotExist exc -> return ()
-                | otherwise -> logErrorN . T.pack $ displayException exc
-            Right () -> return ()
-
-    fileStem = T.unpack label
-    handleError act = act `onError` do
-        logErrorN ("Failed: " <> cmd)
-        tryRemoveFile $ fileStem <.> "timings"
-        tryRemoveFile $ fileStem <.> "output"
-        tryRemoveFile $ fileStem <.> "log"
-
-
 runBenchmarks :: Int -> Int -> Input SqlM ()
 runBenchmarks numNodes numRuns = lift $ do
     -- Error out if C++ code hasn't been compiled
@@ -169,16 +135,21 @@ runBenchmarks numNodes numRuns = lift $ do
         RuntimeData.getKernelExecutable
         RuntimeData.getKernelLibPath
 
-    -- FIXME hardcoded Platform
-    runConduit $ propertyJobs
-        .| mapWithProcessPool numNodes (Platform "TitanX" Nothing) runTask
+    runConduit $
+        Sql.selectSource [] []
+        .> variantToPropertyJob
+        -- FIXME hardcoded Platform
+        .| processJobsParallel numNodes (Platform "TitanX" Nothing)
         .| C.mapM_ processProperty
 
-    platforms <- Sql.selectList [] []
-    forM_ platforms $ \(Entity platformId platform) -> runConduit $
-        timingJobs numRuns platformId
-        .| mapWithProcessPool numNodes platform runTask
-        .| C.mapM_ (processTiming platformId)
+    runConduit $
+        Sql.selectSource [] [] .> \(Entity platformId platform) ->
+            Sql.selectKeys [] [] .> \algoKey ->
+                Sql.selectSource [VariantAlgorithmId ==. algoKey] []
+                .> variantToTimingJob numRuns
+                .> filterExistingTimings platformId
+                .| processJobsParallel numNodes platform
+                .| C.mapM_ (processTiming platformId)
 
 resetRetries :: MonadSql m => m ()
 resetRetries = Sql.updateWhere [] [VariantRetryCount =. 0]

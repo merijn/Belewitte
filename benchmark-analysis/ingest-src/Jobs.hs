@@ -1,10 +1,18 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MonadFailDesugaring #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
-module Jobs (propertyJobs, processProperty, timingJobs, processTiming) where
+module Jobs
+    ( (.>)
+    , variantToPropertyJob
+    , processProperty
+    , variantToTimingJob
+    , filterExistingTimings
+    , processTiming
+    ) where
 
 import Control.Monad (unless, when)
 import Crypto.Hash (Digest, MD5)
@@ -20,6 +28,7 @@ import System.Directory (removeFile)
 
 import Core
 import Parsers
+import ProcessPool (Job(..), Result(..))
 import Schema
 import Sql (Entity(..), Key, MonadSql, (=.), (==.))
 import qualified Sql
@@ -36,55 +45,52 @@ computeHash path = do
     (digest :: Digest MD5) <- hashFile path
     return . Hash . Data.ByteArray.convert $ digest
 
-propertyJobs
-    :: ConduitT () (Text, Key Variant, Key Graph, Maybe Hash, Text) SqlM ()
-propertyJobs = Sql.selectSource [] [] .> toPropJob
+variantToPropertyJob
+    :: Entity Variant
+    -> ConduitT (Entity Variant)
+                (Job (Key Graph, Maybe Hash))
+                SqlM
+                ()
+variantToPropertyJob
+    (Entity varId (Variant graphId algoId _ flags hash hasProps retries)) =
+        case hash of
+            Nothing
+                | retries < 5 -> yieldJob
+                | otherwise -> logWarnN $
+                    "Hash missing, but too many retries for variant #"
+                    <> showSqlKey varId
+
+            Just _
+                | not hasProps && retries < 5 -> yieldJob
+                | not hasProps -> logWarnN $
+                    "Too many retries for variant #" <> showSqlKey varId
+                | otherwise -> return ()
   where
-    toPropJob
-        :: Entity Variant
-        -> ConduitT (Entity Variant)
-                    (Text, Key Variant, Key Graph, Maybe Hash, Text)
-                    SqlM
-                    ()
-    toPropJob
-        (Entity varId (Variant graphId algoId _ flags hash hasProps retries)) =
-            case hash of
-                Nothing
-                    | retries < 5 -> yieldJob
-                    | otherwise -> logWarnN $
-                      "Hash missing, but too many retries for variant #"
-                      <> showSqlKey varId
+    yieldJob = do
+        Graph _ _ path _ <- Sql.getJust graphId
+        Algorithm algo _ <- Sql.getJust algoId
+        yield . Job (graphId,hash) varId (showSqlKey varId) . T.unwords $
+            [ showSqlKey varId
+            , "-a", algo
+            , "-k switch --log"
+            , showSqlKey varId <> ".log"
+            , fromMaybe "" flags
+            , path
+            ]
 
-                Just _
-                    | not hasProps && retries < 5 -> yieldJob
-                    | not hasProps -> logWarnN $
-                      "Too many retries for variant #" <> showSqlKey varId
-                    | otherwise -> return ()
-      where
-        mkTuple = (showSqlKey varId,varId,graphId,hash,)
-        yieldJob = do
-            Graph _ _ path _ <- lift $ Sql.getJust graphId
-            Algorithm algo _ <- lift $ Sql.getJust algoId
-            yield . mkTuple . T.intercalate " " $
-                [ showSqlKey varId
-                , "-a", algo
-                , "-k switch --log"
-                , showSqlKey varId <> ".log"
-                , fromMaybe "" flags
-                , path
-                ]
-
-processProperty :: (Key Variant, Key Graph, Maybe Hash, Text) -> SqlM ()
-processProperty (varId, graphId, hash, var) = do
-    logInfoN $ "Property: " <> var
+processProperty :: Result (Key Graph, Maybe Hash) -> SqlM ()
+processProperty Result{resultValue=(graphId, hash), ..} = do
+    logInfoN $ "Property: " <> resultLabel
     liftIO $ removeFile timingFile
 
     resultHash <- computeHash outputFile
     loadProps <- case hash of
-        Nothing -> True <$ Sql.update varId [VariantResult =. Just resultHash]
+        Nothing ->
+            True <$ Sql.update resultVariant [VariantResult =. Just resultHash]
+
         Just prevHash | prevHash == resultHash -> return True
         _ -> False <$ logErrorN
-                ("Hash mismatch for variant: " <> showSqlKey varId)
+                ("Hash mismatch for variant: " <> showSqlKey resultVariant)
 
     when loadProps $ do
         liftIO $ removeFile outputFile
@@ -97,75 +103,83 @@ processProperty (varId, graphId, hash, var) = do
             .| C.mapM_ insertProperty
 
         liftIO $ removeFile propLog
-        Sql.update varId [VariantPropsStored =. True]
+        Sql.update resultVariant [VariantPropsStored =. True]
 
-    logInfoN $ "Property done: " <> var
+    logInfoN $ "Property done: " <> resultLabel
   where
     propLog :: FilePath
-    propLog = T.unpack var <> ".log"
+    propLog = T.unpack resultLabel <> ".log"
 
     timingFile :: FilePath
-    timingFile = T.unpack var <> ".timings"
+    timingFile = T.unpack resultLabel <> ".timings"
 
     outputFile :: FilePath
-    outputFile = T.unpack var <> ".output"
+    outputFile = T.unpack resultLabel <> ".output"
 
     insertProperty :: Property -> SqlM ()
     insertProperty (GraphProperty name val) =
         Sql.insertUniq $ GraphProp graphId name val
 
     insertProperty (StepProperty n name val) =
-        Sql.insertUniq $ StepProp varId n name val
+        Sql.insertUniq $ StepProp resultVariant n name val
 
     insertProperty Prediction{} = return ()
 
-timingJobs
-    :: Int -> Key Platform
-    -> ConduitT () (Text, Key Variant, Key Implementation, Hash, Text) SqlM ()
-timingJobs numRuns platformId = do
-    Sql.selectKeys [] [] .> \algoKey ->
-        Sql.selectSource [VariantAlgorithmId ==. algoKey] [] .> toTimingJob
+variantToTimingJob
+    :: (MonadLogger m, MonadResource m, MonadSql m)
+    => Int
+    -> Entity Variant
+    -> ConduitT (Entity Variant) (Job (Key Implementation, Hash)) m ()
+variantToTimingJob _ (Entity varId (Variant graphId algoId _ _ Nothing _ _))
+    = logErrorN . mconcat $
+        [ "Algorithm #", showSqlKey algoId
+        , " results missing for graph #", showSqlKey graphId
+        , " variant #", showSqlKey varId
+        ]
+
+variantToTimingJob runs (Entity varId Variant{variantResult = Just hash,..}) =
+    Sql.selectSource [ImplementationAlgorithmId ==. variantAlgorithmId] []
+    .| C.mapM toMissingJob
   where
-    toTimingJob
-        :: Entity Variant
-        -> ConduitT (Entity Variant)
-                    (Text, Key Variant, Key Implementation, Hash, Text)
-                    SqlM
-                    ()
-    toTimingJob
-        (Entity varId (Variant graphId algoId _ _ Nothing _ _))
-        = logErrorN . mconcat $
-                [ "Algorithm #", showSqlKey algoId
-                , " results missing for graph #", showSqlKey graphId
-                , " variant #", showSqlKey varId ]
+    tag name = mconcat [ showSqlKey varId, " ", name]
 
-    toTimingJob
-        (Entity varId (Variant graphId algId _ varFlags (Just hash) _ _))
-        = Sql.selectSource [ImplementationAlgorithmId ==. algId] [] .> runImpl
-      where
-        runImpl (Entity implId (Implementation _ name _ implFlags _ _)) = do
-            Sql.whenNotExists (filters ++ [TotalTimerImplId ==. implId]) $ do
-                Graph _ _ path _ <- lift $ Sql.getJust graphId
-                Algorithm algo _ <- lift $ Sql.getJust algId
+    toMissingJob
+        :: MonadSql m
+        => Entity Implementation -> m (Job (Key Implementation, Hash))
+    toMissingJob (Entity implId Implementation{..}) = do
+        Graph _ _ path _ <- Sql.getJust variantGraphId
+        Algorithm algo _ <- Sql.getJust variantAlgorithmId
 
-                yield . (tag name, varId, implId, hash,) . T.intercalate " " $
-                    [ "\"" <> tag name <> "\"", "-a"
-                    , algo
-                    , fromMaybe ("-k " <> name) implFlags
-                    , fromMaybe "" varFlags
-                    , "-n " <> showText numRuns
-                    , path
-                    ]
+        return . Job (implId, hash) varId (tag implementationName) $ T.unwords
+            [ "\"" <> tag implementationName <> "\"", "-a"
+            , algo
+            , fromMaybe ("-k " <> implementationName) implementationFlags
+            , fromMaybe "" variantFlags
+            , "-n " <> showText runs
+            , path
+            ]
 
-        filters = [ TotalTimerPlatformId ==. platformId
-                  , TotalTimerVariantId ==. varId ]
-        tag name = mconcat [ showSqlKey varId, " ", name]
+filterExistingTimings
+    :: (MonadLogger m, MonadResource m, MonadSql m)
+    => Key Platform
+    -> (Job (Key Implementation, Hash))
+    -> ConduitT (Job (Key Implementation, Hash))
+                (Job (Key Implementation, Hash))
+                m
+                ()
+filterExistingTimings platformId job@Job{jobVariant, jobValue = (implId, _)} =
+    Sql.whenNotExists filters $ yield job
+  where
+    filters = [ TotalTimerPlatformId ==. platformId
+              , TotalTimerVariantId ==. jobVariant
+              , TotalTimerImplId ==. implId
+              ]
 
 processTiming
     :: (MonadLogger m, MonadResource m, MonadSql m, MonadThrow m)
-    => Key Platform -> (Key Variant, Key Implementation, Hash, Text) -> m ()
-processTiming platformId (varId, implId, hash, var) = do
-    logInfoN $ "Timing: " <> var
+    => Key Platform -> Result (Key Implementation, Hash) -> m ()
+processTiming platformId Result{resultValue = (implId, hash), ..} = do
+    logInfoN $ "Timing: " <> resultLabel
     timestamp <- liftIO getCurrentTime
     resultHash <- computeHash outputFile
     liftIO $ removeFile outputFile
@@ -178,7 +192,7 @@ processTiming platformId (varId, implId, hash, var) = do
     unless correct $ do
         logErrorN . mconcat $
             [ "Implementation #", showSqlKey implId
-            , " has wrong results for variant #", showSqlKey varId
+            , " has wrong results for variant #", showSqlKey resultVariant
             , " on Platform #", showSqlKey platformId ]
 
     runConduit $
@@ -190,16 +204,16 @@ processTiming platformId (varId, implId, hash, var) = do
 
     liftIO $ removeFile timingFile
 
-    logInfoN $ "Timing done: " <> var
+    logInfoN $ "Timing done: " <> resultLabel
   where
-    timingFile = T.unpack var <> ".timings"
-    outputFile = T.unpack var <> ".output"
+    timingFile = T.unpack resultLabel <> ".timings"
+    outputFile = T.unpack resultLabel <> ".output"
 
     insertTiming :: MonadSql m => UTCTime -> Maybe Hash -> Timer -> m ()
     insertTiming ts mWrongHash (TotalTiming Timing{..}) = Sql.insert_ $
-        TotalTimer platformId varId implId name minTime avgTime maxTime stddev
-                   ts mWrongHash
+        TotalTimer platformId resultVariant implId name minTime avgTime maxTime
+                   stddev ts mWrongHash
 
     insertTiming ts mWrongHash (StepTiming n Timing{..})= Sql.insert_ $
-        StepTimer platformId varId n implId name minTime avgTime maxTime stddev
-                  ts mWrongHash
+        StepTimer platformId resultVariant n implId name minTime avgTime
+                  maxTime stddev ts mWrongHash

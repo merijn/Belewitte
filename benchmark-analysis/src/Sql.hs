@@ -15,7 +15,6 @@ module Sql
     , Update
     , fromSqlKey
     , toSqlKey
-    , Sqlite.selectKeys
     , Sqlite.fieldLens
     , (Sqlite.=.)
     , (Sqlite.==.)
@@ -149,6 +148,11 @@ selectKeysList
     => [Filter rec] -> [SelectOpt rec] -> m [Key rec]
 selectKeysList filters select =
   liftPersist $ Sqlite.selectKeysList filters select
+
+selectKeys
+    :: (MonadResource m, MonadSql m, SqlRecord rec)
+    => [Filter rec] -> [SelectOpt rec] -> ConduitT a (Key rec) m ()
+selectKeys filters select = toProducer $ Sqlite.selectKeys filters select
 
 selectList
     :: (MonadSql m, SqlRecord rec)

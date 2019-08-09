@@ -1,26 +1,32 @@
+{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 module ProcessPool
-    ( Process(Process,inHandle,outHandle)
-    , mapWithProcessPool
+    ( Job(..)
+    , Result(..)
+    , Process(Process,inHandle,outHandle)
+    , processJobsParallel
     ) where
 
-import Control.Exception (SomeException, try, uninterruptibleMask_)
 import Control.Monad (guard, void)
+import Control.Monad.Catch (SomeException, onError, try, uninterruptibleMask_)
 import Control.Monad.Logger
     (Loc, LogLevel, LogSource, LogStr, LoggingT, MonadLoggerIO)
 import qualified Control.Monad.Logger as Log
 import Control.Monad.Trans.Resource (allocate, release)
 import Data.Conduit (ConduitT)
-import Data.Acquire
-    (withAcquire, mkAcquireType, ReleaseType(ReleaseException))
+import Data.Acquire (withAcquire, mkAcquireType, ReleaseType(ReleaseException))
 import Data.List (intercalate)
+import Data.Maybe (fromMaybe)
 import Data.Pool (Pool)
 import qualified Data.Pool as Pool
 import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import qualified Data.Time.LocalTime as Time
 import Data.Time.Calendar (DayOfWeek(Saturday,Sunday), dayOfWeek)
 import Network.HostName (getHostName)
@@ -29,6 +35,7 @@ import System.Exit (ExitCode(ExitFailure))
 import System.FilePath ((<.>))
 import System.IO (BufferMode(LineBuffering), Handle)
 import qualified System.IO as System
+import System.IO.Error (isDoesNotExistError)
 import System.Posix.Signals (sigKILL, signalProcess)
 import System.Process (CreateProcess(..), ProcessHandle, Pid, StdStream(..))
 import qualified System.Process as Proc
@@ -40,6 +47,19 @@ import RuntimeData (getKernelExecutable, getKernelLibPath)
 import Schema
 import Sql (MonadSql, (+=.))
 import qualified Sql
+
+data Job a = Job
+    { jobValue :: a
+    , jobVariant :: Key Variant
+    , jobLabel :: Text
+    , jobCommand :: Text
+    } deriving (Functor, Foldable, Traversable)
+
+data Result a = Result
+    { resultValue :: a
+    , resultVariant :: Key Variant
+    , resultLabel :: Text
+    } deriving (Functor, Foldable, Traversable)
 
 data Timeout = Timeout deriving (Show)
 
@@ -160,37 +180,54 @@ withResource pool f = withAcquire (mkAcquireType alloc clean) $ f . fst
         ReleaseException -> Pool.destroyResource pool localPool res
         _                -> Pool.putResource localPool res
 
-withProcess
-    :: (MonadLogger m, MonadThrow m, MonadUnliftIO m)
-    => Pool Process -> (Process -> a -> m b) -> a -> m b
-withProcess pool f x = withResource pool $ \process@Process{..} -> do
-    checkProcess process
-    f process x
-
-mapWithProcessPool
+processJobsParallel
     :: ( MonadLoggerIO m
        , MonadResource m
        , MonadSql m
-       , MonadThrow m
+       , MonadMask m
        , MonadUnliftIO m
        )
-    => Int
-    -> Platform
-    -> (Process -> (a, Key Variant, b, c, d) -> m e)
-    -> ConduitT (a, Key Variant, b, c, d) e m ()
-mapWithProcessPool numNodes platform f =
+    => Int -> Platform -> ConduitT (Job a) (Result a) m ()
+processJobsParallel numNodes platform =
     withProcessPool numNodes platform $ \procPool ->
-        parMapM taskHandler numNodes (withProcess procPool f)
+        parMapM taskHandler numNodes $ \Job{..} -> do
 
-taskHandler :: MonadSql m => Handler m (a, Key Variant, b, c, d)
+            let fileStem = T.unpack jobLabel
+                handleErrors act = act `onError` do
+                    logErrorN ("Failed: " <> jobCommand)
+                    tryRemoveFile $ fileStem <.> "timings"
+                    tryRemoveFile $ fileStem <.> "output"
+                    tryRemoveFile $ fileStem <.> "log"
+
+            withResource procPool $ \process@Process{inHandle,outHandle} -> do
+                checkProcess process
+                handleErrors $ do
+                    logInfoN $ "Running: " <> jobCommand
+                    result <- liftIO $ do
+                        T.hPutStrLn inHandle jobCommand
+                        T.hGetLine outHandle
+                    logInfoN $ "Finished: " <> jobCommand
+                    return $ Result jobValue jobVariant result
+  where
+    checkNotExist :: SomeException -> Bool
+    checkNotExist e = fromMaybe False $ isDoesNotExistError <$> fromException e
+
+    tryRemoveFile path = do
+        result <- try . liftIO $ removeFile path
+        case result of
+            Left exc
+                | checkNotExist exc -> return ()
+                | otherwise -> logErrorN . T.pack $ displayException exc
+            Right () -> return ()
+
+taskHandler :: MonadSql m => Handler m (Job a)
 taskHandler = Handle handler
   where
-    handler
-        :: MonadSql m => (a, Key Variant, b, c, d) -> SomeException -> m Action
-    handler (_, varId, _, _, _) exc
+    handler :: MonadSql m => Job a -> SomeException -> m Action
+    handler Job{jobVariant} exc
       | Just Timeout <- fromException exc = return Retry
       | otherwise = do
-          retries <- variantRetryCount <$> Sql.getJust varId
+          retries <- variantRetryCount <$> Sql.getJust jobVariant
           if retries >= 5
              then return Drop
-             else Retry <$ Sql.update varId [ VariantRetryCount +=. 1 ]
+             else Retry <$ Sql.update jobVariant [ VariantRetryCount +=. 1 ]
