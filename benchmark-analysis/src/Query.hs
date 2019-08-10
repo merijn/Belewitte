@@ -25,6 +25,8 @@ module Query
     ) where
 
 import Control.Monad (void)
+import Data.Acquire (allocateAcquire)
+import Control.Monad.Trans.Resource (release)
 import Data.Conduit (ConduitT, Void, (.|), await, runConduit)
 import qualified Data.Conduit.Combinators as C
 import Data.List (intersperse)
@@ -142,7 +144,12 @@ runSqlQuery query = do
         T.hPutStrLn hnd $ T.replicate 80 "#"
 
 runSqlQueryConduit :: MonadQuery m => Query r -> ConduitT r Void m a -> m a
-runSqlQueryConduit query sink = runConduit $ runSqlQuery query .| sink
+runSqlQueryConduit query@Query{..} sink = do
+    srcRes <- liftPersist $ rawQueryRes (toQueryText query) queryParams
+    (key, src) <- allocateAcquire srcRes
+    runConduit (src .| C.mapM convert .| sink) <* release key
+  where
+    queryParams = cteParams ++ params
 
 mIf :: Monoid m => Bool -> m -> m
 mIf condition val
