@@ -47,6 +47,8 @@ Library
                         Schema.Graph
                         Schema.Implementation
                         Schema.Model
+                        Schema.Model.V0
+                        Schema.ModelMetadata
                         Schema.Platform
                         Schema.Properties
                         Schema.Timers

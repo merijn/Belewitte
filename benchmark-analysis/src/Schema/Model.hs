@@ -1,11 +1,8 @@
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -23,8 +20,8 @@ import Model (Model)
 import Schema.Utils (EntityDef, Int64, MonadMigrate, (.=))
 import qualified Schema.Utils as Utils
 
-import Schema.Implementation (ImplementationId)
 import Schema.Platform (PlatformId)
+import qualified Schema.Model.V0 as V0
 
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
 PredictionModel
@@ -38,36 +35,11 @@ PredictionModel
     totalUnknownCount Int
     UniqModel name
     timestamp UTCTime
-
-ModelGraphProperty
-    modelId PredictionModelId
-    property Text
-    importance Double
-    Primary modelId property
-    deriving Eq Show
-
-ModelStepProperty
-    modelId PredictionModelId
-    property Text
-    importance Double
-    Primary modelId property
-    deriving Eq Show
-
-UnknownPrediction
-    modelId PredictionModelId
-    count Int
-    deriving Eq Show
-
-UnknownSet
-    unknownPredId UnknownPredictionId
-    implId ImplementationId
-    Primary unknownPredId implId
-    deriving Eq Show
 |]
 
 migrations :: MonadMigrate m => Int64 -> m [EntityDef]
 migrations = Utils.mkMigrationLookup schema
-    [ 0 .= schema $ do
+    [ 0 .= V0.schema $ do
         Utils.executeMigrationSql [i|
 ALTER TABLE 'PredictionModel' RENAME COLUMN 'gpuId' TO 'platformId'
 |]

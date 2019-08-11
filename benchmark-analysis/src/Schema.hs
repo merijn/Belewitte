@@ -17,6 +17,7 @@ module Schema
     , module Schema.Graph
     , module Schema.Implementation
     , module Schema.Model
+    , module Schema.ModelMetadata
     , module Schema.Platform
     , module Schema.Properties
     , module Schema.Timers
@@ -53,6 +54,8 @@ import Schema.Implementation hiding (migrations, schema)
 import qualified Schema.Implementation as Implementation
 import Schema.Model hiding (migrations, schema)
 import qualified Schema.Model as Model
+import Schema.ModelMetadata hiding (migrations, schema)
+import qualified Schema.ModelMetadata as ModelMetadata
 import Schema.Platform hiding (migrations, schema)
 import qualified Schema.Platform as Platform
 import Schema.Properties hiding (migrations, schema)
@@ -89,6 +92,7 @@ migrations =
     , (Properties.schema, Properties.migrations)
     , (Timers.schema, Timers.migrations)
     , (Model.schema, Model.migrations)
+    , (ModelMetadata.schema, ModelMetadata.migrations)
     ]
 
 schemaVersion :: Int64
