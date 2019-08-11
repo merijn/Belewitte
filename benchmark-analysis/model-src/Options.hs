@@ -215,11 +215,10 @@ reportParser isComparison =
             , showDefault
             , help "Implementation types to output results for" ]
 
-        values = M.fromList
+        values = M.fromList $
             [ ("core", S.singleton Core)
             , ("derived", S.singleton Derived)
-            , ("comparison", S.singleton Comparison)
-            ]
+            ] ++ mIf isComparison [("comparison", S.singleton Comparison)]
 
 type SqlParser = Compose Parser SqlM
 
