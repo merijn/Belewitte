@@ -150,7 +150,7 @@ getManyInteractive
     :: forall a m . (MonadException m, MonadIO m, MonadLogger m, MonadThrow m)
     => InputQuery m a -> Text -> Input m [a]
 getManyInteractive InputQuery{..} prompt = inputCompleter . Input $ do
-    outputStrLn (T.unpack prompt ++ ":\n")
+    outputStrLn (T.unpack prompt ++ ":")
     go id
   where
     go results = getInputLine "> " >>= \case
@@ -163,7 +163,6 @@ getManyInteractive InputQuery{..} prompt = inputCompleter . Input $ do
                     go results
 
     converter s = lift . lift $ inputConvert . T.stripEnd . T.pack $ s
-
 
 processCompleterText
     :: (MonadLogger m, MonadMask m, MonadUnliftIO m)
