@@ -49,11 +49,6 @@ percent x y = T.pack $ showFFloat (Just 2) val "%"
     val :: Double
     val = 100 * realToFrac x / realToFrac y
 
-mIf :: Monoid m => Bool -> m -> m
-mIf condition v
-    | condition = v
-    | otherwise = mempty
-
 padText :: Int -> Text -> Text
 padText n t = t <> T.replicate (n - T.length t) " "
 

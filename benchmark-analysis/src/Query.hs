@@ -151,11 +151,6 @@ runSqlQueryConduit query@Query{..} sink = do
   where
     queryParams = cteParams ++ params
 
-mIf :: Monoid m => Bool -> m -> m
-mIf condition val
-    | condition = val
-    | otherwise = mempty
-
 toQueryText :: Query r -> Text
 toQueryText Query{..} = mconcat $
     [ mIf isExplain "EXPLAIN QUERY PLAN "

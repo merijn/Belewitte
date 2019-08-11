@@ -125,6 +125,11 @@ instance MonadTagFail SqlM where
 showText :: Show a => a -> Text
 showText = T.pack . show
 
+mIf :: Monoid m => Bool -> m -> m
+mIf condition v
+    | condition = v
+    | otherwise = mempty
+
 withTime :: MonadIO m => m a -> m (Double, a)
 withTime act = do
     start <- liftIO $ getTime Monotonic
