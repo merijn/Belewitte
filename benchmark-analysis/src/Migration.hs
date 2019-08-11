@@ -1,15 +1,21 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Migration (checkMigration) where
 
-import Control.Monad (forM_, unless)
+import Control.Monad (forM_, unless, when)
 import Control.Monad.Catch (MonadMask, MonadThrow, bracket, catch, onError)
 import Control.Monad.IO.Unlift (MonadUnliftIO, withRunInIO)
-import Control.Monad.Logger (MonadLogger)
+import Control.Monad.Logger (MonadLogger, logWarnN)
 import qualified Control.Monad.Logger as Log
+import Control.Monad.Trans.Resource (MonadResource)
+import Data.Conduit ((.|), runConduit)
+import qualified Data.Conduit.Combinators as C
+import Data.Monoid (Any(..))
 import Data.Int (Int64)
+import Data.String.Interpolate.IsString (i)
 import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc ((<+>))
 import qualified Data.Text.Prettyprint.Doc as Pretty
@@ -57,6 +63,31 @@ querySingleValue query args = do
         [Single v] -> return v
         v -> logThrowM . ExpectedSingleValue query $ show v
 
+checkForeignKeys
+    :: (MonadMigrate m, MonadLogger m, MonadResource m, MonadThrow m)
+    => m ()
+checkForeignKeys = do
+    result <- runConduit $ Sql.rawQuery query [] .| C.foldMapM logViolation
+    when (getAny result) $ logThrowM ForeignKeyViolation
+  where
+    logViolation l = Any True <$ logWarnN errorMsg
+      where
+        errorMsg = case l of
+            [ PersistInt64 rowid , PersistText table , PersistText column ] ->
+                mconcat [ "Foreign key violation for table \"", table
+                        , "\" rowid #" , showText rowid, " column \"", column
+                        , "\"!" ]
+            _ -> mconcat
+                [ "Unexpected result from foreign key check:\n", showText l ]
+
+    query = [i|
+SELECT origin.rowid, origin."table", group_concat(foreignkeys."from")
+FROM pragma_foreign_key_check() AS origin
+INNER JOIN pragma_foreign_key_list(origin."table") AS foreignkeys
+ON origin.fkid = foreignkeys.id AND origin.parent = foreignkeys."table"
+GROUP BY origin.rowid
+|]
+
 checkSchema
     :: (MonadMigrate m, MonadLogger m, MonadThrow m) => Migration -> m ()
 checkSchema schema = do
@@ -64,7 +95,7 @@ checkSchema schema = do
     unless noChanges $ logThrowM WrongSchema
 
 validateSchema
-    :: (MonadMigrate m, MonadLogger m, MonadMask m)
+    :: (MonadMigrate m, MonadLogger m, MonadMask m, MonadResource m)
     => Bool -> Int64 -> m Bool
 validateSchema _ v
     | v > schemaVersion = logThrowM $ TooNew v
@@ -73,6 +104,8 @@ validateSchema _ v
 validateSchema migrateSchema version
     | not migrateSchema = logThrowM $ MigrationNeeded version
     | otherwise = True <$ do
+        checkForeignKeys
+
         Log.logInfoN $ "Migrating schema."
         forM_ [version..schemaVersion - 1] $ \n -> do
             Log.logInfoN $ mconcat
@@ -80,16 +113,18 @@ validateSchema migrateSchema version
                 , " to version " , showText (n+1), "." ]
 
             reportMigrationFailure n $ do
-                executeMigrationSql "BEGIN TRANSACTION"
-                setPragma "defer_foreign_keys" (1 :: Int64)
+                setPragma "foreign_keys" (0 :: Int64)
 
+                executeMigrationSql "BEGIN TRANSACTION"
                 migration <- schemaUpdateForVersion n
                 silencedUnsafeMigration migration
 
                 checkSchema migration `catch` migrationFailed
 
+                checkForeignKeys
                 executeMigrationSql "COMMIT TRANSACTION"
-                setPragma "user_version" $ (n + 1 :: Int64)
+                setPragma "user_version" (n + 1 :: Int64)
+                setPragma "foreign_keys" (1 :: Int64)
 
             Log.logInfoN $ mconcat
                 [ "Succesfully migrated to version ", showText (n+1), "!"]
@@ -110,7 +145,7 @@ validateSchema migrateSchema version
     migrationFailed WrongSchema = logThrowM AbortMigration
 
 checkMigration
-    :: (MonadMigrate m, MonadLogger m, MonadMask m)
+    :: (MonadMigrate m, MonadLogger m, MonadMask m, MonadResource m)
     => Bool -> m Bool
 checkMigration migrateSchema = do
     tableCount <- querySingleValue "SELECT COUNT(*) FROM sqlite_master" []

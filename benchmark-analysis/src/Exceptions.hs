@@ -375,6 +375,22 @@ instance Exception AbortMigration where
     fromException = fromSchemaException
     displayException = show . pretty
 
+data ForeignKeyViolation = ForeignKeyViolation
+    deriving (Show, Typeable)
+
+instance Pretty ForeignKeyViolation where
+    pretty ForeignKeyViolation = Pretty.vsep
+        [ Pretty.reflow "Found violated foreign key constraints. Data may \
+                        \have been corrupted by manual database modification!"
+        , Pretty.line
+        , Pretty.reflow "Repair foreign key constraints before continuing."
+        ]
+
+instance Exception ForeignKeyViolation where
+    toException = toSchemaException
+    fromException = fromSchemaException
+    displayException = show . pretty
+
 data SqlException where
     SqlException :: (Exception e, Pretty e) => e -> SqlException
     deriving (Typeable)
