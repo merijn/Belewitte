@@ -58,20 +58,32 @@ liftTuple f (i1, v1) (i2, v2)
     | otherwise = error $ mconcat
         [ "Shouldn't happen! Found: " , show i1, " and ", show i2]
 
+filterImplementations
+    :: Set ImplType -> IntMap Implementation -> IntMap Implementation
+filterImplementations implTypes = IM.filter (implFilter . implementationType)
+  where
+    implFilter :: ImplType -> Bool
+    implFilter = getAny . foldMap (\i -> Any . (==i)) implTypes
+
 reportImplementations
     :: Int -> IntMap Implementation -> (a -> Text) -> [(Int64, a)] -> IO ()
 reportImplementations padding impls f =
-    mapM_ $ \(implId, val) -> T.putStrLn $ mconcat
-        [ T.replicate padding " "
-        , padText padSize $ toImplName implId <> ":"
-        , f val
-        ]
+    mapM_ renderEntry . filter (isReportImpl . fst)
   where
+    isReportImpl :: Int64 -> Bool
+    isReportImpl = (`IM.member` impls) . fromIntegral
+
     toImplName :: Int64 -> Text
     toImplName ix = getImplName $ impls IM.! fromIntegral ix
 
     padSize :: Int
     padSize = 2 + maximum (T.length . getImplName <$> impls)
+
+    renderEntry (implId, val) = T.putStrLn $ mconcat
+        [ T.replicate padding " "
+        , padText padSize $ toImplName implId <> ":"
+        , f val
+        ]
 
 foldGroup
     :: Monad m
@@ -260,7 +272,10 @@ evaluateModel
     -> SqlM ()
 evaluateModel algo platId defImpl reportCfg@Report{..} model trainConfig = do
     impls <- queryImplementations algoId
-    let lookupByName :: Text -> Maybe Int
+    let reportImpls :: IntMap Implementation
+        reportImpls = filterImplementations reportImplTypes impls
+
+        lookupByName :: Text -> Maybe Int
         lookupByName t = fmap fst
                        . listToMaybe
                        . filter ((t==) . implementationName . snd)
@@ -276,9 +291,9 @@ evaluateModel algo platId defImpl reportCfg@Report{..} model trainConfig = do
     stats <- runSqlQueryConduit query $
         foldGroup ((==) `on` stepVariantId) (aggregateSteps defaultImpl model)
         .| C.map (addBestNonSwitching impls)
-        .| aggregateVariants reportVariants reportRelativeTo impls
+        .| aggregateVariants reportVariants reportRelativeTo reportImpls
 
-    printTotalStatistics reportCfg impls stats
+    printTotalStatistics reportCfg reportImpls stats
   where
     Entity algoId algorithm = algo
 
@@ -304,7 +319,8 @@ evaluateModel algo platId defImpl reportCfg@Report{..} model trainConfig = do
 compareImplementations
     :: Key Algorithm -> Key Platform -> Report -> SqlM ()
 compareImplementations algoId platformId reportConfig@Report{..} = do
-    impls <- queryImplementations algoId
+    impls <- filterImplementations reportImplTypes <$> queryImplementations algoId
+
     stats <- runSqlQueryConduit query $
         C.map addBestNonSwitching
         .| aggregateVariants reportVariants reportRelativeTo impls
@@ -342,24 +358,14 @@ printTotalStatistics Report{..} impls TotalStats{..} = liftIO $ do
     rankedTimings = sortBy (comparing compareTime) $ VU.toList reportTimings
 
     reportTimings :: Vector (Int64, (Double, Int, Int, Int, Double))
-    reportTimings = VU.filter (\(impl,_) -> isReportImpl impl) $
-      VU.zipWith5 (\(i,a) b c d e-> (i,(a,b,c,d,e)))
-                  timesCumRelError
-                  relErrorOneToTwo
-                  relErrorMoreThanFive
-                  relErrorMoreThanTwenty
-                  timesMaxRelError
+    reportTimings = VU.zipWith5 (\(i,a) b c d e-> (i,(a,b,c,d,e)))
+            timesCumRelError
+            relErrorOneToTwo
+            relErrorMoreThanFive
+            relErrorMoreThanTwenty
+            timesMaxRelError
 
     compareTime :: (Int64, (Double, Int, Int, Int, Double)) -> Double
     compareTime (_, (avgTime, _, _, _, maxTime)) = case reportSortBy of
         Avg -> avgTime
         Max -> maxTime
-
-    implFilter :: ImplType -> Bool
-    implFilter = getAny . foldMap (\i -> Any . (==i)) reportImplTypes
-
-    reportImpls :: IntMap Implementation
-    reportImpls = IM.filter (implFilter . implementationType) impls
-
-    isReportImpl :: Int64 -> Bool
-    isReportImpl = (`IM.member` reportImpls) . fromIntegral
