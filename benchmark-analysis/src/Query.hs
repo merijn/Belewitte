@@ -68,6 +68,12 @@ data Query r =
 instance Functor Query where
     fmap f query@Query{convert} = query { convert = fmap f . convert }
 
+toQueryText :: Query r -> Text
+toQueryText Query{..} = mconcat $
+    [ mIf isExplain "EXPLAIN QUERY PLAN "
+    , mIf (not $ null commonTableExpressions) "\nWITH"
+    ] <> intersperse ",\n\n" commonTableExpressions <> ["\n", queryText]
+
 printExplainTree
     :: (MonadIO m, MonadLogger m, MonadThrow m)
     => Handle -> ConduitT (Int64, Int64, Text) Void m ()
@@ -94,7 +100,7 @@ explainSqlQuery originalQuery hnd = do
         T.hPutStrLn hnd $ toQueryText originalQuery
         T.hPutStrLn hnd $ ""
 
-    runConduit $ runSqlQuery' explainQuery .| printExplainTree hnd
+    runConduit $ runSqlQuery_ explainQuery .| printExplainTree hnd
   where
     explain
         :: (MonadIO m, MonadLogger m, MonadThrow m)
@@ -129,39 +135,47 @@ randomizeQuery seed trainingSize originalQuery = (training, validation)
       }
 
 runSqlQuery :: MonadQuery m => Query r -> ConduitT () r m ()
-runSqlQuery query = do
+runSqlQuery = runLoggingSqlQuery id
+
+runSqlQueryConduit :: MonadQuery m => Query r -> ConduitT r Void m a -> m a
+runSqlQueryConduit query sink =
+  runLoggingSqlQuery (\src -> runConduit $ src .| sink) query
+
+runSqlQuery_
+    :: ( MonadLogger m, MonadResource m, MonadSql m, MonadThrow m)
+    => Query r -> ConduitT () r m ()
+runSqlQuery_ = void . runRawSqlQuery id
+
+runLoggingSqlQuery
+    :: ( MonadLogger m, MonadResource m, MonadSql m, MonadThrow m
+       , MonadExplain n, MonadLogger n, MonadResource n, MonadSql n)
+    => (ConduitT () r m () -> n a) -> Query r -> n  a
+runLoggingSqlQuery f query  = do
     logQueryExplanation $ explainSqlQuery query
-    (timing, ()) <- withTime $ runSqlQuery' query
+
+    (formattedTime, result) <- runRawSqlQuery f query
+
+    logQueryExplanation $ \hnd -> liftIO $ do
+        T.hPutStrLn hnd $ "Query time: " <> formattedTime
+        T.hPutStrLn hnd $ ""
+        T.hPutStrLn hnd $ T.replicate 80 "#"
+
+    return result
+
+runRawSqlQuery
+    :: ( MonadLogger m, MonadResource m, MonadSql m, MonadThrow m
+       , MonadLogger n, MonadResource n, MonadSql n)
+    => (ConduitT () r m () -> n a) -> Query r -> n (Text, a)
+runRawSqlQuery f query@Query{convert,cteParams,params} = do
+    srcRes <- liftPersist $ rawQueryRes (toQueryText query) queryParams
+    (key, src) <- allocateAcquire srcRes
+    (timing, r) <- withTime $ f (src .| C.mapM convert) <* release key
 
     let formattedTime :: Text
         formattedTime = T.pack $ showGFloat (Just 3) timing "s"
 
     logInfoN $ "Query time: " <> formattedTime
-
-    logQueryExplanation $ \hnd -> liftIO $ do
-        T.hPutStrLn hnd $ "\nQuery time: " <> formattedTime
-        T.hPutStrLn hnd $ ""
-        T.hPutStrLn hnd $ T.replicate 80 "#"
-
-runSqlQueryConduit :: MonadQuery m => Query r -> ConduitT r Void m a -> m a
-runSqlQueryConduit query@Query{..} sink = do
-    srcRes <- liftPersist $ rawQueryRes (toQueryText query) queryParams
-    (key, src) <- allocateAcquire srcRes
-    runConduit (src .| C.mapM convert .| sink) <* release key
-  where
-    queryParams = cteParams ++ params
-
-toQueryText :: Query r -> Text
-toQueryText Query{..} = mconcat $
-    [ mIf isExplain "EXPLAIN QUERY PLAN "
-    , mIf (not $ null commonTableExpressions) "\nWITH"
-    ] <> intersperse ",\n\n" commonTableExpressions <> ["\n", queryText]
-
-runSqlQuery'
-    :: (MonadLogger m, MonadResource m, MonadSql m, MonadThrow m)
-    => Query r -> ConduitT () r m ()
-runSqlQuery' query@Query{convert,cteParams,params} = do
-    rawQuery (toQueryText query) queryParams .| C.mapM convert
+    return (formattedTime, r)
   where
     queryParams = cteParams ++ params
 
