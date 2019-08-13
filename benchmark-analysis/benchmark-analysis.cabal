@@ -57,6 +57,7 @@ Library
                         Sql
                         SQLiteExts
                         Types
+                        Utils.Pair
                         Utils.Process
                         Utils.Vector
 
