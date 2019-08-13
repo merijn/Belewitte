@@ -3,7 +3,7 @@
 module Utils.Pair where
 
 data Pair a = Pair { regular :: !a, external :: !a }
-    deriving (Functor)
+    deriving (Functor, Show)
 
 instance Applicative Pair where
     pure x = Pair x x
