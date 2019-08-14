@@ -1,8 +1,10 @@
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ViewPatterns #-}
 module PlotQuery (timePlotQuery, levelTimePlotQuery) where
 
@@ -22,7 +24,7 @@ timePlotQuery
     :: Key Algorithm
     -> Key Platform
     -> Set (Key Variant)
-    -> Query (Text, Vector (Int64, Double))
+    -> Query (Text, (Vector (Int64, Double), Vector (Int64, Double)))
 timePlotQuery algoId platformId variants = Query{..}
   where
     isExplain :: Bool
@@ -36,16 +38,32 @@ timePlotQuery algoId platformId variants = Query{..}
 
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
-        => [PersistValue] -> m (Text, Vector (Int64, Double))
+        => [PersistValue]
+        -> m (Text, (Vector (Int64, Double), Vector (Int64, Double)))
     convert [ PersistText graph
             , PersistByteString (byteStringToVector -> impls)
             , PersistByteString (byteStringToVector -> timings)
-            ] = return $ (graph, VU.zip impls timings)
+            , PersistByteString (byteStringToVector -> extImpls)
+            , extTimings
+            ]
+            | Just extImplTimings <- maybeExtTimings
+            = return $ (graph, (implTimings, extImplTimings))
+      where
+        !infinity = 1/0
+        implTimings = VU.zip impls timings
+
+        maybeExtTimings :: Maybe (Vector (Int64, Double))
+        maybeExtTimings = case extTimings of
+            PersistNull -> Just $ VU.map (, infinity) extImpls
+            PersistByteString times -> Just $
+                VU.zip extImpls (byteStringToVector times)
+            _ -> Nothing
+
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
-        [ SqlString, SqlBlob, SqlBlob ]
+        [ SqlString, SqlBlob, SqlBlob, SqlBlob, SqlBlob ]
 
     cteParams :: [PersistValue]
-    cteParams = [toPersistValue algoId]
+    cteParams = [toPersistValue algoId, toPersistValue algoId]
 
     commonTableExpressions :: [Text]
     commonTableExpressions = [[i|
@@ -63,15 +81,32 @@ timePlotQuery algoId platformId variants = Query{..}
     ImplVector(impls) AS (
         SELECT int64_vector(implId, idx, (SELECT COUNT(*) FROM IndexedImpls))
           FROM IndexedImpls
+    ),
+
+    IndexedExternalImpls(idx, implId) AS (
+        SELECT ROW_NUMBER() OVER (ORDER BY implId)
+             , implId
+          FROM (SELECT id AS implId
+                  FROM ExternalImpl
+                 WHERE algorithmId = ?)
+         ORDER BY implId
+    ),
+
+    ExternalImplVector(impls) AS (
+        SELECT int64_vector(implId, idx, (SELECT COUNT(*) FROM IndexedExternalImpls))
+          FROM IndexedExternalImpls
     )|]]
 
     params :: [PersistValue]
-    params = [toPersistValue platformId, toPersistValue algoId]
+    params = [ toPersistValue platformId, toPersistValue platformId
+             , toPersistValue algoId ]
 
     queryText = [i|
 SELECT Graph.name
      , ImplVector.impls
      , Total.timings
+     , ExternalImplVector.impls
+     , External.timings
 FROM Variant
 INNER JOIN Graph
 ON Variant.graphId = Graph.id
@@ -89,7 +124,20 @@ INNER JOIN
 ) AS Total
 ON Variant.id = Total.variantId
 
+LEFT JOIN
+(   SELECT variantId
+         , double_vector(avgTime, idx, (SELECT COUNT(*) FROM IndexedExternalImpls))
+           AS timings
+     FROM ExternalTimer
+     INNER JOIN IndexedExternalImpls
+     ON ExternalTimer.implId = IndexedExternalImpls.implId
+     WHERE platformId = ? AND ExternalTimer.name = "computation"
+     GROUP BY variantId
+) AS External
+ON Variant.id = External.variantId
+
 LEFT JOIN ImplVector
+LEFT JOIN ExternalImplVector
 
 WHERE Variant.name = "default" AND Variant.algorithmId = ?
 ORDER BY Variant.id ASC|]

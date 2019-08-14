@@ -100,13 +100,13 @@ importResults = do
   where
     platformInput = sqlInput PlatformName UniqPlatform
     algoInput = sqlInput AlgorithmName UniqAlgorithm
-    implInput algoId = sqlInput ImplementationName (UniqImpl algoId)
+    implInput algoId = sqlInput ExternalImplName (UniqExternalImpl algoId)
 
     insertResult
         :: (MonadSql m, MonadTagFail m)
         => Key Platform
         -> Key Algorithm
-        -> Key Implementation
+        -> Key ExternalImpl
         -> UTCTime
         -> ExternalResult
         -> m ()
@@ -120,8 +120,7 @@ importResults = do
             fmap entityKey <$> Sql.getBy uniqVariant
 
         Sql.insert_ $
-          TotalTimer platId varId implId name minTime avgTime maxTime stddev ts
-                     Nothing
+          ExternalTimer platId varId implId name minTime avgTime maxTime stddev ts
       where
         --FIXME get from command
         variantName

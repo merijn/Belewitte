@@ -84,6 +84,17 @@ insertUniq record = do
             ["Unique insert failed:\nFound: ", show r, "\nNew: ", show record]
         _ -> return ()
 
+queryExternalImplementations
+    :: (MonadSql m, MonadUnliftIO m)
+    => Key Algorithm -> m (IntMap ExternalImpl)
+queryExternalImplementations algoId = runConduitRes $
+    selectImpls algoId .| C.foldMap toIntMap
+  where
+    selectImpls aId = selectSource [ ExternalImplAlgorithmId ==. aId ] []
+
+    toIntMap :: Entity ExternalImpl -> IntMap ExternalImpl
+    toIntMap (Entity k val) = IM.singleton (fromIntegral $ fromSqlKey k) val
+
 queryImplementations
     :: (MonadSql m, MonadUnliftIO m)
     => Key Algorithm -> m (IntMap Implementation)

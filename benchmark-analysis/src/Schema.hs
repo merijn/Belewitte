@@ -14,6 +14,7 @@ module Schema
     , toPersistValue
     , Text
     , module Schema.Algorithm
+    , module Schema.External
     , module Schema.Graph
     , module Schema.Implementation
     , module Schema.Model
@@ -27,6 +28,8 @@ module Schema
     , optimalImplId
     , getAlgoName
     , getImplName
+    , getExternalName
+    , toImplNames
     , schemaVersion
     , currentSchema
     , schemaUpdateForVersion
@@ -35,6 +38,7 @@ module Schema
 import Control.Monad.Reader (ReaderT)
 import Data.ByteString (ByteString)
 import Data.Int (Int64)
+import Data.IntMap (IntMap)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Database.Persist.Sql
@@ -45,9 +49,12 @@ import Model (Model)
 import Schema.Utils
     (MonadMigrate, executeMigrationSql, liftMigration, mkMigration)
 import Types
+import Utils.Pair (Pair, toPair)
 
 import Schema.Algorithm hiding (migrations, schema)
 import qualified Schema.Algorithm as Algorithm
+import Schema.External hiding (migrations, schema)
+import qualified Schema.External as External
 import Schema.Graph hiding (migrations, schema)
 import qualified Schema.Graph as Graph
 import Schema.Implementation hiding (migrations, schema)
@@ -82,11 +89,23 @@ getImplName :: Implementation -> Text
 getImplName Implementation{implementationName,implementationPrettyName} =
   fromMaybe implementationName implementationPrettyName
 
+getExternalName :: ExternalImpl -> Text
+getExternalName ExternalImpl{externalImplName,externalImplPrettyName} =
+  fromMaybe externalImplName externalImplPrettyName
+
+toImplNames
+    :: (IntMap Implementation -> IntMap Implementation)
+    -> (IntMap ExternalImpl -> IntMap ExternalImpl)
+    -> (IntMap Implementation, IntMap ExternalImpl)
+    -> Pair (IntMap Text)
+toImplNames f g = toPair (fmap getImplName . f) (fmap getExternalName . g)
+
 migrations :: MonadMigrate m => [([EntityDef], Int64 -> m [EntityDef])]
 migrations =
     [ (Platform.schema, Platform.migrations)
     , (Graph.schema, Graph.migrations)
     , (Algorithm.schema, Algorithm.migrations)
+    , (External.schema, External.migrations)
     , (Implementation.schema, Implementation.migrations)
     , (Variant.schema, Variant.migrations)
     , (Properties.schema, Properties.migrations)
@@ -96,7 +115,7 @@ migrations =
     ]
 
 schemaVersion :: Int64
-schemaVersion = 3
+schemaVersion = 4
 
 type MigrationAction = ReaderT (RawSqlite SqlBackend) IO [EntityDef]
 

@@ -9,6 +9,7 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 module Query
@@ -230,6 +231,7 @@ data VariantInfo =
     , variantOptimal :: {-# UNPACK #-} !Double
     , variantBestNonSwitching :: {-# UNPACK #-} !Double
     , variantTimings :: {-# UNPACK #-} !(Vector (Int64, Double))
+    , variantExternalTimings :: {-# UNPACK #-} !(Vector (Int64, Double))
     } deriving (Show)
 
 variantInfoQuery :: Key Algorithm -> Key Platform -> Query VariantInfo
@@ -246,22 +248,33 @@ variantInfoQuery algoId platformId = Query{..}
             , PersistDouble variantBestNonSwitching
             , PersistByteString (byteStringToVector -> impls)
             , PersistByteString (byteStringToVector -> timings)
+            , PersistByteString (byteStringToVector -> externalImpls)
+            , externalTimings
             ]
 
             | PersistDouble variantOptimal <- stepOptimal
+            , Just variantExternalTimings <- maybeExternalTimings
             = return VariantInfo{..}
 
             | PersistNull <- stepOptimal
-            = let variantOptimal = infinite in return VariantInfo{..}
+            , Just variantExternalTimings <- maybeExternalTimings
+            = let variantOptimal = infinity in return VariantInfo{..}
             where
-              !infinite = 1/0
+              !infinity = 1/0
               variantTimings = VU.zip impls timings
 
+              maybeExternalTimings :: Maybe (Vector (Int64, Double))
+              maybeExternalTimings = case externalTimings of
+                  PersistNull -> Just $ VU.map (, infinity) externalImpls
+                  PersistByteString times -> Just $
+                    VU.zip externalImpls (byteStringToVector times)
+                  _ -> Nothing
+
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
-        [SqlInt64, SqlReal, SqlReal, SqlBlob, SqlBlob]
+        [SqlInt64, SqlReal, SqlReal, SqlBlob, SqlBlob, SqlBlob, SqlBlob]
 
     cteParams :: [PersistValue]
-    cteParams = [toPersistValue algoId]
+    cteParams = [toPersistValue algoId, toPersistValue algoId]
 
     commonTableExpressions :: [Text]
     commonTableExpressions = [[i|
@@ -279,11 +292,25 @@ variantInfoQuery algoId platformId = Query{..}
     ImplVector(impls) AS (
         SELECT int64_vector(implId, idx, (SELECT COUNT(*) FROM IndexedImpls))
           FROM IndexedImpls
+    ),
+
+    IndexedExternalImpls(idx, implId) AS (
+        SELECT ROW_NUMBER() OVER (ORDER BY implId)
+             , implId
+          FROM (SELECT id AS implId
+                  FROM ExternalImpl
+                 WHERE algorithmId = ?)
+         ORDER BY implId
+    ),
+
+    ExternalImplVector(impls) AS (
+        SELECT int64_vector(implId, idx, (SELECT COUNT(*) FROM IndexedExternalImpls))
+          FROM IndexedExternalImpls
     )|]]
 
     params :: [PersistValue]
     params = [ toPersistValue platformId, toPersistValue platformId
-             , toPersistValue algoId
+             , toPersistValue platformId, toPersistValue algoId
              ]
 
     queryText = [i|
@@ -292,6 +319,8 @@ SELECT Variant.id
      , Total.bestNonSwitching
      , ImplVector.impls
      , Total.timings
+     , ExternalImplVector.impls
+     , External.timings
 FROM Variant
 LEFT JOIN
 (   SELECT variantId
@@ -327,7 +356,20 @@ INNER JOIN
 ) AS Total
 ON Variant.id = Total.variantId
 
+LEFT JOIN
+(   SELECT variantId
+         , double_vector(avgTime, idx, (SELECT COUNT(*) FROM IndexedExternalImpls))
+           AS timings
+      FROM ExternalTimer
+      INNER JOIN IndexedExternalImpls
+      ON ExternalTimer.implId = IndexedExternalImpls.implId
+      WHERE platformId = ? AND ExternalTimer.name = "computation"
+      GROUP BY variantId
+) AS External
+ON Variant.id = External.variantId
+
 LEFT JOIN ImplVector
+LEFT JOIN ExternalImplVector
 
 WHERE Variant.algorithmId = ?
 ORDER BY Variant.id ASC|]

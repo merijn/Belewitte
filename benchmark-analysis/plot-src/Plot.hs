@@ -41,6 +41,7 @@ import RuntimeData (getBarPlotScript)
 import Schema
 import Sql ((==.))
 import qualified Sql
+import Utils.Pair (Pair(..), toPair, mergePair)
 
 queryVariants :: Key Algorithm -> Set Text -> SqlM (Set (Key Variant))
 queryVariants algoId graphs = do
@@ -68,7 +69,7 @@ data PlotOptions
       , getAlgoId :: SqlM (Key Algorithm)
       , getPlatformId :: SqlM (Key Platform)
       , getGraphs :: SqlM (Set Text)
-      , getImplementations :: Key Algorithm -> SqlM (IntMap Implementation)
+      , getImplementations :: SqlM (Set Text)
       , plotConfig :: PlotConfig
       }
     | QueryTest
@@ -104,11 +105,8 @@ plotOptions plottype =
     graphs :: Parser (SqlM (Set Text))
     graphs = readSet "graphs"
 
-    impls :: Parser (Key Algorithm -> SqlM (IntMap Implementation))
-    impls = do
-        keepImpls <- readSet "implementations"
-        return $ \algoId ->
-            filterImpls <$> keepImpls <*> Sql.queryImplementations algoId
+    impls :: Parser (SqlM (Set Text))
+    impls = readSet "implementations"
 
     readSet :: FilePath -> Parser (SqlM (Set Text))
     readSet s = fmap readText . strOption $ mconcat
@@ -119,11 +117,14 @@ plotOptions plottype =
     readText :: MonadIO m => FilePath -> m (Set Text)
     readText = liftIO . fmap (S.fromList . T.lines) . T.readFile
 
-    filterImpls :: Set Text -> IntMap Implementation -> IntMap Implementation
-    filterImpls textSet = IM.filter $ getAny . mconcat
-        [ Any . (`S.member` textSet) . implementationName
-        , Any . (Builtin==) . implementationType
-        ]
+filterImpls :: Set Text -> IntMap Implementation -> IntMap Implementation
+filterImpls textSet = IM.filter $ getAny . mconcat
+    [ Any . (`S.member` textSet) . implementationName
+    , Any . (Builtin==) . implementationType
+    ]
+
+filterExternal :: Set Text -> IntMap ExternalImpl -> IntMap ExternalImpl
+filterExternal names = IM.filter ((`S.member` names) . externalImplName)
 
 commands :: String -> (InfoMod a, Parser PlotOptions)
 commands name = (,) mempty . (<|>) hiddenCommands . hsubparser $ mconcat
@@ -198,11 +199,11 @@ reportData hnd normalise = do
             | normalise = V.map (/ maxTime) timings
             | otherwise = timings
 
-dataFromVariantInfo :: VariantInfo -> SqlM (Text, Vector (Int64,Double))
+dataFromVariantInfo :: VariantInfo -> SqlM (Text, Pair (Vector (Int64,Double)))
 dataFromVariantInfo VariantInfo{..} = do
     graphId <- variantGraphId <$> Sql.getJust variantId
     name <- graphName <$> Sql.getJust graphId
-    return (name, extendedTimings)
+    return (name, Pair extendedTimings (V.convert variantExternalTimings))
   where
     extendedTimings = V.convert variantTimings
         `V.snoc` (bestNonSwitchingImplId, variantBestNonSwitching)
@@ -246,21 +247,30 @@ runQueryDump _ (Just suffix) name mkQuery vals =
 
 nameImplementations
     :: Generic.Vector v (Int64, Double)
-    => IntMap Implementation
+    => IntMap Text
     -> v (Int64, Double)
     -> Vector (Text, Double)
 nameImplementations impls = V.mapMaybe translate . V.convert
   where
     translate :: (Int64, a) -> Maybe (Text, a)
-    translate (i, v) = (,v) . getImplName <$> impls IM.!? fromIntegral i
+    translate (i, v) = (,v) <$> impls IM.!? fromIntegral i
 
 main :: IO ()
 main = runSqlM commands $ \case
   PlotOptions{..} -> do
     algoId <- getAlgoId
     platformId <- getPlatformId
-    impls <- getImplementations algoId
+    implNames <- getImplementations
     variants <- getGraphs >>= queryVariants algoId
+
+    impls <- (,) <$> Sql.queryImplementations algoId
+                 <*> Sql.queryExternalImplementations algoId
+
+    let implMaps@Pair{regular} =
+          toImplNames (filterImpls implNames) (filterExternal implNames) impls
+
+        translatePair :: Pair (Vector (Int64, Double)) -> Vector (Text, Double)
+        translatePair x = mergePair $ nameImplementations <$> implMaps <*> x
 
     case plotType of
         PlotLevels -> do
@@ -272,13 +282,13 @@ main = runSqlM commands $ \case
                     pdfName = name <> "-levels"
 
                 plot plotConfig pdfName query $
-                    C.map (bimap showText (nameImplementations impls))
+                    C.map (bimap showText (nameImplementations regular))
 
         PlotTotals -> do
             let timeQuery = timePlotQuery algoId platformId variants
 
             plot plotConfig "times-totals" timeQuery $
-                C.map (second (nameImplementations impls))
+                C.map (second $ translatePair . toPair V.convert V.convert)
 
         PlotVsOptimal -> do
             let variantQuery = variantInfoQuery algoId platformId
@@ -288,7 +298,7 @@ main = runSqlM commands $ \case
             plot plotConfig "times-vs-optimal" variantQuery $
                 C.filter variantFilter
                 .| C.mapM dataFromVariantInfo
-                .| C.map (second (nameImplementations impls))
+                .| C.map (second $ translatePair . fmap V.convert)
 
   QueryTest{getAlgorithm,getPlatformId,outputSuffix} -> do
     Entity algoId algorithm <- getAlgorithm

@@ -44,6 +44,7 @@ Library
                         RuntimeData
                         Schema
                         Schema.Algorithm
+                        Schema.External
                         Schema.Graph
                         Schema.Implementation
                         Schema.Model
@@ -101,7 +102,7 @@ Library
                ,        clock == 0.7.*
                ,        conduit == 1.3.*
                ,        conduit-extra == 1.3.*
-               ,        containers == 0.5.*
+               ,        containers >= 0.5.11 && < 0.7
                ,        data-interval == 1.3.*
                ,        directory == 1.3.*
                ,        exceptions == 0.10.*
@@ -140,7 +141,10 @@ Executable Ingest
                         Parsers
                         ProcessPool
 
-  Other-Extensions:     LambdaCase
+  Other-Extensions:     DeriveFoldable
+                        DeriveFunctor
+                        DeriveTraversable
+                        LambdaCase
                         MonadFailDesugaring
                         NamedFieldPuns
                         OverloadedStrings
@@ -188,6 +192,7 @@ Executable Model
                         StepQuery
 
   Other-Extensions:     BangPatterns
+                        DeriveFunctor
                         FlexibleContexts
                         LambdaCase
                         MonadFailDesugaring
@@ -195,6 +200,8 @@ Executable Model
                         OverloadedStrings
                         QuasiQuotes
                         RecordWildCards
+                        ScopedTypeVariables
+                        TupleSections
                         TypeFamilies
                         ViewPatterns
 
@@ -206,7 +213,7 @@ Executable Model
                ,        bytestring
                ,        conduit == 1.3.*
                ,        conduit-extra == 1.3.*
-               ,        containers == 0.5.*
+               ,        containers >= 0.5.11 && < 0.7
                ,        data-interval == 1.3.*
                ,        exceptions == 0.10.*
                ,        interpolate == 0.1.1
@@ -231,6 +238,7 @@ Executable Plot
   Other-Modules:        PlotQuery
 
   Other-Extensions:     ApplicativeDo
+                        BangPatterns
                         FlexibleContexts
                         LambdaCase
                         MonadFailDesugaring
@@ -245,7 +253,7 @@ Executable Plot
                ,        benchmark-analysis
                ,        conduit == 1.3.*
                ,        conduit-extra == 1.3.*
-               ,        containers == 0.5.*
+               ,        containers >= 0.5.11 && < 0.7
                ,        exceptions == 0.10.*
                ,        interpolate == 0.1.1
                ,        monad-logger == 0.3.28.*

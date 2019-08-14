@@ -3,6 +3,8 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 module Options (ModelCommand(..), commands, runSqlM) where
 
@@ -12,14 +14,17 @@ import Data.Functor.Compose (Compose(..))
 import Data.Foldable (asum)
 import Data.IntervalSet (IntervalSet)
 import qualified Data.IntervalSet as IS
+import Data.Map (Map)
 import qualified Data.Map as M
+import Data.Monoid (Any(..))
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 
 import Core
-import Evaluate (Report(..), RelativeTo(..), SortBy(..))
+import Evaluate
+    (CompareReport, EvaluateReport, Report(..), RelativeTo(..), SortBy(..))
 import Model (Model)
 import OptionParsers
 import Query (getDistinctFieldQuery, runSqlQueryConduit)
@@ -56,12 +61,12 @@ data ModelCommand
       , getPlatformId :: SqlM (Key Platform)
       , getModel :: SqlM (Key PredictionModel, Model)
       , defaultImpl :: Either Int Text
-      , reportConfig :: Report
+      , evaluateConfig :: EvaluateReport
       }
     | Compare
       { getAlgoId :: SqlM (Key Algorithm)
       , getPlatformId :: SqlM (Key Platform)
-      , reportConfig :: Report
+      , compareConfig :: CompareReport
       }
     | Export
       { getAlgoId :: SqlM (Key Algorithm)
@@ -88,11 +93,10 @@ commands name = (,) docs . (<|>) hiddenCommands . hsubparser $ mconcat
         "Evaluate BDT model performance on full dataset and compare against \
         \performance of other implementations" $
         Evaluate <$> algorithmParser <*> platformIdParser <*> modelParser
-                 <*> defaultImplParser <*> reportParser False
+                 <*> defaultImplParser <*> evaluateParser
     , subCommand "compare" "compare implementation performance"
         "Compare the performance of different implementations" $
-        Compare <$> algorithmIdParser <*> platformIdParser
-                <*> reportParser True
+        Compare <$> algorithmIdParser <*> platformIdParser <*> compareParser
     , subCommand "export" "export model to C++"
         "Export BDT model to C++ file" $
         Export <$> algorithmIdParser <*> modelParser <*> cppFile
@@ -161,10 +165,12 @@ modelParser = queryModel <$> modelOpt
       where
         key = toSqlKey n
 
-reportParser :: Bool -> Parser Report
-reportParser isComparison =
+reportParser
+    :: forall a . Monoid a
+    => Map String RelativeTo -> Parser a -> Parser (Report a)
+reportParser relTo implTypes =
   Report <$> variantIntervals <*> resultsRelativeTo <*> sortResultsBy
-         <*> implTypes <*> pure False
+         <*> implTypes <*> detailed
   where
     variantIntervals :: Parser (IntervalSet Int64)
     variantIntervals = IS.unions <$> many intervals
@@ -184,17 +190,11 @@ reportParser isComparison =
                \--report-range=5-10,13,17-20" ]
 
     resultsRelativeTo :: Parser RelativeTo
-    resultsRelativeTo = optionParserFromValues values $ mconcat
+    resultsRelativeTo = optionParserFromValues relTo $ mconcat
         --FIXME: list options
         [ metavar "REL-TO", long "rel-to", value Optimal
         , showDefaultWith (map toLower . show)
         , help "Results to normalise result output to" ]
-      where
-        base = M.fromList [("optimal", Optimal), ("best", BestNonSwitching)]
-
-        values
-          | isComparison = base
-          | otherwise = M.insert "predicted" Predicted $ base
 
     sortResultsBy :: Parser SortBy
     sortResultsBy = optionParserFromValues values $ mconcat
@@ -205,20 +205,38 @@ reportParser isComparison =
       where
         values = M.fromList [("avg", Avg), ("max", Max)]
 
-    implTypes :: Parser (Set ImplType)
-    implTypes = S.insert Builtin <$>
-        (S.unions <$> some implParser <|> pure (S.singleton Core))
-      where
-        implParser = optionParserFromValues values $ mconcat
-            --FIXME: list options
-            [ metavar "TYPE", long "impl-type"
-            , showDefault
-            , help "Implementation types to output results for" ]
+    detailed :: Parser Bool
+    detailed = flag False True $ mconcat
+        [ long "detail", help "Show detailed performance stats" ]
 
-        values = M.fromList $
-            [ ("core", S.singleton Core)
-            , ("derived", S.singleton Derived)
-            ] ++ mIf isComparison [("comparison", S.singleton Comparison)]
+defaultRelativeToValues :: Map String RelativeTo
+defaultRelativeToValues = M.fromList $
+    [("optimal", Optimal), ("best", BestNonSwitching)]
+
+implTypesParser :: Monoid a => (ImplType -> a) -> Map String a -> Parser a
+implTypesParser makeResult extraVals = mappend (makeResult Builtin) <$>
+    (mconcat <$> some implParser <|> pure (makeResult Core))
+  where
+    implParser = optionParserFromValues (extraVals <> values) $ mconcat
+        --FIXME: list options
+        [ metavar "TYPE", long "impl-type"
+        , help "Implementation types to output results for" ]
+
+    values = M.fromList $
+        [ ("core", makeResult Core)
+        , ("derived", makeResult Derived)
+        ]
+
+evaluateParser :: Parser EvaluateReport
+evaluateParser = reportParser relToValues $ implTypesParser S.singleton M.empty
+  where
+    relToValues = M.insert "predicted" Predicted defaultRelativeToValues
+
+compareParser :: Parser CompareReport
+compareParser = reportParser defaultRelativeToValues implTypes
+  where
+    implTypes = implTypesParser ((mempty,) . S.singleton) extraVals
+    extraVals = M.singleton "comparison" (Any True, S.empty)
 
 type SqlParser = Compose Parser SqlM
 
