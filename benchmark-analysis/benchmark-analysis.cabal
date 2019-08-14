@@ -238,6 +238,7 @@ Executable Plot
                         OverloadedStrings
                         QuasiQuotes
                         RecordWildCards
+                        TupleSections
                         ViewPatterns
 
   Build-Depends:        base

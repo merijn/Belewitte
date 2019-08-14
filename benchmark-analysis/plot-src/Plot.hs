@@ -1,15 +1,17 @@
 {-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ViewPatterns #-}
 module Main (main) where
 
 import Control.Monad (forM, forM_, void)
 import Control.Monad.Fail (MonadFail)
-import Data.Bifunctor (first, second)
+import Data.Bifunctor (bimap, second)
 import Data.Char (isSpace)
 import Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
@@ -25,8 +27,9 @@ import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import Data.Vector.Unboxed (Vector)
-import qualified Data.Vector.Unboxed as VU
+import Data.Vector (Vector)
+import qualified Data.Vector as V
+import qualified Data.Vector.Generic as Generic
 import System.IO (Handle, IOMode(WriteMode), hPutStr, stdout, withFile)
 
 import Core
@@ -159,46 +162,40 @@ commands name = (,) mempty . (<|>) hiddenCommands . hsubparser $ mconcat
 
 reportData
     :: (MonadFail m, MonadIO m, MonadLogger m, MonadThrow m)
-    => Handle
-    -> Bool
-    -> IntMap Implementation
-    -> ConduitT (Text, Vector (Int64, Double)) Void m ()
-reportData hnd normalise implMap = do
-    Just (_, VU.map fst -> impls) <- C.peek
+    => Handle -> Bool -> ConduitT (Text, Vector (Text, Double)) Void m ()
+reportData hnd normalise = do
+    Just (_, V.map fst -> impls) <- C.peek
     liftIO . T.hPutStrLn hnd $ toColumnLabels impls
     C.mapM_ $ printGraph impls
   where
-    translate :: Int64 -> Text
-    translate i = getImplName $ implMap IM.! fromIntegral i
-
-    toColumnLabels :: Vector Int64 -> Text
-    toColumnLabels = mconcat . intersperse ":" . map translate . VU.toList
+    toColumnLabels :: Vector Text -> Text
+    toColumnLabels = mconcat . intersperse ":" . V.toList
 
     printGraph
         :: (MonadIO m, MonadLogger m, MonadThrow m)
-        => Vector Int64 -> (Text, Vector (Int64, Double)) -> m ()
+        => Vector Text -> (Text, Vector (Text, Double)) -> m ()
     printGraph impls (graph, timingsPair)
         | mismatch = logThrowM $
-            QueryResultMismatch (VU.toList impls) (VU.toList timingImpls)
+            QueryResultMismatch (V.toList impls) (V.toList timingImpls)
 
         | otherwise = liftIO $ do
             T.hPutStr hnd $ graph <> " :"
-            VU.forM_ processedTimings $ \time -> hPutStr hnd $ " " ++ show time
+            V.forM_ processedTimings $ \time -> hPutStr hnd $ " " ++ show time
             T.hPutStrLn hnd ""
       where
         mismatch :: Bool
-        mismatch = not . VU.and $ VU.zipWith (==) impls timingImpls
+        mismatch = not . V.and $ V.zipWith (==) impls timingImpls
 
-        timingImpls :: Vector Int64
+        timingImpls :: Vector Text
         timings :: Vector Double
-        (timingImpls, timings) = VU.unzip timingsPair
+        (timingImpls, timings) = V.unzip timingsPair
 
         maxTime :: Double
-        maxTime = VU.maximum . VU.filter (not . isInfinite) $ timings
+        maxTime = V.maximum . V.filter (not . isInfinite) $ timings
 
         processedTimings :: Vector Double
         processedTimings
-            | normalise = VU.map (/ maxTime) timings
+            | normalise = V.map (/ maxTime) timings
             | otherwise = timings
 
 dataFromVariantInfo :: VariantInfo -> SqlM (Text, Vector (Int64,Double))
@@ -207,18 +204,17 @@ dataFromVariantInfo VariantInfo{..} = do
     name <- graphName <$> Sql.getJust graphId
     return (name, extendedTimings)
   where
-    extendedTimings = variantTimings
-        `VU.snoc` (bestNonSwitchingImplId, variantBestNonSwitching)
-        `VU.snoc` (optimalImplId, variantOptimal)
+    extendedTimings = V.convert variantTimings
+        `V.snoc` (bestNonSwitchingImplId, variantBestNonSwitching)
+        `V.snoc` (optimalImplId, variantOptimal)
 
 plot
     :: PlotConfig
     -> Text
-    -> IntMap Implementation
     -> Query a
-    -> ConduitT a (Text, Vector (Int64, Double)) SqlM ()
+    -> ConduitT a (Text, Vector (Text, Double)) SqlM ()
     -> SqlM ()
-plot PlotConfig{..} plotName impls query convert
+plot PlotConfig{..} plotName query convert
   | printStdout = doWithHandle stdout
   | otherwise = do
         plotProcess <- getBarPlotScript args
@@ -227,14 +223,9 @@ plot PlotConfig{..} plotName impls query convert
     args :: [String]
     args = [T.unpack plotName, axisName, show normalise, show slideFormat]
 
-    isRelevant :: (Int64, a) -> Bool
-    isRelevant (i, _) = IM.member (fromIntegral i) impls
-
     doWithHandle :: Handle -> SqlM ()
     doWithHandle hnd = runSqlQueryConduit query $
-        convert
-        .| C.map (second (VU.filter isRelevant))
-        .| reportData hnd normalise impls
+        convert .| reportData hnd normalise
 
 runQueryDump
     :: (Foldable f, Show r)
@@ -253,6 +244,16 @@ runQueryDump _ (Just suffix) name mkQuery vals =
             .| C.encode C.utf8
             .| C.sinkHandle hnd
 
+nameImplementations
+    :: Generic.Vector v (Int64, Double)
+    => IntMap Implementation
+    -> v (Int64, Double)
+    -> Vector (Text, Double)
+nameImplementations impls = V.mapMaybe translate . V.convert
+  where
+    translate :: (Int64, a) -> Maybe (Text, a)
+    translate (i, v) = (,v) . getImplName <$> impls IM.!? fromIntegral i
+
 main :: IO ()
 main = runSqlM commands $ \case
   PlotOptions{..} -> do
@@ -270,21 +271,24 @@ main = runSqlM commands $ \case
                 let query = levelTimePlotQuery platformId variantId
                     pdfName = name <> "-levels"
 
-                plot plotConfig pdfName impls query $ C.map (first showText)
+                plot plotConfig pdfName query $
+                    C.map (bimap showText (nameImplementations impls))
 
         PlotTotals -> do
             let timeQuery = timePlotQuery algoId platformId variants
 
-            plot plotConfig "times-totals" impls timeQuery $
-                awaitForever yield
+            plot plotConfig "times-totals" timeQuery $
+                C.map (second (nameImplementations impls))
 
         PlotVsOptimal -> do
             let variantQuery = variantInfoQuery algoId platformId
                 variantFilter VariantInfo{variantId} =
                     S.member variantId variants
 
-            plot plotConfig "times-vs-optimal" impls variantQuery $
-                C.filter variantFilter .| C.mapM dataFromVariantInfo
+            plot plotConfig "times-vs-optimal" variantQuery $
+                C.filter variantFilter
+                .| C.mapM dataFromVariantInfo
+                .| C.map (second (nameImplementations impls))
 
   QueryTest{getAlgorithm,getPlatformId,outputSuffix} -> do
     Entity algoId algorithm <- getAlgorithm
