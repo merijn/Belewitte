@@ -437,8 +437,9 @@ newtype PrettySqliteException = PrettySqliteException SqliteException
 
 instance Pretty PrettySqliteException where
     pretty (PrettySqliteException SqliteException{..}) = Pretty.vsep
-        [ pretty seFunctionName <> ":" <+> Pretty.viaShow seError
-        , pretty seDetails
+        [ Pretty.viaShow seError <> pretty seDetails
+        , Pretty.vsep . map pretty . T.splitOn "\\n" $
+            T.replace "\\\"" "\"" seFunctionName
         ]
 
 instance Exception PrettySqliteException where
