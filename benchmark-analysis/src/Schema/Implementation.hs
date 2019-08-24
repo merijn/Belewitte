@@ -26,7 +26,6 @@ Implementation
     prettyName Text Maybe
     flags Text Maybe
     type ImplType
-    runnable Bool
     UniqImpl algorithmId name
     deriving Eq Show
 |]

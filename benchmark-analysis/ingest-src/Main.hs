@@ -60,12 +60,9 @@ addImplementation = do
 
     prettyName <- getInteractive optionalInput "Implementation Pretty Name"
     flags <- getInteractive optionalInput "Flags"
-
     implType <- getInteractive (readInput (/=Builtin)) "Implementation type"
-    runnable <- getInteractive (readInput (const True)) "Runnable"
 
-    Sql.insert_ $
-        Implementation algoId implName prettyName flags implType runnable
+    Sql.insert_ $ Implementation algoId implName prettyName flags implType
   where
     algoInput = sqlInput AlgorithmName UniqAlgorithm
     implInput algorithmName = processCompleterText

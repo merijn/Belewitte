@@ -107,8 +107,7 @@ queryImplementations algoId = fmap (IM.union builtinImpls) . runConduitRes $
     toIntMap (Entity k val) = IM.singleton (fromIntegral $ fromSqlKey k) val
 
     mkImpl :: Text -> Text -> Implementation
-    mkImpl short long =
-        Implementation algoId short (Just long) Nothing Builtin False
+    mkImpl short long = Implementation algoId short (Just long) Nothing Builtin
 
     builtinImpls :: IntMap Implementation
     builtinImpls = IM.fromList
