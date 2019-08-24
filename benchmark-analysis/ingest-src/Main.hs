@@ -38,11 +38,12 @@ addPlatform = do
 addGraphs :: [FilePath] -> Input SqlM ()
 addGraphs paths = do
     datasetTag <- getInteractive textInput "Dataset Tag"
+    datasetId <- Sql.insert $ Dataset datasetTag
     forM_ paths $ \path -> do
         liftIO $ doesFileExist path >>= guard
         let (graphName, ext) = splitExtension $ takeFileName path
         liftIO $ guard (ext == ".graph")
-        Sql.insert_ $ Graph (T.pack graphName) datasetTag (T.pack path) Nothing
+        Sql.insert_ $ Graph (T.pack graphName) (T.pack path) Nothing datasetId
 
 addAlgorithm :: Input SqlM ()
 addAlgorithm = do

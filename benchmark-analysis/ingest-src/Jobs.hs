@@ -67,7 +67,7 @@ variantToPropertyJob
                 | otherwise -> return ()
   where
     yieldJob = do
-        Graph _ _ path _ <- Sql.getJust graphId
+        Graph _ path _ _ <- Sql.getJust graphId
         Algorithm algo _ <- Sql.getJust algoId
         yield . Job (graphId,hash) varId (showSqlKey varId) . T.unwords $
             [ showSqlKey varId
@@ -147,7 +147,7 @@ variantToTimingJob runs (Entity varId Variant{variantResult = Just hash,..}) =
         :: MonadSql m
         => Entity Implementation -> m (Job (Key Implementation, Hash))
     toMissingJob (Entity implId Implementation{..}) = do
-        Graph _ _ path _ <- Sql.getJust variantGraphId
+        Graph _ path _ _ <- Sql.getJust variantGraphId
         Algorithm algo _ <- Sql.getJust variantAlgorithmId
 
         return . Job (implId, hash) varId (tag implementationName) $ T.unwords

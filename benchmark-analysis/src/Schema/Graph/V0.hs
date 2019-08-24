@@ -1,4 +1,3 @@
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MonadFailDesugaring #-}
@@ -7,37 +6,20 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-module Schema.Graph where
+module Schema.Graph.V0 where
 
-import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
 import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Schema.Utils (EntityDef, Int64, MonadMigrate, (.>), (.=))
-import qualified Schema.Utils as Utils
-
-import Schema.Dataset (DatasetId)
-import qualified Schema.Graph.V0 as V0
-
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
 Graph
     name Text
+    dataset Text
     path Text
     prettyName Text Maybe
-    datasetId DatasetId
     UniqGraph path
-    UniqGraphName name datasetId
+    UniqGraphName path dataset
     deriving Eq Show
 |]
-
-migrations :: MonadMigrate m => Int64 -> m [EntityDef]
-migrations = Utils.mkMigrationLookup
-    [ 1 .> V0.schema $ do
-        Utils.executeMigrationSql [i|
-ALTER TABLE 'Graph'
-ADD COLUMN 'dataset' VARCHAR NOT NULL DEFAULT 'unknown'
-|]
-    , 5 .= schema
-    ]

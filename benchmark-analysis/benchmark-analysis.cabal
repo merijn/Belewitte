@@ -44,8 +44,10 @@ Library
                         RuntimeData
                         Schema
                         Schema.Algorithm
+                        Schema.Dataset
                         Schema.External
                         Schema.Graph
+                        Schema.Graph.V0
                         Schema.Implementation
                         Schema.Model
                         Schema.Model.V0

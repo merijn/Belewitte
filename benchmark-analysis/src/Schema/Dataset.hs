@@ -1,13 +1,12 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MonadFailDesugaring #-}
+{-# LANGUAGE GeneralisedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-module Schema.Graph where
+module Schema.Dataset where
 
 import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
@@ -15,29 +14,40 @@ import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Schema.Utils (EntityDef, Int64, MonadMigrate, (.>), (.=))
+import Schema.Utils (EntityDef, Int64, MonadMigrate, (.>))
 import qualified Schema.Utils as Utils
 
-import Schema.Dataset (DatasetId)
-import qualified Schema.Graph.V0 as V0
-
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
-Graph
+Dataset
     name Text
-    path Text
-    prettyName Text Maybe
-    datasetId DatasetId
-    UniqGraph path
-    UniqGraphName name datasetId
+    UniqDataset name
     deriving Eq Show
 |]
 
 migrations :: MonadMigrate m => Int64 -> m [EntityDef]
 migrations = Utils.mkMigrationLookup
-    [ 1 .> V0.schema $ do
+    [ 5 .> schema $ do
         Utils.executeMigrationSql [i|
-ALTER TABLE 'Graph'
-ADD COLUMN 'dataset' VARCHAR NOT NULL DEFAULT 'unknown'
+CREATE TABLE IF NOT EXISTS "Dataset"
+("id" INTEGER PRIMARY KEY
+,"name" VARCHAR NOT NULL
+,CONSTRAINT "UniqDataset" UNIQUE ("name")
+)
 |]
-    , 5 .= schema
+
+        Utils.executeMigrationSql [i|
+INSERT INTO "Dataset"
+SELECT ROW_NUMBER() OVER (ORDER BY dataset), dataset
+FROM (SELECT DISTINCT dataset FROM Graph)
+|]
+
+        Utils.executeMigrationSql [i|
+ALTER TABLE "Graph"
+ADD COLUMN "datasetId" INTEGER REFERENCES "Dataset"
+|]
+
+        Utils.executeMigrationSql [i|
+UPDATE "Graph"
+SET "datasetId" = (SELECT "id" FROM "Dataset" WHERE "name" = "dataset")
+|]
     ]

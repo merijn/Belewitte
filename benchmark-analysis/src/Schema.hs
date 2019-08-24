@@ -14,6 +14,7 @@ module Schema
     , toPersistValue
     , Text
     , module Schema.Algorithm
+    , module Schema.Dataset
     , module Schema.External
     , module Schema.Graph
     , module Schema.Implementation
@@ -53,6 +54,8 @@ import Utils.Pair (Pair, toPair)
 
 import Schema.Algorithm hiding (migrations, schema)
 import qualified Schema.Algorithm as Algorithm
+import Schema.Dataset hiding (migrations, schema)
+import qualified Schema.Dataset as Dataset
 import Schema.External hiding (migrations, schema)
 import qualified Schema.External as External
 import Schema.Graph hiding (migrations, schema)
@@ -103,6 +106,7 @@ toImplNames f g = toPair (fmap getImplName . f) (fmap getExternalName . g)
 migrations :: MonadMigrate m => [([EntityDef], Int64 -> m [EntityDef])]
 migrations =
     [ (Platform.schema, Platform.migrations)
+    , (Dataset.schema, Dataset.migrations)
     , (Graph.schema, Graph.migrations)
     , (Algorithm.schema, Algorithm.migrations)
     , (External.schema, External.migrations)
@@ -115,7 +119,7 @@ migrations =
     ]
 
 schemaVersion :: Int64
-schemaVersion = 4
+schemaVersion = 5
 
 type MigrationAction = ReaderT (RawSqlite SqlBackend) IO [EntityDef]
 
