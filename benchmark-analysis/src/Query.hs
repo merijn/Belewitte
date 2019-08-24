@@ -279,14 +279,12 @@ variantInfoQuery algoId platformId = Query{..}
     commonTableExpressions :: [Text]
     commonTableExpressions = [[i|
     IndexedImpls(idx, implId, type) AS (
-        SELECT ROW_NUMBER() OVER (ORDER BY implId)
-             , implId
+        SELECT ROW_NUMBER() OVER (ORDER BY id)
+             , id
              , type
-          FROM (SELECT id AS implId
-                     , type
-                  FROM Implementation
-                 WHERE algorithmId = ?)
-         ORDER BY implId
+        FROM Implementation
+        WHERE algorithmId = ?
+        ORDER BY id
     ),
 
     ImplVector(impls) AS (

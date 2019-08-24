@@ -68,14 +68,12 @@ timePlotQuery algoId platformId variants = Query{..}
     commonTableExpressions :: [Text]
     commonTableExpressions = [[i|
     IndexedImpls(idx, implId, type) AS (
-        SELECT ROW_NUMBER() OVER (ORDER BY implId)
-             , implId
+        SELECT ROW_NUMBER() OVER (ORDER BY id)
+             , id
              , type
-          FROM (SELECT id AS implId
-                     , type
-                  FROM Implementation
-                 WHERE algorithmId = ?)
-         ORDER BY implId
+        FROM Implementation
+        WHERE algorithmId = ?
+        ORDER BY id
     ),
 
     ImplVector(impls) AS (
@@ -84,12 +82,11 @@ timePlotQuery algoId platformId variants = Query{..}
     ),
 
     IndexedExternalImpls(idx, implId) AS (
-        SELECT ROW_NUMBER() OVER (ORDER BY implId)
-             , implId
-          FROM (SELECT id AS implId
-                  FROM ExternalImpl
-                 WHERE algorithmId = ?)
-         ORDER BY implId
+        SELECT ROW_NUMBER() OVER (ORDER BY id)
+             , id
+        FROM ExternalImpl
+        WHERE algorithmId = ?
+        ORDER BY id
     ),
 
     ExternalImplVector(impls) AS (
@@ -166,20 +163,16 @@ levelTimePlotQuery platformId variant = Query{..}
     commonTableExpressions :: [Text]
     commonTableExpressions = [[i|
     IndexedImpls(idx, implId, type) AS (
-        SELECT ROW_NUMBER() OVER (ORDER BY implId)
-             , implId
+        SELECT ROW_NUMBER() OVER (ORDER BY id)
+             , id
              , type
-        FROM
-        (   SELECT id AS implId
-                 , type
-            FROM Implementation
-            WHERE algorithmId IN
+        FROM Implementation
+        WHERE algorithmId IN
             (   SELECT algorithmId
                 FROM Variant
                 WHERE id = ?
             )
-        )
-        ORDER BY implId
+        ORDER BY id
     ),
 
     ImplVector(impls) AS (
