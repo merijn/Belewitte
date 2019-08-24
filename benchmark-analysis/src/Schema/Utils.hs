@@ -26,8 +26,8 @@ import Database.Persist.TH (embedEntityDefs)
 
 type MonadMigrate m = (MonadIO m, MonadReader (RawSqlite SqlBackend) m)
 
-(.=) :: Functor f => a -> b -> f c -> (a, f b)
-(.=) i schema act = (i, schema <$ act)
+(.=) :: Functor f => a -> b -> f c -> (a, (b, f c))
+(.=) i schema act = (i, (schema, act))
 
 executeMigrationSql :: MonadMigrate m => Text -> m ()
 executeMigrationSql query = liftMigration $ Sql.rawExecute query []
@@ -42,8 +42,10 @@ mkMigration ents = mapM_ (Sql.migrate embeddedEnts) embeddedEnts
 
 mkMigrationLookup
     :: MonadMigrate m
-    => [EntityDef] -> [(Int64, m [EntityDef])] -> Int64 -> m [EntityDef]
+    => [EntityDef] -> [(Int64, ([EntityDef], m ()))] -> Int64 -> m [EntityDef]
 mkMigrationLookup latestSchema (M.fromList -> migrationMap) = \i ->
-    case M.lookup i migrationMap of
+    case M.lookupLE i migrationMap of
         Nothing -> return latestSchema
-        Just m -> m
+        Just (key, (schema, migration))
+            | key == i -> schema <$ migration
+            | otherwise -> return schema
