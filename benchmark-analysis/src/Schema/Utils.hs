@@ -7,6 +7,7 @@ module Schema.Utils
     , Int64
     , MonadMigrate
     , (.=)
+    , (.>)
     , executeMigrationSql
     , liftMigration
     , mkMigration
@@ -26,8 +27,11 @@ import Database.Persist.TH (embedEntityDefs)
 
 type MonadMigrate m = (MonadIO m, MonadReader (RawSqlite SqlBackend) m)
 
-(.=) :: Functor f => a -> b -> f c -> (a, (b, f c))
-(.=) i schema act = (i, (schema, act))
+(.=) :: Applicative f => a -> b -> (a, (b, f ()))
+(.=) i schema = (i, (schema, pure ()))
+
+(.>) :: Functor f => a -> b -> f c -> (a, (b, f c))
+(.>) i schema act = (i, (schema, act))
 
 executeMigrationSql :: MonadMigrate m => Text -> m ()
 executeMigrationSql query = liftMigration $ Sql.rawExecute query []
@@ -42,10 +46,10 @@ mkMigration ents = mapM_ (Sql.migrate embeddedEnts) embeddedEnts
 
 mkMigrationLookup
     :: MonadMigrate m
-    => [EntityDef] -> [(Int64, ([EntityDef], m ()))] -> Int64 -> m [EntityDef]
-mkMigrationLookup latestSchema (M.fromList -> migrationMap) = \i ->
+    => [(Int64, ([EntityDef], m ()))] -> Int64 -> m [EntityDef]
+mkMigrationLookup (M.fromList -> migrationMap) = \i ->
     case M.lookupLE i migrationMap of
-        Nothing -> return latestSchema
+        Nothing -> return []
         Just (key, (schema, migration))
             | key == i -> schema <$ migration
             | otherwise -> return schema

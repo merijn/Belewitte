@@ -116,7 +116,7 @@ validateSchema migrateSchema version
                 setPragma "foreign_keys" (0 :: Int64)
 
                 executeMigrationSql "BEGIN TRANSACTION"
-                migration <- schemaUpdateForVersion n
+                migration <- updateSchemaToVersion (n+1)
                 silencedUnsafeMigration migration
 
                 checkSchema migration `catch` migrationFailed

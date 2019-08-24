@@ -17,7 +17,7 @@ import Data.Time.Clock (UTCTime)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Schema.Utils (EntityDef, Int64, MonadMigrate, (.=))
+import Schema.Utils (EntityDef, Int64, MonadMigrate, (.>))
 import qualified Schema.Utils as Utils
 
 import Schema.Algorithm (AlgorithmId)
@@ -47,8 +47,8 @@ ExternalTimer
 |]
 
 migrations :: MonadMigrate m => Int64 -> m [EntityDef]
-migrations = Utils.mkMigrationLookup schema
-    [ 3 .= schema $ do
+migrations = Utils.mkMigrationLookup
+    [ 4 .> schema $ do
 
         Utils.executeMigrationSql [i|
 CREATE TABLE IF NOT EXISTS "ExternalImpl"

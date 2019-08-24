@@ -32,7 +32,7 @@ module Schema
     , toImplNames
     , schemaVersion
     , currentSchema
-    , schemaUpdateForVersion
+    , updateSchemaToVersion
     ) where
 
 import Control.Monad.Reader (ReaderT)
@@ -123,5 +123,5 @@ currentSchema :: Migration
 currentSchema = mkMigration $ map fst
     (migrations :: [([EntityDef], Int64 -> MigrationAction)])
 
-schemaUpdateForVersion :: MonadMigrate m => Int64 -> m Migration
-schemaUpdateForVersion n = mkMigration <$> mapM (($n) . snd) migrations
+updateSchemaToVersion :: MonadMigrate m => Int64 -> m Migration
+updateSchemaToVersion n = mkMigration <$> mapM (($n) . snd) migrations

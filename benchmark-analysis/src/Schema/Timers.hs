@@ -19,7 +19,7 @@ import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Schema.Utils (EntityDef, Int64, MonadMigrate, (.=))
+import Schema.Utils (EntityDef, Int64, MonadMigrate, (.>))
 import qualified Schema.Utils as Utils
 
 import Schema.Implementation (ImplementationId)
@@ -59,8 +59,8 @@ StepTimer
 |]
 
 migrations :: MonadMigrate m => Int64 -> m [EntityDef]
-migrations = Utils.mkMigrationLookup schema
-    [ 0 .= schema $ do
+migrations = Utils.mkMigrationLookup
+    [ 1 .> schema $ do
         Utils.executeMigrationSql [i|
 ALTER TABLE 'TotalTimer' RENAME COLUMN 'gpuId' TO 'platformId'
 |]

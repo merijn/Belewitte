@@ -15,7 +15,7 @@ import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Schema.Utils (EntityDef, Int64, MonadMigrate)
+import Schema.Utils (EntityDef, Int64, MonadMigrate, (.=))
 import qualified Schema.Utils as Utils
 
 import Schema.Model (PredictionModelId)
@@ -49,4 +49,4 @@ UnknownSet
 |]
 
 migrations :: MonadMigrate m => Int64 -> m [EntityDef]
-migrations = Utils.mkMigrationLookup schema []
+migrations = Utils.mkMigrationLookup [ 0 .= schema ]
