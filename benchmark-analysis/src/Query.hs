@@ -28,7 +28,7 @@ module Query
 import Control.Monad (void)
 import Data.Acquire (allocateAcquire)
 import Control.Monad.Trans.Resource (release)
-import Data.Conduit (ConduitT, Void, (.|), await, runConduit)
+import Data.Conduit (ConduitT, Void, (.|), await, runConduit, toProducer)
 import qualified Data.Conduit.Combinators as C
 import Data.List (intersperse)
 import Data.Monoid ((<>))
@@ -135,8 +135,8 @@ randomizeQuery seed trainingSize originalQuery = (training, validation)
       , queryText = randomizedQuery <> [i|LIMIT -1 OFFSET ?|]
       }
 
-runSqlQuery :: MonadQuery m => Query r -> ConduitT () r m ()
-runSqlQuery = runLoggingSqlQuery id
+runSqlQuery :: MonadQuery m => Query r -> ConduitT a r m ()
+runSqlQuery = toProducer . runLoggingSqlQuery id
 
 runSqlQueryConduit :: MonadQuery m => Query r -> ConduitT r Void m a -> m a
 runSqlQueryConduit query sink =
@@ -150,7 +150,7 @@ runSqlQuery_ = void . runRawSqlQuery id
 runLoggingSqlQuery
     :: ( MonadLogger m, MonadResource m, MonadSql m, MonadThrow m
        , MonadExplain n, MonadLogger n, MonadResource n, MonadSql n)
-    => (ConduitT () r m () -> n a) -> Query r -> n  a
+    => (ConduitT () r m () -> n a) -> Query r -> n a
 runLoggingSqlQuery f query  = do
     logQueryExplanation $ explainSqlQuery query
 
