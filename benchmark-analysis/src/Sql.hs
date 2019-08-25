@@ -16,6 +16,7 @@ module Sql
     , fromSqlKey
     , toSqlKey
     , Sqlite.fieldLens
+    , Sqlite.fromPersistValue
     , (Sqlite.=.)
     , (Sqlite.==.)
     , (Sqlite.+=.)
