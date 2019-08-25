@@ -22,6 +22,8 @@ module Schema
     , module Schema.ModelMetadata
     , module Schema.Platform
     , module Schema.Properties
+    , module Schema.Run
+    , module Schema.RunConfig
     , module Schema.Timers
     , module Schema.Variant
     , bestNonSwitchingImplId
@@ -70,6 +72,10 @@ import Schema.Platform hiding (migrations, schema)
 import qualified Schema.Platform as Platform
 import Schema.Properties hiding (migrations, schema)
 import qualified Schema.Properties as Properties
+import Schema.Run hiding (migrations, schema)
+import qualified Schema.Run as Run
+import Schema.RunConfig hiding (migrations, schema)
+import qualified Schema.RunConfig as RunConfig
 import Schema.Timers hiding (migrations, schema)
 import qualified Schema.Timers as Timers
 import Schema.Variant hiding (migrations, schema)
@@ -113,13 +119,15 @@ migrations =
     , (Implementation.schema, Implementation.migrations)
     , (Variant.schema, Variant.migrations)
     , (Properties.schema, Properties.migrations)
+    , (RunConfig.schema, RunConfig.migrations)
+    , (Run.schema, Run.migrations)
     , (Timers.schema, Timers.migrations)
     , (Model.schema, Model.migrations)
     , (ModelMetadata.schema, ModelMetadata.migrations)
     ]
 
 schemaVersion :: Int64
-schemaVersion = 5
+schemaVersion = 6
 
 type MigrationAction = ReaderT (RawSqlite SqlBackend) IO [EntityDef]
 

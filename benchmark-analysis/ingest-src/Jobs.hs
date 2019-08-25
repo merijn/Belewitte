@@ -168,11 +168,11 @@ filterExistingTimings
                 m
                 ()
 filterExistingTimings platformId job@Job{jobVariant, jobValue = (implId, _)} =
-    Sql.whenNotExists filters $ yield job
+    _ --Sql.whenNotExists filters $ yield job
   where
-    filters = [ TotalTimerPlatformId ==. platformId
+    filters = [ {- TotalTimerPlatformId ==. platformId
               , TotalTimerVariantId ==. jobVariant
-              , TotalTimerImplId ==. implId
+              , TotalTimerImplId ==. implId -}
               ]
 
 processTiming
@@ -210,10 +210,10 @@ processTiming platformId Result{resultValue = (implId, hash), ..} = do
     outputFile = T.unpack resultLabel <> ".output"
 
     insertTiming :: MonadSql m => UTCTime -> Maybe Hash -> Timer -> m ()
-    insertTiming ts mWrongHash (TotalTiming Timing{..}) = Sql.insert_ $
+    insertTiming ts mWrongHash (TotalTiming Timing{..}) = _ {- Sql.insert_ $
         TotalTimer platformId resultVariant implId name minTime avgTime maxTime
-                   stddev ts mWrongHash
+                   stddev ts mWrongHash -}
 
-    insertTiming ts mWrongHash (StepTiming n Timing{..})= Sql.insert_ $
+    insertTiming ts mWrongHash (StepTiming n Timing{..}) = _ {-Sql.insert_ $
         StepTimer platformId resultVariant n implId name minTime avgTime
-                  maxTime stddev ts mWrongHash
+                  maxTime stddev ts mWrongHash -}

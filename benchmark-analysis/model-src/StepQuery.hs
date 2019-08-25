@@ -58,7 +58,7 @@ stepInfoQuery algoId platformId graphProperties stepProperties = Query{..}
         [ SqlInt64, SqlInt64, SqlInt64, SqlBlob, SqlBlob, SqlBlob, SqlBlob ]
 
     cteParams :: [PersistValue]
-    cteParams = [ toPersistValue algoId , toPersistValue platformId ]
+    cteParams = [ toPersistValue algoId ]
 
     commonTableExpressions :: [Text]
     commonTableExpressions = [[i|
@@ -94,8 +94,8 @@ ImplVector(impls) AS (
     FROM IndexedImpls
 ),
 
-Step(variantId, stepId, implId, minTime, timings) AS (
-    SELECT variantId, stepId, IndexedImpls.implId
+Step(runConfigId, variantId, stepId, implId, minTime, timings) AS (
+    SELECT Run.runConfigId, Run.variantId, stepId, IndexedImpls.implId
          , MIN(CASE IndexedImpls.type
                WHEN "Core" THEN avgTime
                ELSE NULL END)
@@ -103,30 +103,38 @@ Step(variantId, stepId, implId, minTime, timings) AS (
            AS timings
     FROM StepTimer
 
+    INNER JOIN Run
+    ON StepTimer.runId = Run.id
+
     INNER JOIN IndexedImpls
-    ON StepTimer.implId = IndexedImpls.implId
-    WHERE platformId = ?
-    GROUP BY variantId, stepId
+    ON Run.implId = IndexedImpls.implId
+
+    WHERE Run.validated == 1
+    GROUP BY Run.runConfigId, Run.variantId, stepId
 )|]]
 
     params :: [PersistValue]
     params = [ toPersistValue $ S.size graphProperties
              , toPersistValue $ S.size stepProperties
              , toPersistValue algoId
+             , toPersistValue platformId
              ]
 
     queryText = [i|
-SELECT Variant.id
+SELECT Step.variantId
      , Step.stepId
      , Step.implId
      , ImplVector.impls
      , Step.timings
      , GraphProps.props
      , StepProps.props
-FROM Variant
+FROM RunConfig
 
 INNER JOIN Step
-ON Variant.id = Step.variantId
+ON RunConfig.id = Step.runConfigId
+
+INNER JOIN Variant
+ON Step.variantId = Variant.id
 
 INNER JOIN
 (   SELECT graphId, double_vector(value, idx, ?) AS props
@@ -141,8 +149,8 @@ INNER JOIN
     FROM IndexedStepProps
     GROUP BY variantId, stepId
 ) AS StepProps
-ON Variant.id = StepProps.variantId AND Step.stepId = StepProps.stepId
+ON Step.variantId = StepProps.variantId AND Step.stepId = StepProps.stepId
 
 LEFT JOIN ImplVector
-WHERE Variant.algorithmId = ?
-ORDER BY Variant.id, Step.stepId ASC|]
+WHERE RunConfig.algorithmId = ? AND RunConfig.platformId = ?
+ORDER BY Step.variantId, Step.stepId ASC|]

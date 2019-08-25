@@ -2,10 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MonadFailDesugaring #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -14,57 +11,121 @@ module Schema.Timers where
 
 import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
-import Data.Time.Clock (UTCTime)
 import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
 import Schema.Utils (EntityDef, Int64, MonadMigrate, (.>))
 import qualified Schema.Utils as Utils
+import qualified Schema.Timers.V0 as V0
 
-import Schema.Implementation (ImplementationId)
-import Schema.Platform (PlatformId)
-import Schema.Variant (VariantId)
-import Types
+import Schema.Run (RunId)
 
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
 TotalTimer
-    platformId PlatformId
-    variantId VariantId
-    implId ImplementationId
+    runId RunId
     name Text
     minTime Double
     avgTime Double
     maxTime Double
     stdDev Double
-    timestamp UTCTime
-    wrongResult Hash Maybe
-    Primary platformId variantId implId name
+    Primary runId name
     deriving Eq Show
 
 StepTimer
-    platformId PlatformId
-    variantId VariantId
+    runId RunId
     stepId Int
-    implId ImplementationId
     name Text
     minTime Double
     avgTime Double
     maxTime Double
     stdDev Double
-    timestamp UTCTime
-    wrongResult Hash Maybe
-    Primary platformId variantId stepId implId name
+    Primary runId stepId name
     deriving Eq Show
 |]
 
 migrations :: MonadMigrate m => Int64 -> m [EntityDef]
 migrations = Utils.mkMigrationLookup
-    [ 1 .> schema $ do
+    [ 1 .> V0.schema $ do
         Utils.executeMigrationSql [i|
 ALTER TABLE 'TotalTimer' RENAME COLUMN 'gpuId' TO 'platformId'
 |]
         Utils.executeMigrationSql [i|
 ALTER TABLE 'StepTimer' RENAME COLUMN 'gpuId' TO 'platformId'
+|]
+    , 6 .> schema $ do
+        Utils.executeMigrationSql [i|
+ALTER TABLE 'TotalTimer'
+ADD COLUMN 'runId' INTEGER REFERENCES 'Run'
+|]
+
+        Utils.executeMigrationSql [i|
+ALTER TABLE 'StepTimer'
+ADD COLUMN 'runId' INTEGER REFERENCES 'Run'
+|]
+
+        Utils.executeMigrationSql [i|
+REPLACE INTO 'TotalTimer'
+SELECT TotalTimer.platformId
+     , TotalTimer.variantId
+     , TotalTimer.implId
+     , TotalTimer.name
+     , TotalTimer.minTime
+     , TotalTimer.avgTime
+     , TotalTimer.maxTime
+     , TotalTimer.stdDev
+     , TotalTimer.timestamp
+     , TotalTimer.wrongResult
+     , Run.id
+FROM TotalTimer
+
+INNER JOIN Run
+ON  Run.variantId = TotalTimer.variantId
+AND Run.implId = TotalTimer.implId
+
+INNER JOIN Variant
+ON Variant.id = TotalTimer.variantId
+
+INNER JOIN Graph
+ON Graph.id = Variant.graphId
+
+INNER JOIN RunConfig
+ON  RunConfig.id = Run.runConfigId
+AND RunConfig.platformId = TotalTimer.platformId
+AND RunConfig.algorithmId = Variant.algorithmId
+AND RunConfig.datasetId = Graph.datasetId
+|]
+
+        Utils.executeMigrationSql [i|
+REPLACE INTO 'StepTimer'
+SELECT StepTimer.platformId
+     , StepTimer.variantId
+     , StepTimer.stepId
+     , StepTimer.implId
+     , StepTimer.name
+     , StepTimer.minTime
+     , StepTimer.avgTime
+     , StepTimer.maxTime
+     , StepTimer.stdDev
+     , StepTimer.timestamp
+     , StepTimer.wrongResult
+     , Run.id
+FROM StepTimer
+
+INNER JOIN Run
+ON  Run.variantId = StepTimer.variantId
+AND Run.implId = StepTimer.implId
+
+INNER JOIN Variant
+ON Variant.id = StepTimer.variantId
+
+INNER JOIN Graph
+ON Graph.id = Variant.graphId
+
+INNER JOIN RunConfig
+ON  RunConfig.id = Run.runConfigId
+AND RunConfig.platformId = StepTimer.platformId
+AND RunConfig.algorithmId = Variant.algorithmId
+AND RunConfig.datasetId = Graph.datasetId
 |]
     ]

@@ -307,52 +307,64 @@ variantInfoQuery algoId platformId = Query{..}
     )|]]
 
     params :: [PersistValue]
-    params = [ toPersistValue platformId, toPersistValue platformId
-             , toPersistValue platformId, toPersistValue algoId
+    params = [ toPersistValue platformId, toPersistValue algoId
+             , toPersistValue platformId
              ]
 
     queryText = [i|
-SELECT Variant.id
+SELECT OptimalStep.variantId
      , OptimalStep.optimal
      , Total.bestNonSwitching
      , ImplVector.impls
      , Total.timings
      , ExternalImplVector.impls
      , External.timings
-FROM Variant
+FROM RunConfig
+
 LEFT JOIN
-(   SELECT variantId
+(   SELECT runConfigId
+         , variantId
          , SUM(Step.minTime) AS optimal
     FROM (
-        SELECT variantId
+        SELECT Run.runConfigId
+             , Run.variantId
              , stepId
              ,  MIN(CASE Implementation.type
                     WHEN "Core" THEN avgTime
                     ELSE NULL END) AS minTime
         FROM StepTimer
+
+        INNER JOIN Run
+        ON StepTimer.runId = Run.id
+
         INNER JOIN Implementation
-        ON StepTimer.implId = Implementation.id
-        WHERE platformId = ?
-        GROUP BY variantId, stepId
+        ON Run.implId = Implementation.id
+
+        GROUP BY Run.runConfigId, Run.variantId, stepId
     ) AS Step
-    GROUP BY variantId
+    GROUP BY runConfigId, variantId
 ) AS OptimalStep
-ON Variant.id = OptimalStep.variantId
+ON RunConfig.id = OptimalStep.runConfigId
 
 INNER JOIN
-(   SELECT variantId
+(   SELECT Run.variantId
          , MIN(CASE IndexedImpls.type
                WHEN "Core" THEN avgTime
                ELSE NULL END) AS bestNonSwitching
          , double_vector(avgTime, idx, (SELECT COUNT(*) FROM IndexedImpls))
            AS timings
       FROM TotalTimer
+
+      INNER JOIN Run
+      ON TotalTimer.runId = Run.id
+
       INNER JOIN IndexedImpls
-      ON TotalTimer.implId = IndexedImpls.implId
-      WHERE platformId = ? AND TotalTimer.name = "computation"
-      GROUP BY variantId
+      ON Run.implId = IndexedImpls.implId
+
+      WHERE TotalTimer.name = "computation"
+      GROUP BY Run.variantId
 ) AS Total
-ON Variant.id = Total.variantId
+ON OptimalStep.variantId = Total.variantId
 
 LEFT JOIN
 (   SELECT variantId
@@ -364,10 +376,10 @@ LEFT JOIN
       WHERE platformId = ? AND ExternalTimer.name = "computation"
       GROUP BY variantId
 ) AS External
-ON Variant.id = External.variantId
+ON OptimalStep.variantId = External.variantId
 
 LEFT JOIN ImplVector
 LEFT JOIN ExternalImplVector
 
-WHERE Variant.algorithmId = ?
-ORDER BY Variant.id ASC|]
+WHERE RunConfig.algorithmId = ? AND RunConfig.platformId = ?
+ORDER BY OptimalStep.variantId ASC|]

@@ -54,7 +54,10 @@ Library
                         Schema.ModelMetadata
                         Schema.Platform
                         Schema.Properties
+                        Schema.Run
+                        Schema.RunConfig
                         Schema.Timers
+                        Schema.Timers.V0
                         Schema.Utils
                         Schema.Variant
                         Sql

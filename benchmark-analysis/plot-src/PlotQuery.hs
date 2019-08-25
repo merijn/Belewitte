@@ -104,22 +104,32 @@ SELECT Graph.name
      , Total.timings
      , ExternalImplVector.impls
      , External.timings
-FROM Variant
-INNER JOIN Graph
-ON Variant.graphId = Graph.id
+FROM RunConfig
 
 INNER JOIN
-(   SELECT variantId
+(   SELECT Run.runConfigId
+         , Run.variantId
          , double_vector(avgTime, idx, (SELECT COUNT(*) FROM IndexedImpls))
            AS timings
     FROM TotalTimer
+
+    INNER JOIN Run
+    ON Run.id = TotalTimer.runId
+
     INNER JOIN IndexedImpls
-    ON IndexedImpls.implId = TotalTimer.implId
-    WHERE platformId = ? AND name = "computation"
-    GROUP BY variantId
-    HAVING variantId IN #{inExpression variants}
+    ON IndexedImpls.implId = Run.implId
+
+    WHERE name = "computation"
+    GROUP BY Run.runConfigId, Run.variantId
+    HAVING Run.variantId IN #{inExpression variants}
 ) AS Total
-ON Variant.id = Total.variantId
+ON RunConfig.id = Total.runConfigId
+
+INNER JOIN Variant
+ON Total.variantId = Variant.id
+
+INNER JOIN Graph
+ON Variant.graphId = Graph.id
 
 LEFT JOIN
 (   SELECT variantId
@@ -131,13 +141,14 @@ LEFT JOIN
      WHERE platformId = ? AND ExternalTimer.name = "computation"
      GROUP BY variantId
 ) AS External
-ON Variant.id = External.variantId
+ON Total.variantId = External.variantId
 
 LEFT JOIN ImplVector
 LEFT JOIN ExternalImplVector
 
-WHERE Variant.name = "default" AND Variant.algorithmId = ?
-ORDER BY Variant.id ASC|]
+WHERE RunConfig.algorithmId = ? AND RunConfig.platformId = ?
+  AND Variant.name = "default"
+ORDER BY Total.variantId ASC|]
 
 levelTimePlotQuery
     :: Key Platform -> Key Variant -> Query (Int64, Vector (Int64, Double))
@@ -188,12 +199,19 @@ SELECT stepId
      , ImplVector.impls
      , double_vector(avgTime, idx, (SELECT COUNT(*) FROM IndexedImpls))
        AS timings
-FROM StepTimer
+FROM RunConfig
+
+INNER JOIN Run
+ON RunConfig.id = Run.runConfigId
+
 INNER JOIN IndexedImpls
-ON IndexedImpls.implId = StepTimer.implId
+ON IndexedImpls.implId = Run.implId
+
+INNER JOIN StepTimer
+ON Run.id = StepTimer.runId
 
 LEFT JOIN ImplVector
 
-WHERE platformId = ? AND variantId = ?
+WHERE RunConfig.platformId = ? AND Run.variantId = ?
 GROUP BY stepId
 ORDER BY stepId ASC|]
