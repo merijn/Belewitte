@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -9,8 +10,7 @@ module Jobs
     ( (.>)
     , variantToPropertyJob
     , processProperty
-    , variantToTimingJob
-    , filterExistingTimings
+    , missingRunToTimingJob
     , processTiming
     ) where
 
@@ -23,14 +23,15 @@ import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.Text as C
 import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
-import Data.Time.Clock (UTCTime, getCurrentTime)
+import Data.Time.Clock (getCurrentTime)
 import System.Directory (removeFile)
 
 import Core
+import MissingQuery (MissingRun(..))
 import Parsers
 import ProcessPool (Job(..), Result(..))
 import Schema
-import Sql (Entity(..), Key, MonadSql, (=.), (==.))
+import Sql (Entity(..), Key, MonadSql, (=.))
 import qualified Sql
 
 (.>) :: Monad m
@@ -125,82 +126,49 @@ processProperty Result{resultValue=(graphId, hash), ..} = do
 
     insertProperty Prediction{} = return ()
 
-variantToTimingJob
+missingRunToTimingJob
     :: (MonadLogger m, MonadResource m, MonadSql m)
-    => Int
-    -> Entity Variant
-    -> ConduitT (Entity Variant) (Job (Key Implementation, Hash)) m ()
-variantToTimingJob _ (Entity varId (Variant graphId algoId _ _ Nothing _ _))
-    = logErrorN . mconcat $
-        [ "Algorithm #", showSqlKey algoId
-        , " results missing for graph #", showSqlKey graphId
-        , " variant #", showSqlKey varId
+    => MissingRun
+    -> ConduitT MissingRun (Job (Key Implementation, Hash)) m ()
+missingRunToTimingJob MissingRun{..}
+  | Nothing <- missingRunVariantResult
+  = logErrorN . mconcat $
+        [ "Algorithm #", showSqlKey missingRunAlgorithmId
+        , " results missing for variant #", showSqlKey missingRunVariantId
         ]
 
-variantToTimingJob runs (Entity varId Variant{variantResult = Just hash,..}) =
-    Sql.selectSource [ImplementationAlgorithmId ==. variantAlgorithmId] []
-    .| C.mapM toMissingJob
+  | Just hash <- missingRunVariantResult = yield $ job hash
   where
-    tag name = mconcat [ showSqlKey varId, " ", name]
-
-    toMissingJob
-        :: MonadSql m
-        => Entity Implementation -> m (Job (Key Implementation, Hash))
-    toMissingJob (Entity implId Implementation{..}) = do
-        Graph _ path _ _ <- Sql.getJust variantGraphId
-        Algorithm algo _ <- Sql.getJust variantAlgorithmId
-
-        return . Job (implId, hash) varId (tag implementationName) $ T.unwords
-            [ "\"" <> tag implementationName <> "\"", "-a"
-            , algo
-            , fromMaybe ("-k " <> implementationName) implementationFlags
-            , fromMaybe "" variantFlags
-            , "-n " <> showText runs
-            , path
-            ]
-
-filterExistingTimings
-    :: (MonadLogger m, MonadResource m, MonadSql m)
-    => Key Platform
-    -> (Job (Key Implementation, Hash))
-    -> ConduitT (Job (Key Implementation, Hash))
-                (Job (Key Implementation, Hash))
-                m
-                ()
-filterExistingTimings platformId job@Job{jobVariant, jobValue = (implId, _)} =
-    _ --Sql.whenNotExists filters $ yield job
-  where
-    filters = [ {- TotalTimerPlatformId ==. platformId
-              , TotalTimerVariantId ==. jobVariant
-              , TotalTimerImplId ==. implId -}
-              ]
+    tag name = mconcat [ showSqlKey missingRunVariantId, " ", name]
+    implName = tag missingRunImplName
+    cmd = T.unwords $ "\"" <> implName <> "\"" : missingRunArgs
+    job hash = Job (missingRunImplId, hash) missingRunVariantId implName cmd
 
 processTiming
     :: (MonadLogger m, MonadResource m, MonadSql m, MonadThrow m)
-    => Key Platform -> Result (Key Implementation, Hash) -> m ()
-processTiming platformId Result{resultValue = (implId, hash), ..} = do
+    => Key RunConfig -> Result (Key Implementation, Hash) -> m ()
+processTiming runConfigId Result{resultValue = (implId, hash), ..} = do
     logInfoN $ "Timing: " <> resultLabel
-    timestamp <- liftIO getCurrentTime
+    time <- liftIO getCurrentTime
     resultHash <- computeHash outputFile
     liftIO $ removeFile outputFile
 
-    let correct = resultHash == hash
-        mWrongHash
-            | correct = Nothing
-            | otherwise = Just resultHash
+    let validated = resultHash == hash
 
-    unless correct $ do
+    runId <- Sql.insert $ Run runConfigId resultVariant implId time validated
+
+    unless validated $ do
         logErrorN . mconcat $
             [ "Implementation #", showSqlKey implId
-            , " has wrong results for variant #", showSqlKey resultVariant
-            , " on Platform #", showSqlKey platformId ]
+            , " has wrong result hash for variant #", showSqlKey resultVariant
+            , " for run config #", showSqlKey runConfigId ]
 
     runConduit $
         C.sourceFile timingFile
         .| C.decode C.utf8
         .| C.map (T.replace "," "")
         .| conduitParse timer
-        .| C.mapM_ (insertTiming timestamp mWrongHash)
+        .| C.mapM_ (insertTiming runId)
 
     liftIO $ removeFile timingFile
 
@@ -209,11 +177,9 @@ processTiming platformId Result{resultValue = (implId, hash), ..} = do
     timingFile = T.unpack resultLabel <> ".timings"
     outputFile = T.unpack resultLabel <> ".output"
 
-    insertTiming :: MonadSql m => UTCTime -> Maybe Hash -> Timer -> m ()
-    insertTiming ts mWrongHash (TotalTiming Timing{..}) = _ {- Sql.insert_ $
-        TotalTimer platformId resultVariant implId name minTime avgTime maxTime
-                   stddev ts mWrongHash -}
+    insertTiming :: MonadSql m => Key Run -> Timer -> m ()
+    insertTiming runId (TotalTiming Timing{..}) = Sql.insert_ $
+        TotalTimer runId name minTime avgTime maxTime stddev
 
-    insertTiming ts mWrongHash (StepTiming n Timing{..}) = _ {-Sql.insert_ $
-        StepTimer platformId resultVariant n implId name minTime avgTime
-                  maxTime stddev ts mWrongHash -}
+    insertTiming runId (StepTiming n Timing{..})= Sql.insert_ $
+        StepTimer runId n name minTime avgTime maxTime stddev

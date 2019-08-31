@@ -143,6 +143,7 @@ Executable Ingest
   Hs-Source-Dirs:       ingest-src
   Main-Is:              Main.hs
   Other-Modules:        Jobs
+                        MissingQuery
                         Parsers
                         ProcessPool
 
@@ -153,10 +154,12 @@ Executable Ingest
                         MonadFailDesugaring
                         NamedFieldPuns
                         OverloadedStrings
+                        QuasiQuotes
                         RecordWildCards
                         ScopedTypeVariables
                         TupleSections
                         TypeFamilies
+                        ViewPatterns
 
   Build-Depends:        base
                ,        benchmark-analysis
@@ -171,6 +174,7 @@ Executable Ingest
                ,        filepath == 1.4.*
                ,        haskeline >= 0.7.4.2 && < 0.8
                ,        hostname == 1.0
+               ,        interpolate == 0.1.1
                ,        microlens == 0.4.8.*
                ,        monad-logger == 0.3.28.*
                ,        memory == 0.14.*

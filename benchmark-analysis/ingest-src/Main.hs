@@ -21,12 +21,14 @@ import System.FilePath (splitExtension, takeFileName)
 import Core
 import InteractiveInput
 import Jobs
+import MissingQuery (missingQuery)
 import OptionParsers
 import Parsers
 import ProcessPool
+import Query (runSqlQuery)
 import qualified RuntimeData
 import Schema
-import Sql (Entity(..), Filter, Key, MonadSql, (=.), (==.))
+import Sql (Entity(..), Filter, MonadSql, (=.), (==.))
 import qualified Sql
 
 addPlatform :: Input SqlM ()
@@ -125,8 +127,8 @@ importResults = do
             | varName == "0" = "default"
             | otherwise = "Root " <> varName
 
-runBenchmarks :: Int -> Int -> Input SqlM ()
-runBenchmarks numNodes numRuns = lift $ do
+runBenchmarks :: Int -> Input SqlM ()
+runBenchmarks numNodes = lift $ do
     -- Error out if C++ code hasn't been compiled
     void $ do
         RuntimeData.getKernelExecutable
@@ -140,13 +142,13 @@ runBenchmarks numNodes numRuns = lift $ do
         .| C.mapM_ processProperty
 
     runConduit $
-        Sql.selectSource [] [] .> \(Entity platformId platform) ->
-            Sql.selectKeys [] [] .> \algoKey ->
-                Sql.selectSource [VariantAlgorithmId ==. algoKey] []
-                .> variantToTimingJob numRuns
-                .> filterExistingTimings platformId
+        Sql.selectSource [] [] .> \(Entity runConfigId config) -> do
+            platform <- Sql.getJust $ runConfigPlatformId config
+
+            runSqlQuery (missingQuery runConfigId)
+                .> missingRunToTimingJob
                 .| processJobsParallel numNodes platform
-                .| C.mapM_ (processTiming platformId)
+                .| C.mapM_ (processTiming runConfigId)
 
 resetRetries :: MonadSql m => m ()
 resetRetries = Sql.updateWhere [] [VariantRetryCount =. 0]
@@ -189,7 +191,7 @@ commands name = (,) docs . hsubparser $ mconcat
         "Import results of external implementations." $ pure importResults
     , subCommand "run-benchmarks" "run benchmarks"
                  "Run benchmarks for missing registered configurations" $
-                 runBenchmarks <$> parallelism <*> numRuns
+                 runBenchmarks <$> parallelism
     , subCommand "reset-retries" "resets the retry count"
                  "Reset the retry count for failed experiments" $
                  pure $ resetRetries
@@ -221,7 +223,6 @@ commands name = (,) docs . hsubparser $ mconcat
 
     graphFile = metavar "GRAPH" <> help "Graph file"
     parallelism = option auto . mconcat $ [ metavar "N", short 'j', value 2 ]
-    numRuns = option auto . mconcat $ [ metavar "N", short 'n', value 30 ]
 
 main :: IO ()
 main = runSqlM commands $ runInput
