@@ -19,6 +19,7 @@ module Core
     , MonadIO(liftIO)
     , lift
     , MonadLogger
+    , MonadLoggerIO
     , Log.logErrorN
     , Log.logWarnN
     , Log.logInfoN
