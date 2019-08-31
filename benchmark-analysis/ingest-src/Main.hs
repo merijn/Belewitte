@@ -155,11 +155,13 @@ resetProperties :: MonadSql m => m ()
 resetProperties = do
     Sql.deleteWhere ([] :: [Filter GraphProp])
     Sql.deleteWhere ([] :: [Filter StepProp])
+    Sql.updateWhere [] [VariantPropsStored =. False]
 
 resetMeasurements :: MonadSql m => m ()
 resetMeasurements = do
     Sql.deleteWhere ([] :: [Filter StepTimer])
     Sql.deleteWhere ([] :: [Filter TotalTimer])
+    Sql.deleteWhere ([] :: [Filter Run])
 
 resetModels :: MonadSql m => m ()
 resetModels = do
