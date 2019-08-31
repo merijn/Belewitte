@@ -67,7 +67,8 @@ static Options options('h', "help", cout, [](ostream& out)
     out << exeName << " query device [-p NUM | --platform NUM] "
         << "[-d NUM | --device NUM] [-v | --verbose]" << endl;
 
-    out << exeName << " query algorithm [-a NAME | --algorithm NAME]" << endl;
+    out << exeName << " query algorithm-version [-a NAME | --algorithm NAME]"
+        << endl;
 
     out << exeName << " -S" << endl;
     out << exeName << " -a ALGORITHM -k KERNEL [OPTIONS] <graph file(s)>"
@@ -172,21 +173,23 @@ handle_subcommands(Backend& backend, const vector<string>& args)
         backend.listDevices(platform, verbose);
         exit(backend.deviceCount(platform));
     } else if (args[0] == "list" && args[1] == "algorithms") {
-        for (auto& algorithm : algorithms) {
-            cout << algorithm.first << endl;
+        for (auto& [algoName, algorithm] : algorithms) {
+            cout << algoName << " (version: " << algorithm.commit()
+                 << ")" << endl;
+
             if (verbose) {
-                for (auto &kernel : algorithm.second) {
-                    cout << "    " << kernel.first << endl;
-                    kernel.second->help(cout, "\t");
+                for (auto & [kernelName, kernel] : algorithm) {
+                    cout << "    " << kernelName << endl;
+                    kernel->help(cout, "\t");
                 }
             }
         }
         exit(EXIT_SUCCESS);
     } else if (args[0] == "list" && args[1] == "implementations") {
         auto& algorithm = getAlgorithm(algorithmName);
-        for (auto &kernel : algorithm) {
-            cout << kernel.first << endl;
-            if (verbose) kernel.second->help(cout, "    ");
+        for (auto & [kernelName, kernel] : algorithm) {
+            cout << kernelName << endl;
+            if (verbose) kernel->help(cout, "    ");
         }
         exit(EXIT_SUCCESS);
     } else if (args[0] == "query" && args[1] == "platform") {
@@ -195,9 +198,9 @@ handle_subcommands(Backend& backend, const vector<string>& args)
     } else if (args[0] == "query" && args[1] == "device") {
         backend.queryDevice(platform, device, verbose);
         exit(EXIT_SUCCESS);
-    } else if (args[0] == "query" && args[1] == "algorithm") {
+    } else if (args[0] == "query" && args[1] == "algorithm-version") {
         auto& algorithm = getAlgorithm(algorithmName);
-        cout << algorithmName << " " << algorithm.commit() << endl;
+        cout << algorithm.commit() << endl;
         exit(EXIT_SUCCESS);
     } else {
         usage();
