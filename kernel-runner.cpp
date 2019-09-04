@@ -234,7 +234,7 @@ runJob
             algorithm(graph, outputFile.string());
         }
 
-        cout << label << endl;
+        cout << algorithm.commit() << ":" << label << endl;
     }
 }
 

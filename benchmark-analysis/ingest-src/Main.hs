@@ -143,12 +143,13 @@ runBenchmarks numNodes = lift $ do
 
     runConduit $
         Sql.selectSource [] [] .> \(Entity runConfigId config) -> do
+            let commitId = runConfigAlgorithmVersion config
             platform <- Sql.getJust $ runConfigPlatformId config
 
             runSqlQuery (missingQuery runConfigId)
                 .> missingRunToTimingJob
                 .| processJobsParallel numNodes platform
-                .| C.mapM_ (processTiming runConfigId)
+                .| C.mapM_ (processTiming runConfigId commitId)
 
 resetRetries :: MonadSql m => m ()
 resetRetries = Sql.updateWhere [] [VariantRetryCount =. 0]

@@ -59,6 +59,7 @@ data Result a = Result
     { resultValue :: a
     , resultVariant :: Key Variant
     , resultLabel :: Text
+    , resultAlgorithmVersion :: Text
     } deriving (Functor, Foldable, Traversable)
 
 data Timeout = Timeout deriving (Show)
@@ -206,8 +207,13 @@ processJobsParallel numNodes platform =
                     result <- liftIO $ do
                         T.hPutStrLn inHandle jobCommand
                         T.hGetLine outHandle
+
+                    let (label, commit) = case T.splitOn ":" result of
+                            (version:rest) -> (T.concat rest, version)
+                            [] -> ("", "")
+
                     logInfoN $ "Finished: " <> jobCommand
-                    return $ Result jobValue jobVariant result
+                    return $ Result jobValue jobVariant label commit
   where
     checkNotExist :: SomeException -> Bool
     checkNotExist e = fromMaybe False $ isDoesNotExistError <$> fromException e

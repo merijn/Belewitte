@@ -146,33 +146,42 @@ missingRunToTimingJob MissingRun{..}
 
 processTiming
     :: (MonadLogger m, MonadResource m, MonadSql m, MonadThrow m)
-    => Key RunConfig -> Result (Key Implementation, Hash) -> m ()
-processTiming runConfigId Result{resultValue = (implId, hash), ..} = do
+    => Key RunConfig -> Text -> Result (Key Implementation, Hash) -> m ()
+processTiming runConfigId commit Result{resultValue = (implId, hash), ..} = do
     logInfoN $ "Timing: " <> resultLabel
     time <- liftIO getCurrentTime
     resultHash <- computeHash outputFile
     liftIO $ removeFile outputFile
 
-    let validated = resultHash == hash
+    if commit /= resultAlgorithmVersion
+       then logErrorN $ mconcat
+        [ "Unexpected algorithm version for implementation #"
+        , showSqlKey implId, "!. Expected commit ", commit, " found commit "
+        , resultAlgorithmVersion
+        ]
+       else do
+        let validated = resultHash == hash
 
-    runId <- Sql.insert $ Run runConfigId resultVariant implId time validated
+        runId <- Sql.insert $ Run runConfigId resultVariant implId time validated
 
-    unless validated $ do
-        logErrorN . mconcat $
-            [ "Implementation #", showSqlKey implId
-            , " has wrong result hash for variant #", showSqlKey resultVariant
-            , " for run config #", showSqlKey runConfigId ]
+        unless validated $ do
+            logErrorN . mconcat $
+                [ "Implementation #", showSqlKey implId
+                , " has wrong result hash for variant #"
+                , showSqlKey resultVariant
+                , " for run config #", showSqlKey runConfigId
+                ]
 
-    runConduit $
-        C.sourceFile timingFile
-        .| C.decode C.utf8
-        .| C.map (T.replace "," "")
-        .| conduitParse timer
-        .| C.mapM_ (insertTiming runId)
+        runConduit $
+            C.sourceFile timingFile
+            .| C.decode C.utf8
+            .| C.map (T.replace "," "")
+            .| conduitParse timer
+            .| C.mapM_ (insertTiming runId)
+
+        logInfoN $ "Timing done: " <> resultLabel
 
     liftIO $ removeFile timingFile
-
-    logInfoN $ "Timing done: " <> resultLabel
   where
     timingFile = T.unpack resultLabel <> ".timings"
     outputFile = T.unpack resultLabel <> ".output"
