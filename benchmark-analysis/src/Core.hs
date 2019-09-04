@@ -53,7 +53,6 @@ import qualified Database.Persist.Sqlite as Sqlite
 import Database.Sqlite.Internal (Connection(..), Connection'(..))
 import Data.Conduit (ConduitT)
 import Data.Int (Int64)
-import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Prettyprint.Doc (Doc, LayoutOptions(..), PageWidth(..))
@@ -163,27 +162,29 @@ instance MonadExplain SqlM where
 instance MonadExplain m => MonadExplain (ConduitT a b m) where
     logQueryExplanation = lift . logQueryExplanation
 
+terminalWidth :: IO (Maybe Int)
+terminalWidth = runMaybeT $ do
+    isTerminal <- liftIO $ System.hIsTerminalDevice System.stderr
+    guard isTerminal
+    snd <$> MaybeT getTerminalSize <* liftIO (System.hFlush System.stdout)
+
 topLevelHandler :: Bool -> SomeException -> IO ()
 topLevelHandler quiet exc
     | Just (BenchmarkException e) <- fromException exc
     = when (not quiet) $ do
-        pageWidth <- getPageWidth
+        pageWidth <- terminalToPageWidth <$> terminalWidth
         renderError pageWidth $ pretty e
 
     | otherwise = do
-        pageWidth <- getPageWidth
+        pageWidth <- terminalToPageWidth <$> terminalWidth
         renderError pageWidth $ Pretty.vsep
             [ Pretty.reflow "Encountered an unexpected exception!"
             , "", pretty . T.pack $ displayException exc, ""
             , Pretty.reflow "Please file a bug report.\n"
             ]
   where
-    getPageWidth :: IO PageWidth
-    getPageWidth = fmap (fromMaybe Unbounded) . runMaybeT $ do
-        isTerminal <- liftIO $ System.hIsTerminalDevice System.stderr
-        guard isTerminal
-        (_, n) <- MaybeT getTerminalSize
-        return $ AvailablePerLine n 1
+    terminalToPageWidth :: Maybe Int -> PageWidth
+    terminalToPageWidth = maybe Unbounded (\n -> AvailablePerLine n 1)
 
     renderError :: PageWidth -> Doc AnsiStyle -> IO ()
     renderError p =

@@ -3,7 +3,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
 module OptionParsers
-    ( platformIdParser
+    ( reflow
+    , reflowWithMaxWidth
+    , platformIdParser
     , platformParser
     , algorithmIdParser
     , algorithmParser
@@ -22,9 +24,12 @@ import Data.IntervalSet (IntervalSet)
 import qualified Data.IntervalSet as IS
 import Data.Map (Map)
 import qualified Data.Map as M
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Options.Applicative hiding (Completer)
+import Options.Applicative.Help (Doc)
+import qualified Options.Applicative.Help as Help
 import System.Environment (getProgName)
 import Text.Megaparsec (Parsec, parseMaybe, sepBy1, try)
 import Text.Megaparsec.Char (char)
@@ -34,6 +39,17 @@ import Core
 import Schema
 import Sql (Key, Entity(..))
 import qualified Sql
+
+reflow :: String -> Doc
+reflow = Help.fillSep . map Help.text . words
+
+reflowWithMaxWidth :: Int -> String -> Doc
+reflowWithMaxWidth maxWidth = foldMap wordToDoc . words
+  where
+    wordToDoc :: String -> Doc
+    wordToDoc s = Help.column maybeLine <> Help.text s <> Help.softline
+      where
+        maybeLine c = mIf (c + length s >= maxWidth) Help.hardline
 
 platformIdParser :: Parser (SqlM (Key Platform))
 platformIdParser = fmap entityKey <$> platformParser
@@ -99,7 +115,14 @@ optionParserFromValues vals = option . maybeReader $ lookupCI
 runSqlM :: (String -> (InfoMod (Options a), Parser a)) -> (a -> SqlM b) -> IO b
 runSqlM configFromName work = do
     (helpInfo, parser) <- configFromName <$> getProgName
-    config <- execParser $ info (mkOptions parser <**> helper) helpInfo
+
+    cols <- fromMaybe 80 <$> terminalWidth
+
+    let parseInfo = info (mkOptions parser <**> helper) helpInfo
+        parsePrefs = prefs $ mconcat
+            [ columns cols ]
+
+    config <- customExecParser parsePrefs parseInfo
     runSqlMWithOptions config work
   where
     mkOptions p =
