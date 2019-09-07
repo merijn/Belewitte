@@ -42,7 +42,7 @@ import Database.Persist.Sqlite
 import Numeric (showGFloat)
 import System.IO (Handle)
 
-import Core
+import Core hiding (QueryMode(..))
 import Schema
 import Sql (MonadSql, SqlRecord)
 import Utils.Vector (byteStringToVector)
@@ -55,6 +55,8 @@ type MonadQuery m =
     , MonadThrow m
     )
 
+data Explain = Explain | NoExplain
+
 data Query r =
   Query
     { commonTableExpressions :: [Text]
@@ -63,7 +65,6 @@ data Query r =
     , convert :: forall m . (MonadIO m, MonadLogger m, MonadThrow m)
               => [PersistValue] -> m r
     , queryText :: Text
-    , isExplain :: Bool
     }
 
 instance Functor Query where
@@ -71,8 +72,7 @@ instance Functor Query where
 
 toQueryText :: Query r -> Text
 toQueryText Query{..} = mconcat $
-    [ mIf isExplain "EXPLAIN QUERY PLAN "
-    , mIf (not $ null commonTableExpressions) "\nWITH"
+    [ mIf (not $ null commonTableExpressions) "\nWITH"
     ] <> intersperse ",\n\n" commonTableExpressions <> ["\n", queryText]
 
 printExplainTree
@@ -101,7 +101,8 @@ explainSqlQuery originalQuery hnd = do
         T.hPutStrLn hnd $ toQueryText originalQuery
         T.hPutStrLn hnd $ ""
 
-    runConduit $ runSqlQuery_ explainQuery .| printExplainTree hnd
+    runConduit $
+        void (runRawSqlQuery Explain id explainQuery) .| printExplainTree hnd
   where
     explain
         :: (MonadIO m, MonadLogger m, MonadThrow m)
@@ -115,7 +116,7 @@ explainSqlQuery originalQuery hnd = do
     explain actualValues = logThrowM $ QueryResultUnparseable actualValues
         [SqlInt64, SqlInt64, SqlInt64, SqlString]
 
-    explainQuery = originalQuery { convert = explain, isExplain = True }
+    explainQuery = originalQuery { convert = explain }
 
 randomizeQuery :: Int -> Int -> Query r -> (Query r, Query r)
 randomizeQuery seed trainingSize originalQuery = (training, validation)
@@ -142,11 +143,6 @@ runSqlQueryConduit :: MonadQuery m => Query r -> ConduitT r Void m a -> m a
 runSqlQueryConduit query sink =
   runLoggingSqlQuery (\src -> runConduit $ src .| sink) query
 
-runSqlQuery_
-    :: ( MonadLogger m, MonadResource m, MonadSql m, MonadThrow m)
-    => Query r -> ConduitT () r m ()
-runSqlQuery_ = void . runRawSqlQuery id
-
 runLoggingSqlQuery
     :: ( MonadLogger m, MonadResource m, MonadSql m, MonadThrow m
        , MonadExplain n, MonadLogger n, MonadResource n, MonadSql n)
@@ -154,7 +150,7 @@ runLoggingSqlQuery
 runLoggingSqlQuery f query  = do
     logQueryExplanation $ explainSqlQuery query
 
-    (formattedTime, result) <- runRawSqlQuery f query
+    (formattedTime, result) <- runRawSqlQuery NoExplain f query
 
     logQueryExplanation $ \hnd -> liftIO $ do
         T.hPutStrLn hnd $ "Query time: " <> formattedTime
@@ -166,9 +162,9 @@ runLoggingSqlQuery f query  = do
 runRawSqlQuery
     :: ( MonadLogger m, MonadResource m, MonadSql m, MonadThrow m
        , MonadLogger n, MonadResource n, MonadSql n)
-    => (ConduitT () r m () -> n a) -> Query r -> n (Text, a)
-runRawSqlQuery f query@Query{convert,cteParams,params} = do
-    srcRes <- liftPersist $ rawQueryRes (toQueryText query) queryParams
+    => Explain -> (ConduitT () r m () -> n a) -> Query r -> n (Text, a)
+runRawSqlQuery isExplain f query@Query{convert,cteParams,params} = do
+    srcRes <- liftPersist $ rawQueryRes queryText queryParams
     (key, src) <- allocateAcquire srcRes
     (timing, r) <- withTime $ f (src .| C.mapM convert) <* release key
 
@@ -178,7 +174,12 @@ runRawSqlQuery f query@Query{convert,cteParams,params} = do
     logInfoN $ "Query time: " <> formattedTime
     return (formattedTime, r)
   where
+    queryText = explainPrefix <> toQueryText query
     queryParams = cteParams ++ params
+
+    explainPrefix = case isExplain of
+        Explain -> "EXPLAIN QUERY PLAN "
+        NoExplain -> mempty
 
 runSqlQueryCount :: MonadQuery m => Query r -> m Int
 runSqlQueryCount originalQuery = do
@@ -207,9 +208,6 @@ getDistinctFieldQuery entityField = liftPersist $ do
     let queryText = [i|SELECT DISTINCT #{table}.#{field} FROM #{table}|]
     return Query{..}
   where
-    isExplain :: Bool
-    isExplain = False
-
     cteParams :: [PersistValue]
     cteParams = []
 
@@ -237,9 +235,6 @@ data VariantInfo =
 variantInfoQuery :: Key Algorithm -> Key Platform -> Query VariantInfo
 variantInfoQuery algoId platformId = Query{..}
   where
-    isExplain :: Bool
-    isExplain = False
-
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
         => [PersistValue] -> m VariantInfo

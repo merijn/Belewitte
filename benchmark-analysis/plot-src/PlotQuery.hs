@@ -27,9 +27,6 @@ timePlotQuery
     -> Query (Text, (Vector (Int64, Double), Vector (Int64, Double)))
 timePlotQuery algoId platformId variants = Query{..}
   where
-    isExplain :: Bool
-    isExplain = False
-
     inExpression :: Set (Key Variant) -> Text
     inExpression s = "(" <> clauses <> ")"
       where
@@ -154,9 +151,6 @@ levelTimePlotQuery
     :: Key Platform -> Key Variant -> Query (Int64, Vector (Int64, Double))
 levelTimePlotQuery platformId variant = Query{..}
   where
-    isExplain :: Bool
-    isExplain = False
-
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
         => [PersistValue] -> m (Int64, Vector (Int64, Double))
