@@ -25,6 +25,9 @@ data MissingRun = MissingRun
 missingQuery :: Key RunConfig -> Query MissingRun
 missingQuery runConfigId = Query{..}
   where
+    queryName :: Text
+    queryName = "missingQuery"
+
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
         => [PersistValue] -> m MissingRun

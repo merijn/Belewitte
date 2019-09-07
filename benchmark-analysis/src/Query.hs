@@ -59,7 +59,8 @@ data Explain = Explain | NoExplain
 
 data Query r =
   Query
-    { commonTableExpressions :: [Text]
+    { queryName :: Text
+    , commonTableExpressions :: [Text]
     , cteParams :: [PersistValue]
     , params :: [PersistValue]
     , convert :: forall m . (MonadIO m, MonadLogger m, MonadThrow m)
@@ -153,7 +154,7 @@ runLoggingSqlQuery f query  = do
     (formattedTime, result) <- runRawSqlQuery NoExplain f query
 
     logQueryExplanation $ \hnd -> liftIO $ do
-        T.hPutStrLn hnd $ "Query time: " <> formattedTime
+        T.hPutStrLn hnd $ queryName query <> " time: " <> formattedTime
         T.hPutStrLn hnd $ ""
         T.hPutStrLn hnd $ T.replicate 80 "#"
 
@@ -208,6 +209,9 @@ getDistinctFieldQuery entityField = liftPersist $ do
     let queryText = [i|SELECT DISTINCT #{table}.#{field} FROM #{table}|]
     return Query{..}
   where
+    queryName :: Text
+    queryName = "getDistinctFieldQuery"
+
     cteParams :: [PersistValue]
     cteParams = []
 
@@ -235,6 +239,9 @@ data VariantInfo =
 variantInfoQuery :: Key Algorithm -> Key Platform -> Query VariantInfo
 variantInfoQuery algoId platformId = Query{..}
   where
+    queryName :: Text
+    queryName = "variantInfoQuery"
+
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
         => [PersistValue] -> m VariantInfo

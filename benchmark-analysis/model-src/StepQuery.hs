@@ -30,6 +30,9 @@ stepInfoQuery
     :: Key Algorithm -> Key Platform -> Set Text -> Set Text -> Query StepInfo
 stepInfoQuery algoId platformId graphProperties stepProperties = Query{..}
   where
+    queryName :: Text
+    queryName = "stepInfoQuery"
+
     inExpression :: Set Text -> Text
     inExpression s = "(" <> clauses <> ")"
       where
