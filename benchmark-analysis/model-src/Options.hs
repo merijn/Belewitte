@@ -79,56 +79,63 @@ data ModelCommand
       , outputSuffix :: Maybe FilePath
       }
 
-commands :: String -> (InfoMod a, Parser ModelCommand)
-commands name = (,) docs . (<|>) hiddenCommands . hsubparser $ mconcat
-    [ subCommand "train" "train a model" "Train a new model" $
-        Train <$> trainingConfig
-    , subCommand "query" "report model info"
-        "Report model info & statistics" $ QueryModel <$> modelParser
-    , subCommand "validate" "validate model accuracy"
-        "Compute and report a model's accuracy on validation dataset and full \
-        \dataset" $ Validate <$> algorithmIdParser <*> platformIdParser
-                             <*> modelParser
-    , subCommand "evaluate" "evaluate model performance"
-        "Evaluate BDT model performance on full dataset and compare against \
-        \performance of other implementations" $
-        Evaluate <$> algorithmParser <*> platformIdParser <*> modelParser
-                 <*> defaultImplParser <*> evaluateParser
-    , subCommand "compare" "compare implementation performance"
-        "Compare the performance of different implementations" $
-        Compare <$> algorithmIdParser <*> platformIdParser <*> compareParser
-    , subCommand "export" "export model to C++"
-        "Export BDT model to C++ file" $
-        Export <$> algorithmIdParser <*> modelParser <*> cppFile
-    ]
-  where
-    docs :: InfoMod a
-    docs = mconcat
-      [ fullDesc
-      , header $ name ++ " - a tool for generating and validating BDT models"
-      , progDesc
+commands :: String -> Command ModelCommand
+commands name = CommandGroup CommandInfo
+  { commandName = name
+  , commandHeaderDesc = "a tool for generating and validating BDT models"
+  , commandDesc =
         "Generate, validate, evaluate, and export Binary Decision Tree (BDT) \
         \models for predicting which implementation to use for an algorithm."
-      ]
-
-    subCommand :: String-> String -> String -> Parser a -> Mod CommandFields a
-    subCommand cmd hdr desc parser = command cmd . info parser $ mconcat
-        [ fullDesc
-        , header $ name ++ " " ++ cmd ++ " - " ++ hdr
-        , progDesc desc
-        ]
-
+  } [ SingleCommand CommandInfo
+        { commandName = "train"
+        , commandHeaderDesc = "train a model"
+        , commandDesc = "Train a new model"
+        } (Train <$> trainingConfig)
+    , SingleCommand CommandInfo
+        { commandName = "query"
+        , commandHeaderDesc = "report model info"
+        , commandDesc = "Report model info & statistics"
+        } (QueryModel <$> modelParser)
+    , SingleCommand CommandInfo
+        { commandName = "validate"
+        , commandHeaderDesc = "validate model accuracy"
+        , commandDesc =
+            "Compute and report a model's accuracy on validation dataset and \
+            \full dataset"
+        } (Validate <$> algorithmIdParser <*> platformIdParser <*> modelParser)
+    , SingleCommand CommandInfo
+        { commandName = "evaluate"
+        , commandHeaderDesc = "evaluate model performance"
+        , commandDesc =
+            "Evaluate BDT model performance on full dataset and compare \
+            \against performance of other implementations"
+        }
+        $ Evaluate <$> algorithmParser <*> platformIdParser <*> modelParser
+                   <*> defaultImplParser <*> evaluateParser
+    , SingleCommand CommandInfo
+        { commandName = "compare"
+        , commandHeaderDesc = "compare implementation performance"
+        , commandDesc = "Compare the performance of different implementations"
+        }
+        $ Compare <$> algorithmIdParser <*> platformIdParser <*> compareParser
+    , SingleCommand CommandInfo
+        { commandName = "export"
+        , commandHeaderDesc = "export model to C++"
+        , commandDesc = "Export BDT model to C++ file"
+        } (Export <$> algorithmIdParser <*> modelParser <*> cppFile)
+    , HiddenCommand CommandInfo
+        { commandName = "query-test"
+        , commandHeaderDesc = "check query output"
+        , commandDesc = "Dump query output to files to validate results"
+        }
+        $ QueryTest <$> algorithmIdParser <*> platformIdParser
+                    <*> (suffixParser <|> pure Nothing)
+    ]
+  where
     cppFile :: Parser FilePath
     cppFile = strOption . mconcat $
         [ metavar "FILE", short 'e', long "export", value "test.cpp"
         , showDefaultWith id, help "C++ file to write predictor to." ]
-
-    hiddenCommands :: Parser ModelCommand
-    hiddenCommands = hsubparser . mappend internal $
-        subCommand "query-test" "check query output"
-            "Dump query output to files to validate results" $
-            QueryTest <$> algorithmIdParser <*> platformIdParser
-                      <*> (suffixParser <|> pure Nothing)
 
     suffixReader :: String -> Maybe (Maybe String)
     suffixReader "" = Nothing

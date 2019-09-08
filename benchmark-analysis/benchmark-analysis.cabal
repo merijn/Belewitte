@@ -78,6 +78,7 @@ Library
   Other-Extensions:     BangPatterns
                         CApiFFI
                         ConstraintKinds
+                        DeriveFunctor
                         DeriveGeneric
                         FlexibleContexts
                         FlexibleInstances
@@ -90,6 +91,7 @@ Library
                         MultiParamTypeClasses
                         NamedFieldPuns
                         OverloadedStrings
+                        PatternSynonyms
                         QuasiQuotes
                         RankNTypes
                         RecordWildCards
@@ -179,6 +181,7 @@ Executable Ingest
                ,        monad-logger ^>= 0.3.28
                ,        memory ^>= 0.14
                ,        mtl ^>= 2.2.1
+               ,        optparse-applicative ^>= 0.15
                ,        persistent-sqlite ^>= 2.10.4
                ,        process ^>= 1.6.0
                ,        resourcet ^>= 1.2.0

@@ -174,56 +174,104 @@ resetModels = do
     Sql.deleteWhere ([] :: [Filter UnknownPrediction])
     Sql.deleteWhere ([] :: [Filter UnknownSet])
 
-commands :: String -> (InfoMod a, Parser (Input SqlM ()))
-commands name = (,) docs . hsubparser $ mconcat
-    [ subCommand "add-platform" "register a new platform"
-        "Register a new platform in the database." $ pure addPlatform
-    , subCommand "add-graphs" "register graphs"
-        "Register new graphs in the database." $
-        addGraphs <$> some (strArgument graphFile)
-    , subCommand "add-algorithm" "register a new algorithm"
-        "Register a new algorithm in the database." $ pure addAlgorithm
-    , subCommand "add-implementation" "register a new implementation"
-        "Register a new implementation of an algorithm." $
-        pure addImplementation
-    , subCommand "add-variant" "register a new variant"
-        "Register a new variant of an algorithm for a graph." $ pure addVariant
-    , subCommand "import-results" "import results of external tools"
-        "Import results of external implementations." $ pure importResults
-    , subCommand "run-benchmarks" "run benchmarks"
-                 "Run benchmarks for missing registered configurations" $
-                 runBenchmarks <$> parallelism
-    , subCommand "reset-retries" "resets the retry count"
-                 "Reset the retry count for failed experiments" $
-                 pure $ resetRetries
-    , subCommand "reset-properties" "deletes logged properties"
-                 "Deletes the properties stored for each variant" $
-                 pure $ resetProperties
-    , subCommand "reset-measurements" "deletes timing measurements"
-                 "Delete all timing measurements" $
-                 pure $ resetMeasurements
-    , subCommand "reset-models" "deletes models"
-                 "Delete all stored models" $
-                 pure $ resetModels
-    ]
-  where
-    docs = mconcat
-      [ fullDesc
-      , header $ name ++ " - a tool for registering and running GPU benchmarks"
-      , progDesc
+commands :: String -> Command (Input SqlM ())
+commands name = CommandGroup CommandInfo
+  { commandName = name
+  , commandHeaderDesc = "a tool for registering and running GPU benchmarks"
+  , commandDesc =
         "Register GPUs, algorithms, algorithm implementations, and graphs in \
         \an SQLite database of configurations. Automatically run missing \
         \configurations and store all results in the database."
-      ]
-
-    subCommand cmd hdr desc parser = command cmd . info parser $ mconcat
-        [ fullDesc
-        , header $ name ++ " " ++ cmd ++ " - " ++ hdr
-        , progDesc desc
-        ]
-
-    graphFile = metavar "GRAPH" <> help "Graph file"
+  } [ addCommands
+    , resetCommands
+    , SingleCommand CommandInfo
+        { commandName = "run-benchmarks"
+        , commandHeaderDesc = "run benchmarks"
+        , commandDesc = "Run benchmarks for registered configurations"
+        }
+        $ runBenchmarks <$> parallelism
+    , SingleCommand CommandInfo
+        { commandName = "import-results"
+        , commandHeaderDesc = "import results of external tools"
+        , commandDesc = "Import results of external implementations"
+        }
+        $ pure importResults
+    ]
+  where
     parallelism = option auto . mconcat $ [ metavar "N", short 'j', value 2 ]
+
+addCommands :: Command (Input SqlM ())
+addCommands = CommandGroup CommandInfo
+    { commandName = "add"
+    , commandHeaderDesc = "add new entries to the database"
+    , commandDesc = "Used to register setups for experiments"
+    }
+    [ SingleCommand CommandInfo
+        { commandName = "platform"
+        , commandHeaderDesc = "register a new platform"
+        , commandDesc = "Register a new platform in the database"
+        }
+        $ pure addPlatform
+    , SingleCommand CommandInfo
+        { commandName = "graphs"
+        , commandHeaderDesc = "register graphs"
+        , commandDesc = "Register new graphs in the database"
+        }
+        $ addGraphs <$> some (strArgument graphFile)
+    , SingleCommand CommandInfo
+        { commandName = "algorithm"
+        , commandHeaderDesc = "register a new algorithm"
+        , commandDesc = "Register a new algorithm in the database"
+        }
+        $ pure addAlgorithm
+    , SingleCommand CommandInfo
+        { commandName = "implementation"
+        , commandHeaderDesc = "register a new implementation"
+        , commandDesc = "Register a new implementation of an algorithm"
+        }
+        $ pure addImplementation
+    , SingleCommand CommandInfo
+        { commandName = "variant"
+        , commandHeaderDesc = "register a new variant"
+        , commandDesc = "Register a new variant of an algorithm for a graph"
+        }
+        $ pure addVariant
+    ]
+  where
+    graphFile = metavar "GRAPH" <> help "Graph file"
+
+resetCommands :: Command (Input SqlM ())
+resetCommands = CommandGroup CommandInfo
+    { commandName = "reset"
+    , commandHeaderDesc = "commands for resetting database"
+    , commandDesc = "Reset or drop database entries"
+    }
+    [ SingleCommand CommandInfo
+        { commandName = "retries"
+        , commandHeaderDesc = "resets the retry count"
+        , commandDesc = "Reset the retry count for failed experiments"
+        }
+        $ pure resetRetries
+    , SingleCommand CommandInfo
+        { commandName = "properties"
+        , commandHeaderDesc = "deletes logged properties"
+        , commandDesc = "Deletes the properties stored for each variant"
+        }
+        $ pure resetProperties
+    , SingleCommand CommandInfo
+        { commandName = "measurements"
+        , commandHeaderDesc = "deletes timing measurements"
+        , commandDesc = "Delete all timing measurements"
+        }
+        $ pure resetMeasurements
+    , SingleCommand CommandInfo
+        { commandName = "models"
+        , commandHeaderDesc = "deletes models"
+        , commandDesc = "Delete all stored models"
+        }
+        $ pure resetModels
+    ]
+
 
 main :: IO ()
 main = runSqlM commands $ runInput

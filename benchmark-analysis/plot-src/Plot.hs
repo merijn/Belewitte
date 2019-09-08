@@ -126,31 +126,36 @@ filterImpls textSet = IM.filter $ getAny . mconcat
 filterExternal :: Set Text -> IntMap ExternalImpl -> IntMap ExternalImpl
 filterExternal names = IM.filter ((`S.member` names) . externalImplName)
 
-commands :: String -> (InfoMod a, Parser PlotOptions)
-commands name = (,) mempty . (<|>) hiddenCommands . hsubparser $ mconcat
-    [ subCommand "levels" "plot level times for a graph" "" $
-        plotOptions PlotLevels
-    , subCommand "totals" "plot total times for a set of graphs" "" $
-        plotOptions PlotTotals
-    , subCommand "vs-optimal"
-        "plot total times for a set of graphs against the optimal" "" $
-        plotOptions PlotVsOptimal
+commands :: String -> Command PlotOptions
+commands name = CommandGroup CommandInfo
+  { commandName = name
+  , commandHeaderDesc = "a tool for plotting benchmark results"
+  , commandDesc = ""
+  } [ SingleCommand CommandInfo
+        { commandName = "levels"
+        , commandHeaderDesc = "plot level times for a graph" 
+        , commandDesc = ""
+        } (plotOptions PlotLevels)
+    , SingleCommand CommandInfo
+        { commandName = "totals"
+        , commandHeaderDesc = "plot total times for a set of graphs"
+        , commandDesc = ""
+        } (plotOptions PlotTotals)
+    , SingleCommand CommandInfo
+        { commandName = "vs-optimal"
+        , commandHeaderDesc =
+          "plot total times for a set of graphs against the optimal"
+        , commandDesc = ""
+        } (plotOptions PlotVsOptimal)
+    , HiddenCommand CommandInfo
+        { commandName = "query-test"
+        , commandHeaderDesc = "check query output"
+        , commandDesc = "Dump query output to files to validate results"
+        }
+        $ QueryTest <$> algorithmParser <*> platformIdParser
+                    <*> (suffixParser <|> pure Nothing)
     ]
   where
-    subCommand :: String -> String -> String -> Parser a -> Mod CommandFields a
-    subCommand cmd hdr desc parser = command cmd . info parser $ mconcat
-        [ fullDesc
-        , header $ name ++ " " ++ cmd ++ " - " ++ hdr
-        , progDesc desc
-        ]
-
-    hiddenCommands :: Parser PlotOptions
-    hiddenCommands = hsubparser . mappend internal $
-        subCommand "query-test" "check query output"
-            "Dump query output to files to validate results" $
-            QueryTest <$> algorithmParser <*> platformIdParser
-                      <*> (suffixParser <|> pure Nothing)
-
     suffixReader :: String -> Maybe (Maybe String)
     suffixReader "" = Nothing
     suffixReader s
