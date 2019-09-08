@@ -82,6 +82,22 @@ addVariant = do
   where
     algoInput = sqlInput AlgorithmName UniqAlgorithm
 
+addRunConfig :: Input SqlM ()
+addRunConfig = do
+    Entity algoId Algorithm{..} <- getInteractive algoInput "Algorithm Name"
+    Entity platformId _ <- getInteractive platformInput "Platform Name"
+    Entity datasetId _ <- getInteractive datasetInput "Dataset Name"
+    version <- getInteractive (versionInput algorithmName) "Algorithm Version"
+    repeats <- getInteractive (readInput (>0)) "Number of runs"
+
+    Sql.insert_ $ RunConfig algoId platformId datasetId version repeats
+  where
+    algoInput = sqlInput AlgorithmName UniqAlgorithm
+    platformInput = sqlInput PlatformName UniqPlatform
+    datasetInput = sqlInput DatasetName UniqDataset
+    versionInput algorithmName = processCompleterText
+        ["query","algorithm-version","-a",T.unpack algorithmName]
+
 importResults :: Input SqlM ()
 importResults = do
     Entity platformId _ <- getInteractive platformInput "Platform Name"
@@ -236,6 +252,12 @@ addCommands = CommandGroup CommandInfo
         , commandDesc = "Register a new variant of an algorithm for a graph"
         }
         $ pure addVariant
+    , SingleCommand CommandInfo
+        { commandName = "run-config"
+        , commandHeaderDesc = "register a new run configuration"
+        , commandDesc = "Register a new configuration of benchmarks to run."
+        }
+        $ pure addRunConfig
     ]
   where
     graphFile = metavar "GRAPH" <> help "Graph file"
