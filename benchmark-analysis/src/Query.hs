@@ -172,7 +172,7 @@ runRawSqlQuery isExplain f query@Query{convert,cteParams,params} = do
     let formattedTime :: Text
         formattedTime = T.pack $ showGFloat (Just 3) timing "s"
 
-    logInfoN $ "Query time: " <> formattedTime
+    logInfoN $ queryName query <> " time: " <> formattedTime
     return (formattedTime, r)
   where
     queryText = explainPrefix <> toQueryText query
