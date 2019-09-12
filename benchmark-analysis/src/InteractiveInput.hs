@@ -19,6 +19,7 @@ module InteractiveInput
     , sqlInput
     , optionalInput
     , readInput
+    , readInputEnsure
     , textInput
     ) where
 
@@ -221,10 +222,10 @@ optionalInput = InputQuery
         | T.null txt = pure $ Just Nothing
         | otherwise = pure . Just . Just $ txt
 
-readInput
+readInputEnsure
     :: forall a m . (Bounded a, Enum a, Read a, Show a, Monad m)
     => (a -> Bool) -> InputQuery m a
-readInput f = InputQuery
+readInputEnsure f = InputQuery
     { inputConvert = return . readMaybe . T.unpack
     , inputCompleter = withCompletion (SimpleCompletion completions)
     , inputError = "Parse error!"
@@ -240,6 +241,9 @@ readInput f = InputQuery
     toCompletions s = map simpleCompletion . filter (isPrefix s) . map show
       where
         isPrefix = isPrefixOf `on` map toLower
+
+readInput :: (Bounded a, Enum a, Read a, Show a, Monad m) => InputQuery m a
+readInput = readInputEnsure (const True)
 
 textInput :: Applicative m => InputQuery m Text
 textInput = InputQuery

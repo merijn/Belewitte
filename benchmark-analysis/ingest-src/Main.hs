@@ -62,13 +62,14 @@ addImplementation = do
 
     prettyName <- getInteractive optionalInput "Implementation Pretty Name"
     flags <- getInteractive optionalInput "Flags"
-    implType <- getInteractive (readInput (/=Builtin)) "Implementation type"
+    implType <- getInteractive typeInput "Implementation type"
 
     Sql.insert_ $ Implementation algoId implName prettyName flags implType
   where
     algoInput = sqlInput AlgorithmName UniqAlgorithm
     implInput algorithmName = processCompleterText
         ["list","implementations","-a",T.unpack algorithmName]
+    typeInput = readInputEnsure (/=Builtin)
 
 addVariant :: Input SqlM ()
 addVariant = do
@@ -88,7 +89,7 @@ addRunConfig = do
     Entity platformId _ <- getInteractive platformInput "Platform Name"
     Entity datasetId _ <- getInteractive datasetInput "Dataset Name"
     version <- getInteractive (versionInput algorithmName) "Algorithm Version"
-    repeats <- getInteractive (readInput (>0)) "Number of runs"
+    repeats <- getInteractive (readInputEnsure (>0)) "Number of runs"
 
     Sql.insert_ $ RunConfig algoId platformId datasetId version repeats
   where
