@@ -15,7 +15,7 @@ import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Schema.Utils (EntityDef, Int64, MonadMigrate, (.>), (.=))
+import Schema.Utils (EntityDef, Int64, MonadSql, (.>), (.=))
 import qualified Schema.Utils as Utils
 
 import Schema.Dataset (DatasetId)
@@ -32,10 +32,10 @@ Graph
     deriving Eq Show
 |]
 
-migrations :: MonadMigrate m => Int64 -> m [EntityDef]
+migrations :: MonadSql m => Int64 -> m [EntityDef]
 migrations = Utils.mkMigrationLookup
     [ 1 .> V0.schema $ do
-        Utils.executeMigrationSql [i|
+        Utils.executeSql [i|
 ALTER TABLE 'Graph'
 ADD COLUMN 'dataset' VARCHAR NOT NULL DEFAULT 'unknown'
 |]

@@ -17,7 +17,7 @@ import Data.Time.Clock (UTCTime)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Schema.Utils (EntityDef, Int64, MonadMigrate, (.>))
+import Schema.Utils (EntityDef, Int64, MonadSql, (.>))
 import qualified Schema.Utils as Utils
 
 import Schema.Algorithm (AlgorithmId)
@@ -46,11 +46,11 @@ ExternalTimer
     deriving Eq Show
 |]
 
-migrations :: MonadMigrate m => Int64 -> m [EntityDef]
+migrations :: MonadSql m => Int64 -> m [EntityDef]
 migrations = Utils.mkMigrationLookup
     [ 4 .> schema $ do
 
-        Utils.executeMigrationSql [i|
+        Utils.executeSql [i|
 CREATE TABLE IF NOT EXISTS "ExternalImpl"
 ("id" INTEGER PRIMARY KEY
 ,"algorithmId" INTEGER NOT NULL REFERENCES "Algorithm"
@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS "ExternalImpl"
 )
 |]
 
-        Utils.executeMigrationSql [i|
+        Utils.executeSql [i|
 CREATE TABLE IF NOT EXISTS "ExternalTimer"
 ("platformId" INTEGER NOT NULL REFERENCES "Platform"
 ,"variantId" INTEGER NOT NULL REFERENCES "Variant"
@@ -75,12 +75,12 @@ CREATE TABLE IF NOT EXISTS "ExternalTimer"
 )
 |]
 
-        Utils.executeMigrationSql [i|
+        Utils.executeSql [i|
 INSERT INTO "ExternalImpl" SELECT id, algorithmId, name, prettyName
 FROM Implementation WHERE type = "Comparison"
 |]
 
-        Utils.executeMigrationSql [i|
+        Utils.executeSql [i|
 INSERT INTO "ExternalTimer"
 SELECT TotalTimer.platformId, TotalTimer.variantId, TotalTimer.implId
      , TotalTimer.name, TotalTimer.minTime, TotalTimer.avgTime
@@ -90,13 +90,13 @@ INNER JOIN Implementation ON TotalTimer.implId = Implementation.id
 WHERE Implementation.type = "Comparison"
 |]
 
-        Utils.executeMigrationSql [i|
+        Utils.executeSql [i|
 DELETE FROM TotalTimer
 WHERE TotalTimer.implId IN
     ( SELECT id FROM Implementation WHERE type = "Comparison")
 |]
 
-        Utils.executeMigrationSql [i|
+        Utils.executeSql [i|
 DELETE FROM Implementation
 WHERE type = "Comparison"
 |]

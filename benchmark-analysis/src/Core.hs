@@ -75,6 +75,7 @@ import Exceptions
 import Migration
 import Schema
 import Sql
+import Sql.Core (executeSql)
 import SQLiteExts
 
 data Config = Config
@@ -202,15 +203,15 @@ runSqlMWithOptions Options{..} work = do
         didMigrate <- checkMigration migrateSchema
 
         -- Wait longer before timing out query steps
-        rawExecute "PRAGMA busy_timeout = 1000" []
+        setPragma "busy_timeout" (1000 :: Int64)
 
         -- Compacts and reindexes the database when request
-        when (vacuumDb || didMigrate) $ rawExecute "VACUUM" []
+        when (vacuumDb || didMigrate) $ executeSql "VACUUM"
 
         workResult <- work task
 
         -- Runs the ANALYZE command and updates query planner
-        rawExecute "PRAGMA optimize" []
+        executeSql "PRAGMA optimize"
 
         return workResult
   where

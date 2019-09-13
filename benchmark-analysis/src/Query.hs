@@ -44,7 +44,7 @@ import System.IO (Handle)
 
 import Core hiding (QueryMode(..))
 import Schema
-import Sql (MonadSql, SqlRecord)
+import Sql (MonadSql, SqlRecord, conduitQueryRes)
 import Utils.Vector (byteStringToVector)
 
 type MonadQuery m =
@@ -165,7 +165,7 @@ runRawSqlQuery
        , MonadLogger n, MonadResource n, MonadSql n)
     => Explain -> (ConduitT () r m () -> n a) -> Query r -> n (Text, a)
 runRawSqlQuery isExplain f query@Query{convert,cteParams,params} = do
-    srcRes <- liftPersist $ rawQueryRes queryText queryParams
+    srcRes <- conduitQueryRes queryText queryParams
     (key, src) <- allocateAcquire srcRes
     (timing, r) <- withTime $ f (src .| C.mapM convert) <* release key
 

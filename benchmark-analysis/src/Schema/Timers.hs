@@ -15,7 +15,7 @@ import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Schema.Utils (EntityDef, Int64, MonadMigrate, (.>))
+import Schema.Utils (EntityDef, Int64, MonadSql, (.>))
 import qualified Schema.Utils as Utils
 import qualified Schema.Timers.V0 as V0
 
@@ -44,27 +44,27 @@ StepTimer
     deriving Eq Show
 |]
 
-migrations :: MonadMigrate m => Int64 -> m [EntityDef]
+migrations :: MonadSql m => Int64 -> m [EntityDef]
 migrations = Utils.mkMigrationLookup
     [ 1 .> V0.schema $ do
-        Utils.executeMigrationSql [i|
+        Utils.executeSql [i|
 ALTER TABLE 'TotalTimer' RENAME COLUMN 'gpuId' TO 'platformId'
 |]
-        Utils.executeMigrationSql [i|
+        Utils.executeSql [i|
 ALTER TABLE 'StepTimer' RENAME COLUMN 'gpuId' TO 'platformId'
 |]
     , 6 .> schema $ do
-        Utils.executeMigrationSql [i|
+        Utils.executeSql [i|
 ALTER TABLE 'TotalTimer'
 ADD COLUMN 'runId' INTEGER REFERENCES 'Run'
 |]
 
-        Utils.executeMigrationSql [i|
+        Utils.executeSql [i|
 ALTER TABLE 'StepTimer'
 ADD COLUMN 'runId' INTEGER REFERENCES 'Run'
 |]
 
-        Utils.executeMigrationSql [i|
+        Utils.executeSql [i|
 REPLACE INTO 'TotalTimer'
 SELECT TotalTimer.platformId
      , TotalTimer.variantId
@@ -96,7 +96,7 @@ AND RunConfig.algorithmId = Variant.algorithmId
 AND RunConfig.datasetId = Graph.datasetId
 |]
 
-        Utils.executeMigrationSql [i|
+        Utils.executeSql [i|
 REPLACE INTO 'StepTimer'
 SELECT StepTimer.platformId
      , StepTimer.variantId

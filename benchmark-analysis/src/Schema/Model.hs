@@ -17,7 +17,7 @@ import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
 import Model (Model)
-import Schema.Utils (EntityDef, Int64, MonadMigrate, (.>))
+import Schema.Utils (EntityDef, Int64, MonadSql, (.>))
 import qualified Schema.Utils as Utils
 
 import Schema.Platform (PlatformId)
@@ -37,17 +37,17 @@ PredictionModel
     timestamp UTCTime
 |]
 
-migrations :: MonadMigrate m => Int64 -> m [EntityDef]
+migrations :: MonadSql m => Int64 -> m [EntityDef]
 migrations = Utils.mkMigrationLookup
     [ 1 .> V0.schema $ do
-        Utils.executeMigrationSql [i|
+        Utils.executeSql [i|
 ALTER TABLE 'PredictionModel' RENAME COLUMN 'gpuId' TO 'platformId'
 |]
     , 2 .> schema $ do
-        Utils.executeMigrationSql [i|
+        Utils.executeSql [i|
 ALTER TABLE 'PredictionModel' ADD COLUMN 'name' VARCHAR
 |]
-        Utils.executeMigrationSql [i|
+        Utils.executeSql [i|
 UPDATE 'PredictionModel' SET 'name' = "Model-" || id
 |]
     ]

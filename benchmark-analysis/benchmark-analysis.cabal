@@ -61,6 +61,7 @@ Library
                         Schema.Utils
                         Schema.Variant
                         Sql
+                        Sql.Core
                         SQLiteExts
                         Types
                         Utils.Pair

@@ -16,7 +16,7 @@ import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Schema.Utils (EntityDef, Int64, MonadMigrate, (.>))
+import Schema.Utils (EntityDef, Int64, MonadSql, (.>))
 import qualified Schema.Utils as Utils
 
 import Schema.Implementation (ImplementationId)
@@ -34,10 +34,10 @@ Run
     deriving Eq Show
 |]
 
-migrations :: MonadMigrate m => Int64 -> m [EntityDef]
+migrations :: MonadSql m => Int64 -> m [EntityDef]
 migrations = Utils.mkMigrationLookup
     [ 6 .> schema $ do
-        Utils.executeMigrationSql [i|
+        Utils.executeSql [i|
 CREATE TABLE IF NOT EXISTS "Run"
 ("id" INTEGER PRIMARY KEY
 ,"runConfigId" INTEGER NOT NULL REFERENCES "RunConfig"
@@ -49,7 +49,7 @@ CREATE TABLE IF NOT EXISTS "Run"
 )
 |]
 
-        Utils.executeMigrationSql [i|
+        Utils.executeSql [i|
 INSERT INTO "Run"
 SELECT ROW_NUMBER() OVER (ORDER BY runConfigId, variantId, implId)
      , runConfigId
