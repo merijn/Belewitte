@@ -308,7 +308,9 @@ main = runSqlM commands $ \case
   QueryTest{getAlgorithm,getPlatformId,outputSuffix} -> do
     Entity algoId algorithm <- getAlgorithm
     platformId <- getPlatformId
-    variants <- Sql.selectKeysList [VariantAlgorithmId ==. algoId] []
+    variants <- Sql.selectKeysList
+        [VariantAlgorithmId ==. algoId]
+        [Sql.Asc VariantName, Sql.Asc VariantGraphId]
 
     let algoName = getAlgoName algorithm
 

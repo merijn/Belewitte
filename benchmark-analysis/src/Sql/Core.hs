@@ -13,6 +13,7 @@ module Sql.Core
     , SqlBackend
     , Unique
     , Update
+    , SelectOpt(..)
     , Migration
     , fromSqlKey
     , toSqlKey
@@ -47,7 +48,7 @@ import Database.Persist.Sqlite
     , PersistRecordBackend
     , PersistValue
     , RawSqlite
-    , SelectOpt
+    , SelectOpt(..)
     , SqliteConnectionInfo
     , SqlBackend
     , ToBackendKey
