@@ -9,16 +9,18 @@ module Schema.Utils
     , (.=)
     , (.>)
     , executeSql
+    , createTableFromSchema
     , mkMigration
     , mkMigrationLookup
     ) where
 
+import Control.Monad (void)
 import Data.Int (Int64)
 import qualified Data.Map as M
 import Database.Persist.Sql (EntityDef, Migration, migrate)
 import Database.Persist.TH (embedEntityDefs)
 
-import Sql.Core (MonadSql, executeSql)
+import Sql.Core (MonadSql, executeSql, runMigrationSilent)
 
 (.=) :: Applicative f => a -> b -> (a, (b, f ()))
 (.=) i schema = (i, (schema, pure ()))
@@ -30,6 +32,9 @@ mkMigration :: [[EntityDef]] -> Migration
 mkMigration ents = mapM_ (migrate embeddedEnts) embeddedEnts
   where
     embeddedEnts = embedEntityDefs . concat $ ents
+
+createTableFromSchema :: MonadSql m => [EntityDef] -> m ()
+createTableFromSchema = void . runMigrationSilent . mkMigration . pure
 
 mkMigrationLookup
     :: MonadSql m

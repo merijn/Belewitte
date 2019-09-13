@@ -49,31 +49,7 @@ ExternalTimer
 migrations :: MonadSql m => Int64 -> m [EntityDef]
 migrations = Utils.mkMigrationLookup
     [ 4 .> schema $ do
-
-        Utils.executeSql [i|
-CREATE TABLE IF NOT EXISTS "ExternalImpl"
-("id" INTEGER PRIMARY KEY
-,"algorithmId" INTEGER NOT NULL REFERENCES "Algorithm"
-,"name" VARCHAR NOT NULL
-,"prettyName" VARCHAR NULL
-,CONSTRAINT "UniqExternalImpl" UNIQUE ("algorithmId","name")
-)
-|]
-
-        Utils.executeSql [i|
-CREATE TABLE IF NOT EXISTS "ExternalTimer"
-("platformId" INTEGER NOT NULL REFERENCES "Platform"
-,"variantId" INTEGER NOT NULL REFERENCES "Variant"
-,"implId" INTEGER NOT NULL REFERENCES "ExternalImpl"
-,"name" VARCHAR NOT NULL
-,"minTime" REAL NOT NULL
-,"avgTime" REAL NOT NULL
-,"maxTime" REAL NOT NULL
-,"stdDev" REAL NOT NULL
-,"timestamp" TIMESTAMP NOT NULL
-,PRIMARY KEY ("platformId","variantId","implId","name")
-)
-|]
+        Utils.createTableFromSchema schema
 
         Utils.executeSql [i|
 INSERT INTO "ExternalImpl" SELECT id, algorithmId, name, prettyName

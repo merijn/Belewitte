@@ -27,13 +27,7 @@ Dataset
 migrations :: MonadSql m => Int64 -> m [EntityDef]
 migrations = Utils.mkMigrationLookup
     [ 5 .> schema $ do
-        Utils.executeSql [i|
-CREATE TABLE IF NOT EXISTS "Dataset"
-("id" INTEGER PRIMARY KEY
-,"name" VARCHAR NOT NULL
-,CONSTRAINT "UniqDataset" UNIQUE ("name")
-)
-|]
+        Utils.createTableFromSchema schema
 
         Utils.executeSql [i|
 INSERT INTO "Dataset"

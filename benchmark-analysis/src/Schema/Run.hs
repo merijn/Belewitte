@@ -37,17 +37,7 @@ Run
 migrations :: MonadSql m => Int64 -> m [EntityDef]
 migrations = Utils.mkMigrationLookup
     [ 6 .> schema $ do
-        Utils.executeSql [i|
-CREATE TABLE IF NOT EXISTS "Run"
-("id" INTEGER PRIMARY KEY
-,"runConfigId" INTEGER NOT NULL REFERENCES "RunConfig"
-,"variantId" INTEGER NOT NULL REFERENCES "Variant"
-,"implId" INTEGER NOT NULL REFERENCES "Implementation"
-,"timestamp" TIMESTAMP NOT NULL
-,"validated" BOOLEAN NOT NULL
-,CONSTRAINT "UniqRun" UNIQUE ("runConfigId","variantId","implId")
-)
-|]
+        Utils.createTableFromSchema schema
 
         Utils.executeSql [i|
 INSERT INTO "Run"
