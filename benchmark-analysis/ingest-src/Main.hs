@@ -15,7 +15,6 @@ import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.Text as C
 import Data.Monoid ((<>))
 import qualified Data.Text as T
-import Data.Time.Clock (UTCTime, getCurrentTime)
 import System.Directory (doesFileExist)
 import System.FilePath (splitExtension, takeFileName)
 
@@ -141,13 +140,12 @@ importResults = do
 
     filepath <- getInteractive filepathInput "Result File"
 
-    timestamp <- liftIO getCurrentTime
     runConduit $
         C.sourceFile filepath
         .| C.decode C.utf8
         .| C.map (T.replace "," "")
         .| conduitParse externalResult
-        .| C.mapM_ (insertResult platformId algoId implId timestamp)
+        .| C.mapM_ (insertResult platformId algoId implId)
   where
     platformInput = sqlInput PlatformName UniqPlatform
     algoInput = sqlInput AlgorithmName UniqAlgorithm
@@ -158,10 +156,9 @@ importResults = do
         => Key Platform
         -> Key Algorithm
         -> Key ExternalImpl
-        -> UTCTime
         -> ExternalResult
         -> m ()
-    insertResult platId algoId implId ts (ExternalResult gname varName Timing{..}) = do
+    insertResult platId algoId implId (ExternalResult gname varName Timing{..}) = do
         [graphId] <- logIfFail "More than one graph found for" gname $
             Sql.selectKeysList [GraphName ==. gname] []
 
@@ -176,7 +173,7 @@ importResults = do
             fmap entityKey <$> Sql.getBy uniqVariant
 
         Sql.insert_ $
-          ExternalTimer platId varId implId name minTime avgTime maxTime stddev ts
+          ExternalTimer platId varId implId name minTime avgTime maxTime stddev
 
 runBenchmarks :: Int -> Input SqlM ()
 runBenchmarks numNodes = lift $ do

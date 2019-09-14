@@ -13,7 +13,6 @@ module Schema.External where
 
 import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
-import Data.Time.Clock (UTCTime)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
@@ -41,7 +40,6 @@ ExternalTimer
     avgTime Double
     maxTime Double
     stdDev Double
-    timestamp UTCTime
     Primary platformId variantId implId name
     deriving Eq Show
 |]
@@ -60,7 +58,7 @@ FROM Implementation WHERE type = "Comparison"
 INSERT INTO "ExternalTimer"
 SELECT TotalTimer.platformId, TotalTimer.variantId, TotalTimer.implId
      , TotalTimer.name, TotalTimer.minTime, TotalTimer.avgTime
-     , TotalTimer.maxTime, TotalTimer.stdDev, TotalTimer.timestamp
+     , TotalTimer.maxTime, TotalTimer.stdDev
 FROM TotalTimer
 INNER JOIN Implementation ON TotalTimer.implId = Implementation.id
 WHERE Implementation.type = "Comparison"
