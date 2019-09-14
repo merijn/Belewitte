@@ -128,6 +128,9 @@ ON RunConfig.id = Total.runConfigId
 INNER JOIN Variant
 ON Total.variantId = Variant.id
 
+INNER JOIN VariantConfig
+ON Variant.variantConfigId = VariantConfig.id
+
 INNER JOIN Graph
 ON Variant.graphId = Graph.id
 
@@ -147,7 +150,7 @@ LEFT JOIN ImplVector
 LEFT JOIN ExternalImplVector
 
 WHERE RunConfig.algorithmId = ? AND RunConfig.platformId = ?
-  AND Variant.name = "default"
+  AND VariantConfig.isDefault = TRUE
 ORDER BY Total.variantId ASC|]
 
 levelTimePlotQuery

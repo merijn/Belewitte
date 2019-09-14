@@ -60,6 +60,8 @@ Library
                         Schema.Timers.V0
                         Schema.Utils
                         Schema.Variant
+                        Schema.Variant.V0
+                        Schema.VariantConfig
                         Sql
                         Sql.Core
                         SQLiteExts
@@ -189,6 +191,7 @@ Executable Ingest
                ,        resource-pool ^>= 0.2.3.2
                ,        text
                ,        time ^>= 1.9
+               ,        transformers
                ,        unix ^>= 2.7.0
 
 Executable Model

@@ -8,8 +8,9 @@
 {-# LANGUAGE TypeFamilies #-}
 module Main(main) where
 
-import Control.Monad (forM_, guard, void)
-import Data.Conduit ((.|), runConduit)
+import Control.Monad (mzero, unless, void)
+import Control.Monad.Trans.Maybe (runMaybeT)
+import Data.Conduit (ConduitT, Void, (.|), runConduit)
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.Text as C
 import Data.Monoid ((<>))
@@ -41,11 +42,42 @@ addGraphs :: [FilePath] -> Input SqlM ()
 addGraphs paths = do
     datasetTag <- getInteractive textInput "Dataset Tag"
     datasetId <- Sql.insert $ Dataset datasetTag
-    forM_ paths $ \path -> do
-        liftIO $ doesFileExist path >>= guard
-        let (graphName, ext) = splitExtension $ takeFileName path
-        liftIO $ guard (ext == ".graph")
-        Sql.insert_ $ Graph (T.pack graphName) (T.pack path) Nothing datasetId
+
+    runConduit $
+        C.yieldMany paths
+        .| C.concatMapM (lift . filterGraphPaths)
+        .| C.mapM (insertGraph datasetId)
+        .> insertVariants
+  where
+    filterGraphPaths
+        :: (MonadIO m, MonadLogger m) => String -> m (Maybe (String, String))
+    filterGraphPaths path = runMaybeT $ do
+        unless (ext == ".graph") $ do
+            logErrorN $ "Not a .graph file: " <> T.pack path
+            mzero
+
+        exists <- liftIO $ doesFileExist path
+        unless exists $ do
+            logErrorN $ "Graph file does not exist: " <> T.pack path
+            mzero
+
+        return (graphName, path)
+      where
+        (graphName, ext) = splitExtension $ takeFileName path
+
+    insertGraph
+        :: MonadSql m => Key Dataset -> (String, String) -> m (Key Graph)
+    insertGraph datasetId (graphName, path) =
+        Sql.insert $ Graph (T.pack graphName) (T.pack path) Nothing datasetId
+
+    insertVariants
+        :: (MonadResource m, MonadSql m)
+        => Key Graph -> ConduitT (Key Graph) Void m ()
+    insertVariants graphId = Sql.selectKeys [] [] .| C.mapM_ insertVariant
+      where
+        insertVariant :: MonadSql m => Key VariantConfig -> m ()
+        insertVariant variantConfigId =
+            Sql.insert_ $ Variant graphId variantConfigId Nothing False 0
 
 addAlgorithm :: Input SqlM ()
 addAlgorithm = do
@@ -76,8 +108,10 @@ addVariant = do
     Entity algoId _ <- getInteractive algoInput "Algorithm Name"
     variantName <- getInteractive textInput "Variant Name"
     flags <- getInteractive optionalInput "Flags"
+    isDefault <- getInteractive readInput "Default Variant (for plotting)"
+    varCfgId <- Sql.insert $ VariantConfig algoId variantName flags isDefault
 
-    let mkVariant gId = Variant gId algoId variantName flags Nothing False 0
+    let mkVariant gId = Variant gId varCfgId Nothing False 0
 
     runConduit $ Sql.selectKeys [] [] .| C.mapM_ (Sql.insert_ . mkVariant)
   where
@@ -131,18 +165,18 @@ importResults = do
         [graphId] <- logIfFail "More than one graph found for" gname $
             Sql.selectKeysList [GraphName ==. gname] []
 
-        let uniqVariant = UniqVariant graphId algoId variantName
+        let uniqVariantConfig = UniqVariantConfig algoId varName
 
-        Just varId <- logIfFail "No variant found" variantName $
+        Just varCfgId <- logIfFail "No variant config found" varName $
+            fmap entityKey <$> Sql.getBy uniqVariantConfig
+
+        let uniqVariant = UniqVariant graphId varCfgId
+
+        Just varId <- logIfFail "No variant found" varCfgId $
             fmap entityKey <$> Sql.getBy uniqVariant
 
         Sql.insert_ $
           ExternalTimer platId varId implId name minTime avgTime maxTime stddev ts
-      where
-        --FIXME get from command
-        variantName
-            | varName == "0" = "default"
-            | otherwise = "Root " <> varName
 
 runBenchmarks :: Int -> Input SqlM ()
 runBenchmarks numNodes = lift $ do

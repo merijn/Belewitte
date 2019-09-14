@@ -72,7 +72,6 @@ FROM (
     AND StepTimer.variantId = Variant.id
     AND StepTimer.implId = TotalTimer.implid
 
-
     GROUP BY RunConfig.id, Variant.id, TotalTimer.implId
 )
 |]

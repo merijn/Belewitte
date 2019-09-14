@@ -49,8 +49,13 @@ queryVariants algoId graphs = do
         .| C.filter (\i -> S.member (graphName (Sql.entityVal i)) graphs)
         .| C.map Sql.entityKey
         .| C.foldMap S.singleton
+
+    [variantConfigId] <- Sql.selectKeysList
+        [VariantConfigAlgorithmId ==. algoId, VariantConfigIsDefault ==. True]
+        []
+
     variants <- forM (S.toList gids) $ \gId ->
-        Sql.getBy $ UniqVariant gId algoId "default"
+        Sql.getBy $ UniqVariant gId variantConfigId
 
     return . S.fromList . map Sql.entityKey . catMaybes $ variants
 
@@ -308,9 +313,14 @@ main = runSqlM commands $ \case
   QueryTest{getAlgorithm,getPlatformId,outputSuffix} -> do
     Entity algoId algorithm <- getAlgorithm
     platformId <- getPlatformId
-    variants <- Sql.selectKeysList
-        [VariantAlgorithmId ==. algoId]
-        [Sql.Asc VariantName, Sql.Asc VariantGraphId]
+    variantConfigs <- Sql.selectKeysList
+        [VariantConfigAlgorithmId ==. algoId]
+        [Sql.Asc VariantConfigName]
+
+    variants <- fmap concat . forM variantConfigs $ \cfgId ->
+        Sql.selectKeysList
+            [VariantVariantConfigId ==. cfgId]
+            [Sql.Asc VariantGraphId]
 
     let algoName = getAlgoName algorithm
 

@@ -23,6 +23,7 @@ module Schema
     , module Schema.RunConfig
     , module Schema.Timers
     , module Schema.Variant
+    , module Schema.VariantConfig
     , bestNonSwitchingImplId
     , predictedImplId
     , optimalImplId
@@ -77,6 +78,8 @@ import Schema.Timers hiding (migrations, schema)
 import qualified Schema.Timers as Timers
 import Schema.Variant hiding (migrations, schema)
 import qualified Schema.Variant as Variant
+import Schema.VariantConfig hiding (migrations, schema)
+import qualified Schema.VariantConfig as VariantConfig
 
 bestNonSwitchingImplId :: Integral n => n
 bestNonSwitchingImplId = -1
@@ -121,10 +124,11 @@ migrations =
     , (Timers.schema, Timers.migrations)
     , (Model.schema, Model.migrations)
     , (ModelMetadata.schema, ModelMetadata.migrations)
+    , (VariantConfig.schema, VariantConfig.migrations)
     ]
 
 schemaVersion :: Int64
-schemaVersion = 6
+schemaVersion = 7
 
 type MigrationAction = ReaderT (RawSqlite SqlBackend) IO [EntityDef]
 

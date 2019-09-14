@@ -70,7 +70,7 @@ SELECT DISTINCT RunConfig.repeats
               , Algorithm.id
               , Algorithm.name
               , Variant.id
-              , Variant.flags
+              , VariantConfig.flags
               , Variant.result
               , Implementation.id
               , Implementation.name
@@ -88,6 +88,9 @@ ON Dataset.id = Graph.datasetId
 
 INNER JOIN Variant
 ON Graph.id = Variant.graphId
+
+INNER JOIN VariantConfig
+ON Variant.variantConfigId = VariantConfig.id
 
 INNER JOIN Implementation
 ON RunConfig.algorithmId = Implementation.algorithmId

@@ -53,7 +53,7 @@ variantToPropertyJob
                 SqlM
                 ()
 variantToPropertyJob
-    (Entity varId (Variant graphId algoId _ flags hash hasProps retries)) =
+    (Entity varId (Variant graphId variantCfgId hash hasProps retries)) =
         case hash of
             Nothing
                 | retries < 5 -> yieldJob
@@ -69,6 +69,7 @@ variantToPropertyJob
   where
     yieldJob = do
         Graph _ path _ _ <- Sql.getJust graphId
+        VariantConfig algoId _ flags _ <- Sql.getJust variantCfgId
         Algorithm algo _ <- Sql.getJust algoId
         yield . Job (graphId,hash) varId (showSqlKey varId) . T.unwords $
             [ showSqlKey varId
