@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <fstream>
 #include <iomanip>
 
@@ -52,6 +53,7 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
 
     int max_iterations;
     unsigned maskBits;
+    unsigned bucketSize;
 
     Kernel<unsigned*> zeroInitDegrees;
     Kernel<unsigned*> computeDegrees;
@@ -64,13 +66,16 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
     , Kernel<unsigned*> zeroInit
     , Kernel<unsigned*> compute
     )
-      : max_iterations(30), maskBits(0), zeroInitDegrees(zeroInit)
-      , computeDegrees(compute), kernel(k), consolidate(c)
+      : max_iterations(30), maskBits(0), bucketSize(0)
+      , zeroInitDegrees(zeroInit), computeDegrees(compute), kernel(k)
+      , consolidate(c)
     {
         options.add('i', "iterations", "NUM", max_iterations,
                     "Number of pagerank iterations.");
         options.add("bitmask", "NUM", maskBits,
                     "Number of result bits to mask.");
+        options.add('b', "bucket", "NUM", bucketSize,
+                    "Number of results bucket.");
     }
 
     virtual void runImplementation(std::ofstream& outputFile) override
@@ -136,8 +141,33 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
         uint32_t mask = mask_N_bits(maskBits);
         outputFile << std::hexfloat;
 
-        for (size_t i = 0; i < pageranks.size; i++) {
-            outputFile << i << "\t" << roundPrecision(pageranks[i], mask) << endl;
+        if (bucketSize <= 1) {
+            for (size_t i = 0; i < pageranks.size; i++) {
+                outputFile << i << "\t" << roundPrecision(pageranks[i], mask)
+                           << endl;
+            }
+        } else {
+            std::vector<std::pair<float,size_t>> buckets;
+            buckets.reserve(pageranks.size);
+            for (size_t i = 0; i < pageranks.size; i++) {
+                buckets.emplace_back(roundPrecision(pageranks[i], mask), i);
+            }
+
+            std::stable_sort(buckets.begin(), buckets.end());
+            for (size_t i = 0; i < buckets.size(); i += bucketSize) {
+                auto start = buckets.begin() + static_cast<long>(i);
+                auto maxIdx = std::min(i + bucketSize, buckets.size() - 1);
+                auto end = buckets.begin() + static_cast<long>(maxIdx);
+                auto compare = [](const auto& a, const auto& b) -> bool {
+                    return a.second < b.second;
+                };
+
+                std::stable_sort(start, end, compare);
+            }
+
+            for (const auto& p : buckets) {
+                outputFile << p.first << endl;
+            }
         }
     }
 };
