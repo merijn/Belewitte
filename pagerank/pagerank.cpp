@@ -8,11 +8,29 @@
 
 #include "pagerank.hpp"
 
-static inline float
-roundPrecision(float val, int digitPrecision)
+static inline uint32_t
+mask_N_bits(unsigned N)
 {
-    float rounder = std::pow(10.0f, static_cast<float>(digitPrecision));
-    return std::round(val * rounder) / rounder;
+    uint32_t mask = 0;
+
+    for (unsigned i = 0; i < N; i++) {
+        mask |= 1 << i;
+    }
+
+    return ~mask;
+}
+
+static inline float
+roundPrecision(float val, uint32_t mask = 0)
+{
+    uint32_t bits;
+    std::memcpy(&bits, &val, sizeof val);
+
+    bits &= mask;
+
+    std::memcpy(&val, &bits, sizeof val);
+
+    return val;
 }
 
 template<typename Platform, typename Vertex, typename Edge>
@@ -33,6 +51,7 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
     using Kernel = typename Impl::template GraphKernel<Args...>;
 
     int max_iterations;
+    unsigned maskBits;
 
     Kernel<unsigned*> zeroInitDegrees;
     Kernel<unsigned*> computeDegrees;
@@ -45,11 +64,13 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
     , Kernel<unsigned*> zeroInit
     , Kernel<unsigned*> compute
     )
-      : max_iterations(30), zeroInitDegrees(zeroInit), computeDegrees(compute)
-      , kernel(k), consolidate(c)
+      : max_iterations(30), maskBits(0), zeroInitDegrees(zeroInit)
+      , computeDegrees(compute), kernel(k), consolidate(c)
     {
         options.add('i', "iterations", "NUM", max_iterations,
                     "Number of pagerank iterations.");
+        options.add("bitmask", "NUM", maskBits,
+                    "Number of result bits to mask.");
     }
 
     virtual void runImplementation(std::ofstream& outputFile) override
@@ -112,9 +133,11 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
             resultTransfer.stop();
         }
 
-        outputFile << std::scientific << std::setprecision(2);
+        uint32_t mask = mask_N_bits(maskBits);
+        outputFile << std::hexfloat;
+
         for (size_t i = 0; i < pageranks.size; i++) {
-            outputFile << i << "\t" << roundPrecision(pageranks[i], 5) << endl;
+            outputFile << i << "\t" << roundPrecision(pageranks[i], mask) << endl;
         }
     }
 };
