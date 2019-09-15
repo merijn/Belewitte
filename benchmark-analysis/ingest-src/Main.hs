@@ -10,7 +10,8 @@ module Main(main) where
 
 import Control.Monad (mzero, unless, void)
 import Control.Monad.Trans.Maybe (runMaybeT)
-import Data.Conduit (ConduitT, Void, (.|), runConduit)
+import Data.Char (isSpace)
+import Data.Conduit (ConduitT, Void, (.|), await, runConduit)
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.Text as C
 import Data.Monoid ((<>))
@@ -199,6 +200,24 @@ runBenchmarks numNodes = lift $ do
                 .| processJobsParallel numNodes platform
                 .| C.mapM_ (processTiming runConfigId commitId)
 
+queryTest :: Maybe FilePath -> Input SqlM ()
+queryTest outputSuffix = lift $ do
+    runConduit $
+        Sql.selectKeys [] []
+        .> \runConfigId ->
+        runSqlQuery (missingQuery runConfigId)
+        .| querySink outputSuffix
+  where
+    querySink
+        :: (MonadResource m, MonadThrow m, Show a)
+        => Maybe String -> ConduitT a Void m ()
+    querySink Nothing = void await
+    querySink (Just suffix) =
+        C.map showText
+        .| C.map (`T.snoc` '\n')
+        .| C.encode C.utf8
+        .| C.sinkFile ("missingQuery" <> suffix)
+
 resetRetries :: MonadSql m => m ()
 resetRetries = Sql.updateWhere [] [VariantRetryCount =. 0]
 
@@ -244,9 +263,25 @@ commands name = CommandGroup CommandInfo
         , commandDesc = "Import results of external implementations"
         }
         $ pure importResults
+    , HiddenCommand CommandInfo
+        { commandName = "query-test"
+        , commandHeaderDesc = "check query output"
+        , commandDesc = "Dump query output to files to validate results"
+        }
+        $ queryTest <$> (suffixParser <|> pure Nothing)
     ]
   where
     parallelism = option auto . mconcat $ [ metavar "N", short 'j', value 2 ]
+
+    suffixReader :: String -> Maybe (Maybe String)
+    suffixReader "" = Nothing
+    suffixReader s
+        | any isSpace s = Nothing
+        | otherwise = Just $ Just s
+
+    suffixParser :: Parser (Maybe String)
+    suffixParser = argument (maybeReader suffixReader) . mconcat $
+        [ metavar "SUFFIX" ]
 
 addCommands :: Command (Input SqlM ())
 addCommands = CommandGroup CommandInfo
@@ -325,7 +360,6 @@ resetCommands = CommandGroup CommandInfo
         }
         $ pure resetModels
     ]
-
 
 main :: IO ()
 main = runSqlM commands $ runInput
