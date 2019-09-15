@@ -38,6 +38,10 @@ Options::add(const Option& o)
 }
 
 Options&
+Options::add(const char *lo, string arg, string &var, string help)
+{ return add('\0', lo, arg, var, help); }
+
+Options&
 Options::add(char so, const char *lo, string arg, string &var, string help)
 {
     auto action = [&](const string& s) { var = s; };
@@ -127,13 +131,17 @@ Options::parseArgs
             };
         }
 
-        addOption("-" + string(1,usageFlag.shortOption), usageFlag);
+        if (usageFlag.shortOption != '\0') {
+            addOption("-" + string(1,usageFlag.shortOption), usageFlag);
+        }
         addOption("--" + usageFlag.longOption, usageFlag);
     }
 
     for (auto kv : options) {
         auto opt = kv.second;
-        addOption("-" + string(1,opt.shortOption), opt);
+        if (opt.shortOption != '\0') {
+            addOption("-" + string(1,opt.shortOption), opt);
+        }
         addOption("--" + opt.longOption, opt);
     }
 
@@ -169,7 +177,9 @@ void
 Options::usage(ostream& out, string prefix)
 {
     auto renderOpt = [&](const Option& opt) {
-        out << prefix << '-' << opt.shortOption;
+        if (opt.shortOption != '\0') {
+            out << prefix << '-' << opt.shortOption;
+        }
         if (opt.hasArg) out << " " << opt.argName;
         out << " | " << "--" << opt.longOption;
         if (opt.hasArg) out << " " << opt.argName;

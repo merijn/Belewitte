@@ -97,6 +97,7 @@ class Options {
     { if (parent) parent->children.erase(this); }
 
     Options& add(const Option& o);
+    Options& add(const char *, std::string, std::string &, std::string);
     Options& add(char, const char *, std::string, std::string &, std::string);
 
     template<typename T>
@@ -106,6 +107,10 @@ class Options {
         auto reset = [&,initial=T(var)]() { var = initial; };
         return add(Option(so, lo, action, reset, "", help));
     }
+
+    template<typename T>
+    Options& add(const char *lo, T& var, T val, std::string help)
+    { return add('\0', lo, var, val, help); }
 
     template<typename T>
     Options& add
@@ -126,6 +131,15 @@ class Options {
 
     template<typename T>
     Options& add
+    ( const char *lo
+    , std::string arg
+    , T& var
+    , std::string help
+    , typename std::enable_if<std::is_integral<T>::value>::type* = nullptr)
+    { return add('\0', lo, arg, var, help); }
+
+    template<typename T>
+    Options& add
     ( char so
     , const char *lo
     , std::string arg
@@ -143,6 +157,17 @@ class Options {
         opt.multiFlag = true;
         return add(opt);
     }
+
+    template<typename T>
+    Options& add
+    ( const char *lo
+    , std::string arg
+    , std::vector<T>& var
+    , std::string def
+    , std::string help
+    , std::function<T(std::string)> fun = [](auto s) { return s; }
+    )
+    { return add('\0', lo, arg, var, def, help, fun); }
 
     std::vector<std::string> parseArgs(const std::vector<std::string>&);
     std::vector<std::string> parseArgs(int, char * const *);
