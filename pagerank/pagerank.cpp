@@ -32,6 +32,8 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
     template<typename... Args>
     using Kernel = typename Impl::template GraphKernel<Args...>;
 
+    int max_iterations;
+
     Kernel<unsigned*> zeroInitDegrees;
     Kernel<unsigned*> computeDegrees;
     Kernel<unsigned*,float*,float*> kernel;
@@ -43,9 +45,12 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
     , Kernel<unsigned*> zeroInit
     , Kernel<unsigned*> compute
     )
-      : zeroInitDegrees(zeroInit), computeDegrees(compute)
+      : max_iterations(30), zeroInitDegrees(zeroInit), computeDegrees(compute)
       , kernel(k), consolidate(c)
-    {}
+    {
+        options.add('i', "iterations", "NUM", max_iterations,
+                    "Number of pagerank iterations.");
+    }
 
     virtual void runImplementation(std::ofstream& outputFile) override
     {
