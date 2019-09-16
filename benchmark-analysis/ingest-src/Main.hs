@@ -216,7 +216,7 @@ queryTest outputSuffix = lift $ do
         C.map showText
         .| C.map (`T.snoc` '\n')
         .| C.encode C.utf8
-        .| C.sinkFile ("missingQuery" <> suffix)
+        .| C.sinkFile ("missingQuery-" <> suffix)
 
 resetRetries :: MonadSql m => m ()
 resetRetries = Sql.updateWhere [] [VariantRetryCount =. 0]
