@@ -353,7 +353,7 @@ struct SimpleImplementation : public AlgorithmBase
       : AlgorithmBase(std::get<I>(kernels)...)
       , kernels(ks)
     {
-        if ((std::get<I>(ks)->isWarp && ...)) {
+        if ((std::get<I>(ks)->isWarp || ...)) {
             options.add('w', "warp", "NUM", warp_size,
                         "Virtual warp size for warp variants.")
                    .add('c', "chunk", "NUM", chunk_size,
