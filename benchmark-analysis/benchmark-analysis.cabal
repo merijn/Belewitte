@@ -32,7 +32,7 @@ Extra-Source-Files:     cbits/*.h src/schema
 Library
   Default-Language:     Haskell2010
   GHC-Options:          -O2 -Wall -fno-warn-unused-do-bind
-  GHC-Prof-Options:     -fprof-auto
+  GHC-Prof-Options:     
   Hs-Source-Dirs:       src
   Exposed-Modules:      Core
                         Exceptions
