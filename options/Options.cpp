@@ -148,8 +148,17 @@ Options::parseArgs
     for (unsigned i = 0; i < args.size(); i++) {
         auto it = optionParsers.find(args[i]);
         if (it == optionParsers.end()) {
-            if (boost::starts_with(args[i], "--") && exitUnknown) {
-                cerr << "Unknown option '" << args[i] << "'!" << endl;
+            if (args[i] == "--") {
+                // Dump everything into remainingArgs and exit parse loop
+                for (unsigned j = i+1; j < args.size(); j++) {
+                    remainingArgs.push_back(args[j]);
+                }
+                break;
+            }
+
+            if (boost::starts_with(args[i], "-") && exitUnknown) {
+                cerr << "Unknown option '" << args[i] << "'!" << endl << endl;
+                cerr << "Possible options:" << endl;
                 usage(usageOutput);
                 exit(EXIT_FAILURE);
             }
@@ -179,9 +188,9 @@ Options::usage(ostream& out, string prefix)
     auto renderOpt = [&](const Option& opt) {
         if (opt.shortOption != '\0') {
             out << prefix << '-' << opt.shortOption;
+            if (opt.hasArg) out << " " << opt.argName << " | ";
         }
-        if (opt.hasArg) out << " " << opt.argName;
-        out << " | " << "--" << opt.longOption;
+        out << "--" << opt.longOption;
         if (opt.hasArg) out << " " << opt.argName;
         out << endl << prefix << '\t' << opt.helpString << endl;
 
