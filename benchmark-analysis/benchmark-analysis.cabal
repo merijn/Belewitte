@@ -46,22 +46,28 @@ Library
                         Schema.Algorithm
                         Schema.Dataset
                         Schema.External
+                        Schema.External.V0
                         Schema.Graph
                         Schema.Graph.V0
                         Schema.Implementation
+                        Schema.Indices
                         Schema.Model
                         Schema.Model.V0
+                        Schema.Model.V1
                         Schema.ModelMetadata
                         Schema.Platform
                         Schema.Properties
                         Schema.Run
+                        Schema.Run.V0
                         Schema.RunConfig
                         Schema.Timers
                         Schema.Timers.V0
                         Schema.UnknownPredictions
+                        Schema.UnknownPredictions.V0
                         Schema.Utils
                         Schema.Variant
                         Schema.Variant.V0
+                        Schema.Variant.V1
                         Schema.VariantConfig
                         Sql
                         Sql.Core

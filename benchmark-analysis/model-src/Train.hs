@@ -226,6 +226,7 @@ trainModel algoId platId ModelDesc{..} = do
 
     modelId <- Sql.insert $ PredictionModel
         { predictionModelPlatformId = platId
+        , predictionModelAlgorithmId = algoId
         , predictionModelName = modelName
         , predictionModelPrettyName = modelPrettyName
         , predictionModelDescription = modelDescription
@@ -243,8 +244,9 @@ trainModel algoId platId ModelDesc{..} = do
         Sql.insert_ . uncurry (ModelStepProperty modelId)
 
     forM_ modelUnknownPreds $ \(count, impls) -> do
-        unknownId <- Sql.insert $ UnknownPrediction modelId count
-        forM_ impls $ Sql.insert_ . UnknownSet unknownId . toSqlKey
+        unknownId <- Sql.insert $ UnknownPrediction modelId algoId count
+        forM_ impls $ \impl ->
+            Sql.insert_ $ UnknownSet unknownId (toSqlKey impl) algoId
 
     return (modelId, model)
   where

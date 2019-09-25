@@ -53,7 +53,7 @@ variantToPropertyJob
                 SqlM
                 ()
 variantToPropertyJob
-    (Entity varId (Variant graphId variantCfgId hash hasProps retries)) =
+    (Entity varId (Variant graphId variantCfgId _ hash hasProps retries)) =
         case hash of
             Nothing
                 | retries < 5 -> yieldJob
@@ -130,7 +130,7 @@ processProperty Result{resultValue=(graphId, hash), ..} = do
 missingRunToTimingJob
     :: (MonadLogger m, MonadResource m, MonadSql m)
     => MissingRun
-    -> ConduitT MissingRun (Job (Key Implementation, Hash)) m ()
+    -> ConduitT MissingRun (Job (Key Algorithm, Key Implementation, Hash)) m ()
 missingRunToTimingJob MissingRun{..}
   | Nothing <- missingRunVariantResult
   = logErrorN . mconcat $
@@ -143,12 +143,15 @@ missingRunToTimingJob MissingRun{..}
     tag name = mconcat [ showSqlKey missingRunVariantId, " ", name]
     implName = tag missingRunImplName
     cmd = T.unwords $ "\"" <> implName <> "\"" : missingRunArgs
-    job hash = Job (missingRunImplId, hash) missingRunVariantId implName cmd
+    job hash = Job (missingRunAlgorithmId, missingRunImplId, hash) missingRunVariantId implName cmd
 
 processTiming
     :: (MonadLogger m, MonadResource m, MonadSql m, MonadThrow m)
-    => Key RunConfig -> Text -> Result (Key Implementation, Hash) -> m ()
-processTiming runConfigId commit Result{resultValue = (implId, hash), ..} = do
+    => Key RunConfig
+    -> Text
+    -> Result (Key Algorithm, Key Implementation, Hash)
+    -> m ()
+processTiming runConfigId commit Result{..} = do
     logInfoN $ "Timing: " <> resultLabel
     time <- liftIO getCurrentTime
     resultHash <- computeHash outputFile
@@ -163,7 +166,7 @@ processTiming runConfigId commit Result{resultValue = (implId, hash), ..} = do
        else do
         let validated = resultHash == hash
 
-        runId <- Sql.insert $ Run runConfigId resultVariant implId time validated
+        runId <- Sql.insert $ Run runConfigId resultVariant implId algoId time validated
 
         unless validated $ do
             logErrorN . mconcat $
@@ -184,6 +187,7 @@ processTiming runConfigId commit Result{resultValue = (implId, hash), ..} = do
 
     liftIO $ removeFile timingFile
   where
+    (algoId, implId, hash) = resultValue
     timingFile = T.unpack resultLabel <> ".timings"
     outputFile = T.unpack resultLabel <> ".output"
 

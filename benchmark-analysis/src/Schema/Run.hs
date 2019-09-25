@@ -4,6 +4,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralisedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -16,28 +17,49 @@ import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Schema.Utils (EntityDef, Int64, MonadSql, (.>))
+import Schema.Utils (EntityDef, ForeignDef, Int64, MonadSql, (.>))
 import qualified Schema.Utils as Utils
 
+import Schema.Algorithm (AlgorithmId)
 import Schema.Implementation (ImplementationId)
 import Schema.RunConfig (RunConfigId)
 import Schema.Variant (VariantId)
+import qualified Schema.Run.V0 as V0
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
+TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema'"] [persistUpperCase|
 Run
     runConfigId RunConfigId
     variantId VariantId
     implId ImplementationId
+    algorithmId AlgorithmId
     timestamp UTCTime
     validated Bool
-    UniqRun runConfigId variantId implId
+    UniqRun runConfigId variantId implId algorithmId
     deriving Eq Show
 |]
 
+schema :: [EntityDef]
+schema = Utils.addForeignRef "Run" runConfig
+       . Utils.addForeignRef "Run" variant
+       . Utils.addForeignRef "Run" impl
+       $ schema'
+  where
+    runConfig :: ForeignDef
+    runConfig = Utils.mkForeignRef "RunConfig"
+        [ ("runConfigId", "id"), ("algorithmId", "algorithmId") ]
+
+    variant :: ForeignDef
+    variant = Utils.mkForeignRef "Variant"
+        [ ("variantId", "id"), ("algorithmId", "algorithmId") ]
+
+    impl :: ForeignDef
+    impl = Utils.mkForeignRef "Implementation"
+        [ ("implId", "id"), ("algorithmId", "algorithmId") ]
+
 migrations :: MonadSql m => Int64 -> m [EntityDef]
 migrations = Utils.mkMigrationLookup
-    [ 6 .> schema $ do
-        Utils.createTableFromSchema schema
+    [ 6 .> V0.schema $ do
+        Utils.createTableFromSchema V0.schema
 
         Utils.executeSql [i|
 INSERT INTO "Run"
@@ -74,5 +96,24 @@ FROM (
 
     GROUP BY RunConfig.id, Variant.id, TotalTimer.implId
 )
+|]
+    , 9 .> schema $ do
+        Utils.executeSql [i|
+ALTER TABLE "Run" ADD COLUMN "algorithmId" INTEGER REFERENCES "Algorithm"
+|]
+
+        Utils.executeSql [i|
+REPLACE INTO "Run"
+SELECT Run.id
+     , Run.runConfigId
+     , Run.variantId
+     , Run.implId
+     , Run.timestamp
+     , Run.validated
+     , RunConfig.algorithmId
+FROM Run
+
+INNER JOIN RunConfig
+ON Run.runConfigId = RunConfig.id
 |]
     ]

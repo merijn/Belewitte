@@ -102,6 +102,7 @@ validateSchema migrateSchema version
                 Sql.executeSql "BEGIN TRANSACTION"
                 migration <- updateSchemaToVersion (n+1)
                 silencedUnsafeMigration migration
+                updateIndicesToVersion (n+1)
 
                 checkSchema migration `catch` migrationFailed
 

@@ -73,11 +73,11 @@ addGraphs paths = do
     insertVariants
         :: (MonadResource m, MonadSql m)
         => Key Graph -> ConduitT (Key Graph) Void m ()
-    insertVariants graphId = Sql.selectKeys [] [] .| C.mapM_ insertVariant
+    insertVariants graphId = Sql.selectSource [] [] .| C.mapM_ insertVariant
       where
-        insertVariant :: MonadSql m => Key VariantConfig -> m ()
-        insertVariant variantConfigId =
-            Sql.insert_ $ Variant graphId variantConfigId Nothing False 0
+        insertVariant :: MonadSql m => Entity VariantConfig -> m ()
+        insertVariant (Entity variantCfgId (VariantConfig algoId _ _ _)) =
+            Sql.insert_ $ Variant graphId variantCfgId algoId Nothing False 0
 
 addAlgorithm :: Input SqlM ()
 addAlgorithm = do
@@ -111,7 +111,7 @@ addVariant = do
     isDefault <- getInteractive readInput "Default Variant (for plotting)"
     varCfgId <- Sql.insert $ VariantConfig algoId variantName flags isDefault
 
-    let mkVariant gId = Variant gId varCfgId Nothing False 0
+    let mkVariant gId = Variant gId varCfgId algoId Nothing False 0
 
     runConduit $ Sql.selectKeys [] [] .| C.mapM_ (Sql.insert_ . mkVariant)
   where
@@ -174,7 +174,7 @@ importResults = do
             fmap entityKey <$> Sql.getBy uniqVariant
 
         Sql.insert_ $
-          ExternalTimer platId varId implId name minTime avgTime maxTime stddev
+          ExternalTimer platId varId implId algoId name minTime avgTime maxTime stddev
 
 runBenchmarks :: Int -> Input SqlM ()
 runBenchmarks numNodes = lift $ do

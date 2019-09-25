@@ -5,6 +5,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -16,14 +17,15 @@ import Data.Text (Text)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Schema.Utils (EntityDef, Int64, MonadSql, (.>))
+import Schema.Utils (EntityDef, ForeignDef, Int64, MonadSql, (.>))
 import qualified Schema.Utils as Utils
 
 import Schema.Algorithm (AlgorithmId)
 import Schema.Platform (PlatformId)
 import Schema.Variant (VariantId)
+import qualified Schema.External.V0 as V0
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
+TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema'"] [persistUpperCase|
 ExternalImpl
     algorithmId AlgorithmId
     name Text
@@ -35,19 +37,33 @@ ExternalTimer
     platformId PlatformId
     variantId VariantId
     implId ExternalImplId
+    algorithmId AlgorithmId
     name Text
     minTime Double
     avgTime Double
     maxTime Double
     stdDev Double
-    Primary platformId variantId implId name
+    Primary platformId variantId implId algorithmId name
     deriving Eq Show
 |]
 
+schema :: [EntityDef]
+schema = Utils.addForeignRef "ExternalTimer" variant
+       . Utils.addForeignRef "ExternalTimer" extImpl
+       $ schema'
+  where
+    variant :: ForeignDef
+    variant = Utils.mkForeignRef "Variant"
+        [ ("variantId", "id"), ("algorithmId", "algorithmId") ]
+
+    extImpl :: ForeignDef
+    extImpl = Utils.mkForeignRef "ExternalImpl"
+        [ ("implId", "id"), ("algorithmId", "algorithmId") ]
+
 migrations :: MonadSql m => Int64 -> m [EntityDef]
 migrations = Utils.mkMigrationLookup
-    [ 4 .> schema $ do
-        Utils.createTableFromSchema schema
+    [ 4 .> V0.schema $ do
+        Utils.createTableFromSchema V0.schema
 
         Utils.executeSql [i|
 INSERT INTO "ExternalImpl" SELECT id, algorithmId, name, prettyName
@@ -73,5 +89,27 @@ WHERE TotalTimer.implId IN
         Utils.executeSql [i|
 DELETE FROM Implementation
 WHERE type = "Comparison"
+|]
+    , 9 .> schema $ do
+        Utils.executeSql [i|
+ALTER TABLE "ExternalTimer"
+ADD COLUMN "algorithmId" INTEGER REFERENCES "Algorithm"
+|]
+
+        Utils.executeSql [i|
+REPLACE INTO "ExternalTimer"
+SELECT ExternalTimer.platformId
+     , ExternalTimer.variantId
+     , ExternalTimer.implId
+     , ExternalTimer.name
+     , ExternalTimer.minTime
+     , ExternalTimer.avgTime
+     , ExternalTimer.maxTime
+     , ExternalTimer.stdDev
+     , ExternalImpl.algorithmId
+FROM ExternalTimer
+
+INNER JOIN ExternalImpl
+ON ExternalTimer.implId = ExternalImpl.id
 |]
     ]
