@@ -1,15 +1,21 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MonadFailDesugaring #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns #-}
 module Schema.Utils
     ( MonadSql
+    , DBName(..)
     , EntityDef
+    , ForeignDef
+    , HaskellName(..)
     , Int64
     , (.=)
     , (.>)
     , executeSql
     , createTableFromSchema
+    , mkForeignRef
+    , addForeignRef
     , mkMigration
     , mkMigrationLookup
     ) where
@@ -17,8 +23,11 @@ module Schema.Utils
 import Control.Monad (void)
 import Data.Int (Int64)
 import qualified Data.Map as M
-import Database.Persist.Sql (EntityDef, Migration, migrate)
+import Data.Text (Text)
+import Database.Persist.Sql (Migration, migrate)
 import Database.Persist.TH (embedEntityDefs)
+import Database.Persist.Types
+    (DBName(..), EntityDef(..), ForeignDef(..), HaskellName(..))
 
 import Sql.Core (MonadSql, executeSql, runMigrationSilent)
 
@@ -35,6 +44,27 @@ mkMigration ents = mapM_ (migrate embeddedEnts) embeddedEnts
 
 createTableFromSchema :: MonadSql m => [EntityDef] -> m ()
 createTableFromSchema = void . runMigrationSilent . mkMigration . pure
+
+mkForeignRef :: Text -> [(Text, Text)] -> ForeignDef
+mkForeignRef foreignTable refs = ForeignDef
+    { foreignRefTableHaskell = HaskellName foreignTable
+    , foreignRefTableDBName = DBName foreignTable
+    , foreignConstraintNameHaskell = HaskellName $ "Foreign" <> foreignTable
+    , foreignConstraintNameDBName = DBName $ "Foreign" <> foreignTable
+    , foreignFields = map wrapNames refs
+    , foreignAttrs = []
+    , foreignNullable = False
+    }
+  where
+    wrapNames :: (Text, Text) -> ((HaskellName, DBName), (HaskellName, DBName))
+    wrapNames (src, dst) =
+        ((HaskellName src, DBName src), (HaskellName dst, DBName dst))
+
+addForeignRef :: Text -> ForeignDef -> [EntityDef] -> [EntityDef]
+addForeignRef _ _ [] = []
+addForeignRef name fk (ent:ents)
+    | entityHaskell ent /= HaskellName name = ent : addForeignRef name fk ents
+    | otherwise = ent { entityForeigns = fk : entityForeigns ent } : ents
 
 mkMigrationLookup
     :: MonadSql m
