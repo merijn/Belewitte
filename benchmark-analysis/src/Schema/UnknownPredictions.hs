@@ -8,9 +8,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-module Schema.ModelMetadata where
+module Schema.UnknownPredictions where
 
-import Data.Text (Text)
 import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
@@ -19,20 +18,18 @@ import Schema.Utils (EntityDef, Int64, MonadSql, (.=))
 import qualified Schema.Utils as Utils
 
 import Schema.Model (PredictionModelId)
+import Schema.Implementation (ImplementationId)
 
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
-ModelGraphProperty
+UnknownPrediction
     modelId PredictionModelId
-    property Text
-    importance Double
-    Primary modelId property
+    count Int
     deriving Eq Show
 
-ModelStepProperty
-    modelId PredictionModelId
-    property Text
-    importance Double
-    Primary modelId property
+UnknownSet
+    unknownPredId UnknownPredictionId
+    implId ImplementationId
+    Primary unknownPredId implId
     deriving Eq Show
 |]
 

@@ -58,6 +58,7 @@ Library
                         Schema.RunConfig
                         Schema.Timers
                         Schema.Timers.V0
+                        Schema.UnknownPredictions
                         Schema.Utils
                         Schema.Variant
                         Schema.Variant.V0

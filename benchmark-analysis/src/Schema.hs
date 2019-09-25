@@ -22,6 +22,7 @@ module Schema
     , module Schema.Run
     , module Schema.RunConfig
     , module Schema.Timers
+    , module Schema.UnknownPredictions
     , module Schema.Variant
     , module Schema.VariantConfig
     , bestNonSwitchingImplId
@@ -76,6 +77,8 @@ import Schema.RunConfig hiding (migrations, schema)
 import qualified Schema.RunConfig as RunConfig
 import Schema.Timers hiding (migrations, schema)
 import qualified Schema.Timers as Timers
+import Schema.UnknownPredictions hiding (migrations, schema)
+import qualified Schema.UnknownPredictions as UnknownPredictions
 import Schema.Variant hiding (migrations, schema)
 import qualified Schema.Variant as Variant
 import Schema.VariantConfig hiding (migrations, schema)
@@ -125,6 +128,7 @@ migrations =
     , (Model.schema, Model.migrations)
     , (ModelMetadata.schema, ModelMetadata.migrations)
     , (VariantConfig.schema, VariantConfig.migrations)
+    , (UnknownPredictions.schema, UnknownPredictions.migrations)
     ]
 
 schemaVersion :: Int64
