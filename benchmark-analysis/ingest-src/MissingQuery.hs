@@ -80,11 +80,8 @@ FROM RunConfig
 INNER JOIN Algorithm
 ON RunConfig.algorithmId = Algorithm.id
 
-INNER JOIN Dataset
-ON RunConfig.datasetId = Dataset.id
-
 INNER JOIN Graph
-ON Dataset.id = Graph.datasetId
+ON RunConfig.datasetId = Graph.datasetId
 
 INNER JOIN Variant
 ON Graph.id = Variant.graphId
