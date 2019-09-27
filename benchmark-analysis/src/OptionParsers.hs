@@ -39,7 +39,7 @@ import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Options.Applicative hiding (Completer)
-import Options.Applicative.Help (Doc)
+import Options.Applicative.Help (Doc, (</>))
 import qualified Options.Applicative.Help as Help
 import System.Environment (getProgName)
 import qualified System.IO as System
@@ -220,11 +220,25 @@ intervalReader = maybeReader . parseMaybe $
     toInterval = I.interval `on` (,True) . Finite
 
 optionParserFromValues
-    :: Map String a -> Mod OptionFields a -> Parser a
-optionParserFromValues vals = option . maybeReader $ lookupCI
+    :: Map String a -> String -> Doc -> Mod OptionFields a -> Parser a
+optionParserFromValues vals metaVar helpText =
+    option (maybeReader lookupCI) . mappend extra
   where
     lookupCI key = M.lookup (map toLower key) valMap
     valMap = M.mapKeys (map toLower) vals
+    extra = mconcat [ metavar metaVar, helpDoc (Just extraHelpText) ]
+    extraHelpText =
+        helpText </> reflow ("The possible values of " <> metaVar <> " are")
+                 </> quoteValues (M.keys valMap)
+
+    quote :: String -> Doc
+    quote = Help.squotes . Help.string
+
+    quoteValues :: [String] -> Doc
+    quoteValues l = case l of
+        [] -> mempty
+        [x] -> Help.string "or" </> quote x <> Help.char '.' <> Help.softbreak
+        (x:xs) -> quote x <> Help.char ',' </> quoteValues xs
 
 runSqlM :: (String -> Command a) -> (a -> SqlM b) -> IO b
 runSqlM commandFromName work = do

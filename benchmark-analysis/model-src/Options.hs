@@ -197,20 +197,17 @@ reportParser relTo implTypes =
                \--report-range=5-10,13,17-20" ]
 
     resultsRelativeTo :: Parser RelativeTo
-    resultsRelativeTo = optionParserFromValues relTo $ mconcat
-        --FIXME: list options
-        [ metavar "REL-TO", long "rel-to", value Optimal
-        , showDefaultWith (map toLower . show)
-        , help "Results to normalise result output to" ]
+    resultsRelativeTo = optionParserFromValues relTo "REL-TO" helpTxt $ mconcat
+        [ long "rel-to", value Optimal, showDefaultWith (map toLower . show)]
+      where
+        helpTxt = "Results to normalise result output to."
 
     sortResultsBy :: Parser SortBy
-    sortResultsBy = optionParserFromValues values $ mconcat
-        --FIXME: list options
-        [ metavar "SORT-BY", long "sort-by", value Avg
-        , showDefaultWith (map toLower . show)
-        , help "Sort results by" ]
+    sortResultsBy = optionParserFromValues values "SORT-BY" helpTxt $ mconcat
+        [ long "sort-by", value Avg, showDefaultWith (map toLower . show) ]
       where
         values = M.fromList [("avg", Avg), ("max", Max)]
+        helpTxt = "Time to sort results by."
 
     detailed :: Parser Bool
     detailed = flag False True $ mconcat
@@ -224,10 +221,11 @@ implTypesParser :: Monoid a => (ImplType -> a) -> Map String a -> Parser a
 implTypesParser makeResult extraVals = mappend (makeResult Builtin) <$>
     (mconcat <$> some implParser <|> pure (makeResult Core))
   where
-    implParser = optionParserFromValues (extraVals <> values) $ mconcat
-        --FIXME: list options
-        [ metavar "TYPE", long "impl-type"
-        , help "Implementation types to output results for" ]
+    allValues = extraVals <> values
+    implParser = optionParserFromValues allValues "TYPE" helpTxt $ mconcat
+        [ long "impl-type" ]
+      where
+        helpTxt = "Implementation types to output results for."
 
     values = M.fromList $
         [ ("core", makeResult Core)
