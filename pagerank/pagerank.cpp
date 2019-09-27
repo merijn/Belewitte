@@ -42,6 +42,9 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
     {
         Timer initResults("initResults", run_count);
         Timer pagerankTime("computation", run_count);
+        // Step timer is redundant/pointless for PageRank, but needed for
+        // consistency with other algorithms
+        Timer pagerankStepTime("0:computation", run_count);
         Timer resultTransfer("resultTransfer", run_count);
 
         auto pageranks = backend.template alloc<float>(vertex_count);
@@ -57,6 +60,7 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
             initResults.stop();
 
             pagerankTime.start();
+            pagerankStepTime.start();
 
             float diff;
             int j = 0;
@@ -70,6 +74,7 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
 
                 diff = getDiff();
             } while (j < max_iterations);
+            pagerankStepTime.stop();
             pagerankTime.stop();
 
             resultTransfer.start();
