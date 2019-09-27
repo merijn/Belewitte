@@ -97,5 +97,5 @@ ON Variant.id = Run.variantId
 AND Implementation.id = Run.implId
 AND RunConfig.id = Run.runConfigId
 
-WHERE RunConfig.id = ? AND Run.runConfigId IS NULL
+WHERE RunConfig.id = ? AND Variant.retryCount < 5 AND Run.runConfigId IS NULL
 |]
