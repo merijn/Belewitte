@@ -170,6 +170,27 @@ vertexPushWarpBfs<Reduction<blockreduce>>
 
 template<typename BFSVariant>
 __global__ void
+vertexPullWarpBfs
+(size_t, size_t, CSR<unsigned,unsigned> *graph, int *levels, int depth);
+
+extern template __global__ void
+vertexPullWarpBfs<Reduction<normal>>
+(size_t, size_t, CSR<unsigned,unsigned> *, int *, int);
+
+extern template __global__ void
+vertexPullWarpBfs<Reduction<bulk>>
+(size_t, size_t, CSR<unsigned,unsigned> *, int *, int);
+
+extern template __global__ void
+vertexPullWarpBfs<Reduction<warpreduce>>
+(size_t, size_t, CSR<unsigned,unsigned> *, int *, int);
+
+extern template __global__ void
+vertexPullWarpBfs<Reduction<blockreduce>>
+(size_t, size_t, CSR<unsigned,unsigned> *, int *, int);
+
+template<typename BFSVariant>
+__global__ void
 edgeListBfs(EdgeList<unsigned> *graph, int *levels, int depth);
 
 extern template __global__ void

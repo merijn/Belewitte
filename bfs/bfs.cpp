@@ -189,6 +189,17 @@ insertVariant()
             )
     };
 
+    kernelMap[std::string("vertex-pull-warp") + Reduction<Variant>::suffix] = {
+        make_kernel
+            ( vertexPullWarpBfs<Reduction<Variant>>
+            , work_division::vertex
+            , [](size_t chunkSize) {
+                return chunkSize * sizeof(int) + (chunkSize+1) * sizeof(unsigned);
+            }
+            , tag_t(Rep::CSR)
+            )
+    };
+
     return kernelMap;
 }
 
