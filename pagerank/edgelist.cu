@@ -2,14 +2,12 @@
 
 __global__ void
 edgeListCSR
-    ( EdgeListCSR<unsigned,unsigned> *graph
-    , float *pagerank
-    , float *new_pagerank
-    )
+(EdgeListCSR<unsigned,unsigned> *graph , float *pagerank , float *new_pagerank)
 {
-    uint64_t idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+    uint64_t startIdx = (blockIdx.x * blockDim.x) + threadIdx.x;
+    uint64_t size = graph->edge_count;
 
-    if (idx < graph->edge_count) {
+    for (uint64_t idx = startIdx; idx < size; idx += blockDim.x * gridDim.x) {
         int64_t origin = graph->inEdges[idx];
         unsigned *vertices = &graph->vertices[origin];
 

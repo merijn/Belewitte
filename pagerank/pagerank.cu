@@ -29,11 +29,11 @@ void updateDiff(float val)
 }
 
 __global__ void
-consolidateRank(size_t size, float *pagerank, float *new_pagerank, bool)
+consolidateRank(uint64_t size, float *pagerank, float *new_pagerank, bool)
 {
-    size_t idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+    uint64_t startIdx = (blockIdx.x * blockDim.x) + threadIdx.x;
 
-    if (idx < size) {
+    for (uint64_t idx = startIdx; idx < size; idx += blockDim.x * gridDim.x) {
         float new_rank = ((1.0 - dampening) / size) + (dampening * new_pagerank[idx]);
         float my_diff = fabsf(new_rank - pagerank[idx]);
 
@@ -46,16 +46,16 @@ consolidateRank(size_t size, float *pagerank, float *new_pagerank, bool)
 
 __global__ void
 consolidateRankNoDiv
-    ( InverseVertexCSR<unsigned,unsigned> *graph
-    , float *pagerank
-    , float *new_pagerank
-    , bool notLast
-    )
+( InverseVertexCSR<unsigned,unsigned> *graph
+, float *pagerank
+, float *new_pagerank
+, bool notLast
+)
 {
-    uint64_t idx = (blockIdx.x * blockDim.x) + threadIdx.x;
+    uint64_t startIdx = (blockIdx.x * blockDim.x) + threadIdx.x;
     uint64_t vertex_count = graph->vertex_count;
 
-    if (idx < vertex_count) {
+    for (uint64_t idx = startIdx; idx < vertex_count; idx += blockDim.x * gridDim.x) {
         unsigned *outgoing_vertices = &graph->inverse_vertices[idx];
 
         float new_rank = ((1 - dampening) / vertex_count) + (dampening * new_pagerank[idx]);

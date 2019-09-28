@@ -3,12 +3,12 @@
 
 __global__ void
 vertexPullWarp
-    ( size_t warp_size
-    , size_t chunk_size
-    , InverseVertexCSR<unsigned,unsigned> *graph
-    , float *pagerank
-    , float *new_pagerank
-    )
+( size_t warp_size
+, size_t chunk_size
+, InverseVertexCSR<unsigned,unsigned> *graph
+, float *pagerank
+, float *new_pagerank
+)
 {
     const size_t vertex_count = graph->vertex_count;
     const int THREAD_ID = (blockIdx.x * blockDim.x) + threadIdx.x;
