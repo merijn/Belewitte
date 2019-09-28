@@ -1,14 +1,6 @@
 #include <algorithm>
+#include "CUDA.hpp"
 #include "bfs.hpp"
-
-#define CUDA_CHK(ans) { \
-    cudaError_t code = ans; \
-    if (code != cudaSuccess) { \
-        cudaAssert(code, __FILE__, __LINE__); \
-    } \
-}
-void __attribute__((noreturn))
-cudaAssert(const cudaError_t code, const char *file, const int line);
 
 __device__ unsigned frontier = 0;
 
