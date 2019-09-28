@@ -3,10 +3,13 @@
 cd "$(dirname $0)"
 
 if [ -d ".hg" ]; then
-    hg log -r "last(modifies('$1/*'))" -T "{gitnode}\n"
+    COMMIT="$(hg log -r "last(modifies('$1/*'))" -T "{gitnode}\n")"
 elif [ -d ".git" ]; then
-    git log -n 1 --pretty=format:%H $1
+    COMMIT="$(git log -n 1 --pretty=format:%H $1)"
+fi
+
+if [ -n "$COMMIT" ]; then
+    printf "$COMMIT"
 else
-    printf "Repository type couldn't be determined!\n"
-    exit 1
+    printf "Unknown\n"
 fi
