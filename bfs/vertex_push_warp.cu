@@ -1,15 +1,5 @@
-#include <cuda_runtime_api.h>
+#include "utils/cuda_utils.hpp"
 #include "bfs.hpp"
-
-template<typename T>
-static __device__ inline void
-memcpy_SIMD(size_t warp_size, int warp_offset, int cnt, T *dest, T *src)
-{
-    for (int i = warp_offset; i < cnt; i += warp_size) {
-        dest[i] = src[i];
-    }
-    __threadfence_block();
-}
 
 template<typename BFSVariant>
 static __device__ inline void
