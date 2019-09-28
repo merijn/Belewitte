@@ -4,20 +4,21 @@ template<typename BFSVariant>
 __global__ void
 vertexPushBfs(CSR<unsigned,unsigned> *graph, int *levels, int depth)
 {
+    uint64_t startIdx = blockIdx.x * blockDim.x + threadIdx.x;
     uint64_t size = graph->vertex_count;
     BFSVariant bfs;
     unsigned newDepth = depth + 1;
-    for (uint64_t idx = blockIdx.x * blockDim.x + threadIdx.x;
-         idx < size && levels[idx] == depth;
-         idx += blockDim.x * gridDim.x)
+    for (uint64_t idx = startIdx; idx < size; idx += blockDim.x * gridDim.x)
     {
-        unsigned *vertices = graph->vertices;
-        unsigned start = vertices[idx];
-        unsigned end = vertices[idx + 1];
+        if (levels[idx] == depth) {
+            unsigned *vertices = graph->vertices;
+            unsigned start = vertices[idx];
+            unsigned end = vertices[idx + 1];
 
-        for (unsigned i = start; i < end; i++) {
-            if (atomicMin(&levels[graph->edges[i]], newDepth) > newDepth) {
-                bfs.update();
+            for (unsigned i = start; i < end; i++) {
+                if (atomicMin(&levels[graph->edges[i]], newDepth) > newDepth) {
+                    bfs.update();
+                }
             }
         }
     }
