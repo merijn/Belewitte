@@ -144,6 +144,23 @@ insertVariant()
             )
     };
 
+    kernelMap[std::string("struct-edge-list") + Reduction<Variant>::suffix] = {
+        make_kernel
+            ( structEdgeListBfs<Reduction<Variant>>
+            , work_division::edge
+            , tag_t(Rep::StructEdgeList)
+            )
+    };
+
+    kernelMap[std::string("rev-struct-edge-list") + Reduction<Variant>::suffix] = {
+        make_kernel
+            ( revStructEdgeListBfs<Reduction<Variant>>
+            , work_division::edge
+            , tag_t(Rep::StructEdgeList)
+            , tag_t(Dir::Reverse)
+            )
+    };
+
     kernelMap[std::string("vertex-push") + Reduction<Variant>::suffix] = {
         make_kernel
             ( vertexPushBfs<Reduction<Variant>>

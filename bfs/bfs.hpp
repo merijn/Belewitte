@@ -186,6 +186,38 @@ edgeListBfs<Reduction<blockreduce>>(EdgeList<unsigned> *, int *, int);
 
 template<typename BFSVariant>
 __global__ void
+structEdgeListBfs(StructEdgeList<unsigned> *graph, int *levels, int depth);
+
+extern template __global__ void
+structEdgeListBfs<Reduction<normal>>(StructEdgeList<unsigned> *, int *, int);
+
+extern template __global__ void
+structEdgeListBfs<Reduction<bulk>>(StructEdgeList<unsigned> *, int *, int);
+
+extern template __global__ void
+structEdgeListBfs<Reduction<warpreduce>>(StructEdgeList<unsigned> *, int *, int);
+
+extern template __global__ void
+structEdgeListBfs<Reduction<blockreduce>>(StructEdgeList<unsigned> *, int *, int);
+
+template<typename BFSVariant>
+__global__ void
+revStructEdgeListBfs(StructEdgeList<unsigned> *graph, int *levels, int depth);
+
+extern template __global__ void
+revStructEdgeListBfs<Reduction<normal>>(StructEdgeList<unsigned> *, int *, int);
+
+extern template __global__ void
+revStructEdgeListBfs<Reduction<bulk>>(StructEdgeList<unsigned> *, int *, int);
+
+extern template __global__ void
+revStructEdgeListBfs<Reduction<warpreduce>>(StructEdgeList<unsigned> *, int *, int);
+
+extern template __global__ void
+revStructEdgeListBfs<Reduction<blockreduce>>(StructEdgeList<unsigned> *, int *, int);
+
+template<typename BFSVariant>
+__global__ void
 revEdgeListBfs(EdgeList<unsigned> *graph, int *levels, int depth);
 
 extern template __global__ void
