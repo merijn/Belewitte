@@ -1,5 +1,5 @@
 #include <algorithm>
-#include "CUDA.hpp"
+#include "utils/cuda_utils.hpp"
 #include "bfs.hpp"
 
 __device__ unsigned frontier = 0;

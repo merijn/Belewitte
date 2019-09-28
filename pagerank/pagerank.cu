@@ -1,4 +1,4 @@
-#include "CUDA.hpp"
+#include "utils/cuda_utils.hpp"
 #include "pagerank.hpp"
 
 __device__ float diff = 0.0;

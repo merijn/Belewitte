@@ -10,6 +10,7 @@
 #include <cuda_runtime.h>
 
 #include "Backend.hpp"
+#include "utils/cuda_utils.hpp"
 #include "utils/Util.hpp"
 
 #define ALIGN_UP(offset, alignment) \
@@ -18,9 +19,6 @@
 using std::cerr;
 using std::cout;
 using std::endl;
-
-#define CUDA_CHK(ans) cudaAssert((ans), __FILE__, __LINE__)
-void cudaAssert(const cudaError_t code, const char *file, const int line);
 
 class CUDABackend;
 
