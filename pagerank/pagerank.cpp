@@ -24,6 +24,7 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
     using Impl::setKernelConfig;
     using Impl::vertex_count;
     using Impl::options;
+    using Impl::isSwitching;
 
     template<typename T>
     using alloc_t = typename Impl::template alloc_t<T>;
@@ -58,6 +59,10 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
             std::fill(new_pageranks.begin(), new_pageranks.end(), 0.0f);
             new_pageranks.copyHostToDev();
             initResults.stop();
+
+            if constexpr (isSwitching) {
+                this->predictInitial();
+            }
 
             pagerankTime.start();
             pagerankStepTime.start();
