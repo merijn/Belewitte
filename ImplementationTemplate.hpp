@@ -65,6 +65,8 @@ struct GraphKernel : public BaseKernel<Platform>
     template<typename T>
     using DevToHost = typename BaseKernel<Platform>::template DevToHost<T>;
 
+    virtual explicit operator bool() const = 0;
+
     virtual void
     run(GraphLoader<Platform,V,E>&, DevToHost<Args>...) = 0;
 
@@ -101,8 +103,11 @@ struct GraphKernelImpl : GraphKernel<Platform,V,E,Args...>
             (reinterpret_cast<KernelType>(k), {rep, dir}, w, false)
     {}
 
+    virtual explicit operator bool() const override
+    { return true; }
+
     virtual void
-    run(GraphLoader<Platform,V,E>& loader, DevToHost<Args>... args)
+    run(GraphLoader<Platform,V,E>& loader, DevToHost<Args>... args) override
     {
         const auto& graph = loader.template getGraph<rep,dir>();
         backend.runKernel(reinterpret_cast<Kernel>(kernel), graph, args...);
@@ -134,6 +139,9 @@ struct WarpKernel : GraphKernel<Platform,V,E,Args...>
             (reinterpret_cast<KernelType>(k), {rep, dir}, w, true)
       , chunkMemory(mem), warp_size(32), chunk_size(32)
     {}
+
+    virtual explicit operator bool() const override
+    { return true; }
 
     virtual void
     run(GraphLoader<Platform,V,E>& loader, DevToHost<Args>... args) override
@@ -177,6 +185,9 @@ struct NullKernel : GraphKernel<Platform,V,E,Args...>
       : GraphKernel<Platform,V,E,Args...>(nullptr)
     {}
 
+    virtual explicit operator bool() const override
+    { return false; }
+
     virtual void
     run(GraphLoader<Platform,V,E>&, DevToHost<Args>...) override
     {}
@@ -199,6 +210,14 @@ struct GraphKernel : std::shared_ptr<internals::GraphKernel<P,V,E,Args...>>
     GraphKernel(const std::shared_ptr<Base>& f)
       : std::shared_ptr<Base>(f)
     {}
+
+    explicit operator bool() const
+    {
+        if (std::shared_ptr<Base>::operator bool()) {
+            return static_cast<bool>(*this->get());
+        }
+        return false;
+    }
 
     GraphKernel&
     operator=(std::nullptr_t)
