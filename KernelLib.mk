@@ -47,8 +47,9 @@ $(DEST)/version: $(patsubst %, $(SRCDIR)/%, $($(NAME)_CPP_HEADERS) \
 	$(PRINTF) " HASH\t$(NAME)\n"
 	$(AT)$(BASE)/report-kernel-commit.sh $(NAME) >$@
 
-$($(NAME)_CPP_OBJS): $(DEST)/version
+$($(NAME)_CPP_OBJS): DEST:=$(DEST)
 $($(NAME)_CPP_OBJS): CXXFLAGS+=-DKERNEL_COMMIT=\"$$(cat $(DEST)/version)\"
+$($(NAME)_CPP_OBJS): $(DEST)/version
 
 $(BUILD)/kernels/lib$(NAME)kernel.so: $($(NAME)_CPP_OBJS) $($(NAME)_CUDA_OBJS) \
     $(DEST)/device.o | $(BUILD)/kernels/
