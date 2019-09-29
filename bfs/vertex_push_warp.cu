@@ -23,28 +23,37 @@ vertexPushWarpBfs
 , int *levels, int depth)
 {
     BFSVariant bfs;
-    const size_t vertex_count = graph->vertex_count;
     const int THREAD_ID = (blockIdx.x * blockDim.x) + threadIdx.x;
+    const uint64_t vertex_count = graph->vertex_count;
+    const uint64_t warpsPerBlock = blockDim.x / warp_size;
+
+    const uint64_t WARP_ID = THREAD_ID / warp_size;
     const int W_OFF = THREAD_ID % warp_size;
-    const size_t W_ID = THREAD_ID / warp_size;
     const size_t BLOCK_W_ID = threadIdx.x / warp_size;
+    const size_t sharedOffset = chunk_size * BLOCK_W_ID;
 
     extern __shared__ int MEM[];
-    int *myLevels = &MEM[chunk_size * BLOCK_W_ID];
-    unsigned *vertices = (unsigned*) &MEM[(blockDim.x/warp_size) * chunk_size];
-    unsigned *myVertices = &vertices[(1+chunk_size) * BLOCK_W_ID];
+    int *myLevels = &MEM[sharedOffset];
+    unsigned *vertices = (unsigned*) &MEM[warpsPerBlock * chunk_size];
+    unsigned *myVertices = &vertices[sharedOffset + BLOCK_W_ID];
 
-    const size_t v_ = min(W_ID * chunk_size, vertex_count);
-    const size_t end = min(chunk_size, (vertex_count - v_));
+    for ( uint64_t chunkIdx = WARP_ID
+        ; chunk_size * chunkIdx < vertex_count
+        ; chunkIdx += warpsPerBlock * gridDim.x
+        )
+    {
+        const size_t v_ = min(chunkIdx * chunk_size, vertex_count);
+        const size_t end = min(chunk_size, (vertex_count - v_));
 
-    memcpy_SIMD(warp_size, W_OFF, end, myLevels, &levels[v_]);
-    memcpy_SIMD(warp_size, W_OFF, end + 1, myVertices, &graph->vertices[v_]);
+        memcpy_SIMD(warp_size, W_OFF, end, myLevels, &levels[v_]);
+        memcpy_SIMD(warp_size, W_OFF, end + 1, myVertices, &graph->vertices[v_]);
 
-    for (int v = 0; v < end; v++) {
-        const unsigned num_nbr = myVertices[v+1] - myVertices[v];
-        const unsigned *nbrs = &graph->edges[myVertices[v]];
-        if (myLevels[v] == depth) {
-            expand_bfs(bfs, warp_size, W_OFF, num_nbr, nbrs, levels, depth);
+        for (int v = 0; v < end; v++) {
+            const unsigned num_nbr = myVertices[v+1] - myVertices[v];
+            const unsigned *nbrs = &graph->edges[myVertices[v]];
+            if (myLevels[v] == depth) {
+                expand_bfs(bfs, warp_size, W_OFF, num_nbr, nbrs, levels, depth);
+            }
         }
     }
     bfs.finalise();
