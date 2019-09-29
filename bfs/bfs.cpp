@@ -197,6 +197,7 @@ insertVariant()
                 return chunkSize * sizeof(int) + (chunkSize+1) * sizeof(unsigned);
             }
             , tag_t(Rep::CSR)
+            , tag_t(Dir::Reverse)
             )
     };
 

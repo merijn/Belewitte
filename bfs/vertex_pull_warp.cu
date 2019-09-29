@@ -47,8 +47,8 @@ vertexPullWarpBfs
         const unsigned *nbrs = &graph->edges[myVertices[v]];
         if (myLevels[v] > depth) {
             update = expand_bfs(bfs, warp_size, W_OFF, num_nbr, nbrs, levels, depth);
-            if (W_ID == 0 && update) {
-                levels[v] = depth + 1;
+            if (W_OFF == 0 && update) {
+                levels[v_ + v] = depth + 1;
                 bfs.update();
             }
         }
