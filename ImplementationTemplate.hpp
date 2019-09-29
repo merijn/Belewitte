@@ -42,6 +42,12 @@ struct BaseKernel
     {}
 
   protected:
+    BaseKernel(std::nullptr_t)
+      : isWarp(false), representation({Rep::VertexCount, Dir::Forward})
+      , workDivision(work_division::vertex), kernel(nullptr)
+      , backend(Platform::get())
+    {}
+
     virtual size_t getSharedMemSize(size_t)
     { return 0; }
 
@@ -61,6 +67,10 @@ struct GraphKernel : public BaseKernel<Platform>
 
     virtual void
     run(GraphLoader<Platform,V,E>&, DevToHost<Args>...) = 0;
+
+    GraphKernel(std::nullptr_t p)
+      : BaseKernel<Platform>(p)
+    {}
 
     GraphKernel(KernelType k, GraphRep rep, work_division w, bool warp)
       : BaseKernel<Platform>(k, rep, w, warp)
@@ -94,8 +104,6 @@ struct GraphKernelImpl : GraphKernel<Platform,V,E,Args...>
     virtual void
     run(GraphLoader<Platform,V,E>& loader, DevToHost<Args>... args)
     {
-        if (kernel == nullptr) return;
-
         const auto& graph = loader.template getGraph<rep,dir>();
         backend.runKernel(reinterpret_cast<Kernel>(kernel), graph, args...);
     }
@@ -130,8 +138,6 @@ struct WarpKernel : GraphKernel<Platform,V,E,Args...>
     virtual void
     run(GraphLoader<Platform,V,E>& loader, DevToHost<Args>... args) override
     {
-        if (kernel == nullptr) return;
-
         const auto& graph = loader.template getGraph<rep,dir>();
         backend.runKernel
             ( reinterpret_cast<Kernel>(kernel)
@@ -155,22 +161,48 @@ struct WarpKernel : GraphKernel<Platform,V,E,Args...>
     std::function<size_t(size_t)> chunkMemory;
     size_t warp_size, chunk_size;
 };
+
+template
+< typename Platform
+, typename V
+, typename E
+, typename... Args
+>
+struct NullKernel : GraphKernel<Platform,V,E,Args...>
+{
+    template<typename T>
+    using DevToHost = typename BaseKernel<Platform>::template DevToHost<T>;
+
+    NullKernel()
+      : GraphKernel<Platform,V,E,Args...>(nullptr)
+    {}
+
+    virtual void
+    run(GraphLoader<Platform,V,E>&, DevToHost<Args>...) override
+    {}
+};
 }
 
 template<typename P, typename V, typename E, typename... Args>
 struct GraphKernel : std::shared_ptr<internals::GraphKernel<P,V,E,Args...>>
 {
+    using Null = internals::NullKernel<P,V,E,Args...>;
     using Base = internals::GraphKernel<P,V,E,Args...>;
 
     template<typename T>
     using DevToHost = typename Base::template DevToHost<T>;
 
     GraphKernel()
+      : GraphKernel(std::make_shared<Null>())
     {}
 
     GraphKernel(const std::shared_ptr<Base>& f)
       : std::shared_ptr<Base>(f)
     {}
+
+    GraphKernel&
+    operator=(std::nullptr_t)
+    { std::shared_ptr<Base>::operator=(std::make_shared<Null>()); return *this; }
 
     void
     operator()(GraphLoader<P,V,E>& l, DevToHost<Args>... args)
