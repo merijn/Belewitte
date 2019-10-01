@@ -11,7 +11,6 @@ vertexPullPageRank
     uint64_t startIdx = (blockIdx.x * blockDim.x) + threadIdx.x;
     uint64_t size = graph->vertex_count;
 
-    float degree;
     float newRank = 0.0f;
 
     for (uint64_t idx = startIdx; idx < size; idx += blockDim.x * gridDim.x) {
@@ -24,9 +23,7 @@ vertexPullPageRank
         for (unsigned i = start; i < end; i++) {
             uint64_t rev_edge = reverse_edges[i];
 
-            degree = degrees[rev_edge];
-
-            newRank += pagerank[rev_edge] / degree;
+            newRank += pagerank[rev_edge] / degrees[rev_edge];
         }
 
         new_pagerank[idx] = newRank;
