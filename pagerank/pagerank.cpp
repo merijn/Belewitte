@@ -165,6 +165,23 @@ extern "C" void registerCUDA(Algorithm& result)
         }
     };
 
+    prMap["rev-edge-list"] =
+        { make_kernel
+            ( revEdgeListPageRank
+            , work_division::edge
+            , tag_t(Rep::EdgeList)
+            , tag_t(Dir::Reverse)
+            )
+        , consolidate
+        , zeroInitDegrees
+        , make_kernel
+            ( reverseEdgeListComputeDegrees
+            , work_division::edge
+            , tag_t(Rep::EdgeList)
+            , tag_t(Dir::Reverse)
+            )
+        };
+
     prMap["struct-edge-list"] =
         { make_kernel
             ( structEdgeListPageRank
@@ -177,6 +194,23 @@ extern "C" void registerCUDA(Algorithm& result)
             ( structEdgeListComputeDegrees
             , work_division::edge
             , tag_t(Rep::StructEdgeList)
+            )
+        };
+
+    prMap["rev-struct-edge-list"] =
+        { make_kernel
+            ( revStructEdgeListPageRank
+            , work_division::edge
+            , tag_t(Rep::StructEdgeList)
+            , tag_t(Dir::Reverse)
+            )
+        , consolidate
+        , zeroInitDegrees
+        , make_kernel
+            ( reverseStructEdgeListComputeDegrees
+            , work_division::edge
+            , tag_t(Rep::StructEdgeList)
+            , tag_t(Dir::Reverse)
             )
         };
 

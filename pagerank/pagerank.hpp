@@ -29,6 +29,14 @@ CSRComputeDegrees
 (CSR<unsigned,unsigned> *graph, unsigned *degrees);
 
 __global__ void
+reverseEdgeListComputeDegrees
+(EdgeList<unsigned> *graph, unsigned *degrees);
+
+__global__ void
+reverseStructEdgeListComputeDegrees
+(StructEdgeList<unsigned> *graph, unsigned *degrees);
+
+__global__ void
 reverseCSRComputeDegrees
 (CSR<unsigned,unsigned> *graph, unsigned *degrees);
 
@@ -103,7 +111,23 @@ structEdgeListPageRank
 );
 
 __global__ void
+revStructEdgeListPageRank
+( StructEdgeList<unsigned> *graph
+, unsigned *degrees
+, float *pagerank
+, float *new_pagerank
+);
+
+__global__ void
 edgeListPageRank
+( EdgeList<unsigned> *
+, unsigned *degrees
+, float *pagerank
+, float *new_pagerank
+);
+
+__global__ void
+revEdgeListPageRank
 ( EdgeList<unsigned> *
 , unsigned *degrees
 , float *pagerank

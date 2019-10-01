@@ -77,6 +77,33 @@ CSRComputeDegrees(CSR<unsigned,unsigned> *graph, unsigned *degrees)
 }
 
 __global__ void
+reverseEdgeListComputeDegrees
+(EdgeList<unsigned> *graph, unsigned *degrees)
+{
+    uint64_t startIdx = (blockIdx.x * blockDim.x) + threadIdx.x;
+    uint64_t size = graph->edge_count;
+    unsigned *edgeOrigins = graph->outEdges;
+
+    for (uint64_t idx = startIdx; idx < size; idx += blockDim.x * gridDim.x) {
+        unsigned v = edgeOrigins[idx];
+        atomicAdd(&degrees[v], 1);
+    }
+}
+
+__global__ void
+reverseStructEdgeListComputeDegrees
+(StructEdgeList<unsigned> *graph, unsigned *degrees)
+{
+    uint64_t startIdx = (blockIdx.x * blockDim.x) + threadIdx.x;
+    uint64_t size = graph->edge_count;
+    edge<unsigned> *edges = graph->edges;
+
+    for (uint64_t idx = startIdx; idx < size; idx += blockDim.x * gridDim.x) {
+        atomicAdd(&degrees[edges[idx].out], 1);
+    }
+}
+
+__global__ void
 reverseCSRComputeDegrees(CSR<unsigned,unsigned> *graph, unsigned *degrees)
 {
     uint64_t startIdx = (blockIdx.x * blockDim.x) + threadIdx.x;
