@@ -1,8 +1,9 @@
 #include "pagerank.hpp"
 
 __global__ void
-structEdgeListCSR
-( StructEdgeListCSR<unsigned,unsigned> *graph
+structEdgeListPageRank
+( StructEdgeList<unsigned> *graph
+, unsigned *degrees
 , float *pagerank
 , float *new_pagerank
 )
@@ -14,9 +15,8 @@ structEdgeListCSR
         edge<unsigned> *edge = &graph->edges[idx];
         unsigned origin = edge->in;
         unsigned destination = edge->out;
-        unsigned *vertices = &graph->vertices[origin];
 
-        unsigned degree = vertices[1] - vertices[0];
+        unsigned degree = degrees[origin];
         float new_rank = 0.0f;
         if (degree != 0) new_rank = pagerank[origin] / degree;
         atomicAdd(&new_pagerank[destination], new_rank);

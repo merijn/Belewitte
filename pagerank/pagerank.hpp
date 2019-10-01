@@ -14,33 +14,99 @@ void resetDiff();
 float getDiff();
 
 __global__ void
-consolidateRank(size_t, float *pagerank, float *new_pagerank, bool);
+zeroInitDegreesKernel(size_t vertexCount, unsigned *degrees);
 
 __global__ void
-consolidateRankNoDiv(InverseVertexCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank, bool);
+edgeListComputeDegrees
+(EdgeList<unsigned> *graph, unsigned *degrees);
 
 __global__ void
-vertexPush(CSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
+structEdgeListComputeDegrees
+(StructEdgeList<unsigned> *graph, unsigned *degrees);
 
 __global__ void
-vertexPull(InverseVertexCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
+CSRComputeDegrees
+(CSR<unsigned,unsigned> *graph, unsigned *degrees);
 
 __global__ void
-vertexPullNoDiv(InverseVertexCSR<unsigned, unsigned> *graph, float *pagerank, float *new_pagerank);
-
-
-__global__ void
-vertexPushWarp(size_t, size_t, CSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
+reverseCSRComputeDegrees
+(CSR<unsigned,unsigned> *graph, unsigned *degrees);
 
 __global__ void
-vertexPullWarp(size_t, size_t, InverseVertexCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
+consolidateRank
+(size_t, unsigned *degrees, float *pagerank, float *new_pagerank, bool);
 
 __global__ void
-vertexPullWarpNoDiv(size_t, size_t, InverseVertexCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
+consolidateRankNoDiv
+(size_t, unsigned *degrees, float *pagerank, float *new_pagerank, bool);
 
 __global__ void
-structEdgeListCSR(StructEdgeListCSR<unsigned,unsigned> *graph, float *pagerank, float *new_pagerank);
+vertexPushPageRank
+( CSR<unsigned,unsigned> *graph
+, unsigned* degrees
+, float *pagerank
+, float *new_pagerank
+);
 
 __global__ void
-edgeListCSR(EdgeListCSR<unsigned,unsigned> *, float *pagerank, float *new_pagerank);
+vertexPullPageRank
+( CSR<unsigned,unsigned> *graph
+, unsigned *degrees
+, float *pagerank
+, float *new_pagerank
+);
+
+__global__ void
+vertexPullNoDivPageRank
+( CSR<unsigned,unsigned> *graph
+, unsigned *degrees
+, float *pagerank
+, float *new_pagerank
+);
+
+__global__ void
+vertexPushWarpPageRank
+( size_t warp_size
+, size_t chunk_size
+, CSR<unsigned,unsigned> *graph
+, unsigned *degrees
+, float *pagerank
+, float *new_pagerank
+);
+
+__global__ void
+vertexPullWarpPageRank
+( size_t warp_size
+, size_t chunk_size
+, CSR<unsigned,unsigned> *graph
+, unsigned *degrees
+, float *pagerank
+, float *new_pagerank
+);
+
+__global__ void
+vertexPullWarpNoDivPageRank
+( size_t warp_size
+, size_t chunk_size
+, CSR<unsigned,unsigned> *graph
+, unsigned *degrees
+, float *pagerank
+, float *new_pagerank
+);
+
+__global__ void
+structEdgeListPageRank
+( StructEdgeList<unsigned> *graph
+, unsigned *degrees
+, float *pagerank
+, float *new_pagerank
+);
+
+__global__ void
+edgeListPageRank
+( EdgeList<unsigned> *
+, unsigned *degrees
+, float *pagerank
+, float *new_pagerank
+);
 #endif

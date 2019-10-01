@@ -2,10 +2,11 @@
 #include "pagerank.hpp"
 
 __global__ void
-vertexPullWarp
+vertexPullWarpPageRank
 ( size_t warp_size
 , size_t chunk_size
-, InverseVertexCSR<unsigned,unsigned> *graph
+, CSR<unsigned,unsigned> *graph
+, unsigned *degrees
 , float *pagerank
 , float *new_pagerank
 )
@@ -33,13 +34,12 @@ vertexPullWarp
         memcpy_SIMD(warp_size, W_OFF, end + 1, myVertices, &graph->vertices[v_]);
 
         const unsigned * const rev_edges = graph->edges;
-        const unsigned * const vertices = graph->inverse_vertices;
         for (int v = 0; v < end; v++) {
             float my_new_rank = 0;
             const unsigned num_nbr = myVertices[v+1] - myVertices[v];
             const unsigned *nbrs = &rev_edges[myVertices[v]];
             for (int i = W_OFF; i < num_nbr; i += warp_size) {
-                int their_num_nbr = vertices[nbrs[i] + 1] - vertices[nbrs[i]];
+                int their_num_nbr = degrees[nbrs[i]];
                 my_new_rank += pagerank[nbrs[i]] / their_num_nbr;
             }
             atomicAdd(&new_pagerank[v_ + v], my_new_rank);

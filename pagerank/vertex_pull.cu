@@ -1,8 +1,9 @@
 #include "pagerank.hpp"
 
 __global__ void
-vertexPull
-( InverseVertexCSR<unsigned,unsigned> *graph
+vertexPullPageRank
+( CSR<unsigned,unsigned> *graph
+, unsigned *degrees
 , float *pagerank
 , float *new_pagerank
 )
@@ -15,7 +16,6 @@ vertexPull
 
     for (uint64_t idx = startIdx; idx < size; idx += blockDim.x * gridDim.x) {
         unsigned *rev_vertices = graph->vertices;
-        unsigned *vertices = graph->inverse_vertices;
         unsigned *reverse_edges = graph->edges;
 
         unsigned start = rev_vertices[idx];
@@ -24,10 +24,7 @@ vertexPull
         for (unsigned i = start; i < end; i++) {
             uint64_t rev_edge = reverse_edges[i];
 
-            unsigned startRev = vertices[rev_edge];
-            unsigned endRev =  vertices[rev_edge + 1];
-
-            degree = endRev - startRev;
+            degree = degrees[rev_edge];
 
             newRank += pagerank[rev_edge] / degree;
         }

@@ -1,8 +1,9 @@
 #include "pagerank.hpp"
 
 __global__ void
-vertexPush
+vertexPushPageRank
 ( CSR<unsigned,unsigned> *graph
+, unsigned *
 , float *pagerank
 , float *new_pagerank
 )

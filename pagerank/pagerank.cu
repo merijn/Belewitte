@@ -16,6 +16,15 @@ float getDiff()
     return val;
 }
 
+__global__ void
+zeroInitDegreesKernel(size_t count, unsigned *degrees)
+{
+    uint64_t startIdx = (blockIdx.x * blockDim.x) + threadIdx.x;
+    for (uint64_t idx = startIdx; idx < count; idx += blockDim.x * gridDim.x) {
+        degrees[idx] = 0;
+    }
+}
+
 static __device__ __forceinline__
 void updateDiff(float val)
 {
@@ -29,7 +38,66 @@ void updateDiff(float val)
 }
 
 __global__ void
-consolidateRank(uint64_t size, float *pagerank, float *new_pagerank, bool)
+edgeListComputeDegrees(EdgeList<unsigned> *graph, unsigned *degrees)
+{
+    uint64_t startIdx = (blockIdx.x * blockDim.x) + threadIdx.x;
+    uint64_t size = graph->edge_count;
+    unsigned *edgeOrigins = graph->inEdges;
+
+    for (uint64_t idx = startIdx; idx < size; idx += blockDim.x * gridDim.x) {
+        unsigned v = edgeOrigins[idx];
+        atomicAdd(&degrees[v], 1);
+    }
+}
+
+__global__ void
+structEdgeListComputeDegrees
+(StructEdgeList<unsigned> *graph, unsigned *degrees)
+{
+    uint64_t startIdx = (blockIdx.x * blockDim.x) + threadIdx.x;
+    uint64_t size = graph->edge_count;
+    edge<unsigned> *edges = graph->edges;
+
+    for (uint64_t idx = startIdx; idx < size; idx += blockDim.x * gridDim.x) {
+        atomicAdd(&degrees[edges[idx].in], 1);
+    }
+}
+
+__global__ void
+CSRComputeDegrees(CSR<unsigned,unsigned> *graph, unsigned *degrees)
+{
+    uint64_t startIdx = (blockIdx.x * blockDim.x) + threadIdx.x;
+    uint64_t size = graph->vertex_count;
+    unsigned *vertices = graph->vertices;
+
+    for (uint64_t idx = startIdx; idx < size; idx += blockDim.x * gridDim.x) {
+        unsigned degree = vertices[idx + 1] - vertices[idx];
+        atomicAdd(&degrees[idx], degree);
+    }
+}
+
+__global__ void
+reverseCSRComputeDegrees(CSR<unsigned,unsigned> *graph, unsigned *degrees)
+{
+    uint64_t startIdx = (blockIdx.x * blockDim.x) + threadIdx.x;
+    uint64_t size = graph->vertex_count;
+    unsigned *vertices = graph->vertices;
+    unsigned *edges = graph->edges;
+
+    for (uint64_t idx = startIdx; idx < size; idx += blockDim.x * gridDim.x) {
+        unsigned start = vertices[idx];
+        unsigned end = vertices[idx + 1];
+
+        for (unsigned i = start; i < end; i++) {
+            unsigned v = edges[i];
+            atomicAdd(&degrees[v], 1);
+        }
+    }
+}
+
+__global__ void
+consolidateRank
+(uint64_t size, unsigned*, float *pagerank, float *new_pagerank, bool)
 {
     uint64_t startIdx = (blockIdx.x * blockDim.x) + threadIdx.x;
 
@@ -46,24 +114,20 @@ consolidateRank(uint64_t size, float *pagerank, float *new_pagerank, bool)
 
 __global__ void
 consolidateRankNoDiv
-( InverseVertexCSR<unsigned,unsigned> *graph
+( uint64_t size
+, unsigned* degrees
 , float *pagerank
 , float *new_pagerank
 , bool notLast
 )
 {
     uint64_t startIdx = (blockIdx.x * blockDim.x) + threadIdx.x;
-    uint64_t vertex_count = graph->vertex_count;
 
-    for (uint64_t idx = startIdx; idx < vertex_count; idx += blockDim.x * gridDim.x) {
-        unsigned *outgoing_vertices = &graph->inverse_vertices[idx];
-
-        float new_rank = ((1 - dampening) / vertex_count) + (dampening * new_pagerank[idx]);
+    for (uint64_t idx = startIdx; idx < size; idx += blockDim.x * gridDim.x) {
+        float new_rank = ((1 - dampening) / size) + (dampening * new_pagerank[idx]);
         float my_diff = fabsf(new_rank - pagerank[idx]);
 
-        unsigned start = outgoing_vertices[0];
-        unsigned end = outgoing_vertices[1];
-        unsigned degree = end - start;
+        unsigned degree = degrees[idx];
 
         if (degree != 0 && notLast) new_rank = new_rank / degree;
         pagerank[idx] = new_rank;

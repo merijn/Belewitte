@@ -1,8 +1,9 @@
 #include "pagerank.hpp"
 
 __global__ void
-vertexPullNoDiv
-( InverseVertexCSR<unsigned,unsigned> *graph
+vertexPullNoDivPageRank
+( CSR<unsigned,unsigned> *graph
+, unsigned *
 , float *pagerank
 , float *new_pagerank
 )

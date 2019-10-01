@@ -2,10 +2,11 @@
 #include "pagerank.hpp"
 
 __global__ void
-vertexPushWarp
+vertexPushWarpPageRank
 ( size_t warp_size
 , size_t chunk_size
 , CSR<unsigned,unsigned> *graph
+, unsigned *
 , float *pagerank
 , float *new_pagerank
 )
