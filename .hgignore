@@ -1,4 +1,4 @@
-syntax: glob
+syntax: rootglob
 kernel-runner
 normalise-graph
 reorder-graph
