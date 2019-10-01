@@ -36,6 +36,7 @@ vertexPullWarpPageRank
         const unsigned * const rev_edges = graph->edges;
         for (int v = 0; v < end; v++) {
             float my_new_rank = 0;
+            // num_nbr = incoming edges, so can't use degrees[]
             const unsigned num_nbr = myVertices[v+1] - myVertices[v];
             const unsigned *nbrs = &rev_edges[myVertices[v]];
             for (int i = W_OFF; i < num_nbr; i += warp_size) {

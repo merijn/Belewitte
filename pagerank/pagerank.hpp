@@ -43,7 +43,7 @@ consolidateRankNoDiv
 __global__ void
 vertexPushPageRank
 ( CSR<unsigned,unsigned> *graph
-, unsigned* degrees
+, unsigned *degrees
 , float *pagerank
 , float *new_pagerank
 );

@@ -11,7 +11,7 @@ vertexPushPageRank
     uint64_t startIdx = (blockIdx.x * blockDim.x) + threadIdx.x;
     uint64_t size = graph->vertex_count;
 
-    int degree;
+    unsigned degree;
     float outgoingRank = 0.0f;
 
     for (uint64_t idx = startIdx; idx < size; idx += blockDim.x * gridDim.x) {
