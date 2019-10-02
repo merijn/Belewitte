@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TypeFamilies #-}
 module Commands.Add (commands) where
 
 import Control.Monad (mzero, unless, when)
@@ -15,7 +16,7 @@ import Core
 import InteractiveInput
 import OptionParsers
 import Schema
-import Sql (Entity(..), MonadSql, (=.), (==.))
+import Sql (Entity(..), MonadSql, SqlRecord, (=.), (==.))
 import qualified Sql
 
 commands :: Command (Input SqlM ())
@@ -64,11 +65,23 @@ commands = CommandGroup CommandInfo
   where
     graphFile = metavar "GRAPH" <> help "Graph file"
 
+checkSetDefault
+    :: (SqlRecord rec)
+    => Key rec -> EntityField rec Bool -> Text -> Input SqlM ()
+checkSetDefault key field prompt = do
+    n <- Sql.count [field ==. True]
+    when (n == 0) $ do
+        isDefault <- getInteractive readInput prompt
+        when isDefault $ Sql.update key [field =. True]
+
 addPlatform :: Input SqlM ()
 addPlatform = do
     platformName <- getInteractive textInput "Platform Slurm Name"
     prettyName <- getInteractive optionalInput "Platform Pretty Name"
-    Sql.insert_ $ Platform platformName prettyName
+    platformId <- Sql.insert $ Platform platformName prettyName False
+    checkSetDefault platformId PlatformIsDefault defaultPrompt
+  where
+    defaultPrompt = "Default platform for computing properties"
 
 addGraphs :: [FilePath] -> Input SqlM ()
 addGraphs paths = do
@@ -141,17 +154,15 @@ addVariant = do
     variantName <- getInteractive textInput "Variant Name"
     flags <- getInteractive optionalInput "Flags"
     varCfgId <- Sql.insert $ VariantConfig algoId variantName flags False
-    n <- Sql.count [VariantConfigIsDefault ==. True]
 
-    when (n == 0) $ do
-        isDefault <- getInteractive readInput "Default Variant (for plotting)"
-        when isDefault $ Sql.update varCfgId [VariantConfigIsDefault =. True]
+    checkSetDefault varCfgId VariantConfigIsDefault defaultPrompt
 
     let mkVariant gId = Variant gId varCfgId algoId Nothing False 0
 
     runConduit $ Sql.selectKeys [] [] .| C.mapM_ (Sql.insert_ . mkVariant)
   where
     algoInput = sqlInput AlgorithmName UniqAlgorithm
+    defaultPrompt = "Default Variant (for plotting)"
 
 addRunConfig :: Input SqlM ()
 addRunConfig = do

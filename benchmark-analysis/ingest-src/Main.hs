@@ -9,12 +9,16 @@
 module Main(main) where
 
 import Control.Monad (void)
+import Control.Monad.Trans.Maybe (MaybeT(..))
 import Data.Char (isSpace)
 import Data.Conduit (ConduitT, Void, (.|), await, runConduit)
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.Text as C
+import Data.Foldable (asum)
 import Data.Monoid ((<>))
 import qualified Data.Text as T
+import System.Exit (exitFailure)
+
 
 import qualified Commands.Add as Add
 import qualified Commands.Reset as Reset
@@ -83,11 +87,17 @@ runBenchmarks numNodes = lift $ do
         RuntimeData.getKernelExecutable
         RuntimeData.getKernelLibPath
 
+    Entity _ defaultPlatform <- tryAlternatives
+        [ MaybeT $ Sql.selectFirst [PlatformIsDefault ==. True] []
+        , MaybeT $ do
+            logWarnN "No default platform specified!"
+            Sql.selectFirst [] []
+        ]
+
     runConduit $
         Sql.selectSource [] []
         .> variantToPropertyJob
-        -- FIXME hardcoded Platform
-        .| processJobsParallel numNodes (Platform "TitanX" Nothing)
+        .| processJobsParallel numNodes defaultPlatform
         .| C.mapM_ processProperty
 
     runConduit $
@@ -99,6 +109,14 @@ runBenchmarks numNodes = lift $ do
                 .> missingRunToTimingJob
                 .| processJobsParallel numNodes platform
                 .| C.mapM_ (processTiming runConfigId commitId)
+  where
+    tryAlternatives :: (MonadIO m, MonadLogger m) => [MaybeT m a] -> m a
+    tryAlternatives alts = runMaybeT (asum alts) >>= maybe exitOnNothing return
+
+    exitOnNothing :: (MonadIO m, MonadLogger m) => m a
+    exitOnNothing = do
+        logErrorN "No platforms registered!"
+        liftIO $ exitFailure
 
 queryTest :: Maybe FilePath -> Input SqlM ()
 queryTest outputSuffix = lift . runConduit $ do
