@@ -154,7 +154,8 @@ Executable Ingest
   GHC-Prof-Options:     -fprof-auto
   Hs-Source-Dirs:       ingest-src
   Main-Is:              Main.hs
-  Other-Modules:        Jobs
+  Other-Modules:        Commands.Add
+                        Jobs
                         MissingQuery
                         Parsers
                         ProcessPool
