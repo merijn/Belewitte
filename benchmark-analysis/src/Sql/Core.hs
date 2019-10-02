@@ -93,7 +93,7 @@ conduitQueryRes
 conduitQueryRes query args = liftPersist $ Sqlite.rawQueryRes query args
 
 querySingleValue
-    :: (MonadSql m, MonadLogger m, MonadThrow m, PersistField a, Show a)
+    :: (MonadSql m, MonadLogger m, MonadThrow m, PersistField a)
     => Text
     -> [PersistValue]
     -> m a
@@ -101,7 +101,7 @@ querySingleValue query args = do
     result <- liftPersist $ Sqlite.rawSql query args
     case result of
         [Single v] -> return v
-        v -> logThrowM . ExpectedSingleValue query $ show v
+        _ -> logThrowM $ ExpectedSingleValue query
 
 getUniq
     :: (MonadSql m, SqlRecord record, OnlyOneUniqueKey record)

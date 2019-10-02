@@ -414,16 +414,14 @@ fromSqlException exc = do
     SqlException e <- fromException exc
     cast e
 
-data ExpectedSingleValue = ExpectedSingleValue Text String
+data ExpectedSingleValue = ExpectedSingleValue Text
     deriving (Show, Typeable)
 
 instance Pretty ExpectedSingleValue where
-    pretty (ExpectedSingleValue q v) = Pretty.vsep
+    pretty (ExpectedSingleValue q) = Pretty.vsep
         [ "Query:", pretty q, ""
-        , Pretty.reflow "Query should always return a single value!"
-        , ""
-        , "Got:" <+> renderList v
-        , ""
+        , Pretty.reflow
+            "Query should always return a single value, but got multiple!"
         , Pretty.reflow "This should be impossible, please report a bug."
         ]
 
