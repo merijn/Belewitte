@@ -18,7 +18,7 @@ import Control.Monad (unless, when)
 import Crypto.Hash (Digest, MD5)
 import Crypto.Hash.Conduit (hashFile)
 import qualified Data.ByteArray (convert)
-import Data.Conduit (ConduitT, (.|), awaitForever, runConduit, yield)
+import Data.Conduit (ConduitT, (.|), runConduit, yield)
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.Text as C
 import Data.Maybe (fromMaybe)
@@ -33,13 +33,6 @@ import ProcessPool (Job(..), Result(..))
 import Schema
 import Sql (Entity(..), Key, MonadSql, (=.))
 import qualified Sql
-
-(.>) :: Monad m
-      => ConduitT a b m ()
-      -> (b -> ConduitT b c m r)
-      -> ConduitT a c m ()
-producer .> consumer = producer .| awaitForever consumer
-infixl 3 .>
 
 computeHash :: MonadIO m => FilePath -> m Hash
 computeHash path = do

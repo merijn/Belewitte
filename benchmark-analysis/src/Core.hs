@@ -51,7 +51,7 @@ import Control.Monad.Trans.Maybe (MaybeT(..))
 import Control.Monad.Trans.Resource (MonadResource, ResourceT, runResourceT)
 import qualified Database.Persist.Sqlite as Sqlite
 import Database.Sqlite.Internal (Connection(..), Connection'(..))
-import Data.Conduit (ConduitT)
+import Data.Conduit (ConduitT, (.|), awaitForever)
 import Data.Int (Int64)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -248,3 +248,10 @@ runSqlMWithOptions Options{..} work = do
       where
         verbosity = levels !! logVerbosity
         levels = LevelError : LevelWarn : LevelInfo : repeat LevelDebug
+
+(.>) :: Monad m
+     => ConduitT a b m ()
+     -> (b -> ConduitT b c m r)
+     -> ConduitT a c m ()
+producer .> consumer = producer .| awaitForever consumer
+infixl 3 .>
