@@ -186,13 +186,15 @@ selectSource
     => [Filter rec] -> [SelectOpt rec] -> ConduitT a (Entity rec) m ()
 selectSource filters select = toProducer $ Sqlite.selectSource filters select
 
+count :: (MonadSql m, SqlRecord rec) => [Filter rec] -> m Int
+count = liftPersist . Sqlite.count
+
 update :: (MonadSql m, SqlRecord rec) => Key rec -> [Update rec] -> m ()
 update key = liftPersist . Sqlite.update key
 
 updateWhere
     :: (MonadSql m, SqlRecord rec) => [Filter rec] -> [Update rec] -> m ()
 updateWhere filts  = liftPersist . Sqlite.updateWhere filts
-
 
 showSqlKey :: ToBackendKey SqlBackend record => Key record -> Text
 showSqlKey = T.pack . show . Sqlite.fromSqlKey
