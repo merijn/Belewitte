@@ -100,7 +100,7 @@ type LogFun = Loc -> LogSource -> LogLevel -> LogStr -> IO ()
 withProcessPool
     :: (MonadLoggerIO m, MonadResource m)
     => Int -> Platform -> (Pool Process -> m a) -> m a
-withProcessPool n (Platform name _) f = do
+withProcessPool n Platform{platformName} f = do
     hostName <- liftIO getHostName
     logFun <- Log.askLoggerIO
     (releaseKey, pool) <-
@@ -143,7 +143,7 @@ withProcessPool n (Platform name _) f = do
         proc <$ logInfoN ("Started new process: " <> showText procId)
       where
         opts timeout exePath libPath = intercalate " " . ("srun":) $ timeout ++
-            [ "-Q", "--gres=gpu:1", "-C ", T.unpack name, exePath
+            [ "-Q", "--gres=gpu:1", "-C ", T.unpack platformName, exePath
             , "-L", libPath, "-W", "-S"
             ]
 
