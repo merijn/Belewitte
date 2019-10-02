@@ -155,6 +155,7 @@ Executable Ingest
   Hs-Source-Dirs:       ingest-src
   Main-Is:              Main.hs
   Other-Modules:        Commands.Add
+                        Commands.Reset
                         Jobs
                         MissingQuery
                         Parsers
