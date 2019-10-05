@@ -5,21 +5,22 @@
 {-# LANGUAGE RecordWildCards #-}
 module Main(main) where
 
-import Control.Monad (forM_, void)
+import Control.Monad (void)
 import Data.Bifunctor (first)
-import Data.Conduit (ConduitT, Void, (.|), await)
-import qualified Data.Conduit.Text as C
+import Data.Conduit (ConduitT, Void, (.|))
+import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
+import qualified Data.Conduit.Text as C
 import Data.List (sortBy)
 import Data.Ord (comparing)
 import qualified Data.Map as M
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
-import qualified Data.Text.IO as T
 
 import Core
 import Evaluate (evaluateModel, compareImplementations, percent)
+import FormattedOutput (renderOutput)
 import InteractiveInput
 import Model
 import Options
@@ -31,13 +32,18 @@ import Train
 import Validate
 
 reportModelStats :: MonadIO m => ModelStats -> m ()
-reportModelStats ModelStats{..} = liftIO $ do
-  forM_ sortedFeatures $ \(lbl, val) -> do
-    T.putStrLn $ lbl <> ": " <> percent val 1
-
-  forM_ sortedUnknown $ \(count, implSet) -> do
-      T.putStrLn $ percent count modelUnknownCount <> " : " <> showText implSet
+reportModelStats ModelStats{..} = renderOutput $ do
+    C.yieldMany sortedFeatures .| C.map renderFeature
+    C.yield "\n"
+    C.yieldMany sortedUnknown .| C.map renderImplSet
   where
+    renderFeature :: (Text, Double) -> Text
+    renderFeature (lbl, val) = lbl <> ": " <> percent val 1 <> "\n"
+
+    renderImplSet :: (Int, Set Int64) -> Text
+    renderImplSet (count, implSet) =
+      percent count modelUnknownCount <> " : " <> showText implSet <> "\n"
+
     features :: [(Text, Double)]
     features = map (first ("Graph:" <>)) (M.toList modelGraphPropImportance)
             ++ map (first ("Step:" <>)) (M.toList modelStepPropImportance)
@@ -53,7 +59,7 @@ querySink
     => Maybe String
     -> FilePath
     -> ConduitT a Void m ()
-querySink Nothing _ = void await
+querySink Nothing _ = void C.await
 querySink (Just suffix) name =
     C.map showText
     .| C.map (`T.snoc` '\n')

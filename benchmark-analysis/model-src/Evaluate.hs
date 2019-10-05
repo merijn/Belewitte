@@ -16,11 +16,11 @@ module Evaluate
     , compareImplementations
     ) where
 
-import Control.Monad (when)
 import Control.Monad.Fail (MonadFail)
 import Control.Monad.Fix (fix)
 import Data.Bifunctor (second)
 import Data.Conduit as C
+import Data.Conduit.List as C (mapAccum)
 import qualified Data.Conduit.Combinators as C
 import Data.Function (on)
 import Data.IntervalSet (IntervalSet)
@@ -35,12 +35,12 @@ import Data.Semigroup (Max, getMax)
 import qualified Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Text as T
-import qualified Data.Text.IO as T
 import Data.Vector.Unboxed (Unbox, Vector)
 import qualified Data.Vector.Unboxed as VU
 import Numeric (showFFloat)
 
 import Core
+import FormattedOutput (renderOutput)
 import Model
 import Query
 import Schema
@@ -77,13 +77,13 @@ reportImplementations
     -> ((Int64, a) -> (Int64, a) -> Ordering)
     -> (a -> Text)
     -> Pair (Vector (Int64, a))
-    -> IO ()
+    -> Text
 reportImplementations pad implMaps cmp f =
-    mapM_ renderEntry
-    . sortBy (cmp `on` snd)
-    . mergePair
-    . filterLabelEntries
-    . fmap VU.toList
+    foldMap renderEntry
+        . sortBy (cmp `on` snd)
+        . mergePair
+        . filterLabelEntries
+        . fmap VU.toList
   where
     lookupName :: IntMap Text -> (Int64, a) -> Maybe (Text, (Int64, a))
     lookupName implNames v@(i, _) = (,v) <$> implNames !? fromIntegral i
@@ -97,11 +97,8 @@ reportImplementations pad implMaps cmp f =
         getLength :: Text -> Max Word
         getLength = Semigroup.Max . fromIntegral . T.length
 
-    renderEntry (name, (_, val)) = T.putStrLn $ mconcat
-        [ T.replicate pad " "
-        , padText padSize $ name <> ":"
-        , f val
-        ]
+    renderEntry (name, (_, val)) = mconcat
+        [ T.replicate pad " ", padText padSize $ name <> ":", f val ]
 
 foldGroup
     :: Monad m
@@ -190,10 +187,10 @@ aggregateVariants
     => IntervalSet Int64
     -> RelativeTo
     -> Pair (IntMap Text)
-    -> ConduitT VariantAggregate Void m TotalStatistics
+    -> ConduitT VariantAggregate Text m TotalStatistics
 aggregateVariants variantIntervals relTo implMaps = do
     Just VariantAgg{implTimes} <- C.peek
-    C.foldM aggregate (initial implTimes)
+    C.mapAccum aggregate (initial implTimes)
   where
     initial :: Unbox a => Pair (Vector (Int64, a)) -> TotalStatistics
     initial v = TotalStats
@@ -209,17 +206,8 @@ aggregateVariants variantIntervals relTo implMaps = do
         zeroDoubleVector = VU.map (const 0) <$> v
 
     aggregate
-        :: MonadIO m
-        => TotalStatistics
-        -> VariantAggregate
-        -> m TotalStatistics
-    aggregate TotalStats{..} VariantAgg{..} = liftIO $ do
-        when (fromSqlKey variantid `IS.member` variantIntervals) $ do
-            T.putStrLn $ "Variant #" <> showText (fromSqlKey variantid)
-            reportImplementations 4 implMaps comparison relTiming results
-            T.putStrLn ""
-
-        return TotalStats
+        :: VariantAggregate -> TotalStatistics -> (TotalStatistics, Text)
+    aggregate VariantAgg{..} TotalStats{..} = (, variantReport) TotalStats
           { variantCount = variantCount + 1
           , timesCumRelError =
                 VU.zipWith (liftTuple (+)) <$> timesCumRelError <*> relTimings
@@ -239,6 +227,16 @@ aggregateVariants variantIntervals relTo implMaps = do
                                <*> (VU.map snd <$> relTimings)
           }
       where
+        shouldReportVariant :: Bool
+        shouldReportVariant = fromSqlKey variantid `IS.member` variantIntervals
+
+        variantReport :: Text
+        variantReport = mIf shouldReportVariant $ mconcat
+            [ "Variant #", showText (fromSqlKey variantid), "\n"
+            , reportImplementations 4 implMaps comparison relTiming results
+            , "\n"
+            ]
+
         lessThan :: Double -> (Int64, Double) -> Int -> Int
         lessThan x (_, val) count
             | val < x = count + 1
@@ -262,7 +260,7 @@ aggregateVariants variantIntervals relTo implMaps = do
                 Predicted -> findImplTime predictedImplId
                 BestNonSwitching -> findImplTime bestNonSwitchingImplId
 
-        relTiming t = percent t optimalTime <> " (" <> showText t <> ")"
+        relTiming t = percent t optimalTime <> " (" <> showText t <> ")\n"
 
         results = mapFirst (VU.cons (optimalImplId, optimalTime)) implTimes
 
@@ -296,7 +294,8 @@ evaluateModel
     -> Model
     -> TrainingConfig
     -> SqlM ()
-evaluateModel algo platId defImpl reportCfg@Report{..} model trainConfig = do
+evaluateModel algo platId defImpl reportCfg@Report{..} model trainConfig =
+  renderOutput $ do
     impls <- queryImplementations algoId
     let implMaps :: Pair (IntMap Text)
         implMaps = toImplNames (filterImpls reportImplTypes) id (impls, mempty)
@@ -314,12 +313,12 @@ evaluateModel algo platId defImpl reportCfg@Report{..} model trainConfig = do
                 "Default implementation not found for algorithm"
                 (getAlgoName algorithm)
 
-    stats <- runSqlQueryConduit query $
-        foldGroup ((==) `on` stepVariantId) (aggregateSteps defaultImpl model)
-        .| C.map (addBestNonSwitching impls)
-        .| aggregateVariants reportVariants reportRelativeTo implMaps
+    stats <- runSqlQuery query
+      .| foldGroup ((==) `on` stepVariantId) (aggregateSteps defaultImpl model)
+      .| C.map (addBestNonSwitching impls)
+      .| aggregateVariants reportVariants reportRelativeTo implMaps
 
-    printTotalStatistics reportCfg implMaps stats
+    reportTotalStatistics reportCfg implMaps stats
   where
     Entity algoId algorithm = algo
 
@@ -349,18 +348,18 @@ evaluateModel algo platId defImpl reportCfg@Report{..} model trainConfig = do
 
 compareImplementations
     :: Key Algorithm -> Key Platform -> CompareReport -> SqlM ()
-compareImplementations algoId platformId cfg@Report{..} = do
+compareImplementations algoId platformId cfg@Report{..} = renderOutput $ do
     impls <- (,) <$> queryImplementations algoId
                  <*> queryExternalImplementations algoId
 
     let implMaps :: Pair (IntMap Text)
         implMaps = toImplNames filterImplTypes filterExternalImpls impls
 
-    stats <- runSqlQueryConduit query $
-        C.map addBestNonSwitching
+    stats <- runSqlQuery query
+        .| C.map addBestNonSwitching
         .| aggregateVariants reportVariants reportRelativeTo implMaps
 
-    printTotalStatistics cfg implMaps stats
+    reportTotalStatistics cfg implMaps stats
   where
     filterImplTypes = filterImpls implTypes
     filterExternalImpls
@@ -380,15 +379,15 @@ compareImplementations algoId platformId cfg@Report{..} = do
       where
         addBest v = VU.snoc v (bestNonSwitchingImplId, variantBestNonSwitching)
 
-printTotalStatistics
-    :: MonadIO m
+reportTotalStatistics
+    :: Monad m
     => Report a
     -> Pair (IntMap Text)
     -> TotalStatistics
-    -> m ()
-printTotalStatistics Report{..} implMaps TotalStats{..} = liftIO $ do
-    T.putStrLn "Summarising:"
-    reportImplementations 0 implMaps comparison relError reportTimings
+    -> ConduitT () Text m ()
+reportTotalStatistics Report{..} implMaps TotalStats{..} = do
+    C.yield "Summarising:\n"
+    C.yield $ reportImplementations 0 implMaps comparison relError reportTimings
   where
     relError (cumError, oneToTwo, gtFive, gtTwenty, maxError) = mconcat
         [ T.pack $ roundedVal (cumError / fromIntegral variantCount)
@@ -398,6 +397,7 @@ printTotalStatistics Report{..} implMaps TotalStats{..} = liftIO $ do
                 , "\t" <> percent gtTwenty variantCount
                 ]
         , T.pack $ "\t" <> roundedVal maxError
+        , "\n"
         ]
       where
         roundedVal val = showFFloat (Just 3) val ""
