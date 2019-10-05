@@ -8,8 +8,7 @@ module Sql (module Sql.Core, module Sql) where
 
 import Control.Monad.Catch (MonadThrow)
 import Control.Monad.Logger (MonadLogger)
-import Control.Monad.IO.Unlift (MonadIO, MonadUnliftIO)
-import Data.Conduit ((.|), runConduitRes)
+import Conduit (MonadIO, MonadResource, (.|), runConduit)
 import qualified Data.Conduit.Combinators as C
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
@@ -61,9 +60,9 @@ FROM #{table}
         [SqlInt64, SqlInt64]
 
 queryExternalImplementations
-    :: (MonadSql m, MonadUnliftIO m)
+    :: (MonadResource m, MonadSql m)
     => Key Algorithm -> m (IntMap ExternalImpl)
-queryExternalImplementations algoId = runConduitRes $
+queryExternalImplementations algoId = runConduit $
     selectImpls algoId .| C.foldMap toIntMap
   where
     selectImpls aId = selectSource [ ExternalImplAlgorithmId ==. aId ] []
@@ -72,9 +71,9 @@ queryExternalImplementations algoId = runConduitRes $
     toIntMap (Entity k val) = IM.singleton (fromIntegral $ fromSqlKey k) val
 
 queryImplementations
-    :: (MonadSql m, MonadUnliftIO m)
+    :: (MonadResource m, MonadSql m)
     => Key Algorithm -> m (IntMap Implementation)
-queryImplementations algoId = fmap (IM.union builtinImpls) . runConduitRes $
+queryImplementations algoId = fmap (IM.union builtinImpls) . runConduit $
     selectImpls algoId .| C.foldMap toIntMap
   where
     selectImpls aId = selectSource [ ImplementationAlgorithmId ==. aId ] []
