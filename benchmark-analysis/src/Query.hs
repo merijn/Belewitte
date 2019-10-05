@@ -45,7 +45,7 @@ import System.IO (Handle)
 
 import Core hiding (QueryMode(..))
 import Schema
-import Sql (MonadSql, SqlRecord, conduitQueryRes)
+import Sql.Core (MonadSql, SqlRecord, conduitQueryRes)
 import Utils.Vector (byteStringToVector)
 
 type MonadQuery m =

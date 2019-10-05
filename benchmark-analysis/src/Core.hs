@@ -71,8 +71,7 @@ import Migration
 import Pretty (AnsiStyle, Doc, LayoutOptions(..), PageWidth(..))
 import qualified Pretty
 import Schema
-import Sql
-import Sql.Core (executeSql)
+import Sql.Core
 import SQLiteExts
 
 data Config = Config

@@ -8,6 +8,7 @@ module Sql.Core
     , EntityField
     , Filter
     , Key
+    , Sqlite.PersistFieldSql
     , RawSqlite
     , SqliteConnectionInfo
     , SqlBackend
