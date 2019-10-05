@@ -16,13 +16,12 @@ import qualified Control.Monad.Catch as Except
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding.Error (UnicodeException(..))
-import Data.Text.Prettyprint.Doc (Doc, Pretty(pretty), (<+>))
-import qualified Data.Text.Prettyprint.Doc as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Text as Pretty
-import qualified Data.Text.Prettyprint.Doc.Util as Pretty
 import Data.Typeable (Typeable, cast)
 import Database.Persist.Types (SqlType(..), PersistValue(..))
 import Database.Sqlite (SqliteException(..))
+
+import Pretty (Doc, Pretty(pretty), (<+>))
+import qualified Pretty
 
 logThrowM :: (Exception e, MonadLogger m, MonadThrow m, Pretty e) => e -> m r
 logThrowM exc = do

@@ -55,11 +55,6 @@ import Data.Conduit (ConduitT, (.|), awaitForever)
 import Data.Int (Int64)
 import Data.Text (Text)
 import qualified Data.Text as T
-import Data.Text.Prettyprint.Doc (Doc, LayoutOptions(..), PageWidth(..))
-import qualified Data.Text.Prettyprint.Doc as Pretty
-import Data.Text.Prettyprint.Doc.Render.Terminal (AnsiStyle)
-import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
-import qualified Data.Text.Prettyprint.Doc.Util as Pretty
 import Foreign (Ptr)
 import GHC.Conc.Sync
     (getNumProcessors, setNumCapabilities, setUncaughtExceptionHandler)
@@ -73,6 +68,8 @@ import qualified System.IO as System
 
 import Exceptions
 import Migration
+import Pretty (AnsiStyle, Doc, LayoutOptions(..), PageWidth(..))
+import qualified Pretty
 import Schema
 import Sql
 import Sql.Core (executeSql)

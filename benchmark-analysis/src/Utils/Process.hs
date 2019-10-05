@@ -33,9 +33,6 @@ import Data.Streaming.Process
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import Data.Text.Prettyprint.Doc (Pretty(pretty), (<+>))
-import qualified Data.Text.Prettyprint.Doc as Pretty
-import qualified Data.Text.Prettyprint.Doc.Util as Pretty
 import Data.Tuple (swap)
 import Data.Typeable (Typeable)
 import System.Exit (ExitCode(..))
@@ -44,6 +41,8 @@ import System.Posix.IO (createPipe, closeFd, fdToHandle)
 import System.Process (CreateProcess, cmdspec, cwd, env)
 
 import Exceptions
+import Pretty (Pretty(pretty), (<+>))
+import qualified Pretty
 
 data ReadWrite = Read | Write deriving (Eq, Show)
 

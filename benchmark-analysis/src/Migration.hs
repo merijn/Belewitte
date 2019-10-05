@@ -17,14 +17,14 @@ import Data.Monoid (Any(..))
 import Data.Int (Int64)
 import Data.String.Interpolate.IsString (i)
 import qualified Data.Text as T
-import Data.Text.Prettyprint.Doc ((<+>))
-import qualified Data.Text.Prettyprint.Doc as Pretty
 import Data.Typeable (Typeable)
 import Database.Persist.Sql (Migration)
 import GHC.IO.Handle (hDuplicate, hDuplicateTo)
 import System.IO (Handle, IOMode(WriteMode), hClose, stderr, withFile)
 
 import Exceptions
+import Pretty ((<+>))
+import qualified Pretty
 import Schema
 import Sql.Core (MonadSql)
 import qualified Sql.Core as Sql
