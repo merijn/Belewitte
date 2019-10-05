@@ -36,11 +36,13 @@ Library
   Hs-Source-Dirs:       src
   Exposed-Modules:      Core
                         Exceptions
+                        FormattedOutput
                         InteractiveInput
                         Migration
                         Model
                         OptionParsers
                         Pretty
+                        Pretty.Columns
                         Query
                         RuntimeData
                         Schema
@@ -196,7 +198,6 @@ Executable Ingest
                ,        memory ^>= 0.14
                ,        mtl ^>= 2.2.1
                ,        optparse-applicative ^>= 0.15
-               ,        persistent-sqlite ^>= 2.10.4
                ,        process ^>= 1.6.0
                ,        resourcet ^>= 1.2.0
                ,        resource-pool ^>= 0.2.3.2

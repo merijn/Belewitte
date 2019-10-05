@@ -8,6 +8,7 @@ module Sql.Core
     , EntityField
     , Filter
     , Key
+    , Sqlite.PersistEntity
     , Sqlite.PersistFieldSql
     , RawSqlite
     , SqliteConnectionInfo
@@ -15,6 +16,7 @@ module Sql.Core
     , Unique
     , Update
     , SelectOpt(..)
+    , ToBackendKey
     , Migration
     , fromSqlKey
     , toSqlKey
