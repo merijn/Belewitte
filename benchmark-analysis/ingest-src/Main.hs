@@ -118,21 +118,6 @@ runBenchmarks numNodes = lift $ do
         logErrorN "No platforms registered!"
         liftIO $ exitFailure
 
-queryTest :: Maybe FilePath -> Input SqlM ()
-queryTest outputSuffix = lift . runConduit $ do
-    Sql.selectKeys [] [] .> \runConfigId ->
-        runSqlQuery (missingQuery runConfigId) .| querySink outputSuffix
-  where
-    querySink
-        :: (MonadResource m, MonadThrow m, Show a)
-        => Maybe String -> ConduitT a Void m ()
-    querySink Nothing = void await
-    querySink (Just suffix) =
-        C.map showText
-        .| C.map (`T.snoc` '\n')
-        .| C.encode C.utf8
-        .| C.sinkFile ("missingQuery-" <> suffix)
-
 importResults :: Input SqlM ()
 importResults = do
     Entity platformId _ <- getInteractive platformInput "Platform Name"
@@ -176,3 +161,17 @@ importResults = do
         Sql.insert_ $
           ExternalTimer platId varId implId algoId name minTime avgTime maxTime stddev
 
+queryTest :: Maybe FilePath -> Input SqlM ()
+queryTest outputSuffix = lift . runConduit $ do
+    Sql.selectKeys [] [] .> \runConfigId ->
+        runSqlQuery (missingQuery runConfigId) .| querySink outputSuffix
+  where
+    querySink
+        :: (MonadResource m, MonadThrow m, Show a)
+        => Maybe String -> ConduitT a Void m ()
+    querySink Nothing = void await
+    querySink (Just suffix) =
+        C.map showText
+        .| C.map (`T.snoc` '\n')
+        .| C.encode C.utf8
+        .| C.sinkFile ("missingQuery-" <> suffix)
