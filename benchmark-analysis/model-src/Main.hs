@@ -31,7 +31,7 @@ import StepQuery (StepInfo, stepInfoQuery)
 import Train
 import Validate
 
-reportModelStats :: MonadIO m => ModelStats -> m ()
+reportModelStats :: ModelStats -> SqlM ()
 reportModelStats ModelStats{..} = renderOutput $ do
     C.yieldMany sortedFeatures .| C.map renderFeature
     C.yield "\n"
