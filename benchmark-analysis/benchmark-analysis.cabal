@@ -117,7 +117,7 @@ Library
                         ViewPatterns
 
   Build-Depends:        base
-               ,        ansi-terminal ^>= 0.9.1
+               ,        ansi-terminal ^>= 0.10.1
                ,        bytestring
                ,        binary ^>= 0.8.7
                ,        clock ^>= 0.8
