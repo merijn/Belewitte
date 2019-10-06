@@ -176,7 +176,7 @@ topLevelHandler quiet exc
         renderError pageWidth $ Pretty.vsep
             [ Pretty.reflow "Encountered an unexpected exception!"
             , "", pretty . T.pack $ displayException exc, ""
-            , Pretty.reflow "Please file a bug report.\n"
+            , Pretty.reflow "Please file a bug report.", ""
             ]
   where
     terminalToPageWidth :: Maybe Int -> PageWidth
