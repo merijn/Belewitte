@@ -61,7 +61,7 @@ import GHC.Conc.Sync
 import qualified Lens.Micro as Lens
 import qualified Lens.Micro.Extras as Lens
 import System.Clock (Clock(Monotonic), diffTimeSpec, getTime, toNanoSecs)
-import System.Console.ANSI (getTerminalSize)
+import System.Console.ANSI (hGetTerminalSize)
 import System.Console.Haskeline.MonadException (MonadException(..), RunIO(..))
 import System.IO (Handle, IOMode(WriteMode))
 import qualified System.IO as System
@@ -159,21 +159,20 @@ instance MonadExplain SqlM where
 instance MonadExplain m => MonadExplain (ConduitT a b m) where
     logQueryExplanation = lift . logQueryExplanation
 
-terminalWidth :: IO (Maybe Int)
-terminalWidth = runMaybeT $ do
-    isTerminal <- liftIO $ System.hIsTerminalDevice System.stderr
-    guard isTerminal
-    snd <$> MaybeT getTerminalSize <* liftIO (System.hFlush System.stdout)
+stderrTerminalWidth :: IO (Maybe Int)
+stderrTerminalWidth = runMaybeT $ do
+    guard =<< liftIO (System.hIsTerminalDevice System.stderr)
+    snd <$> MaybeT (hGetTerminalSize System.stderr)
 
 topLevelHandler :: Bool -> SomeException -> IO ()
 topLevelHandler quiet exc
     | Just (BenchmarkException e) <- fromException exc
     = when (not quiet) $ do
-        pageWidth <- terminalToPageWidth <$> terminalWidth
+        pageWidth <- terminalToPageWidth <$> stderrTerminalWidth
         renderError pageWidth $ pretty e
 
     | otherwise = do
-        pageWidth <- terminalToPageWidth <$> terminalWidth
+        pageWidth <- terminalToPageWidth <$> stderrTerminalWidth
         renderError pageWidth $ Pretty.vsep
             [ Pretty.reflow "Encountered an unexpected exception!"
             , "", pretty . T.pack $ displayException exc, ""

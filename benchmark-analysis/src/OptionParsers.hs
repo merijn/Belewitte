@@ -245,7 +245,7 @@ runSqlM commandFromName work = do
     System.hFlush System.stdout >> System.hFlush System.stderr
 
     (parser, helpInfo) <- buildCommand . commandFromName <$> getProgName
-    cols <- fromMaybe 80 <$> terminalWidth
+    cols <- fromMaybe 80 <$> stderrTerminalWidth
 
     let topParser = mkOptions parser <**> helper
         parseInfo = info topParser helpInfo
