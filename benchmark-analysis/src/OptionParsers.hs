@@ -256,12 +256,24 @@ runSqlM commandFromName work = do
   where
     mkOptions p =
       Options <$> databaseOption <*> vacuumOption <*> verbosityOption
-              <*> queryOption <*> migrateOption <*> p
+              <*> queryOption <*> migrateOption <*> pagerOption <*> p
 
+    pagerOption :: Parser Pager
+    pagerOption = optionParserFromValues pagerValues "PAGER" helpTxt $ mconcat
+        [ long "pager", value Auto, showDefaultWith (map toLower . show) ]
+      where
+        helpTxt = "Controls whether output is paged."
+
+        pagerValues :: Map String Pager
+        pagerValues = M.fromList
+            [("never", Never), ("auto", Auto), ("always", Always)]
+
+    vacuumOption :: Parser Bool
     vacuumOption = flag False True $ mconcat
         [ long "vacuum-db"
         , help "Vacuum SQLite database to compact it and speed up." ]
 
+    migrateOption :: Parser Bool
     migrateOption = flag False True $ mconcat
         [ help "Automatically migrate old schema to current version. Caution!"
         , long "migrate" ]

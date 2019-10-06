@@ -77,6 +77,7 @@ import SQLiteExts
 data Config = Config
     { explainHandle :: Maybe Handle
     , failTag :: Maybe Text
+    , pagerValue :: Pager
     , sqliteHandle :: RawSqlite SqlBackend
     }
 
@@ -136,6 +137,8 @@ withTime act = do
         wallTime = toNanoSecs (diffTimeSpec start end)
     return $ (fromIntegral wallTime / 1e9, r)
 
+data Pager = Never | Auto | Always deriving (Show)
+
 data Options a =
   Options
     { database :: Text
@@ -143,8 +146,12 @@ data Options a =
     , logVerbosity :: Int
     , queryMode :: QueryMode
     , migrateSchema :: Bool
+    , pager :: Pager
     , task :: a
     }
+
+pagerSetting :: SqlM Pager
+pagerSetting = SqlM $ asks pagerValue
 
 class Monad m => MonadExplain m where
     logQueryExplanation :: (Handle -> SqlM ()) -> m ()
@@ -215,7 +222,7 @@ runSqlMWithOptions Options{..} work = do
     runStack mHnd act =
       runLog . Sqlite.withRawSqliteConnInfo connInfo $ runSql act . config
       where
-        config = Config mHnd Nothing
+        config = Config mHnd Nothing pager
 
     withQueryLog :: (Maybe Handle -> IO r) -> IO r
     withQueryLog f = case queryMode of
