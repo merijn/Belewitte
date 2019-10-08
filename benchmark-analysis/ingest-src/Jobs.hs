@@ -136,7 +136,9 @@ missingRunToTimingJob MissingRun{..}
     tag name = mconcat [ showSqlKey missingRunVariantId, " ", name]
     implName = tag missingRunImplName
     cmd = T.unwords $ "\"" <> implName <> "\"" : missingRunArgs
-    job hash = Job (missingRunAlgorithmId, missingRunImplId, hash) missingRunVariantId implName cmd
+    job hash = Job metadata missingRunVariantId implName cmd
+      where
+        metadata = (missingRunAlgorithmId, missingRunImplId, hash)
 
 processTiming
     :: (MonadLogger m, MonadResource m, MonadSql m, MonadThrow m)
