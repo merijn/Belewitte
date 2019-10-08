@@ -26,7 +26,7 @@ data ColumnInfo rec where
 columnSep :: ColumnInfo v
 columnSep = ColSeparator
 
-idColumn :: ToBackendKey SqlBackend v => EntityField v (Key v) -> ColumnInfo v
+idColumn :: ToBackendKey SqlBackend k => EntityField v (Key k) -> ColumnInfo v
 idColumn field = ColInfo field (showText . fromSqlKey)
 
 column :: EntityField v Text  -> ColumnInfo v
