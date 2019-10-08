@@ -11,6 +11,8 @@ module ProcessPool
     , Result(..)
     , Process(Process,inHandle,outHandle)
     , processJobsParallel
+    , processJobsParallelWithSharedPool
+    , withProcessPool
     ) where
 
 import Control.Monad (guard, void)
@@ -189,31 +191,41 @@ processJobsParallel
        , MonadUnliftIO m
        )
     => Int -> Platform -> ConduitT (Job a) (Result a) m ()
-processJobsParallel numNodes platform =
-    withProcessPool numNodes platform $ \procPool ->
-        parMapM taskHandler numNodes $ \Job{..} -> do
+processJobsParallel numNodes platform = withProcessPool numNodes platform $
+    processJobsParallelWithSharedPool numNodes
 
-            let fileStem = T.unpack jobLabel
-                handleErrors act = act `onError` do
-                    logErrorN ("Failed: " <> jobCommand)
-                    tryRemoveFile $ fileStem <.> "timings"
-                    tryRemoveFile $ fileStem <.> "output"
-                    tryRemoveFile $ fileStem <.> "log"
+processJobsParallelWithSharedPool
+    :: ( MonadLoggerIO m
+       , MonadResource m
+       , MonadSql m
+       , MonadMask m
+       , MonadUnliftIO m
+       )
+    => Int -> Pool Process -> ConduitT (Job a) (Result a) m ()
+processJobsParallelWithSharedPool numNodes procPool =
+    parMapM taskHandler numNodes $ \Job{..} -> do
 
-            withResource procPool $ \process@Process{inHandle,outHandle} -> do
-                checkProcess process
-                handleErrors $ do
-                    logInfoN $ "Running: " <> jobCommand
-                    result <- liftIO $ do
-                        T.hPutStrLn inHandle jobCommand
-                        T.hGetLine outHandle
+        let fileStem = T.unpack jobLabel
+            handleErrors act = act `onError` do
+                logErrorN ("Failed: " <> jobCommand)
+                tryRemoveFile $ fileStem <.> "timings"
+                tryRemoveFile $ fileStem <.> "output"
+                tryRemoveFile $ fileStem <.> "log"
 
-                    let (label, commit) = case T.splitOn ":" result of
-                            (version:rest) -> (T.concat rest, version)
-                            [] -> ("", "")
+        withResource procPool $ \process@Process{inHandle,outHandle} -> do
+            checkProcess process
+            handleErrors $ do
+                logInfoN $ "Running: " <> jobCommand
+                result <- liftIO $ do
+                    T.hPutStrLn inHandle jobCommand
+                    T.hGetLine outHandle
 
-                    logInfoN $ "Finished: " <> jobCommand
-                    return $ Result jobValue jobVariant label commit
+                let (label, commit) = case T.splitOn ":" result of
+                        (version:rest) -> (T.concat rest, version)
+                        [] -> ("", "")
+
+                logInfoN $ "Finished: " <> jobCommand
+                return $ Result jobValue jobVariant label commit
   where
     checkNotExist :: SomeException -> Bool
     checkNotExist e = fromMaybe False $ isDoesNotExistError <$> fromException e
