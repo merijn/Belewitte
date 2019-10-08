@@ -72,7 +72,11 @@ renderColumns filts order = do
     let columnSource = do
             yield header
             Sql.selectSource filts order .| C.map f
-    runConduit $ columnSource .| C.unlines .| outputSink
+    res <- try . runConduit $ columnSource .| C.unlines .| outputSink
+    case res of
+        Right _ -> return ()
+        Left (ioeGetErrorType -> ResourceVanished) -> return ()
+        Left e -> throwM e
 
 renderOutput :: ConduitT () Text SqlM () -> SqlM ()
 renderOutput producer = do
