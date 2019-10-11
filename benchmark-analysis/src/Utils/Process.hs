@@ -1,6 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Utils.Process
     ( CreateProcess
@@ -9,20 +10,22 @@ module Utils.Process
     , UnexpectedTermination(..)
     , readStdout
     , runProcess
+    , runProcess_
     , runProcessCreation
+    , runProcessCreation_
     , unexpectedTermination
     , withPipe
     , withProcess
     , withStdin
     ) where
 
-import Control.Monad (unless)
+import Control.Monad (unless, void)
 import Control.Monad.Catch (MonadMask, MonadThrow, SomeException(..))
 import qualified Control.Monad.Catch as Except
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Logger (MonadLogger, logErrorN, logInfoN, logWarnN)
 import Control.Monad.Trans (MonadTrans(lift))
-import Control.Monad.Trans.Cont (ContT(..), evalContT, mapContT)
+import Control.Monad.Trans.Cont (ContT(..), mapContT)
 import Control.Monad.Reader (ReaderT, runReaderT, local, ask)
 import Control.Monad.Trans.Resource (MonadResource, register, release)
 import Data.Conduit.Process
@@ -46,15 +49,41 @@ import qualified Pretty
 
 data ReadWrite = Read | Write deriving (Eq, Show)
 
+data ProcessResult r = ProcResult
+    { resultProcessCreation :: CreateProcess
+    , resultExitCode :: ExitCode
+    , resultValue :: r
+    }
+
 newtype ProcessCreation r m a = ProcessCreation (ContT r (ReaderT (m ()) m) a)
   deriving (Applicative, Functor, Monad, MonadIO, MonadLogger)
 
 instance MonadTrans (ProcessCreation r) where
     lift = ProcessCreation . lift . lift
 
-runProcessCreation :: Monad m => ProcessCreation r m r -> m r
+runProcessCreation
+    :: Monad m
+    => ProcessCreation (ExitCode, r) m (ProcessResult r)
+    -> m (ExitCode, r)
 runProcessCreation (ProcessCreation act) =
-  runReaderT (evalContT act) $ return ()
+    runReaderT (runContT act unwrap) $ return ()
+  where
+    unwrap :: Monad m => ProcessResult r -> m (ExitCode, r)
+    unwrap ProcResult{..} = return (resultExitCode, resultValue)
+
+runProcessCreation_
+    :: MonadThrow m => ProcessCreation r m (ProcessResult r) -> m r
+runProcessCreation_ (ProcessCreation act) =
+    runReaderT (runContT act unwrap) $ return ()
+  where
+    unwrap :: MonadThrow m => ProcessResult r -> m r
+    unwrap ProcResult{..} = case resultExitCode of
+        ExitSuccess -> return resultValue
+        _ -> throwUnexpected resultProcessCreation resultExitCode
+
+    throwUnexpected :: MonadThrow m => CreateProcess -> ExitCode -> m a
+    throwUnexpected cp =
+      Except.throwM . UnexpectedTermination . ProcessExitedUnsuccessfully cp
 
 withProcess
     :: ( InputSource stdin
@@ -64,16 +93,17 @@ withProcess
        , MonadMask m
        )
     => CreateProcess
-    -> (stdin -> stdout -> m r)
-    -> ProcessCreation r m r
+    -> (stdin -> stdout -> m a)
+    -> ProcessCreation r m (ProcessResult a)
 withProcess cp f = ProcessCreation . lift $
   Except.bracket alloc cleanup $ \(stdin, stdout, stderr, sph) -> do
     ask >>= \free -> lift $ do
         free
         (r, err) <- work stdin stdout stderr `Except.onException` terminate sph
-        Process.waitForStreamingProcess sph >>= \case
-            ExitSuccess -> r <$ logStderrOutput err
-            ec -> logErrorN err >> throwUnexpected ec
+        ec <- Process.waitForStreamingProcess sph
+        ProcResult cp ec r <$ case ec of
+            ExitSuccess -> logStderrOutput err
+            _ -> logErrorN err
   where
     logStderrOutput :: MonadLogger m => Text -> m ()
     logStderrOutput t = unless (T.null (T.strip t)) $ logWarnN t
@@ -84,10 +114,6 @@ withProcess cp f = ProcessCreation . lift $
     terminate :: MonadIO m => StreamingProcessHandle -> m ()
     terminate =
       liftIO . Process.terminateProcess . Process.streamingProcessHandleRaw
-
-    throwUnexpected :: MonadThrow m => ExitCode -> m a
-    throwUnexpected =
-      Except.throwM . UnexpectedTermination . ProcessExitedUnsuccessfully cp
 
     logAndRethrow
         :: (MonadIO m, MonadLogger m, MonadThrow m)
@@ -100,39 +126,36 @@ withProcess cp f = ProcessCreation . lift $
     work stdin stdout stderr = Except.handle (logAndRethrow stderr) $
         (,) <$> f stdin stdout <*> liftIO (T.hGetContents stderr)
 
-withProcess_
-    :: ( InputSource stdin
-       , OutputSink stdout
-       , MonadIO m
-       , MonadLogger m
-       , MonadMask m
-       )
-    => CreateProcess
-    -> (stdin -> stdout -> m r)
-    -> m r
-withProcess_ cp f = runProcessCreation $ withProcess cp f
+runProcess_
+    :: (MonadIO m, MonadLogger m, MonadMask m) => FilePath -> [String] -> m ()
+runProcess_ exe args = void $ runProcess exe args
 
 runProcess
-    :: (MonadIO m, MonadLogger m, MonadMask m) => FilePath -> [String] -> m ()
-runProcess exe args = withProcess_ process $ \ClosedStream stdout -> do
-    info <- liftIO $ T.hGetContents stdout
-    unless (T.null info) $ logInfoN info
+    :: (MonadIO m, MonadLogger m, MonadMask m)
+    => FilePath -> [String] -> m ExitCode
+runProcess exe args = do
+    (ec, ()) <- runProcessCreation $ do
+        withProcess process $ \ClosedStream stdout -> do
+            info <- liftIO $ T.hGetContents stdout
+            unless (T.null info) $ logInfoN info
+    return ec
   where
     process = Process.proc exe args
 
 readStdout
     :: (MonadIO m, MonadLogger m, MonadMask m) => CreateProcess -> m Text
-readStdout process = withProcess_ process $ \ClosedStream ->
-    liftIO . T.hGetContents
+readStdout process = runProcessCreation_ $ do
+    withProcess process $ \ClosedStream -> liftIO . T.hGetContents
 
 withStdin
     :: (MonadIO m, MonadLogger m, MonadMask m)
     => CreateProcess -> (Handle -> m ()) -> m ()
-withStdin process work = withProcess_ process $ \stdin stdout -> do
-    work stdin
-    liftIO $ hClose stdin
-    info <- liftIO $ T.hGetContents stdout
-    unless (T.null info) $ logInfoN info
+withStdin process work = runProcessCreation_ $ do
+    withProcess process $ \stdin stdout -> do
+        work stdin
+        liftIO $ hClose stdin
+        info <- liftIO $ T.hGetContents stdout
+        unless (T.null info) $ logInfoN info
 
 withPipe
     :: (MonadMask m, MonadResource m)

@@ -41,7 +41,7 @@ import Text.Megaparsec.Error (errorBundlePretty)
 
 import Core
 import Model
-import Utils.Process (ReadWrite(..), runProcessCreation, withPipe, withProcess)
+import Utils.Process (ReadWrite(..), runProcessCreation_, withPipe, withProcess)
 import Query
 import RuntimeData (getModelScript)
 import Schema
@@ -173,7 +173,7 @@ trainModel algoId platId ModelDesc{..} = do
         fmap (VU.length . fst) <$> runSqlQueryConduit trainQuery C.head
 
     timestamp <- liftIO getCurrentTime
-    (model, ModelStats{..}) <- runProcessCreation $ do
+    (model, ModelStats{..}) <- runProcessCreation_ $ do
         (resultsFd, resultsHnd) <- withPipe Write
         (unknownsFd, unknownsHnd) <- withPipe Read
 

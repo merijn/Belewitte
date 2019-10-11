@@ -60,7 +60,7 @@ getPythonScript script args = do
 
     unless exists $ do
         logInfoN $ "Creating virtualenv"
-        runProcess "virtualenv-2.7" [virtualenv]
+        runProcess_ "virtualenv-2.7" [virtualenv]
 
     let initialisedFile = virtualenv </> "initialised"
 
@@ -68,8 +68,8 @@ getPythonScript script args = do
     unless virtualenvInitialised $ do
         logInfoN $ "Initialising virtualenv"
         pipExe <- liftIO $ getDataFileName "runtime-data/virtualenv/bin/pip"
-        runProcess pipExe ["install", "--upgrade", "pip"]
-        runProcess pipExe ["install", "-r", requirements]
+        runProcess_ pipExe ["install", "--upgrade", "pip"]
+        runProcess_ pipExe ["install", "-r", requirements]
         mask_ . liftIO $ touchFile initialisedFile >>= Posix.closeFd
 
     liftIO $ do
