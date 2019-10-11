@@ -10,8 +10,7 @@ import Control.Monad.Trans.Resource (release)
 import Data.Acquire (ReleaseType(..), allocateAcquire, mkAcquireType)
 import Data.Conduit (ConduitT, Void, (.|), runConduit, yield)
 import qualified Data.Conduit.Combinators as C
-import Data.Conduit.Process
-    (CreateProcess, Inherited(..), ProcessExitedUnsuccessfully(..))
+import Data.Conduit.Process (CreateProcess, Inherited(..))
 import qualified Data.Conduit.Process as Process
 import Data.Foldable (asum)
 import Data.Text (Text)
@@ -29,7 +28,7 @@ import Core
 import Pretty.Columns
 import Query (MonadQuery)
 import Sql
-import Utils.Process (UnexpectedTermination(..))
+import Utils.Process (unexpectedTermination)
 
 columnName :: PersistEntity r => EntityField r a -> Text
 columnName = unHaskellName . fieldHaskell . persistFieldDef
@@ -123,8 +122,7 @@ pagerConduit process = do
     C.encodeUtf8 .| inStream >> closeIn
     ec <- Process.waitForStreamingProcess sph <* release key
     unless (ec == ExitSuccess) $ do
-        let exc = ProcessExitedUnsuccessfully process ec
-        logThrowM $ UnexpectedTermination exc
+        logThrowM $ unexpectedTermination process ec
   where
     acquireProcess = mkAcquireType (Process.streamingProcess process) cleanup
 
