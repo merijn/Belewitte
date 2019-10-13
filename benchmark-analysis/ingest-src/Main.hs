@@ -19,13 +19,12 @@ import Data.Monoid ((<>))
 import qualified Data.Text as T
 import System.Exit (exitFailure)
 
-
 import qualified Commands.Add as Add
 import qualified Commands.Reset as Reset
 import Core
 import InteractiveInput
 import Jobs
-import MissingQuery (missingBenchmarkQuery)
+import MissingQuery (missingBenchmarkQuery, validationVariantQuery)
 import OptionParsers
 import Parsers
 import ProcessPool
@@ -55,6 +54,13 @@ commands name = CommandGroup CommandInfo
         }
         $ runBenchmarks <$> parallelism
     , SingleCommand CommandInfo
+        { commandName = "validate"
+        , commandHeaderDesc = "validate measurement results"
+        , commandDesc =
+            "Validate result mismatches for non-deterministic algorithms"
+        }
+        $ validate <$> parallelism
+    , SingleCommand CommandInfo
         { commandName = "import-results"
         , commandHeaderDesc = "import results of external tools"
         , commandDesc = "Import results of external implementations"
@@ -80,12 +86,15 @@ commands name = CommandGroup CommandInfo
     suffixParser = argument (maybeReader suffixReader) . mconcat $
         [ metavar "SUFFIX" ]
 
+-- Error out if C++ code hasn't been compiled
+checkCxxCompiled :: SqlM ()
+checkCxxCompiled = void $ do
+    RuntimeData.getKernelExecutable
+    RuntimeData.getKernelLibPath
+
 runBenchmarks :: Int -> Input SqlM ()
 runBenchmarks numNodes = lift $ do
-    -- Error out if C++ code hasn't been compiled
-    void $ do
-        RuntimeData.getKernelExecutable
-        RuntimeData.getKernelLibPath
+    checkCxxCompiled
 
     Entity _ defaultPlatform <- tryAlternatives
         [ MaybeT $ Sql.selectFirst [PlatformIsDefault ==. True] []
@@ -117,6 +126,19 @@ runBenchmarks numNodes = lift $ do
     exitOnNothing = do
         logErrorN "No platforms registered!"
         liftIO $ exitFailure
+
+validate :: Int -> Input SqlM ()
+validate numNodes = lift $ do
+    checkCxxCompiled
+    runConduit $
+        Sql.selectSource [] [] .> \(Entity platformId platform) -> do
+            withProcessPool numNodes platform $ \procPool -> do
+                runSqlQuery (validationVariantQuery platformId)
+                .| processJobsParallelWithSharedPool numNodes procPool
+                .> validationMissingRuns platformId
+                .| processJobsParallelWithSharedPool numNodes procPool
+                .| validateResults numNodes
+                .| C.mapM_ cleanupValidation
 
 importResults :: Input SqlM ()
 importResults = do

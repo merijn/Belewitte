@@ -7,14 +7,21 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 module Jobs
-    ( (.>)
+    ( Validation(..)
+    , (.>)
     , variantToPropertyJob
     , processProperty
     , missingRunToTimingJob
     , processTiming
+    , validationMissingRuns
+    , validateResults
+    , cleanupValidation
     ) where
 
+import BroadcastChan.Conduit
+import qualified Control.Concurrent.STM as STM
 import Control.Monad (unless, when)
+import Control.Monad.Trans.Resource (register, release)
 import Crypto.Hash (Digest, MD5)
 import Crypto.Hash.Conduit (hashFile)
 import qualified Data.ByteArray (convert)
@@ -27,9 +34,11 @@ import Data.Time.Clock (getCurrentTime)
 import System.Directory (removeFile)
 
 import Core
-import MissingQuery (MissingRun(..))
+import MissingQuery (MissingRun(..), ValidationVariant(..), validationRunQuery)
 import Parsers
 import ProcessPool (Job, Result(..), makeJob)
+import Query (runSqlQuery)
+import qualified RuntimeData
 import Schema
 import Sql (Entity(..), Key, MonadSql, (=.))
 import qualified Sql
@@ -191,3 +200,80 @@ processTiming runConfigId commit Result{..} = do
 
     insertTiming runId (StepTiming n Timing{..})= Sql.insert_ $
         StepTimer runId n name minTime avgTime maxTime stddev
+
+data Validation = Validation
+    { cleanData :: SqlM ()
+    , originalCommit :: Text
+    , referenceResult :: FilePath
+    , runId :: Key Run
+    }
+
+validationMissingRuns
+    :: Key Platform
+    -> Result ValidationVariant
+    -> ConduitT (Result ValidationVariant) (Job Validation) SqlM ()
+validationMissingRuns platformId Result{..} = do
+    liftIO $ removeFile timingFile
+    refCounter <- liftIO $ STM.newTVarIO validationMissingCount
+    key <- register $ removeFile outputFile
+
+    let onCompletion :: SqlM ()
+        onCompletion = do
+            count <- liftIO . STM.atomically $ do
+                STM.modifyTVar' refCounter (subtract 1)
+                STM.readTVar refCounter
+
+            when (count == 0) $ release key
+
+        mkValidation :: Key Run -> Validation
+        mkValidation = Validation onCompletion validationCommit outputFile
+
+        toValidationJob :: MissingRun (Key Run) -> Job Validation
+        toValidationJob MissingRun{..} = makeJob
+            (mkValidation missingRunExtraInfo)
+            missingRunVariantId
+            (Just missingRunImplName)
+            missingRunArgs
+
+    runSqlQuery (validationRunQuery platformId resultValue)
+        .| C.map toValidationJob
+  where
+    ValidationVariant{..} = resultValue
+    outputFile = T.unpack resultLabel <> ".output"
+    timingFile = T.unpack resultLabel <> ".timings"
+
+validateResults
+    :: Int -> ConduitT (Result Validation) (Result Validation) SqlM ()
+validateResults numProcs = do
+    validate <- RuntimeData.getOutputChecker
+    parMapM (Simple Terminate) numProcs (process validate)
+  where
+    process
+        :: (FilePath -> FilePath -> SqlM Bool)
+        -> Result Validation
+        -> SqlM (Result Validation)
+    process check res@Result{resultAlgorithmVersion, resultLabel, resultValue}
+      | originalCommit /= resultAlgorithmVersion = do
+            res <$ logErrorN "Result validation used wrong algorithm version!"
+      | otherwise = do
+            result <- check referenceResult outputFile
+            ts <- liftIO $ getCurrentTime
+
+            when result $ do
+                Sql.update runId [RunValidated =. True, RunTimestamp =. ts]
+            return res
+      where
+        Validation{..} = resultValue
+        outputFile = T.unpack resultLabel <> ".output"
+
+cleanupValidation :: Result Validation -> SqlM ()
+cleanupValidation Result{resultLabel, resultValue} = do
+    liftIO $ do
+        removeFile outputFile
+        removeFile timingFile
+    cleanData
+  where
+    Validation{..} = resultValue
+
+    timingFile = T.unpack resultLabel <> ".timings"
+    outputFile = T.unpack resultLabel <> ".output"

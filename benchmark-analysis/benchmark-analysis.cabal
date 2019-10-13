@@ -201,6 +201,7 @@ Executable Ingest
                ,        process ^>= 1.6.0
                ,        resourcet ^>= 1.2.0
                ,        resource-pool ^>= 0.2.3.2
+               ,        stm ^>= 2.5.0
                ,        text
                ,        time ^>= 1.9
                ,        transformers

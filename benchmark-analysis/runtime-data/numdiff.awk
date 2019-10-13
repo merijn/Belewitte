@@ -22,11 +22,12 @@ if [ "$#" -lt 2 ]; then
 fi
 
 prec=0.0
-args=""
+args=()
+file_args=""
 n=0
 v=1
 while
-  case $1 in
+  case "$1" in
     -h | --help)
       usage
       ;;
@@ -53,7 +54,8 @@ while
       usage
       ;;
     *)
-      args+=" $1"
+      args+=("$1")
+      file_args+="\t$1"
       n=$(($n + 1))
       ;;
   esac
@@ -62,9 +64,9 @@ do
     :
 done
 
-paste $args | awk -v args="$args" -v num_args="$n" -v precision="$prec" -v verbose="$v" '
+paste $args | awk -v args="$file_args" -v num_args="$n" -v precision="$prec" -v verbose="$v" '
 function abs(v) { return v < 0 ? -v : v }
-BEGIN { count = 0; max_diff=0; split(args,files," ");}
+BEGIN { count = 0; max_diff=0; split(args,files,"\t");}
 {
     off=NF/num_args;
     for (i = 2; i <= off; i++) {
