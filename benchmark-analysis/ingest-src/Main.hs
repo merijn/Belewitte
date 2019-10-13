@@ -25,7 +25,7 @@ import qualified Commands.Reset as Reset
 import Core
 import InteractiveInput
 import Jobs
-import MissingQuery (missingQuery)
+import MissingQuery (missingBenchmarkQuery)
 import OptionParsers
 import Parsers
 import ProcessPool
@@ -105,7 +105,7 @@ runBenchmarks numNodes = lift $ do
             let commitId = runConfigAlgorithmVersion config
             platform <- Sql.getJust $ runConfigPlatformId config
 
-            runSqlQuery (missingQuery runConfigId)
+            runSqlQuery (missingBenchmarkQuery runConfigId)
                 .> missingRunToTimingJob
                 .| processJobsParallel numNodes platform
                 .| C.mapM_ (processTiming runConfigId commitId)
@@ -163,8 +163,9 @@ importResults = do
 
 queryTest :: Maybe FilePath -> Input SqlM ()
 queryTest outputSuffix = lift . runConduit $ do
-    Sql.selectKeys [] [] .> \runConfigId ->
-        runSqlQuery (missingQuery runConfigId) .| querySink outputSuffix
+    Sql.selectKeys [] []
+        .> runSqlQuery . missingBenchmarkQuery
+        .| querySink outputSuffix
   where
     querySink
         :: (MonadResource m, MonadThrow m, Show a)

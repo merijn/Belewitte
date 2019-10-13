@@ -3,7 +3,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
-module MissingQuery (MissingRun(..), missingQuery) where
+module MissingQuery (MissingRun(..), missingBenchmarkQuery) where
 
 import Data.Maybe (fromMaybe)
 import Data.String.Interpolate.IsString (i)
@@ -13,31 +13,31 @@ import Query
 import Schema
 import Sql (fromPersistValue)
 
-data MissingRun = MissingRun
+data MissingRun a = MissingRun
     { missingRunAlgorithmId :: {-# UNPACK #-} !(Key Algorithm)
     , missingRunImplId :: {-# UNPACK #-} !(Key Implementation)
     , missingRunImplName :: {-# UNPACK #-} !Text
     , missingRunVariantId :: {-# UNPACK #-} !(Key Variant)
-    , missingRunVariantResult :: !(Maybe Hash)
     , missingRunArgs :: ![Text]
+    , missingRunExtraInfo :: !a
     } deriving (Show)
 
-missingQuery :: Key RunConfig -> Query MissingRun
-missingQuery runConfigId = Query{..}
+missingBenchmarkQuery :: Key RunConfig -> Query (MissingRun (Maybe Hash))
+missingBenchmarkQuery runConfigId = Query{..}
   where
     queryName :: Text
     queryName = "missingQuery"
 
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
-        => [PersistValue] -> m MissingRun
+        => [PersistValue] -> m (MissingRun (Maybe Hash))
     convert [ PersistInt64 numRepeats
             , PersistText graphPath
             , PersistInt64 (toSqlKey -> missingRunAlgorithmId)
             , PersistText algoName
             , PersistInt64 (toSqlKey -> missingRunVariantId)
             , (fromPersistValue -> Right variantFlags)
-            , (fromPersistValue -> Right missingRunVariantResult)
+            , (fromPersistValue -> Right missingRunExtraInfo)
             , PersistInt64 (toSqlKey -> missingRunImplId)
             , PersistText missingRunImplName
             , (fromPersistValue -> Right implFlags)

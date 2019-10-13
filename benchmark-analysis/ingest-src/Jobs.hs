@@ -122,16 +122,19 @@ processProperty Result{resultValue=(graphId, hash), ..} = do
 
 missingRunToTimingJob
     :: (MonadLogger m, MonadResource m, MonadSql m)
-    => MissingRun
-    -> ConduitT MissingRun (Job (Key Algorithm, Key Implementation, Hash)) m ()
+    => MissingRun (Maybe Hash)
+    -> ConduitT (MissingRun (Maybe Hash))
+                (Job (Key Algorithm, Key Implementation, Hash))
+                m
+                ()
 missingRunToTimingJob MissingRun{..}
-  | Nothing <- missingRunVariantResult
+  | Nothing <- missingRunExtraInfo
   = logErrorN . mconcat $
         [ "Algorithm #", showSqlKey missingRunAlgorithmId
         , " results missing for variant #", showSqlKey missingRunVariantId
         ]
 
-  | Just hash <- missingRunVariantResult = yield $ makeJob
+  | Just hash <- missingRunExtraInfo = yield $ makeJob
             (missingRunAlgorithmId, missingRunImplId, hash)
             missingRunVariantId
             (Just missingRunImplName)
