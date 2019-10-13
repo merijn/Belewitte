@@ -29,7 +29,7 @@ import System.Directory (removeFile)
 import Core
 import MissingQuery (MissingRun(..))
 import Parsers
-import ProcessPool (Job(..), Result(..))
+import ProcessPool (Job, Result(..), makeJob)
 import Schema
 import Sql (Entity(..), Key, MonadSql, (=.))
 import qualified Sql
@@ -64,7 +64,7 @@ variantToPropertyJob
         Graph _ path _ _ <- Sql.getJust graphId
         VariantConfig algoId _ flags _ <- Sql.getJust variantCfgId
         Algorithm algo _ <- Sql.getJust algoId
-        yield . Job (graphId,hash) varId (showSqlKey varId) . T.unwords $
+        yield . makeJob (graphId,hash) varId Nothing $
             [ showSqlKey varId
             , "-a", algo
             , "-k switch --log"
@@ -131,14 +131,11 @@ missingRunToTimingJob MissingRun{..}
         , " results missing for variant #", showSqlKey missingRunVariantId
         ]
 
-  | Just hash <- missingRunVariantResult = yield $ job hash
-  where
-    tag name = mconcat [ showSqlKey missingRunVariantId, " ", name]
-    implName = tag missingRunImplName
-    cmd = T.unwords $ "\"" <> implName <> "\"" : missingRunArgs
-    job hash = Job metadata missingRunVariantId implName cmd
-      where
-        metadata = (missingRunAlgorithmId, missingRunImplId, hash)
+  | Just hash <- missingRunVariantResult = yield $ makeJob
+            (missingRunAlgorithmId, missingRunImplId, hash)
+            missingRunVariantId
+            (Just missingRunImplName)
+            missingRunArgs
 
 processTiming
     :: (MonadLogger m, MonadResource m, MonadSql m, MonadThrow m)
@@ -155,7 +152,7 @@ processTiming runConfigId commit Result{..} = do
     if commit /= resultAlgorithmVersion
        then logErrorN $ mconcat
         [ "Unexpected algorithm version for implementation #"
-        , showSqlKey implId, "!. Expected commit ", commit, " found commit "
+        , showSqlKey implId, "! Expected commit ", commit, " found commit "
         , resultAlgorithmVersion
         ]
        else do

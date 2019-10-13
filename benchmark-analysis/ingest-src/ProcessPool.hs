@@ -7,9 +7,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 module ProcessPool
-    ( Job(..)
+    ( Job
     , Result(..)
     , Process(Process,inHandle,outHandle)
+    , makeJob
     , processJobsParallel
     , processJobsParallelWithSharedPool
     , withProcessPool
@@ -56,6 +57,18 @@ data Job a = Job
     , jobLabel :: Text
     , jobCommand :: Text
     } deriving (Functor, Foldable, Traversable)
+
+makeJob :: a -> Key Variant -> Maybe Text -> [Text] -> Job a
+makeJob val variantId implName args = Job
+    { jobValue = val
+    , jobVariant = variantId
+    , jobLabel = label
+    , jobCommand = T.unwords $ label: args
+    }
+  where
+    label = case implName of
+        Nothing -> showSqlKey variantId
+        Just name -> mconcat ["\"", showSqlKey variantId, " ", name, "\""]
 
 data Result a = Result
     { resultValue :: a
