@@ -65,8 +65,7 @@ variantToPropertyJob
         VariantConfig algoId _ flags _ <- Sql.getJust variantCfgId
         Algorithm algo _ <- Sql.getJust algoId
         yield . makeJob (graphId,hash) varId Nothing $
-            [ showSqlKey varId
-            , "-a", algo
+            [ "-a", algo
             , "-k switch --log"
             , showSqlKey varId <> ".log"
             , fromMaybe "" flags
