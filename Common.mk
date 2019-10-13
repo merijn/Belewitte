@@ -129,6 +129,7 @@ ifeq ($(UNAME),Linux)
     CLANGCXXFLAGS += -stdlib=libc++
 
     CXXFLAGS += -isystem$(CUDA_PATH)/include/
+    LDFLAGS += -lpthread
 
 ifdef CXX_IS_CLANG
     LD += -stdlib=libc++

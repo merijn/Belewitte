@@ -12,6 +12,11 @@
 #include <boost/filesystem.hpp>
 #include <boost/regex.hpp>
 
+#ifdef __linux__
+#include <sched.h>
+#include <pthread.h>
+#endif
+
 #include "Algorithm.hpp"
 #include "Backend.hpp"
 #include "CUDA.hpp"
@@ -238,8 +243,33 @@ runJob
     }
 }
 
+static void
+pin_cpu()
+{
+#ifdef __linux__
+    cpu_set_t cpuset;
+    pthread_t thread = pthread_self();
+
+    CPU_ZERO(&cpuset);
+    CPU_SET(0, &cpuset);
+    int err = pthread_setaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
+    if (err != 0) reportError("pthread_setaffinity_np failed!");
+
+    err = pthread_getaffinity_np(thread, sizeof(cpu_set_t), &cpuset);
+    if (err != 0) reportError("pthread_getaffinity_np failed!");
+
+    if (!CPU_ISSET(0, &cpuset)) reportError("Not set to CPU 0!");
+
+    for (int i = 1; i < CPU_SETSIZE; i++) {
+        if (CPU_ISSET(i, &cpuset)) reportError("Affinity for CPU #", i, "!");
+    }
+#endif
+}
+
 int main(int argc, char * const *argv)
 {
+    pin_cpu();
+
     std::reference_wrapper<Backend> activeBackend(CUDA);
 
     options.add('d', "device", "NUM", device, "Device to use.")
