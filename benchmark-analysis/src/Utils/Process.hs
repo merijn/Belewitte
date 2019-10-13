@@ -5,6 +5,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Utils.Process
     ( CreateProcess
+    , ExitCode(..)
     , Process.proc
     , ReadWrite(..)
     , UnexpectedTermination(..)
