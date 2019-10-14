@@ -61,8 +61,8 @@ import GHC.Conc.Sync
 import qualified Lens.Micro as Lens
 import qualified Lens.Micro.Extras as Lens
 import System.Clock (Clock(Monotonic), diffTimeSpec, getTime, toNanoSecs)
-import System.Console.ANSI (hGetTerminalSize)
 import System.Console.Haskeline.MonadException (MonadException(..), RunIO(..))
+import System.Console.Terminal.Size (hSize, width)
 import System.IO (Handle, IOMode(WriteMode))
 import qualified System.IO as System
 
@@ -169,7 +169,7 @@ instance MonadExplain m => MonadExplain (ConduitT a b m) where
 stderrTerminalWidth :: IO (Maybe Int)
 stderrTerminalWidth = runMaybeT $ do
     guard =<< liftIO (System.hIsTerminalDevice System.stderr)
-    snd <$> MaybeT (hGetTerminalSize System.stderr)
+    width <$> MaybeT (hSize System.stderr)
 
 topLevelHandler :: Bool -> SomeException -> IO ()
 topLevelHandler quiet exc

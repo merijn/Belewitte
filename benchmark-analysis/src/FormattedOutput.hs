@@ -1,15 +1,18 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns #-}
 module FormattedOutput (renderColumns, renderOutput, outputSink) where
 
-import Control.Monad (join, unless)
+import Control.Monad (unless)
 import Control.Monad.Catch (catch, throwM, try)
 import Control.Monad.Trans.Maybe (MaybeT(..))
 import Control.Monad.Trans.Resource (release)
 import Data.Acquire (ReleaseType(..), allocateAcquire, mkAcquireType)
 import Data.Conduit (ConduitT, Void, (.|), runConduit, yield)
+import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
+import qualified Data.Conduit.List as C (isolate)
 import Data.Conduit.Process (CreateProcess, Inherited(..))
 import qualified Data.Conduit.Process as Process
 import Data.Foldable (asum)
@@ -19,6 +22,7 @@ import Database.Persist.Class (persistFieldDef)
 import Database.Persist.Types (fieldHaskell, unHaskellName)
 import GHC.IO.Exception (IOException, IOErrorType(ResourceVanished))
 import Lens.Micro.Extras (view)
+import System.Console.Terminal.Size (hSize, height)
 import System.Directory (findExecutable)
 import System.Exit (ExitCode(..))
 import System.IO (hIsTerminalDevice, stdout)
@@ -104,11 +108,22 @@ outputSink = do
       unpagedOutput
 
     outputPager :: ConduitT Text Void SqlM ()
-    outputPager = join $ maybe fallback pagerConduit <$> findPager
+    outputPager = do
+        maybeHeight <- liftIO $ fmap height <$> hSize stdout
+        initialText <- case maybeHeight of
+            Nothing -> return ""
+            Just n -> C.linesUnbounded .| C.isolate (n-1) .| C.unlines .| C.fold
+
+        hasMoreText <- C.peek
+        C.leftover initialText
+
+        case hasMoreText of
+            Nothing -> unpagedOutput
+            Just _ -> findPager >>= maybe fallback pagerConduit
 
 findPager :: MonadIO m => m (Maybe CreateProcess)
 findPager = runMaybeT $ asum
-    [ Process.proc <$> find "less" <*> pure ["-FRSX"]
+    [ Process.proc <$> find "less" <*> pure ["-RS", "-+X"]
     , Process.proc <$> find "more" <*> pure []
     ]
   where

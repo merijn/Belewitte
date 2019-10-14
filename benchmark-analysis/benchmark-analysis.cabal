@@ -117,7 +117,6 @@ Library
                         ViewPatterns
 
   Build-Depends:        base
-               ,        ansi-terminal ^>= 0.10.1
                ,        bytestring
                ,        binary ^>= 0.8.7
                ,        clock ^>= 0.8
@@ -144,6 +143,7 @@ Library
                ,        resourcet ^>= 1.2.0
                ,        resource-pool ^>= 0.2.3.2
                ,        streaming-commons ^>= 0.2.1
+               ,        terminal-size ^>= 0.3.2.1
                ,        text
                ,        time ^>= 1.9
                ,        transformers
