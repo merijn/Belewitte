@@ -19,6 +19,7 @@ module Query
     , explainSqlQuery
     , randomizeQuery
     , runSqlQuery
+    , runSqlQuerySingleMaybe
     , runSqlQuerySingle
     , runSqlQueryConduit
     , runSqlQueryCount
@@ -26,7 +27,7 @@ module Query
     , variantInfoQuery
     ) where
 
-import Control.Monad (void)
+import Control.Monad ((>=>), void)
 import Data.Acquire (allocateAcquire)
 import Control.Monad.Trans.Resource (release)
 import Data.Conduit (ConduitT, Void, (.|), await, runConduit, toProducer)
@@ -141,16 +142,18 @@ randomizeQuery seed trainingSize originalQuery = (training, validation)
 runSqlQuery :: MonadQuery m => Query r -> ConduitT a r m ()
 runSqlQuery = toProducer . runLoggingSqlQuery id
 
-runSqlQuerySingle :: MonadQuery m => Query r -> m r
-runSqlQuerySingle query = runSqlQueryConduit query $ do
-    result <- await >>= \case
-        Nothing -> logThrowM QueryReturnedZeroResults
-        Just v -> return v
-
+runSqlQuerySingleMaybe :: MonadQuery m => Query r -> m (Maybe r)
+runSqlQuerySingleMaybe query = runSqlQueryConduit query $ do
+    result <- await
     check <- await
     case check of
         Nothing -> return result
         Just _ -> logThrowM $ ExpectedSingleValue (toQueryText query)
+
+runSqlQuerySingle :: MonadQuery m => Query r -> m r
+runSqlQuerySingle = runSqlQuerySingleMaybe >=> \case
+    Nothing -> logThrowM QueryReturnedZeroResults
+    Just v -> return v
 
 runSqlQueryConduit :: MonadQuery m => Query r -> ConduitT r Void m a -> m a
 runSqlQueryConduit query sink =
