@@ -24,7 +24,6 @@ import qualified Control.Monad.Logger as Log
 import Control.Monad.Trans.Resource (allocate, release)
 import Data.Conduit (ConduitT)
 import Data.Acquire (withAcquire, mkAcquireType, ReleaseType(ReleaseException))
-import Data.List (intercalate)
 import Data.Maybe (fromMaybe)
 import Data.Pool (Pool)
 import qualified Data.Pool as Pool
@@ -142,7 +141,7 @@ withProcessPool n Platform{platformName} f = do
         libPath <- getKernelLibPath
         proc@Process{procId} <- liftIO $ do
             timeout <- getJobTimeOut
-            let p = (Proc.shell (opts timeout exePath libPath))
+            let p = (Proc.proc "srun" (opts timeout exePath libPath))
                     { std_in = CreatePipe, std_out = CreatePipe }
 
                 procToException = unexpectedTermination p
@@ -157,8 +156,8 @@ withProcessPool n Platform{platformName} f = do
             return Process{..}
         proc <$ logInfoN ("Started new process: " <> showText procId)
       where
-        opts timeout exePath libPath = intercalate " " . ("srun":) $ timeout ++
-            [ "-Q", "--gres=gpu:1", "-C ", T.unpack platformName, exePath
+        opts timeout exePath libPath = timeout ++
+            [ "-Q", "--gres=gpu:1", "-C", T.unpack platformName, exePath
             , "-L", libPath, "-W", "-S"
             ]
 
@@ -168,7 +167,7 @@ withProcessPool n Platform{platformName} f = do
             Proc.getPid procHandle >>= mapM_ (signalProcess sigKILL)
             System.hClose inHandle
             System.hClose outHandle
-            () <$ Proc.waitForProcess procHandle
+            Proc.waitForProcess procHandle
             tryRemoveFile $ "kernel-runner.0" <.> show procId <.> hostName
             tryRemoveFile $ ".PRUN_ENVIRONMENT" <.> show procId <.> hostName
         logInfoN $ "Destroyed process: " <> showText procId
