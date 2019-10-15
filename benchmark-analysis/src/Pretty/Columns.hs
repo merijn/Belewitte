@@ -2,32 +2,30 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Pretty.Columns
-    ( PrettyColumns(prettyColumnInfo)
+    ( NonEmpty(..)
+    , PrettyColumns(prettyColumnInfo)
     , ColumnInfo(..)
-    , columnSep
     , idColumn
     , column
     , columnVia
     , maybeColumn
     , maybeColumnVia
+    , prettyDouble
+    , prettyShow
     ) where
 
+import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe (fromMaybe, maybe)
-import Data.Text (Text)
+import Data.Text (Text, pack)
 import Database.Persist.Class (EntityField, PersistEntity)
 
-import Core (showText)
 import Sql.Core (Key, SqlBackend, SqlRecord, ToBackendKey, fromSqlKey)
 
 data ColumnInfo rec where
     ColInfo :: EntityField rec v -> (v -> Text) -> ColumnInfo rec
-    ColSeparator :: ColumnInfo rec
-
-columnSep :: ColumnInfo v
-columnSep = ColSeparator
 
 idColumn :: ToBackendKey SqlBackend k => EntityField v (Key k) -> ColumnInfo v
-idColumn field = ColInfo field (showText . fromSqlKey)
+idColumn field = ColInfo field (pack . show . fromSqlKey)
 
 column :: EntityField v Text  -> ColumnInfo v
 column field = ColInfo field id
@@ -42,4 +40,10 @@ maybeColumnVia :: EntityField v (Maybe r) -> (r -> Text) -> ColumnInfo v
 maybeColumnVia field f = ColInfo field (maybe "" f)
 
 class (PersistEntity a, SqlRecord a) => PrettyColumns a where
-    prettyColumnInfo :: [ColumnInfo a]
+    prettyColumnInfo :: NonEmpty (ColumnInfo a)
+
+prettyDouble :: Double -> Text
+prettyDouble = pack . show
+
+prettyShow :: Show a => a -> Text
+prettyShow = pack . show

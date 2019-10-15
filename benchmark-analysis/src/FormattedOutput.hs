@@ -40,7 +40,6 @@ columnName = unHaskellName . fieldHaskell . persistFieldDef
 queryColumnInfo
     :: (PrettyColumns a, MonadQuery m)
     => ColumnInfo a -> m (ColumnInfo a, (Avg, Max))
-queryColumnInfo ColSeparator = return (ColSeparator, (Avg 1, Max 3))
 queryColumnInfo col@(ColInfo field _) =
     annotateColumn <$> Sql.getFieldLength field
   where
@@ -50,24 +49,32 @@ queryColumnInfo col@(ColInfo field _) =
 columnFormatter
     :: (MonadQuery m, PrettyColumns a) => m (Text, Entity a -> Text)
 columnFormatter = do
-    annotatedColumns <- traverse queryColumnInfo prettyColumnInfo
-    let renderEntity = foldMap padColumn annotatedColumns
-        headerText = foldMap header annotatedColumns
+    (startCol :| columns) <- traverse queryColumnInfo prettyColumnInfo
+    let renderEntity = padColumn startCol <> foldMap sepPadColumn columns
+        headerText = header startCol <> foldMap sepHeader columns
     return (headerText, renderEntity)
   where
+    sep :: Text
+    sep = "   "
+
     padText :: Int -> Text -> Text
     padText n input = input <> T.replicate (n - T.length input) " "
 
     header :: PrettyColumns a => (ColumnInfo a, (Avg, Max)) -> Text
-    header (ColSeparator, (_, Max n)) = T.replicate n " "
     header (ColInfo field _, (_, Max n)) = padText n $ columnName field
+
+    sepHeader :: PrettyColumns a => (ColumnInfo a, (Avg, Max)) -> Text
+    sepHeader x = sep <> header x
 
     padColumn
         :: PrettyColumns a => (ColumnInfo a, (Avg, Max)) -> Entity a -> Text
-    padColumn (ColSeparator, (_, Max n)) _ = T.replicate n " "
     padColumn (ColInfo f toText, (_, Max n)) val = padText n col
       where
         col = toText . view (Sql.fieldLens f) $ val
+
+    sepPadColumn
+        :: PrettyColumns a => (ColumnInfo a, (Avg, Max)) -> Entity a -> Text
+    sepPadColumn x y = sep <> padColumn x y
 
 renderColumns :: PrettyColumns a => [Filter a] -> [SelectOpt a] -> SqlM ()
 renderColumns filts order = do
