@@ -162,6 +162,7 @@ Executable Ingest
   Other-Modules:        Commands.Add
                         Commands.Reset
                         Commands.Set
+                        Commands.Unset
                         Jobs
                         MissingQuery
                         Parsers

@@ -20,6 +20,7 @@ import Database.Persist.Sqlite
     (getFieldName, getTableName, liftPersist, rawExecute, sqlType)
 import Query (MonadQuery, Query(..), runSqlQuerySingle, runSqlQuerySingleMaybe)
 import Schema
+import Schema.GlobalVars (Unique(UniqGlobal))
 import Sql.Core hiding (executeSql, liftProjectPersist)
 
 newtype Avg = Avg { getAvg :: Int } deriving (Show, Eq, Ord)
@@ -73,6 +74,9 @@ setGlobalVar var value = liftPersist $ do
     rawExecute query [ toPersistValue (show var), toPersistValue value ]
   where
     query = [i|INSERT OR REPLACE INTO GlobalVars ("name","value") VALUES (?,?)|]
+
+unsetGlobalVar :: MonadSql m => GlobalVar a -> m ()
+unsetGlobalVar var = deleteBy $ UniqGlobal (showText var)
 
 getFieldLength
     :: forall a m rec

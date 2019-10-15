@@ -126,6 +126,9 @@ insertUniq record = do
         _ -> return ()
 
 -- Generalisations
+deleteBy :: (MonadSql m, SqlRecord rec) => Unique rec -> m ()
+deleteBy = liftPersist . Sqlite.deleteBy
+
 deleteWhere :: (MonadSql m, SqlRecord rec) => [Filter rec] -> m ()
 deleteWhere = liftPersist . Sqlite.deleteWhere
 
