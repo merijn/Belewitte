@@ -161,6 +161,7 @@ Executable Ingest
   Main-Is:              Main.hs
   Other-Modules:        Commands.Add
                         Commands.Reset
+                        Commands.Set
                         Jobs
                         MissingQuery
                         Parsers

@@ -21,6 +21,7 @@ import System.Exit (exitFailure)
 
 import qualified Commands.Add as Add
 import qualified Commands.Reset as Reset
+import qualified Commands.Set as Set
 import Core
 import InteractiveInput
 import Jobs
@@ -46,6 +47,7 @@ commands name = CommandGroup CommandInfo
         \an SQLite database of configurations. Automatically run missing \
         \configurations and store all results in the database."
   } [ Add.commands
+    , lift <$> Set.commands
     , lift <$> Reset.commands
     , SingleCommand CommandInfo
         { commandName = "run-benchmarks"

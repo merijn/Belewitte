@@ -4,21 +4,23 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE StandaloneDeriving #-}
 module Exceptions
-    ( Exception(..)
+    ( Error(..)
+    , Exception(..)
     , Pretty(pretty)
     , SqlType(..)
+    , SqliteException(..)
     , module Exceptions
     ) where
 
 import Control.Monad.Catch (Exception(..), MonadThrow, SomeException)
-import Control.Monad.Logger (MonadLogger, logErrorN)
 import qualified Control.Monad.Catch as Except
+import Control.Monad.Logger (MonadLogger, logErrorN)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding.Error (UnicodeException(..))
 import Data.Typeable (Typeable, cast)
 import Database.Persist.Types (SqlType(..), PersistValue(..))
-import Database.Sqlite (SqliteException(..))
+import Database.Sqlite (Error(..), SqliteException(..))
 
 import Pretty (Doc, Pretty(pretty), (<+>))
 import qualified Pretty
