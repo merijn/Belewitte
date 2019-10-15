@@ -12,16 +12,67 @@ import Conduit (MonadIO, MonadResource, (.|), runConduit)
 import qualified Data.Conduit.Combinators as C
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
+import Data.Proxy (Proxy(Proxy))
 import Data.String.Interpolate.IsString (i)
 
-import Database.Persist.Sqlite (getFieldName, getTableName, liftPersist)
-import Exceptions
-import Query (MonadQuery, Query(..), runSqlQuerySingle)
+import Core
+import Database.Persist.Sqlite
+    (getFieldName, getTableName, liftPersist, rawExecute, sqlType)
+import Query (MonadQuery, Query(..), runSqlQuerySingle, runSqlQuerySingleMaybe)
 import Schema
 import Sql.Core hiding (executeSql, liftProjectPersist)
 
 newtype Avg = Avg { getAvg :: Int } deriving (Show, Eq, Ord)
 newtype Max = Max { getMax :: Int } deriving (Show, Eq, Ord)
+
+rawGetGlobalVar
+    :: forall a b m
+     . (MonadQuery m, PersistFieldSql a)
+    => (Query a -> m b) -> GlobalVar a -> m b
+rawGetGlobalVar run var = do
+    let queryText = [i|SELECT value FROM GlobalVars WHERE name = ?|]
+    run Query{..}
+  where
+    queryName :: Text
+    queryName = "getGlobalVar"
+
+    cteParams :: [PersistValue]
+    cteParams = []
+
+    commonTableExpressions :: [Text]
+    commonTableExpressions = []
+
+    params :: [PersistValue]
+    params = [ toPersistValue (showText var) ]
+
+    convert
+        :: (MonadIO n, MonadLogger n, MonadThrow n)
+        => [PersistValue] -> n a
+    convert [sqlResult]
+        | Right result <- fromPersistValue sqlResult
+        = return result
+
+    convert actualValues = logThrowM $ QueryResultUnparseable actualValues
+        [ sqlType (Proxy :: Proxy a) ]
+
+getGlobalVar :: (MonadQuery m, PersistFieldSql a) => GlobalVar a -> m (Maybe a)
+getGlobalVar = rawGetGlobalVar runSqlQuerySingleMaybe
+
+getGlobalVar_ :: (MonadQuery m, PersistFieldSql a) => GlobalVar a -> m a
+getGlobalVar_ = rawGetGlobalVar runSqlQuerySingle
+
+initialiseGlobalVar
+    :: (MonadSql m, PersistFieldSql a) => GlobalVar a -> a -> m ()
+initialiseGlobalVar var value = liftPersist $ do
+    rawExecute query [ toPersistValue (show var), toPersistValue value ]
+  where
+    query = [i|INSERT INTO GlobalVars ("name","value") VALUES (?,?)|]
+
+setGlobalVar :: (MonadSql m, PersistFieldSql a) => GlobalVar a -> a -> m ()
+setGlobalVar var value = liftPersist $ do
+    rawExecute query [ toPersistValue (show var), toPersistValue value ]
+  where
+    query = [i|INSERT OR REPLACE INTO GlobalVars ("name","value") VALUES (?,?)|]
 
 getFieldLength
     :: forall a m rec

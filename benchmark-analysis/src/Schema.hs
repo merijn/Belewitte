@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Schema
     ( ByteString
+    , GlobalVars.GlobalVar(..)
     , Hash(..)
     , ImplType(..)
     , Model

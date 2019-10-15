@@ -5,6 +5,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
@@ -25,6 +26,11 @@ GlobalVars
     UniqGlobal name
     deriving Eq Show
 |]
+
+data GlobalVar a where
+    RunCommand :: GlobalVar Text
+
+deriving instance Show (GlobalVar a)
 
 migrations :: MonadSql m => Int64 -> m [EntityDef]
 migrations = Utils.mkMigrationLookup [ 11 .= schema ]
