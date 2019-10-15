@@ -46,8 +46,9 @@ import BroadcastChan.Conduit
 import Core
 import Utils.Process (UnexpectedTermination, unexpectedTermination)
 import RuntimeData (getKernelExecutable, getKernelLibPath)
+import Query (MonadQuery)
 import Schema
-import Sql (MonadSql, (+=.))
+import Sql (MonadSql, (+=.), getGlobalVar)
 import qualified Sql
 
 data Job a = Job
@@ -102,7 +103,7 @@ getJobTimeOut = liftIO $ do
     return $ case dayOfWeek (Time.localDay localTime) of
         Sunday -> timeoutFlag 8
         Saturday -> timeoutFlag 8
-        _ | dayHour > 18 -> timeoutFlag 8
+        _ | dayHour > 20 -> timeoutFlag 8
           | dayHour < 8 -> timeoutFlag $ 8 - (dayHour + 1)
           | otherwise -> []
   where
@@ -112,19 +113,25 @@ getJobTimeOut = liftIO $ do
 type LogFun = Loc -> LogSource -> LogLevel -> LogStr -> IO ()
 
 withProcessPool
-    :: (MonadLoggerIO m, MonadResource m)
+    :: (MonadLoggerIO m, MonadResource m, MonadQuery m)
     => Int -> Platform -> (Pool Process -> m a) -> m a
-withProcessPool n Platform{platformName} f = do
+withProcessPool n Platform{platformName,platformFlags} f = do
     hostName <- liftIO getHostName
     logFun <- Log.askLoggerIO
-    (releaseKey, pool) <-
-        allocate (createProcessPool logFun hostName) destroyProcessPool
+    makeRunnerProc <- runnerCreator
+    (releaseKey, pool) <- allocate
+        (createProcessPool logFun hostName makeRunnerProc)
+        destroyProcessPool
 
     f pool <* release releaseKey
   where
-    createProcessPool :: LogFun -> String -> IO (Pool Process)
-    createProcessPool logFun hostName = Pool.createPool
-            (unLog allocateProcess)
+    createProcessPool
+        :: LogFun
+        -> String
+        -> ([String] -> IO CreateProcess)
+        -> IO (Pool Process)
+    createProcessPool logFun hostName makeRunnerProc = Pool.createPool
+            (unLog $ allocateProcess makeRunnerProc)
             (unLog . destroyProcess hostName)
             1
             3153600000
@@ -135,15 +142,40 @@ withProcessPool n Platform{platformName} f = do
     destroyProcessPool :: Pool Process -> IO ()
     destroyProcessPool = liftIO . Pool.destroyAllResources
 
-    allocateProcess :: LoggingT IO Process
-    allocateProcess = do
+    customRunner :: Text -> [String] -> IO CreateProcess
+    customRunner txtCmd args = return . Proc.proc cmd $ runnerArgs ++ args
+      where
+        cmd = T.unpack txtCmd
+        runnerArgs = flags ++ ["--"]
+        flags = map T.unpack $ case platformFlags of
+            Nothing -> [platformName]
+            Just t -> T.splitOn " " t
+
+    defaultRunner :: [String] -> IO CreateProcess
+    defaultRunner args = do
+        timeout <- getJobTimeOut
+        return . Proc.proc "srun" $ timeout ++ runnerArgs ++ args
+      where
+        runnerArgs = ["-Q", "--gres=gpu:1"] ++ flags ++ ["--"]
+        flags = map T.unpack $ case platformFlags of
+            Nothing -> ["-C", platformName]
+            Just t -> T.splitOn " " t
+
+    runnerCreator :: MonadQuery m => m ([String] -> IO CreateProcess)
+    runnerCreator = do
+        result <- getGlobalVar RunCommand
+        case result of
+            Just cmd -> return $ customRunner cmd
+            Nothing -> return $ defaultRunner
+
+    allocateProcess :: ([String] -> IO CreateProcess) -> LoggingT IO Process
+    allocateProcess createRunnerProc = do
         exePath <- getKernelExecutable
         libPath <- getKernelLibPath
         proc@Process{procId} <- liftIO $ do
-            timeout <- getJobTimeOut
-            let p = (Proc.proc "srun" (opts timeout exePath libPath))
-                    { std_in = CreatePipe, std_out = CreatePipe }
+            runnerProc <- createRunnerProc [exePath, "-L", libPath, "-W", "-S"]
 
+            let p = runnerProc { std_in = CreatePipe, std_out = CreatePipe }
                 procToException = unexpectedTermination p
 
             (Just inHandle, Just outHandle, Nothing, procHandle) <-
@@ -155,11 +187,6 @@ withProcessPool n Platform{platformName} f = do
 
             return Process{..}
         proc <$ logInfoN ("Started new process: " <> showText procId)
-      where
-        opts timeout exePath libPath = timeout ++
-            [ "-Q", "--gres=gpu:1", "-C", T.unpack platformName, "--", exePath
-            , "-L", libPath, "-W", "-S"
-            ]
 
     destroyProcess :: String -> Process -> LoggingT IO ()
     destroyProcess hostName Process{..} = do
@@ -197,8 +224,7 @@ withResource pool f = withAcquire (mkAcquireType alloc clean) $ f . fst
 
 processJobsParallel
     :: ( MonadLoggerIO m
-       , MonadResource m
-       , MonadSql m
+       , MonadQuery m
        , MonadMask m
        , MonadUnliftIO m
        )
@@ -208,8 +234,7 @@ processJobsParallel numNodes platform = withProcessPool numNodes platform $
 
 processJobsParallelWithSharedPool
     :: ( MonadLoggerIO m
-       , MonadResource m
-       , MonadSql m
+       , MonadQuery m
        , MonadMask m
        , MonadUnliftIO m
        )
