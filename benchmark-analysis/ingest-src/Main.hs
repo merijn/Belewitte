@@ -103,20 +103,24 @@ runBenchmarks numNodes = lift $ do
             Sql.selectFirst [] []
         ]
 
+    let defaultN = min numNodes (platformAvailable defaultPlatform)
+
     runConduit $
         Sql.selectSource [] []
         .> variantToPropertyJob
-        .| processJobsParallel numNodes defaultPlatform
+        .| processJobsParallel defaultN defaultPlatform
         .| C.mapM_ processProperty
 
     runConduit $
         Sql.selectSource [] [] .> \(Entity runConfigId config) -> do
-            let commitId = runConfigAlgorithmVersion config
             platform <- Sql.getJust $ runConfigPlatformId config
+
+            let commitId = runConfigAlgorithmVersion config
+                n = min numNodes (platformAvailable platform)
 
             runSqlQuery (missingBenchmarkQuery runConfigId)
                 .> missingRunToTimingJob
-                .| processJobsParallel numNodes platform
+                .| processJobsParallel n platform
                 .| C.mapM_ (processTiming runConfigId commitId)
   where
     tryAlternatives :: (MonadIO m, MonadLogger m) => [MaybeT m a] -> m a
@@ -132,11 +136,12 @@ validate numNodes = lift $ do
     checkCxxCompiled
     runConduit $
         Sql.selectSource [] [] .> \(Entity platformId platform) -> do
-            withProcessPool numNodes platform $ \procPool -> do
+            let n = min numNodes (platformAvailable platform)
+            withProcessPool n platform $ \procPool -> do
                 runSqlQuery (validationVariantQuery platformId)
-                .| processJobsParallelWithSharedPool numNodes procPool
+                .| processJobsParallelWithSharedPool n procPool
                 .> validationMissingRuns platformId
-                .| processJobsParallelWithSharedPool numNodes procPool
+                .| processJobsParallelWithSharedPool n procPool
                 .| validateResults numNodes
                 .| C.mapM_ cleanupValidation
 
