@@ -157,7 +157,7 @@ withProcessPool n Platform{platformName} f = do
         proc <$ logInfoN ("Started new process: " <> showText procId)
       where
         opts timeout exePath libPath = timeout ++
-            [ "-Q", "--gres=gpu:1", "-C", T.unpack platformName, exePath
+            [ "-Q", "--gres=gpu:1", "-C", T.unpack platformName, "--", exePath
             , "-L", libPath, "-W", "-S"
             ]
 
