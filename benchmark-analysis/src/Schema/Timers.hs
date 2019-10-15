@@ -15,6 +15,7 @@ import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
+import Pretty.Columns
 import Schema.Utils (EntityDef, Int64, MonadSql, (.>))
 import qualified Schema.Utils as Utils
 import qualified Schema.Timers.V0 as V0
@@ -43,6 +44,25 @@ StepTimer
     Primary runId stepId name
     deriving Eq Show
 |]
+
+instance PrettyColumns TotalTimer where
+    prettyColumnInfo = idColumn TotalTimerRunId :|
+        [ column TotalTimerName
+        , TotalTimerMinTime `columnVia` prettyDouble
+        , TotalTimerAvgTime `columnVia` prettyDouble
+        , TotalTimerMaxTime `columnVia` prettyDouble
+        , TotalTimerStdDev `columnVia` prettyDouble
+        ]
+
+instance PrettyColumns StepTimer where
+    prettyColumnInfo = idColumn StepTimerRunId :|
+        [ StepTimerStepId `columnVia` prettyShow
+        , column StepTimerName
+        , StepTimerMinTime `columnVia` prettyDouble
+        , StepTimerAvgTime `columnVia` prettyDouble
+        , StepTimerMaxTime `columnVia` prettyDouble
+        , StepTimerStdDev `columnVia` prettyDouble
+        ]
 
 migrations :: MonadSql m => Int64 -> m [EntityDef]
 migrations = Utils.mkMigrationLookup

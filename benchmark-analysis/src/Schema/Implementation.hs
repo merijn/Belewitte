@@ -13,6 +13,7 @@ import Data.Text (Text)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
+import Pretty.Columns
 import Schema.Utils (EntityDef, Int64, MonadSql, (.=))
 import qualified Schema.Utils as Utils
 import Types
@@ -29,6 +30,15 @@ Implementation
     UniqImpl algorithmId name
     deriving Eq Show
 |]
+
+instance PrettyColumns Implementation where
+    prettyColumnInfo = idColumn ImplementationId :|
+        [ idColumn ImplementationAlgorithmId
+        , column ImplementationName
+        , ImplementationType `columnVia` prettyShow
+        , maybeColumn ImplementationPrettyName
+        , maybeColumn ImplementationFlags
+        ]
 
 migrations :: MonadSql m => Int64 -> m [EntityDef]
 migrations = Utils.mkMigrationLookup [ 0 .= schema ]

@@ -17,6 +17,7 @@ import Data.Text (Text)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
+import Pretty.Columns
 import Schema.Utils (EntityDef, ForeignDef, Int64, MonadSql, (.>))
 import qualified Schema.Utils as Utils
 
@@ -46,6 +47,25 @@ ExternalTimer
     Primary platformId variantId implId algorithmId name
     deriving Eq Show
 |]
+
+instance PrettyColumns ExternalImpl where
+    prettyColumnInfo = idColumn ExternalImplId :|
+        [ idColumn ExternalImplAlgorithmId
+        , column ExternalImplName
+        , maybeColumn ExternalImplPrettyName
+        ]
+
+instance PrettyColumns ExternalTimer where
+    prettyColumnInfo = idColumn ExternalTimerPlatformId :|
+        [ idColumn ExternalTimerVariantId
+        , idColumn ExternalTimerImplId
+        , idColumn ExternalTimerAlgorithmId
+        , column ExternalTimerName
+        , ExternalTimerMinTime `columnVia` prettyDouble
+        , ExternalTimerAvgTime `columnVia` prettyDouble
+        , ExternalTimerMaxTime `columnVia` prettyDouble
+        , ExternalTimerStdDev `columnVia` prettyDouble
+        ]
 
 schema :: [EntityDef]
 schema = Utils.addForeignRef "ExternalTimer" variant

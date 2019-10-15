@@ -15,6 +15,7 @@ import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
+import Pretty.Columns
 import Schema.Utils (EntityDef, Int64, MonadSql, (.>), (.=))
 import qualified Schema.Utils as Utils
 
@@ -31,6 +32,14 @@ Graph
     UniqGraphName name datasetId
     deriving Eq Show
 |]
+
+instance PrettyColumns Graph where
+    prettyColumnInfo = idColumn GraphId :|
+        [ column GraphName
+        , idColumn GraphDatasetId
+        , maybeColumn GraphPrettyName
+        , column GraphPath
+        ]
 
 migrations :: MonadSql m => Int64 -> m [EntityDef]
 migrations = Utils.mkMigrationLookup

@@ -17,6 +17,7 @@ import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
+import Pretty.Columns
 import Schema.Utils (EntityDef, ForeignDef, Int64, MonadSql, (.>))
 import qualified Schema.Utils as Utils
 
@@ -37,6 +38,16 @@ Run
     UniqRun runConfigId variantId implId algorithmId
     deriving Eq Show
 |]
+
+instance PrettyColumns Run where
+    prettyColumnInfo = idColumn RunId :|
+        [ idColumn RunRunConfigId
+        , idColumn RunAlgorithmId
+        , idColumn RunVariantId
+        , idColumn RunImplId
+        , RunValidated `columnVia` prettyShow
+        , RunTimestamp `columnVia` prettyShow
+        ]
 
 schema :: [EntityDef]
 schema = Utils.addForeignRef "Run" runConfig

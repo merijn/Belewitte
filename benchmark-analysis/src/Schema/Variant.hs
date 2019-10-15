@@ -15,6 +15,7 @@ import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 import Database.Persist.Types
 
+import Pretty.Columns
 import Schema.Utils (EntityDef, Int64, MonadSql, (.>), (.=))
 import qualified Schema.Utils as Utils
 import Types
@@ -36,6 +37,16 @@ Variant
     UniqVariant graphId variantConfigId
     deriving Eq Show
 |]
+
+instance PrettyColumns Variant where
+    prettyColumnInfo = idColumn VariantId :|
+        [ idColumn VariantVariantConfigId
+        , idColumn VariantAlgorithmId
+        , idColumn VariantGraphId
+        , VariantPropsStored `columnVia` prettyShow
+        , VariantRetryCount `columnVia` prettyShow
+        , VariantResult `maybeColumnVia` prettyShow
+        ]
 
 schema :: [EntityDef]
 schema = Utils.addForeignRef "Variant" variantConfig schema'
