@@ -32,10 +32,9 @@ import Data.Interval (Extended(Finite), Interval)
 import qualified Data.Interval as I
 import Data.IntervalSet (IntervalSet)
 import qualified Data.IntervalSet as IS
-import Data.List (intersperse)
 import Data.Map (Map)
 import qualified Data.Map as M
-import Data.Maybe (fromMaybe, mapMaybe)
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Options.Applicative hiding (Completer)
@@ -99,23 +98,10 @@ unfoldCommand prefix (Command cmdInfo@CommandInfo{..} cmdType) =
             [ mIf (null prefix) Help.linebreak
             , reflowWithMaxWidth 80 commandDesc
             ]
-        , footerDoc . justUnless (null subcmds) $ subcommandBlocks subcmds
         ]
 
-    subcommandBlocks :: [(String, Doc)] -> Doc
-    subcommandBlocks = mconcat . intersperse separator . map toSubCommandBlock
-        where
-          separator = Help.hardline <> Help.hardline
-
-    toSubCommandBlock :: (String, Doc) -> Doc
-    toSubCommandBlock (title, doc) = mconcat
-        [ "Subcommands for \"" <> Help.text title <> "\":"
-        , Help.hardline
-        , doc
-        ]
-
-    (parser, SubCommands subcmds) = case cmdType of
-        Single p -> (p, mempty)
+    parser = case cmdType of
+        Single p -> p
         Group cmds -> groupToParser cmdInfo cmds prefix
 
 groupToParser
@@ -123,8 +109,8 @@ groupToParser
      . CommandInfo
     -> [Command a]
     -> String
-    -> (Parser a, SubCommands)
-groupToParser CommandInfo{..} cmds prefix = (groupParser, subcommands)
+    -> Parser a
+groupToParser CommandInfo{..} cmds prefix = groupParser
   where
     groupPrefix :: String
     groupPrefix = prefix ++ commandName ++ " "
@@ -133,26 +119,17 @@ groupToParser CommandInfo{..} cmds prefix = (groupParser, subcommands)
     groupParser = hsubparser cmdGroup <|> hsubparser (hiddenCmdGroup <> internal)
 
     cmdGroup, hiddenCmdGroup :: Mod CommandFields a
-    subcommands :: SubCommands
-    (cmdGroup, hiddenCmdGroup, subcommands) = foldMap unfoldSubCommand cmds
+    (cmdGroup, hiddenCmdGroup) = foldMap unfoldSubCommand cmds
 
-    unfoldSubCommand
-        :: Command a -> (Mod CommandFields a, Mod CommandFields a, SubCommands)
+    unfoldSubCommand :: Command a -> (Mod CommandFields a, Mod CommandFields a)
     unfoldSubCommand cmd = select . wrapCommand . unfoldCommand groupPrefix $ cmd
       where
-        select (cmdFields, subcmds) = case cmd of
-            Hidden _ -> (mempty, cmdFields, subcmds)
-            _ -> (cmdFields, mempty, subcmds)
+        select cmdFields = case cmd of
+            Hidden _ -> (mempty, cmdFields)
+            _ -> (cmdFields, mempty)
 
-    wrapCommand
-        :: (String, Parser a, InfoMod a) -> (Mod CommandFields a, SubCommands)
-    wrapCommand (cmd, parser, infoMod) = (cmdFields, subcmds)
-      where
-        cmdFields = command cmd $ info parser infoMod
-        docs = mapMaybe (Help.unChunk . snd) $ Help.cmdDesc parser
-        subcmds = case docs of
-            [] -> mempty
-            _ -> SubCommands [(cmd, mconcat docs)]
+    wrapCommand :: (String, Parser a, InfoMod a) -> Mod CommandFields a
+    wrapCommand (cmd, parser, infoMod) = command cmd $ info parser infoMod
 
 reflow :: String -> Doc
 reflow = Help.fillSep . map Help.text . words
