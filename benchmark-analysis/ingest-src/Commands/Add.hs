@@ -76,9 +76,14 @@ checkSetDefault key field prompt = do
 
 addPlatform :: Input SqlM ()
 addPlatform = do
-    platformName <- getInteractive textInput "Platform Slurm Name"
+    platformName <- getInteractive textInput "Platform (Slurm) Name"
     prettyName <- getInteractive optionalInput "Platform Pretty Name"
-    platformId <- Sql.insert $ Platform platformName prettyName False
+    runFlags <- getInteractive optionalInput "Platform Flags"
+    platformCount <- getInteractive (readInputEnsure (>0)) "Available Machines"
+
+    platformId <- Sql.insert $
+        Platform platformName prettyName runFlags platformCount False
+
     checkSetDefault platformId PlatformIsDefault defaultPrompt
   where
     defaultPrompt = "Default platform for computing properties"

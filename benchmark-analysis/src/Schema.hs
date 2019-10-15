@@ -60,6 +60,7 @@ import Schema.Dataset hiding (migrations, schema)
 import qualified Schema.Dataset as Dataset
 import Schema.External hiding (migrations, schema, schema')
 import qualified Schema.External as External
+import qualified Schema.GlobalVars as GlobalVars
 import Schema.Graph hiding (migrations, schema)
 import qualified Schema.Graph as Graph
 import Schema.Implementation hiding (migrations, schema)
@@ -131,10 +132,11 @@ migrations =
     , (ModelMetadata.schema, ModelMetadata.migrations)
     , (VariantConfig.schema, VariantConfig.migrations)
     , (UnknownPredictions.schema, UnknownPredictions.migrations)
+    , (GlobalVars.schema, GlobalVars.migrations)
     ]
 
 schemaVersion :: Int64
-schemaVersion = 10
+schemaVersion = 11
 
 type MigrationAction = ReaderT (RawSqlite SqlBackend) IO [EntityDef]
 

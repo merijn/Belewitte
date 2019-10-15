@@ -50,6 +50,7 @@ Library
                         Schema.Dataset
                         Schema.External
                         Schema.External.V0
+                        Schema.GlobalVars
                         Schema.Graph
                         Schema.Graph.V0
                         Schema.Implementation
