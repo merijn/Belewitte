@@ -9,6 +9,7 @@ module Sql.Core
     , Filter
     , Key
     , Sqlite.PersistEntity
+    , Sqlite.PersistField
     , Sqlite.PersistFieldSql
     , RawSqlite
     , SqliteConnectionInfo
@@ -25,6 +26,7 @@ module Sql.Core
     , (Sqlite.=.)
     , (Sqlite.==.)
     , (Sqlite.+=.)
+    , (Sqlite.||.)
     , module Sql.Core
     ) where
 
