@@ -64,7 +64,7 @@ do
     :
 done
 
-paste $args | awk -v args="$file_args" -v num_args="$n" -v precision="$prec" -v verbose="$v" '
+paste "${args[@]}" | awk -v args="$file_args" -v num_args="$n" -v precision="$prec" -v verbose="$v" '
 function abs(v) { return v < 0 ? -v : v }
 BEGIN { count = 0; max_diff=0; split(args,files,"\t");}
 {
