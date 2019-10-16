@@ -22,7 +22,6 @@ import BroadcastChan.Conduit
 import qualified Control.Concurrent.STM as STM
 import Control.Monad (unless, when)
 import Control.Monad.Trans.Resource (register, release)
-import Crypto.Hash (Digest, MD5)
 import Crypto.Hash.Conduit (hashFile)
 import qualified Data.ByteArray (convert)
 import Data.Conduit (ConduitT, (.|), runConduit, yield)
@@ -42,10 +41,11 @@ import qualified RuntimeData
 import Schema
 import Sql (Entity(..), Key, MonadSql, (=.))
 import qualified Sql
+import Types (HashDigest)
 
 computeHash :: MonadIO m => FilePath -> m Hash
 computeHash path = do
-    (digest :: Digest MD5) <- hashFile path
+    (digest :: HashDigest) <- hashFile path
     return . Hash . Data.ByteArray.convert $ digest
 
 variantToPropertyJob
