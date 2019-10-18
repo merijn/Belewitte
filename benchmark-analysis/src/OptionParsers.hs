@@ -20,6 +20,7 @@ module OptionParsers
     , algorithmIdParser
     , algorithmParser
     , intervalReader
+    , optionEnumerationHelp
     , optionParserFromValues
     , runSqlM
     , module Options.Applicative
@@ -196,17 +197,11 @@ intervalReader = maybeReader . parseMaybe $
 
     toInterval = I.interval `on` (,True) . Finite
 
-optionParserFromValues
-    :: Map String a -> String -> Doc -> Mod OptionFields a -> Parser a
-optionParserFromValues vals metaVar helpText =
-    option (maybeReader lookupCI) . mappend extra
+optionEnumerationHelp :: String -> [String] -> Doc
+optionEnumerationHelp metaVar names = preamble </> quoteValues names
   where
-    lookupCI key = M.lookup (map toLower key) valMap
-    valMap = M.mapKeys (map toLower) vals
-    extra = mconcat [ metavar metaVar, helpDoc (Just extraHelpText) ]
-    extraHelpText =
-        helpText </> reflow ("The possible values of " <> metaVar <> " are")
-                 </> quoteValues (M.keys valMap)
+    preamble :: Doc
+    preamble = reflow $ "The possible values of " <> metaVar <> " are"
 
     quote :: String -> Doc
     quote = Help.squotes . Help.string
@@ -216,6 +211,16 @@ optionParserFromValues vals metaVar helpText =
         [] -> mempty
         [x] -> Help.string "or" </> quote x <> Help.char '.' <> Help.softbreak
         (x:xs) -> quote x <> Help.char ',' </> quoteValues xs
+
+optionParserFromValues
+    :: Map String a -> String -> Doc -> Mod OptionFields a -> Parser a
+optionParserFromValues vals metaVar helpText =
+    option (maybeReader lookupCI) . mappend extra
+  where
+    lookupCI key = M.lookup (map toLower key) valMap
+    valMap = M.mapKeys (map toLower) vals
+    extra = mconcat [ metavar metaVar, helpDoc (Just extraHelpText) ]
+    extraHelpText = helpText </> optionEnumerationHelp metaVar (M.keys valMap)
 
 runSqlM :: (String -> Command a) -> (a -> SqlM b) -> IO b
 runSqlM commandFromName work = do
