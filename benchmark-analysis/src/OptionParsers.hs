@@ -20,6 +20,7 @@ module OptionParsers
     , algorithmIdParser
     , algorithmParser
     , intervalReader
+    , mapOption
     , optionEnumerationHelp
     , optionParserFromValues
     , runSqlM
@@ -197,6 +198,12 @@ intervalReader = maybeReader . parseMaybe $
 
     toInterval = I.interval `on` (,True) . Finite
 
+mapOption :: Map String v -> Mod OptionFields v -> Parser v
+mapOption vals = option (maybeReader lookupCI)
+  where
+    lookupCI key = M.lookup (map toLower key) valMap
+    valMap = M.mapKeys (map toLower) vals
+
 optionEnumerationHelp :: String -> [String] -> Doc
 optionEnumerationHelp metaVar names = preamble </> quoteValues names
   where
@@ -214,13 +221,11 @@ optionEnumerationHelp metaVar names = preamble </> quoteValues names
 
 optionParserFromValues
     :: Map String a -> String -> Doc -> Mod OptionFields a -> Parser a
-optionParserFromValues vals metaVar helpText =
-    option (maybeReader lookupCI) . mappend extra
+optionParserFromValues vals metaVar helpText = mapOption vals . mappend extra
   where
-    lookupCI key = M.lookup (map toLower key) valMap
-    valMap = M.mapKeys (map toLower) vals
     extra = mconcat [ metavar metaVar, helpDoc (Just extraHelpText) ]
-    extraHelpText = helpText </> optionEnumerationHelp metaVar (M.keys valMap)
+    extraHelpText = helpText </> optionEnumerationHelp metaVar names
+    names = map (map toLower) $ M.keys vals
 
 runSqlM :: (String -> Command a) -> (a -> SqlM b) -> IO b
 runSqlM commandFromName work = do
