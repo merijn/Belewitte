@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -fno-prof-auto #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE TemplateHaskell #-}

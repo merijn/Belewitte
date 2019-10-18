@@ -29,10 +29,38 @@ Data-Files:             runtime-data/kernel-runner
 
 Extra-Source-Files:     cbits/*.h src/schema
 
-Library
+Common all
   Default-Language:     Haskell2010
   GHC-Options:          -O2 -Wall -fno-warn-unused-do-bind
-  GHC-Prof-Options:     
+  GHC-Prof-Options:     -fprof-auto
+  Other-Extensions:     LambdaCase
+                        MonadFailDesugaring
+                        NamedFieldPuns
+                        OverloadedStrings
+                        QuasiQuotes
+                        RecordWildCards
+                        TupleSections
+                        ViewPatterns
+
+  Build-Depends:        base
+               ,        conduit ^>= 1.3.1.1
+               ,        conduit-extra ^>= 1.3.4
+               ,        containers >= 0.5.11 && < 0.7
+               ,        exceptions ^>= 0.10.0
+               ,        interpolate ^>= 0.2.0
+               ,        monad-logger ^>= 0.3.28
+               ,        mtl ^>= 2.2.1
+               ,        optparse-applicative ^>= 0.15
+               ,        resourcet ^>= 1.2.0
+               ,        text
+               ,        time ^>= 1.9
+               ,        unix ^>= 2.7.0
+
+Common exes
+  GHC-Options:          -rtsopts -threaded -with-rtsopts=-qg
+
+Library
+  Import:               all
   Hs-Source-Dirs:       src
   Exposed-Modules:      Core
                         Exceptions
@@ -100,64 +128,39 @@ Library
                         GADTs
                         GADTSyntax
                         GeneralizedNewtypeDeriving
-                        LambdaCase
                         MagicHash
-                        MonadFailDesugaring
                         MultiParamTypeClasses
-                        NamedFieldPuns
-                        OverloadedStrings
                         PatternSynonyms
-                        QuasiQuotes
                         RankNTypes
-                        RecordWildCards
                         ScopedTypeVariables
                         TemplateHaskell
-                        TupleSections
                         TypeFamilies
                         UndecidableInstances
-                        ViewPatterns
 
-  Build-Depends:        base
-               ,        bytestring
+  Build-Depends:        bytestring
                ,        binary ^>= 0.8.7
                ,        clock ^>= 0.8
-               ,        conduit ^>= 1.3.1.1
-               ,        conduit-extra ^>= 1.3.4
-               ,        containers >= 0.5.11 && < 0.7
                ,        cryptonite ^>= 0.26
                ,        data-interval ^>= 1.3.0
                ,        directory ^>= 1.3.4.0
-               ,        exceptions ^>= 0.10.0
                ,        filepath ^>= 1.4.0
                ,        haskeline ^>= 0.7.4.2
-               ,        interpolate ^>= 0.2.0
                ,        megaparsec ^>= 7.0.0
                ,        microlens ^>= 0.4.8
-               ,        monad-logger ^>= 0.3.28
-               ,        mtl ^>= 2.2.1
-               ,        optparse-applicative ^>= 0.15
                ,        persistent ^>= 2.10.0
                ,        persistent-template ^>= 2.7.2
                ,        persistent-sqlite ^>= 2.10.4
                ,        prettyprinter ^>= 1.2.0
                ,        prettyprinter-ansi-terminal ^>= 1.1.1
                ,        process ^>= 1.6.0
-               ,        resourcet ^>= 1.2.0
-               ,        resource-pool ^>= 0.2.3.2
                ,        streaming-commons ^>= 0.2.1
                ,        terminal-size ^>= 0.3.2.1
-               ,        text
-               ,        time ^>= 1.9
                ,        transformers
-               ,        unix ^>= 2.7.0
                ,        unliftio-core ^>= 0.1.1
                ,        vector ^>= 0.12.0.1
 
 Executable Ingest
-  Default-Language:     Haskell2010
-  GHC-Options:          -O2 -Wall -fno-warn-unused-do-bind -rtsopts -threaded
-                        -with-rtsopts=-qg
-  GHC-Prof-Options:     -fprof-auto
+  Import:               all, exes
   Hs-Source-Dirs:       ingest-src
   Main-Is:              Main.hs
   Other-Modules:        Commands.Add
@@ -172,49 +175,24 @@ Executable Ingest
   Other-Extensions:     DeriveFoldable
                         DeriveFunctor
                         DeriveTraversable
-                        LambdaCase
-                        MonadFailDesugaring
-                        NamedFieldPuns
-                        OverloadedStrings
-                        QuasiQuotes
-                        RecordWildCards
                         ScopedTypeVariables
-                        TupleSections
                         TypeFamilies
-                        ViewPatterns
 
-  Build-Depends:        base
-               ,        benchmark-analysis
+  Build-Depends:        benchmark-analysis
                ,        broadcast-chan-conduit ^>= 0.2.0
                ,        attoparsec ^>= 0.13.1
-               ,        conduit ^>= 1.3.1.1
-               ,        conduit-extra ^>= 1.3.4
                ,        cryptonite-conduit ^>= 0.2.0
                ,        directory ^>= 1.3.4.0
-               ,        exceptions ^>= 0.10.0
                ,        filepath ^>= 1.4.0
-               ,        haskeline >= 0.7.4.2
                ,        hostname ^>= 1.0
-               ,        interpolate ^>= 0.2.0
-               ,        microlens ^>= 0.4.8
-               ,        monad-logger ^>= 0.3.28
                ,        memory ^>= 0.14
-               ,        mtl ^>= 2.2.1
-               ,        optparse-applicative ^>= 0.15
                ,        process ^>= 1.6.0
-               ,        resourcet ^>= 1.2.0
                ,        resource-pool ^>= 0.2.3.2
                ,        stm ^>= 2.5.0
-               ,        text
-               ,        time ^>= 1.9
                ,        transformers
-               ,        unix ^>= 2.7.0
 
 Executable Model
-  Default-Language:     Haskell2010
-  GHC-Options:          -O2 -Wall -fno-warn-unused-do-bind -rtsopts -threaded
-                        -with-rtsopts=-qg
-  GHC-Prof-Options:     -fprof-auto
+  Import:               all, exes
   Hs-Source-Dirs:       model-src
   Main-Is:              Main.hs
   Other-Modules:        Evaluate
@@ -226,45 +204,20 @@ Executable Model
   Other-Extensions:     BangPatterns
                         DeriveFunctor
                         FlexibleContexts
-                        LambdaCase
-                        MonadFailDesugaring
-                        NamedFieldPuns
-                        OverloadedStrings
-                        QuasiQuotes
-                        RecordWildCards
                         ScopedTypeVariables
-                        TupleSections
                         TypeFamilies
-                        ViewPatterns
 
-  Build-Depends:        base
-               ,        benchmark-analysis
+  Build-Depends:        benchmark-analysis
                ,        binary ^>= 0.8.7
                ,        binary-conduit ^>= 1.3
-               ,        broadcast-chan ^>= 0.2.0
                ,        bytestring
-               ,        conduit ^>= 1.3.1.1
-               ,        conduit-extra ^>= 1.3.4
-               ,        containers >= 0.5.11 && < 0.7
                ,        data-interval ^>= 1.3.0
-               ,        exceptions ^>= 0.10.0
-               ,        interpolate ^>= 0.2.0
                ,        megaparsec ^>= 7.0.0
-               ,        monad-logger ^>= 0.3.28
-               ,        mtl ^>= 2.2.1
-               ,        persistent-sqlite ^>= 2.10.4
-               ,        resourcet ^>= 1.2.0
-               ,        streaming-commons ^>= 0.2.1
-               ,        text
-               ,        time ^>= 1.9
-               ,        unix ^>= 2.7.0
                ,        vector ^>= 0.12.0.1
 
 Executable Plot
+  Import:               all, exes
   Default-Language:     Haskell2010
-  GHC-Options:          -O2 -Wall -fno-warn-unused-do-bind -rtsopts -threaded
-                        -with-rtsopts=-qg
-  GHC-Prof-Options:     -fprof-auto
   Hs-Source-Dirs:       plot-src
   Main-Is:              Plot.hs
   Other-Modules:        PlotQuery
@@ -272,29 +225,9 @@ Executable Plot
   Other-Extensions:     ApplicativeDo
                         BangPatterns
                         FlexibleContexts
-                        LambdaCase
-                        MonadFailDesugaring
-                        NamedFieldPuns
-                        OverloadedStrings
-                        QuasiQuotes
-                        RecordWildCards
-                        TupleSections
-                        ViewPatterns
 
-  Build-Depends:        base
-               ,        benchmark-analysis
-               ,        conduit ^>= 1.3.1.1
-               ,        conduit-extra ^>= 1.3.4
-               ,        containers >= 0.5.11 && < 0.7
-               ,        exceptions ^>= 0.10.0
-               ,        interpolate ^>= 0.2.0
-               ,        monad-logger ^>= 0.3.28
-               ,        optparse-applicative ^>= 0.15
-               ,        persistent-sqlite ^>= 2.10.4
-               ,        resourcet ^>= 1.2.0
+  Build-Depends:        benchmark-analysis
                ,        split ^>= 0.2.0
-               ,        text
-               ,        unliftio-core ^>= 0.1.1
                ,        vector ^>= 0.12.0.1
 
 Source-Repository head
