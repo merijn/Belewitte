@@ -33,7 +33,6 @@ commands = CommandGroup CommandInfo
     forceOpt = flag NoForce Force $ mconcat
         [ long "force", help "Override pre-existing values when setting." ]
 
-
 setRunCommand :: Force -> Text -> SqlM ()
 setRunCommand force = setCommand
   where

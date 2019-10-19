@@ -135,6 +135,9 @@ deleteBy = liftPersist . Sqlite.deleteBy
 deleteWhere :: (MonadSql m, SqlRecord rec) => [Filter rec] -> m ()
 deleteWhere = liftPersist . Sqlite.deleteWhere
 
+get :: (MonadSql m, SqlRecord rec) => Key rec -> m (Maybe rec)
+get = liftPersist . Sqlite.get
+
 getBy :: (MonadSql m, SqlRecord rec) => Unique rec -> m (Maybe (Entity rec))
 getBy = liftPersist . Sqlite.getBy
 
