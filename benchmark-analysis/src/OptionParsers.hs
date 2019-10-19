@@ -20,6 +20,7 @@ module OptionParsers
     , algorithmIdParser
     , algorithmParser
     , intervalReader
+    , readCI
     , mapOption
     , optionEnumerationHelp
     , optionParserFromValues
@@ -197,6 +198,12 @@ intervalReader = maybeReader . parseMaybe $
     range = toInterval <$> try (decimal <* char '-') <*> decimal
 
     toInterval = I.interval `on` (,True) . Finite
+
+readCI :: (Foldable f, Show a) => f a -> ReadM a
+readCI vals = maybeReader lookupCI
+  where
+    lookupCI key = M.lookup (map toLower key) valMap
+    valMap = foldMap (\v -> M.singleton (map toLower (show v)) v) vals
 
 mapOption :: Map String v -> Mod OptionFields v -> Parser v
 mapOption vals = option (maybeReader lookupCI)
