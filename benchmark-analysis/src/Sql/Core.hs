@@ -208,10 +208,10 @@ updateWhere filts  = liftPersist . Sqlite.updateWhere filts
 showSqlKey :: ToBackendKey SqlBackend record => Key record -> Text
 showSqlKey = T.pack . show . Sqlite.fromSqlKey
 
-likeFilter :: EntityField record Text -> Text -> Filter record
+likeFilter :: PersistField v => EntityField record v -> Text -> Filter record
 likeFilter field val = Filter field filterVal backendFilter
   where
-    filterVal = FilterValue $ T.concat ["%", val, "%"]
+    filterVal = UnsafeValue $ T.concat ["%", val, "%"]
     backendFilter = BackendSpecificFilter "like"
 
 whenNotExists
