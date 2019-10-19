@@ -21,6 +21,7 @@ module Sql.Core
     , Migration
     , fromSqlKey
     , toSqlKey
+    , Sqlite.persistIdField
     , Sqlite.fieldLens
     , Sqlite.fromPersistValue
     , (Sqlite.=.)
