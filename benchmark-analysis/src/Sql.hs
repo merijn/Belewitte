@@ -86,8 +86,8 @@ getFieldLength entityField = do
     table <- liftPersist $ getTableName (undefined :: rec)
     field <- liftPersist $ getFieldName entityField
     let queryText = [i|
-SELECT ROUND(AVG(length(#{table}.#{field})))
-     , MAX(length(#{table}.#{field}))
+SELECT IFNULL(ROUND(AVG(length(#{table}.#{field}))), 0)
+     , IFNULL(MAX(length(#{table}.#{field})), 0)
 FROM #{table}
 |]
     runSqlQuerySingle Query{..}
