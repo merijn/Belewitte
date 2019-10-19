@@ -20,6 +20,7 @@ import qualified Data.Text as T
 import System.Exit (exitFailure)
 
 import qualified Commands.Add as Add
+import qualified Commands.List as List
 import qualified Commands.Reset as Reset
 import qualified Commands.Set as Set
 import qualified Commands.Unset as Unset
@@ -51,6 +52,7 @@ commands name = CommandGroup CommandInfo
     , lift <$> Set.commands
     , lift <$> Unset.commands
     , lift <$> Reset.commands
+    , lift <$> List.commands
     , SingleCommand CommandInfo
         { commandName = "run-benchmarks"
         , commandHeaderDesc = "run benchmarks"
