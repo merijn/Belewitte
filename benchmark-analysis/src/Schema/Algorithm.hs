@@ -14,7 +14,7 @@ import Data.Text (Text)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Pretty.Columns
+import Pretty.Fields
 import Schema.Utils (EntityDef, Int64, MonadSql, (.=))
 import qualified Schema.Utils as Utils
 
@@ -26,10 +26,10 @@ Algorithm
     deriving Eq Show
 |]
 
-instance PrettyColumns Algorithm where
-    prettyColumnInfo = ("Id", idColumn AlgorithmId) :|
-        [ ("Name", column AlgorithmName)
-        , ("Pretty Name", maybeColumn AlgorithmPrettyName)
+instance PrettyFields Algorithm where
+    prettyFieldInfo = ("Id", idField AlgorithmId) :|
+        [ ("Name", textField AlgorithmName)
+        , ("Pretty Name", maybeTextField AlgorithmPrettyName)
         ]
 
 migrations :: MonadSql m => Int64 -> m [EntityDef]

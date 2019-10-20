@@ -18,8 +18,6 @@ import qualified Data.Conduit.Process as Process
 import Data.Foldable (asum)
 import Data.Text (Text)
 import qualified Data.Text as T
-import Database.Persist.Class (persistFieldDef)
-import Database.Persist.Types (fieldHaskell, unHaskellName)
 import GHC.IO.Exception (IOException, IOErrorType(ResourceVanished))
 import Lens.Micro.Extras (view)
 import System.Console.Terminal.Size (hSize, height)
@@ -29,27 +27,24 @@ import System.IO (hIsTerminalDevice, stdout)
 import System.IO.Error (ioeGetErrorType)
 
 import Core
-import Pretty.Columns
+import Pretty.Fields
 import Query (MonadQuery)
 import Sql
 import Utils.Process (unexpectedTermination)
 
-columnName :: PersistEntity r => EntityField r a -> Text
-columnName = unHaskellName . fieldHaskell . persistFieldDef
-
-queryColumnInfo
-    :: (PrettyColumns a, MonadQuery m)
-    => (Text, ColumnInfo a) -> m (ColumnInfo a, (Avg, Max))
-queryColumnInfo (name, col@(ColInfo field _)) =
-    annotateColumn <$> Sql.getFieldLength field
+queryFieldInfo
+    :: (PrettyFields a, MonadQuery m)
+    => (Text, FieldInfo a) -> m (Text, FieldInfo a, (Avg, Max))
+queryFieldInfo (name, col@(FieldInfo field _)) =
+    annotateField <$> Sql.getFieldLength field
   where
-    columnSize = Max . T.length . columnName $ field
-    annotateColumn (avgVal, maxVal) = (col, (avgVal, max columnSize maxVal))
+    fieldSize = Max . T.length $ name
+    annotateField (avgVal, maxVal) = (name, col, (avgVal, max fieldSize maxVal))
 
 columnFormatter
-    :: (MonadQuery m, PrettyColumns a) => m (Text, Entity a -> Text)
+    :: (MonadQuery m, PrettyFields a) => m (Text, Entity a -> Text)
 columnFormatter = do
-    (startCol :| columns) <- traverse queryColumnInfo prettyColumnInfo
+    (startCol :| columns) <- traverse queryFieldInfo prettyFieldInfo
     let renderEntity = padColumn startCol <> foldMap sepPadColumn columns
         headerText = header startCol <> foldMap sepHeader columns
     return (headerText, renderEntity)
@@ -60,23 +55,25 @@ columnFormatter = do
     padText :: Int -> Text -> Text
     padText n input = input <> T.replicate (n - T.length input) " "
 
-    header :: PrettyColumns a => (ColumnInfo a, (Avg, Max)) -> Text
-    header (ColInfo field _, (_, Max n)) = padText n $ columnName field
+    header :: PrettyFields a => (Text, FieldInfo a, (Avg, Max)) -> Text
+    header (name, _, (_, Max n)) = padText n $ name
 
-    sepHeader :: PrettyColumns a => (ColumnInfo a, (Avg, Max)) -> Text
+    sepHeader :: PrettyFields a => (Text, FieldInfo a, (Avg, Max)) -> Text
     sepHeader x = sep <> header x
 
     padColumn
-        :: PrettyColumns a => (ColumnInfo a, (Avg, Max)) -> Entity a -> Text
-    padColumn (ColInfo f toText, (_, Max n)) val = padText n col
+        :: PrettyFields a
+        => (Text, FieldInfo a, (Avg, Max)) -> Entity a -> Text
+    padColumn (_, FieldInfo field toText, (_, Max n)) val = padText n col
       where
-        col = toText . view (Sql.fieldLens f) $ val
+        col = toText . view (Sql.fieldLens field) $ val
 
     sepPadColumn
-        :: PrettyColumns a => (ColumnInfo a, (Avg, Max)) -> Entity a -> Text
+        :: PrettyFields a
+        => (Text, FieldInfo a, (Avg, Max)) -> Entity a -> Text
     sepPadColumn x y = sep <> padColumn x y
 
-renderColumns :: PrettyColumns a => [Filter a] -> [SelectOpt a] -> SqlM ()
+renderColumns :: PrettyFields a => [Filter a] -> [SelectOpt a] -> SqlM ()
 renderColumns filts order = do
     (header, f) <- columnFormatter
     let columnSource = do

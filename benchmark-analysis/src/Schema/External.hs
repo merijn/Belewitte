@@ -17,7 +17,7 @@ import Data.Text (Text)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Pretty.Columns
+import Pretty.Fields
 import Schema.Utils (EntityDef, ForeignDef, Int64, MonadSql, (.>))
 import qualified Schema.Utils as Utils
 
@@ -48,23 +48,23 @@ ExternalTimer
     deriving Eq Show
 |]
 
-instance PrettyColumns ExternalImpl where
-    prettyColumnInfo = ("Id", idColumn ExternalImplId) :|
-        [ ("Algorithm", idColumn ExternalImplAlgorithmId)
-        , ("Name", column ExternalImplName)
-        , ("Pretty Name", maybeColumn ExternalImplPrettyName)
+instance PrettyFields ExternalImpl where
+    prettyFieldInfo = ("Id", idField ExternalImplId) :|
+        [ ("Algorithm", idField ExternalImplAlgorithmId)
+        , ("Name", textField ExternalImplName)
+        , ("Pretty Name", maybeTextField ExternalImplPrettyName)
         ]
 
-instance PrettyColumns ExternalTimer where
-    prettyColumnInfo = ("Id", idColumn ExternalTimerPlatformId) :|
-        [ ("Variant", idColumn ExternalTimerVariantId)
-        , ("Algorithm", idColumn ExternalTimerAlgorithmId)
-        , ("Implementation", idColumn ExternalTimerImplId)
-        , ("Name", column ExternalTimerName)
-        , ("Min. Time", ExternalTimerMinTime `columnVia` prettyDouble)
-        , ("Avg. Time", ExternalTimerAvgTime `columnVia` prettyDouble)
-        , ("Max Time", ExternalTimerMaxTime `columnVia` prettyDouble)
-        , ("Std. Dev.", ExternalTimerStdDev `columnVia` prettyDouble)
+instance PrettyFields ExternalTimer where
+    prettyFieldInfo = ("Id", idField ExternalTimerPlatformId) :|
+        [ ("Variant", idField ExternalTimerVariantId)
+        , ("Algorithm", idField ExternalTimerAlgorithmId)
+        , ("Implementation", idField ExternalTimerImplId)
+        , ("Name", textField ExternalTimerName)
+        , ("Min. Time", ExternalTimerMinTime `fieldVia` prettyDouble)
+        , ("Avg. Time", ExternalTimerAvgTime `fieldVia` prettyDouble)
+        , ("Max Time", ExternalTimerMaxTime `fieldVia` prettyDouble)
+        , ("Std. Dev.", ExternalTimerStdDev `fieldVia` prettyDouble)
         ]
 
 schema :: [EntityDef]

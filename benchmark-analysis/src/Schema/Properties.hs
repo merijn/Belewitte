@@ -16,7 +16,7 @@ import Data.Text (Text)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Pretty.Columns
+import Pretty.Fields
 import Schema.Utils (EntityDef, Int64, MonadSql, (.=))
 import qualified Schema.Utils as Utils
 
@@ -42,17 +42,17 @@ StepProp
     deriving Eq Show
 |]
 
-instance PrettyColumns GraphProp where
-    prettyColumnInfo = ("Graph", idColumn GraphPropGraphId) :|
-        [ ("Property", column GraphPropProperty)
-        , ("Value", GraphPropValue `columnVia` prettyDouble)
+instance PrettyFields GraphProp where
+    prettyFieldInfo = ("Graph", idField GraphPropGraphId) :|
+        [ ("Property", textField GraphPropProperty)
+        , ("Value", GraphPropValue `fieldVia` prettyDouble)
         ]
 
-instance PrettyColumns StepProp where
-    prettyColumnInfo = ("Variant", idColumn StepPropVariantId) :|
-        [ ("Step", StepPropStepId `columnVia` prettyShow)
-        , ("Property", column StepPropProperty)
-        , ("Value", StepPropValue `columnVia` prettyDouble)
+instance PrettyFields StepProp where
+    prettyFieldInfo = ("Variant", idField StepPropVariantId) :|
+        [ ("Step", StepPropStepId `fieldVia` prettyShow)
+        , ("Property", textField StepPropProperty)
+        , ("Value", StepPropValue `fieldVia` prettyDouble)
         ]
 
 migrations :: MonadSql m => Int64 -> m [EntityDef]

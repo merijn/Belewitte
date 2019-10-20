@@ -17,7 +17,7 @@ import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Pretty.Columns
+import Pretty.Fields
 import Schema.Utils (EntityDef, ForeignDef, Int64, MonadSql, (.>))
 import qualified Schema.Utils as Utils
 
@@ -39,14 +39,14 @@ Run
     deriving Eq Show
 |]
 
-instance PrettyColumns Run where
-    prettyColumnInfo = ("Id", idColumn RunId) :|
-        [ ("Run Config", idColumn RunRunConfigId)
-        , ("Algorithm", idColumn RunAlgorithmId)
-        , ("Variant", idColumn RunVariantId)
-        , ("Implementation", idColumn RunImplId)
-        , ("Validated", RunValidated `columnVia` prettyShow)
-        , ("Timestamp", RunTimestamp `columnVia` prettyShow)
+instance PrettyFields Run where
+    prettyFieldInfo = ("Id", idField RunId) :|
+        [ ("Run Config", idField RunRunConfigId)
+        , ("Algorithm", idField RunAlgorithmId)
+        , ("Variant", idField RunVariantId)
+        , ("Implementation", idField RunImplId)
+        , ("Validated", RunValidated `fieldVia` prettyShow)
+        , ("Timestamp", RunTimestamp `fieldVia` prettyShow)
         ]
 
 schema :: [EntityDef]

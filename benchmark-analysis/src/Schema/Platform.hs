@@ -16,7 +16,7 @@ import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Pretty.Columns
+import Pretty.Fields
 import Schema.Utils (EntityDef, Int64, MonadSql, (.>), (.=))
 import qualified Schema.Utils as Utils
 
@@ -33,13 +33,13 @@ Platform
     deriving Eq Show
 |]
 
-instance PrettyColumns Platform where
-    prettyColumnInfo = ("Id", idColumn PlatformId) :|
-        [ ("Name", column PlatformName)
-        , ("Pretty Name", maybeColumn PlatformPrettyName)
-        , ("Flags", maybeColumn PlatformFlags)
-        , ("Num. Available", PlatformAvailable `columnVia` prettyShow)
-        , ("Default Platform", PlatformIsDefault `columnVia` prettyShow)
+instance PrettyFields Platform where
+    prettyFieldInfo = ("Id", idField PlatformId) :|
+        [ ("Name", textField PlatformName)
+        , ("Pretty Name", maybeTextField PlatformPrettyName)
+        , ("Flags", maybeTextField PlatformFlags)
+        , ("Num. Available", PlatformAvailable `fieldVia` prettyShow)
+        , ("Default Platform", PlatformIsDefault `fieldVia` prettyShow)
         ]
 
 migrations :: MonadSql m => Int64 -> m [EntityDef]

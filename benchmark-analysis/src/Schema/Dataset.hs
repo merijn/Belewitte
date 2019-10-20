@@ -15,7 +15,7 @@ import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Pretty.Columns
+import Pretty.Fields
 import Schema.Utils (EntityDef, Int64, MonadSql, (.>))
 import qualified Schema.Utils as Utils
 
@@ -26,9 +26,9 @@ Dataset
     deriving Eq Show
 |]
 
-instance PrettyColumns Dataset where
-    prettyColumnInfo = ("Id", idColumn DatasetId) :|
-        [ ("Name", column DatasetName) ]
+instance PrettyFields Dataset where
+    prettyFieldInfo = ("Id", idField DatasetId) :|
+        [ ("Name", textField DatasetName) ]
 
 migrations :: MonadSql m => Int64 -> m [EntityDef]
 migrations = Utils.mkMigrationLookup

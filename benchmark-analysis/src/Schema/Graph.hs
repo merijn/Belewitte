@@ -16,7 +16,7 @@ import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Pretty.Columns
+import Pretty.Fields
 import Schema.Utils (EntityDef, Int64, MonadSql, (.>), (.=))
 import qualified Schema.Utils as Utils
 
@@ -34,12 +34,12 @@ Graph
     deriving Eq Show
 |]
 
-instance PrettyColumns Graph where
-    prettyColumnInfo = ("Id", idColumn GraphId) :|
-        [ ("Name", column GraphName)
-        , ("Dataset", idColumn GraphDatasetId)
-        , ("Pretty Name", maybeColumn GraphPrettyName)
-        , ("Filepath", column GraphPath)
+instance PrettyFields Graph where
+    prettyFieldInfo = ("Id", idField GraphId) :|
+        [ ("Name", textField GraphName)
+        , ("Dataset", idField GraphDatasetId)
+        , ("Pretty Name", maybeTextField GraphPrettyName)
+        , ("Filepath", textField GraphPath)
         ]
 
 migrations :: MonadSql m => Int64 -> m [EntityDef]

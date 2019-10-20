@@ -17,7 +17,7 @@ import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Pretty.Columns
+import Pretty.Fields
 import Schema.Utils (EntityDef, Int64, MonadSql, (.>))
 import qualified Schema.Utils as Utils
 
@@ -35,13 +35,13 @@ RunConfig
     deriving Eq Show
 |]
 
-instance PrettyColumns RunConfig where
-    prettyColumnInfo = ("Id", idColumn RunConfigId) :|
-        [ ("Algorithm", idColumn RunConfigAlgorithmId)
-        , ("Platform", idColumn RunConfigPlatformId)
-        , ("Dataset", idColumn RunConfigDatasetId)
-        , ("Repeats", RunConfigRepeats `columnVia` prettyShow)
-        , ("Algorithm Commit", column RunConfigAlgorithmVersion)
+instance PrettyFields RunConfig where
+    prettyFieldInfo = ("Id", idField RunConfigId) :|
+        [ ("Algorithm", idField RunConfigAlgorithmId)
+        , ("Platform", idField RunConfigPlatformId)
+        , ("Dataset", idField RunConfigDatasetId)
+        , ("Repeats", RunConfigRepeats `fieldVia` prettyShow)
+        , ("Algorithm Commit", textField RunConfigAlgorithmVersion)
         ]
 
 migrations :: MonadSql m => Int64 -> m [EntityDef]

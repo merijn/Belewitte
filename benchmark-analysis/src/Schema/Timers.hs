@@ -16,7 +16,7 @@ import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Pretty.Columns
+import Pretty.Fields
 import Schema.Utils (EntityDef, Int64, MonadSql, (.>))
 import qualified Schema.Utils as Utils
 import qualified Schema.Timers.V0 as V0
@@ -46,23 +46,23 @@ StepTimer
     deriving Eq Show
 |]
 
-instance PrettyColumns TotalTimer where
-    prettyColumnInfo = ("Run", idColumn TotalTimerRunId) :|
-        [ ("Name", column TotalTimerName)
-        , ("Min. Time", TotalTimerMinTime `columnVia` prettyDouble)
-        , ("Avg. Time", TotalTimerAvgTime `columnVia` prettyDouble)
-        , ("Max Time", TotalTimerMaxTime `columnVia` prettyDouble)
-        , ("Std. Dev.", TotalTimerStdDev `columnVia` prettyDouble)
+instance PrettyFields TotalTimer where
+    prettyFieldInfo = ("Run", idField TotalTimerRunId) :|
+        [ ("Name", textField TotalTimerName)
+        , ("Min. Time", TotalTimerMinTime `fieldVia` prettyDouble)
+        , ("Avg. Time", TotalTimerAvgTime `fieldVia` prettyDouble)
+        , ("Max Time", TotalTimerMaxTime `fieldVia` prettyDouble)
+        , ("Std. Dev.", TotalTimerStdDev `fieldVia` prettyDouble)
         ]
 
-instance PrettyColumns StepTimer where
-    prettyColumnInfo = ("Run", idColumn StepTimerRunId) :|
-        [ ("Step", StepTimerStepId `columnVia` prettyShow)
-        , ("Name", column StepTimerName)
-        , ("Min. Time", StepTimerMinTime `columnVia` prettyDouble)
-        , ("Avg. Time", StepTimerAvgTime `columnVia` prettyDouble)
-        , ("Max Time", StepTimerMaxTime `columnVia` prettyDouble)
-        , ("Std. Dev.", StepTimerStdDev `columnVia` prettyDouble)
+instance PrettyFields StepTimer where
+    prettyFieldInfo = ("Run", idField StepTimerRunId) :|
+        [ ("Step", StepTimerStepId `fieldVia` prettyShow)
+        , ("Name", textField StepTimerName)
+        , ("Min. Time", StepTimerMinTime `fieldVia` prettyDouble)
+        , ("Avg. Time", StepTimerAvgTime `fieldVia` prettyDouble)
+        , ("Max Time", StepTimerMaxTime `fieldVia` prettyDouble)
+        , ("Std. Dev.", StepTimerStdDev `fieldVia` prettyDouble)
         ]
 
 migrations :: MonadSql m => Int64 -> m [EntityDef]

@@ -14,7 +14,7 @@ import Data.Text (Text)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Pretty.Columns
+import Pretty.Fields
 import Schema.Utils (EntityDef, Int64, MonadSql, (.>))
 import qualified Schema.Utils as Utils
 
@@ -30,13 +30,13 @@ VariantConfig
     deriving Eq Show
 |]
 
-instance PrettyColumns VariantConfig where
-    prettyColumnInfo = ("Id", idColumn VariantConfigId) :|
-        [ ("Name", column VariantConfigName)
-        , ("Algorithm", idColumn VariantConfigAlgorithmId)
-        , ("Flags", maybeColumn VariantConfigFlags)
+instance PrettyFields VariantConfig where
+    prettyFieldInfo = ("Id", idField VariantConfigId) :|
+        [ ("Name", textField VariantConfigName)
+        , ("Algorithm", idField VariantConfigAlgorithmId)
+        , ("Flags", maybeTextField VariantConfigFlags)
         , ( "Default Variant Config"
-          , VariantConfigIsDefault `columnVia` prettyShow
+          , VariantConfigIsDefault `fieldVia` prettyShow
           )
         ]
 

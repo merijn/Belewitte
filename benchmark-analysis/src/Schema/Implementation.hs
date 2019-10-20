@@ -14,7 +14,7 @@ import Data.Text (Text)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Pretty.Columns
+import Pretty.Fields
 import Schema.Utils (EntityDef, Int64, MonadSql, (.=))
 import qualified Schema.Utils as Utils
 import Types
@@ -32,13 +32,13 @@ Implementation
     deriving Eq Show
 |]
 
-instance PrettyColumns Implementation where
-    prettyColumnInfo = ("Id", idColumn ImplementationId) :|
-        [ ("Algorithm", idColumn ImplementationAlgorithmId)
-        , ("Name", column ImplementationName)
-        , ("Type", ImplementationType `columnVia` prettyShow)
-        , ("Pretty Name", maybeColumn ImplementationPrettyName)
-        , ("Flags", maybeColumn ImplementationFlags)
+instance PrettyFields Implementation where
+    prettyFieldInfo = ("Id", idField ImplementationId) :|
+        [ ("Algorithm", idField ImplementationAlgorithmId)
+        , ("Name", textField ImplementationName)
+        , ("Type", ImplementationType `fieldVia` prettyShow)
+        , ("Pretty Name", maybeTextField ImplementationPrettyName)
+        , ("Flags", maybeTextField ImplementationFlags)
         ]
 
 migrations :: MonadSql m => Int64 -> m [EntityDef]

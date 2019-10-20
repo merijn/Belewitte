@@ -15,7 +15,7 @@ import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 import Database.Persist.Types
 
-import Pretty.Columns
+import Pretty.Fields
 import Schema.Utils (EntityDef, Int64, MonadSql, (.>), (.=))
 import qualified Schema.Utils as Utils
 import Types
@@ -38,14 +38,14 @@ Variant
     deriving Eq Show
 |]
 
-instance PrettyColumns Variant where
-    prettyColumnInfo = ("Id", idColumn VariantId) :|
-        [ ("Variant Config", idColumn VariantVariantConfigId)
-        , ("Algorithm", idColumn VariantAlgorithmId)
-        , ("Graph", idColumn VariantGraphId)
-        , ("Properties Stored", VariantPropsStored `columnVia` prettyShow)
-        , ("Retries", VariantRetryCount `columnVia` prettyShow)
-        , ("Result Hash", VariantResult `maybeColumnVia` prettyShow)
+instance PrettyFields Variant where
+    prettyFieldInfo = ("Id", idField VariantId) :|
+        [ ("Variant Config", idField VariantVariantConfigId)
+        , ("Algorithm", idField VariantAlgorithmId)
+        , ("Graph", idField VariantGraphId)
+        , ("Properties Stored", VariantPropsStored `fieldVia` prettyShow)
+        , ("Retries", VariantRetryCount `fieldVia` prettyShow)
+        , ("Result Hash", VariantResult `maybeFieldVia` prettyShow)
         ]
 
 schema :: [EntityDef]
