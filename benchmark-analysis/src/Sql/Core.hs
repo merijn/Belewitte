@@ -67,6 +67,7 @@ import Database.Persist.Sqlite
     , toSqlKey
     )
 import qualified Database.Persist.Sqlite as Sqlite
+import Lens.Micro.Extras (view)
 
 import Exceptions
 
@@ -127,6 +128,10 @@ insertUniq record = do
         Left (Entity _ r) | record /= r -> Log.logErrorN . T.pack $ mconcat
             ["Unique insert failed:\nFound: ", show r, "\nNew: ", show record]
         _ -> return ()
+
+fieldFromEntity
+    :: Sqlite.PersistEntity r => EntityField r v -> Entity r -> v
+fieldFromEntity field = view (Sqlite.fieldLens field)
 
 -- Generalisations
 deleteBy :: (MonadSql m, SqlRecord rec) => Unique rec -> m ()
