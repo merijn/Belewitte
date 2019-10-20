@@ -1,8 +1,14 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
-module FormattedOutput (renderColumns, renderOutput, outputSink) where
+module FormattedOutput
+    ( renderEntity
+    , renderColumns
+    , renderOutput
+    , outputSink
+    ) where
 
 import Control.Monad (unless)
 import Control.Monad.Catch (catch, throwM, try)
@@ -32,6 +38,12 @@ import Query (MonadQuery)
 import Sql
 import Utils.Process (unexpectedTermination)
 
+fieldToText :: PersistEntity a => FieldInfo a -> Entity a -> Text
+fieldToText (FieldInfo field toText) = toText . view (Sql.fieldLens field)
+
+padText :: Int -> Text -> Text
+padText n input = input <> T.replicate (n - T.length input) " "
+
 queryFieldInfo
     :: (PrettyFields a, MonadQuery m)
     => (Text, FieldInfo a) -> m (Text, FieldInfo a, (Avg, Max))
@@ -41,19 +53,34 @@ queryFieldInfo (name, col@(FieldInfo field _)) =
     fieldSize = Max . T.length $ name
     annotateField (avgVal, maxVal) = (name, col, (avgVal, max fieldSize maxVal))
 
+entityFormatter :: forall a . PrettyFields a => Entity a -> Text
+entityFormatter ent = foldMap formatLine fieldInfos
+  where
+    formatLine :: (Text, FieldInfo a) -> Text
+    formatLine (name, field) = mconcat
+        [paddedName, "   ", fieldToText field ent, "\n"]
+      where
+        paddedName = padText (1 + maxLength) $ name <> ":"
+
+    maxLength :: Int
+    maxLength = maximum . fmap (T.length . fst) $ fieldInfos
+
+    fieldInfos :: NonEmpty (Text, FieldInfo a)
+    fieldInfos = prettyFieldInfo
+
+renderEntity :: PrettyFields a => Entity a -> SqlM ()
+renderEntity ent = renderOutput $ C.yield (entityFormatter ent)
+
 columnFormatter
     :: (MonadQuery m, PrettyFields a) => m (Text, Entity a -> Text)
 columnFormatter = do
     (startCol :| columns) <- traverse queryFieldInfo prettyFieldInfo
-    let renderEntity = padColumn startCol <> foldMap sepPadColumn columns
+    let entityRenderer = padColumn startCol <> foldMap sepPadColumn columns
         headerText = header startCol <> foldMap sepHeader columns
-    return (headerText, renderEntity)
+    return (headerText, entityRenderer)
   where
     sep :: Text
     sep = "   "
-
-    padText :: Int -> Text -> Text
-    padText n input = input <> T.replicate (n - T.length input) " "
 
     header :: PrettyFields a => (Text, FieldInfo a, (Avg, Max)) -> Text
     header (name, _, (_, Max n)) = padText n $ name
@@ -64,9 +91,7 @@ columnFormatter = do
     padColumn
         :: PrettyFields a
         => (Text, FieldInfo a, (Avg, Max)) -> Entity a -> Text
-    padColumn (_, FieldInfo field toText, (_, Max n)) val = padText n col
-      where
-        col = toText . view (Sql.fieldLens field) $ val
+    padColumn (_, field, (_, Max n)) = padText n . fieldToText field
 
     sepPadColumn
         :: PrettyFields a
