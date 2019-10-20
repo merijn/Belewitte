@@ -165,6 +165,7 @@ Executable Ingest
   Main-Is:              Main.hs
   Other-Modules:        Commands.Add
                         Commands.List
+                        Commands.Query
                         Commands.Reset
                         Commands.Set
                         Commands.Unset
