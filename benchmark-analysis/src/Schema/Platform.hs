@@ -34,12 +34,12 @@ Platform
 |]
 
 instance PrettyColumns Platform where
-    prettyColumnInfo = idColumn PlatformId :|
-        [ column PlatformName
-        , maybeColumn PlatformPrettyName
-        , maybeColumn PlatformFlags
-        , PlatformAvailable `columnVia` prettyShow
-        , PlatformIsDefault `columnVia` prettyShow
+    prettyColumnInfo = ("Id", idColumn PlatformId) :|
+        [ ("Name", column PlatformName)
+        , ("Pretty Name", maybeColumn PlatformPrettyName)
+        , ("Flags", maybeColumn PlatformFlags)
+        , ("Num. Available", PlatformAvailable `columnVia` prettyShow)
+        , ("Default Platform", PlatformIsDefault `columnVia` prettyShow)
         ]
 
 migrations :: MonadSql m => Int64 -> m [EntityDef]

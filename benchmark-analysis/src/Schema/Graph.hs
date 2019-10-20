@@ -3,6 +3,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -34,11 +35,11 @@ Graph
 |]
 
 instance PrettyColumns Graph where
-    prettyColumnInfo = idColumn GraphId :|
-        [ column GraphName
-        , idColumn GraphDatasetId
-        , maybeColumn GraphPrettyName
-        , column GraphPath
+    prettyColumnInfo = ("Id", idColumn GraphId) :|
+        [ ("Name", column GraphName)
+        , ("Dataset", idColumn GraphDatasetId)
+        , ("Pretty Name", maybeColumn GraphPrettyName)
+        , ("Filepath", column GraphPath)
         ]
 
 migrations :: MonadSql m => Int64 -> m [EntityDef]

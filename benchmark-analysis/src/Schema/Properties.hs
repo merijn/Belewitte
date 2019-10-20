@@ -5,6 +5,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -42,16 +43,16 @@ StepProp
 |]
 
 instance PrettyColumns GraphProp where
-    prettyColumnInfo = idColumn GraphPropGraphId :|
-        [ column GraphPropProperty
-        , GraphPropValue `columnVia` prettyDouble
+    prettyColumnInfo = ("Graph", idColumn GraphPropGraphId) :|
+        [ ("Property", column GraphPropProperty)
+        , ("Value", GraphPropValue `columnVia` prettyDouble)
         ]
 
 instance PrettyColumns StepProp where
-    prettyColumnInfo = idColumn StepPropVariantId :|
-        [ StepPropStepId `columnVia` prettyShow
-        , column StepPropProperty
-        , StepPropValue `columnVia` prettyDouble
+    prettyColumnInfo = ("Variant", idColumn StepPropVariantId) :|
+        [ ("Step", StepPropStepId `columnVia` prettyShow)
+        , ("Property", column StepPropProperty)
+        , ("Value", StepPropValue `columnVia` prettyDouble)
         ]
 
 migrations :: MonadSql m => Int64 -> m [EntityDef]

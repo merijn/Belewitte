@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE MonadFailDesugaring #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -46,22 +47,22 @@ StepTimer
 |]
 
 instance PrettyColumns TotalTimer where
-    prettyColumnInfo = idColumn TotalTimerRunId :|
-        [ column TotalTimerName
-        , TotalTimerMinTime `columnVia` prettyDouble
-        , TotalTimerAvgTime `columnVia` prettyDouble
-        , TotalTimerMaxTime `columnVia` prettyDouble
-        , TotalTimerStdDev `columnVia` prettyDouble
+    prettyColumnInfo = ("Run", idColumn TotalTimerRunId) :|
+        [ ("Name", column TotalTimerName)
+        , ("Min. Time", TotalTimerMinTime `columnVia` prettyDouble)
+        , ("Avg. Time", TotalTimerAvgTime `columnVia` prettyDouble)
+        , ("Max Time", TotalTimerMaxTime `columnVia` prettyDouble)
+        , ("Std. Dev.", TotalTimerStdDev `columnVia` prettyDouble)
         ]
 
 instance PrettyColumns StepTimer where
-    prettyColumnInfo = idColumn StepTimerRunId :|
-        [ StepTimerStepId `columnVia` prettyShow
-        , column StepTimerName
-        , StepTimerMinTime `columnVia` prettyDouble
-        , StepTimerAvgTime `columnVia` prettyDouble
-        , StepTimerMaxTime `columnVia` prettyDouble
-        , StepTimerStdDev `columnVia` prettyDouble
+    prettyColumnInfo = ("Run", idColumn StepTimerRunId) :|
+        [ ("Step", StepTimerStepId `columnVia` prettyShow)
+        , ("Name", column StepTimerName)
+        , ("Min. Time", StepTimerMinTime `columnVia` prettyDouble)
+        , ("Avg. Time", StepTimerAvgTime `columnVia` prettyDouble)
+        , ("Max Time", StepTimerMaxTime `columnVia` prettyDouble)
+        , ("Std. Dev.", StepTimerStdDev `columnVia` prettyDouble)
         ]
 
 migrations :: MonadSql m => Int64 -> m [EntityDef]

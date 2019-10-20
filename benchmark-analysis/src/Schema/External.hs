@@ -49,22 +49,22 @@ ExternalTimer
 |]
 
 instance PrettyColumns ExternalImpl where
-    prettyColumnInfo = idColumn ExternalImplId :|
-        [ idColumn ExternalImplAlgorithmId
-        , column ExternalImplName
-        , maybeColumn ExternalImplPrettyName
+    prettyColumnInfo = ("Id", idColumn ExternalImplId) :|
+        [ ("Algorithm", idColumn ExternalImplAlgorithmId)
+        , ("Name", column ExternalImplName)
+        , ("Pretty Name", maybeColumn ExternalImplPrettyName)
         ]
 
 instance PrettyColumns ExternalTimer where
-    prettyColumnInfo = idColumn ExternalTimerPlatformId :|
-        [ idColumn ExternalTimerVariantId
-        , idColumn ExternalTimerImplId
-        , idColumn ExternalTimerAlgorithmId
-        , column ExternalTimerName
-        , ExternalTimerMinTime `columnVia` prettyDouble
-        , ExternalTimerAvgTime `columnVia` prettyDouble
-        , ExternalTimerMaxTime `columnVia` prettyDouble
-        , ExternalTimerStdDev `columnVia` prettyDouble
+    prettyColumnInfo = ("Id", idColumn ExternalTimerPlatformId) :|
+        [ ("Variant", idColumn ExternalTimerVariantId)
+        , ("Algorithm", idColumn ExternalTimerAlgorithmId)
+        , ("Implementation", idColumn ExternalTimerImplId)
+        , ("Name", column ExternalTimerName)
+        , ("Min. Time", ExternalTimerMinTime `columnVia` prettyDouble)
+        , ("Avg. Time", ExternalTimerAvgTime `columnVia` prettyDouble)
+        , ("Max Time", ExternalTimerMaxTime `columnVia` prettyDouble)
+        , ("Std. Dev.", ExternalTimerStdDev `columnVia` prettyDouble)
         ]
 
 schema :: [EntityDef]

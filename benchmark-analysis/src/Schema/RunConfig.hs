@@ -4,6 +4,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralisedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -35,12 +36,12 @@ RunConfig
 |]
 
 instance PrettyColumns RunConfig where
-    prettyColumnInfo = idColumn RunConfigId :|
-        [ idColumn RunConfigAlgorithmId
-        , idColumn RunConfigPlatformId
-        , idColumn RunConfigDatasetId
-        , RunConfigRepeats `columnVia` prettyShow
-        , column RunConfigAlgorithmVersion
+    prettyColumnInfo = ("Id", idColumn RunConfigId) :|
+        [ ("Algorithm", idColumn RunConfigAlgorithmId)
+        , ("Platform", idColumn RunConfigPlatformId)
+        , ("Dataset", idColumn RunConfigDatasetId)
+        , ("Repeats", RunConfigRepeats `columnVia` prettyShow)
+        , ("Algorithm Commit", column RunConfigAlgorithmVersion)
         ]
 
 migrations :: MonadSql m => Int64 -> m [EntityDef]

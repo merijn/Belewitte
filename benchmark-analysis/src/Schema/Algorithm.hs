@@ -3,6 +3,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -26,9 +27,9 @@ Algorithm
 |]
 
 instance PrettyColumns Algorithm where
-    prettyColumnInfo = idColumn AlgorithmId :|
-        [ column AlgorithmName
-        , maybeColumn AlgorithmPrettyName
+    prettyColumnInfo = ("Id", idColumn AlgorithmId) :|
+        [ ("Name", column AlgorithmName)
+        , ("Pretty Name", maybeColumn AlgorithmPrettyName)
         ]
 
 migrations :: MonadSql m => Int64 -> m [EntityDef]

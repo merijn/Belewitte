@@ -40,13 +40,13 @@ Run
 |]
 
 instance PrettyColumns Run where
-    prettyColumnInfo = idColumn RunId :|
-        [ idColumn RunRunConfigId
-        , idColumn RunAlgorithmId
-        , idColumn RunVariantId
-        , idColumn RunImplId
-        , RunValidated `columnVia` prettyShow
-        , RunTimestamp `columnVia` prettyShow
+    prettyColumnInfo = ("Id", idColumn RunId) :|
+        [ ("Run Config", idColumn RunRunConfigId)
+        , ("Algorithm", idColumn RunAlgorithmId)
+        , ("Variant", idColumn RunVariantId)
+        , ("Implementation", idColumn RunImplId)
+        , ("Validated", RunValidated `columnVia` prettyShow)
+        , ("Timestamp", RunTimestamp `columnVia` prettyShow)
         ]
 
 schema :: [EntityDef]

@@ -40,7 +40,7 @@ maybeColumnVia :: EntityField v (Maybe r) -> (r -> Text) -> ColumnInfo v
 maybeColumnVia field f = ColInfo field (maybe "" f)
 
 class (PersistEntity a, SqlRecord a) => PrettyColumns a where
-    prettyColumnInfo :: NonEmpty (ColumnInfo a)
+    prettyColumnInfo :: NonEmpty (Text, ColumnInfo a)
 
 prettyDouble :: Double -> Text
 prettyDouble = pack . show

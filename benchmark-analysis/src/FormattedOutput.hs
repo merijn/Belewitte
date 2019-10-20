@@ -39,8 +39,8 @@ columnName = unHaskellName . fieldHaskell . persistFieldDef
 
 queryColumnInfo
     :: (PrettyColumns a, MonadQuery m)
-    => ColumnInfo a -> m (ColumnInfo a, (Avg, Max))
-queryColumnInfo col@(ColInfo field _) =
+    => (Text, ColumnInfo a) -> m (ColumnInfo a, (Avg, Max))
+queryColumnInfo (name, col@(ColInfo field _)) =
     annotateColumn <$> Sql.getFieldLength field
   where
     columnSize = Max . T.length . columnName $ field

@@ -39,13 +39,13 @@ Variant
 |]
 
 instance PrettyColumns Variant where
-    prettyColumnInfo = idColumn VariantId :|
-        [ idColumn VariantVariantConfigId
-        , idColumn VariantAlgorithmId
-        , idColumn VariantGraphId
-        , VariantPropsStored `columnVia` prettyShow
-        , VariantRetryCount `columnVia` prettyShow
-        , VariantResult `maybeColumnVia` prettyShow
+    prettyColumnInfo = ("Id", idColumn VariantId) :|
+        [ ("Variant Config", idColumn VariantVariantConfigId)
+        , ("Algorithm", idColumn VariantAlgorithmId)
+        , ("Graph", idColumn VariantGraphId)
+        , ("Properties Stored", VariantPropsStored `columnVia` prettyShow)
+        , ("Retries", VariantRetryCount `columnVia` prettyShow)
+        , ("Result Hash", VariantResult `maybeColumnVia` prettyShow)
         ]
 
 schema :: [EntityDef]

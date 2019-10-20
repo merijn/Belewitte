@@ -2,6 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralisedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -26,7 +27,8 @@ Dataset
 |]
 
 instance PrettyColumns Dataset where
-    prettyColumnInfo = idColumn DatasetId :| [ column DatasetName ]
+    prettyColumnInfo = ("Id", idColumn DatasetId) :|
+        [ ("Name", column DatasetName) ]
 
 migrations :: MonadSql m => Int64 -> m [EntityDef]
 migrations = Utils.mkMigrationLookup

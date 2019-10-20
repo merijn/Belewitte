@@ -3,6 +3,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -32,12 +33,12 @@ Implementation
 |]
 
 instance PrettyColumns Implementation where
-    prettyColumnInfo = idColumn ImplementationId :|
-        [ idColumn ImplementationAlgorithmId
-        , column ImplementationName
-        , ImplementationType `columnVia` prettyShow
-        , maybeColumn ImplementationPrettyName
-        , maybeColumn ImplementationFlags
+    prettyColumnInfo = ("Id", idColumn ImplementationId) :|
+        [ ("Algorithm", idColumn ImplementationAlgorithmId)
+        , ("Name", column ImplementationName)
+        , ("Type", ImplementationType `columnVia` prettyShow)
+        , ("Pretty Name", maybeColumn ImplementationPrettyName)
+        , ("Flags", maybeColumn ImplementationFlags)
         ]
 
 migrations :: MonadSql m => Int64 -> m [EntityDef]

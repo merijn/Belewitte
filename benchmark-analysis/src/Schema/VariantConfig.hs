@@ -2,6 +2,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -30,11 +31,13 @@ VariantConfig
 |]
 
 instance PrettyColumns VariantConfig where
-    prettyColumnInfo = idColumn VariantConfigId :|
-        [ column VariantConfigName
-        , idColumn VariantConfigAlgorithmId
-        , maybeColumn VariantConfigFlags
-        , VariantConfigIsDefault `columnVia` prettyShow
+    prettyColumnInfo = ("Id", idColumn VariantConfigId) :|
+        [ ("Name", column VariantConfigName)
+        , ("Algorithm", idColumn VariantConfigAlgorithmId)
+        , ("Flags", maybeColumn VariantConfigFlags)
+        , ( "Default Variant Config"
+          , VariantConfigIsDefault `columnVia` prettyShow
+          )
         ]
 
 migrations :: MonadSql m => Int64 -> m [EntityDef]
