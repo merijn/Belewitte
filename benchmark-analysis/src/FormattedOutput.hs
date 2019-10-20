@@ -51,7 +51,9 @@ queryFieldInfo (name, col@(FieldInfo field _)) =
     annotateField <$> Sql.getFieldLength field
   where
     fieldSize = Max . T.length $ name
-    annotateField (avgVal, maxVal) = (name, col, (avgVal, max fieldSize maxVal))
+    annotateField (avgVal, maxVal)
+        | maxVal > Max 0 = (name, col, (avgVal, max fieldSize maxVal))
+        | otherwise = (name, col, (avgVal, maxVal))
 
 entityFormatter :: forall a . PrettyFields a => Entity a -> Text
 entityFormatter ent = foldMap formatLine fieldInfos
@@ -83,19 +85,23 @@ columnFormatter = do
     sep = "   "
 
     header :: PrettyFields a => (Text, FieldInfo a, (Avg, Max)) -> Text
+    header (_, _, (_, Max 0)) = ""
     header (name, _, (_, Max n)) = padText n $ name
 
     sepHeader :: PrettyFields a => (Text, FieldInfo a, (Avg, Max)) -> Text
+    sepHeader (_, _, (_, Max 0)) = ""
     sepHeader x = sep <> header x
 
     padColumn
         :: PrettyFields a
         => (Text, FieldInfo a, (Avg, Max)) -> Entity a -> Text
+    padColumn (_, _, (_, Max 0)) = const ""
     padColumn (_, field, (_, Max n)) = padText n . fieldToText field
 
     sepPadColumn
         :: PrettyFields a
         => (Text, FieldInfo a, (Avg, Max)) -> Entity a -> Text
+    sepPadColumn (_, _, (_, Max 0)) _ = ""
     sepPadColumn x y = sep <> padColumn x y
 
 renderColumns :: PrettyFields a => [Filter a] -> [SelectOpt a] -> SqlM ()
