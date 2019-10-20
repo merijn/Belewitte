@@ -20,6 +20,12 @@ commands = CommandGroup CommandInfo
         }
         $ pure resetRetries
     , SingleCommand CommandInfo
+        { commandName = "results"
+        , commandHeaderDesc = "resets the stored result hash"
+        , commandDesc = "Reset the result hash for every variant"
+        }
+        $ pure resetResults
+    , SingleCommand CommandInfo
         { commandName = "properties"
         , commandHeaderDesc = "deletes logged properties"
         , commandDesc = "Deletes the properties stored for each variant"
@@ -41,6 +47,9 @@ commands = CommandGroup CommandInfo
 
 resetRetries :: MonadSql m => m ()
 resetRetries = Sql.updateWhere [] [VariantRetryCount =. 0]
+
+resetResults :: MonadSql m => m ()
+resetResults = Sql.updateWhere [] [VariantResult =. Nothing]
 
 resetProperties :: MonadSql m => m ()
 resetProperties = do
