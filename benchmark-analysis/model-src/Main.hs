@@ -26,7 +26,7 @@ import Model
 import Options
 import Query
 import Schema
-import Sql (queryImplementations)
+import Sql (queryImplementations, getJust)
 import StepQuery (StepInfo, stepInfoQuery)
 import Train
 import Validate
@@ -35,14 +35,21 @@ reportModelStats :: ModelStats -> SqlM ()
 reportModelStats ModelStats{..} = renderOutput $ do
     C.yieldMany sortedFeatures .| C.map renderFeature
     C.yield "\n"
-    C.yieldMany sortedUnknown .| C.map renderImplSet
+    C.yieldMany sortedUnknown .| C.mapM renderImplSet
   where
     renderFeature :: (Text, Double) -> Text
     renderFeature (lbl, val) = lbl <> ": " <> percent val 1 <> "\n"
 
-    renderImplSet :: (Int, Set Int64) -> Text
-    renderImplSet (count, implSet) =
-      percent count modelUnknownCount <> " : " <> showText implSet <> "\n"
+    renderImplSet :: (Int, Set Int64) -> SqlM Text
+    renderImplSet (count, implSet) = do
+        names <- foldMap wrap <$> traverse getName (S.toList implSet)
+        return $ percent count modelUnknownCount <> " :\n" <> names
+      where
+        wrap :: Text -> Text
+        wrap t = "    " <> t <> "\n"
+
+        getName :: Int64 -> SqlM Text
+        getName i = getImplName <$> getJust (toSqlKey i)
 
     features :: [(Text, Double)]
     features = map (first ("Graph:" <>)) (M.toList modelGraphPropImportance)
