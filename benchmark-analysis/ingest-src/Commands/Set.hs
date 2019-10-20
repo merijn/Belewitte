@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Commands.Set (commands) where
 
+import Control.Monad (guard)
 import qualified Control.Monad.Catch as Except
 import qualified Data.Text as T
 import System.Exit (exitFailure)
@@ -29,6 +30,14 @@ commands = CommandGroup CommandInfo
             \runner."
         }
         $ setRunCommand <$> forceOpt <*> strArgument runCmd
+    , SingleCommand CommandInfo
+        { commandName = "available"
+        , commandHeaderDesc = "set number of available machines for platform"
+        , commandDesc =
+            "Set the number of available machines (and thus maximum parallel \
+            \jobs) for a platform."
+        }
+        $ setAvailable <$> keyParser <*> numNodes
     , CommandGroup CommandInfo
         { commandName = "default"
         , commandHeaderDesc = "change registered defaults"
@@ -53,10 +62,59 @@ commands = CommandGroup CommandInfo
             $ setDefault "variant config" VariantConfigIsDefault
                      <$> forceOpt <*> keyParser
         ]
+    , CommandGroup CommandInfo
+        { commandName = "pretty-name"
+        , commandHeaderDesc = "change registered pretty name"
+        , commandDesc =
+            "Change the registered pretty name for database entries."
+        }
+        [ SingleCommand CommandInfo
+            { commandName = "algorithm"
+            , commandHeaderDesc = "change algorithm pretty name"
+            , commandDesc = "Changes the pretty name for an algorithm."
+            }
+            $ setPrettyName "algorithm" AlgorithmPrettyName
+                <$> forceOpt <*> keyParser <*> prettyName
+        , SingleCommand CommandInfo
+            { commandName = "implementation"
+            , commandHeaderDesc = "change implementation pretty name"
+            , commandDesc = "Changes the pretty name for an implementation."
+            }
+            $ setPrettyName "implementation" ImplementationPrettyName
+                <$> forceOpt <*> keyParser <*> prettyName
+        , SingleCommand CommandInfo
+            { commandName = "external-impl"
+            , commandHeaderDesc = "change external implementation pretty name"
+            , commandDesc =
+                "Changes the pretty name for an external implementation."
+            }
+            $ setPrettyName "external implementation" ExternalImplPrettyName
+                <$> forceOpt <*> keyParser <*> prettyName
+        , SingleCommand CommandInfo
+            { commandName = "graph"
+            , commandHeaderDesc = "change graph pretty name"
+            , commandDesc = "Changes the pretty name for a graph."
+            }
+            $ setPrettyName "graph" GraphPrettyName
+                <$> forceOpt <*> keyParser <*> prettyName
+        , SingleCommand CommandInfo
+            { commandName = "platform"
+            , commandHeaderDesc = "change platform pretty name"
+            , commandDesc = "Changes the pretty name for a platform."
+            }
+            $ setPrettyName "platform" PlatformPrettyName
+                <$> forceOpt <*> keyParser <*> prettyName
+        ]
     ]
   where
     runCmd :: Mod ArgumentFields a
     runCmd = metavar "COMMAND" <> help "Run command"
+
+    numNodes :: Parser Int
+    numNodes = argument (auto >>= checkPositive) $ mconcat
+        [ metavar "N", help "Available machine count." ]
+      where
+        checkPositive n = n <$ guard (n > 0)
 
     forceOpt :: Parser Force
     forceOpt = flag NoForce Force $ mconcat
@@ -65,6 +123,10 @@ commands = CommandGroup CommandInfo
     keyParser :: ToBackendKey SqlBackend v => Parser (Key v)
     keyParser = argument (toSqlKey <$> auto) $ mconcat
         [ metavar "ID", help "Id to change." ]
+
+    prettyName :: Parser Text
+    prettyName = strArgument $ mconcat
+        [ metavar "NAME", help "Pretty name to set." ]
 
 setRunCommand :: Force -> Text -> SqlM ()
 setRunCommand force = setCommand
@@ -83,26 +145,51 @@ setRunCommand force = setCommand
 
     sqliteException e = Except.throwM e
 
+setAvailable :: Key Platform -> Int -> SqlM ()
+setAvailable key n = withCheckedKey "platform" key $ \_ -> do
+    Sql.update key [PlatformAvailable =. n]
+
+withCheckedKey
+    :: (SqlRecord r, ToBackendKey SqlBackend r)
+    => String -> Key r -> (Entity r -> SqlM ()) -> SqlM ()
+withCheckedKey name key act = do
+    ent <- Sql.getEntity key >>= checkExists
+    act ent
+  where
+    checkExists :: Maybe (Entity a) -> SqlM (Entity a)
+    checkExists = maybe (logErrorN msg >> liftIO exitFailure) return
+
+    msg :: Text
+    msg = mconcat ["No ", T.pack name, " with id #", showSqlKey key]
+
+setPrettyName
+    :: (SqlRecord r, ToBackendKey SqlBackend r)
+    => String
+    -> EntityField r (Maybe Text)
+    -> Force
+    -> Key r
+    -> Text
+    -> SqlM ()
+setPrettyName name field force key val = withCheckedKey name key $ \ent -> do
+    case (Sql.fieldFromEntity field ent, force) of
+        (Nothing, _) -> Sql.update (entityKey ent) [field =. Just val]
+        (_, Force) -> Sql.update (entityKey ent) [field =. Just val]
+        _ -> liftIO $ do
+            putStrLn $ "Pretty name for " <> name <> " is already set!"
+            putStrLn "Use --force to overwrite!"
+            exitFailure
+
 setDefault
     :: (SqlRecord r, ToBackendKey SqlBackend r)
     => String -> EntityField r Bool -> Force -> Key r -> SqlM ()
-setDefault name field force key = do
-    Sql.get key >>= checkExists
-
+setDefault name field force key = withCheckedKey name key $ \ent -> do
     numDefault <- Sql.count [field ==. True]
     case (numDefault, force) of
-        (0, _) -> Sql.update key [field =. True]
+        (0, _) -> Sql.update (entityKey ent) [field =. True]
         (_, Force) -> do
             Sql.updateWhere [] [field =. False]
-            Sql.update key [field =. True]
+            Sql.update (entityKey ent) [field =. True]
         _ -> liftIO $ do
             putStrLn $ "Default " <> name <> " is already set!"
             putStrLn "Use --force to overwrite."
             exitFailure
-  where
-    checkExists :: Maybe a -> SqlM ()
-    checkExists (Just _) = return ()
-    checkExists Nothing = logErrorN msg >> liftIO exitFailure
-
-    msg :: Text
-    msg = mconcat ["No ", T.pack name, " with id #", showSqlKey key]

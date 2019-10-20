@@ -50,6 +50,45 @@ commands = CommandGroup CommandInfo
             $ unsetDefault "variant config" VariantConfigIsDefault
                        <$> keyParser
         ]
+    , CommandGroup CommandInfo
+        { commandName = "pretty-name"
+        , commandHeaderDesc = "unset registered pretty name"
+        , commandDesc = "Unset the registered pretty name for database entries."
+        }
+        [ SingleCommand CommandInfo
+            { commandName = "algorithm"
+            , commandHeaderDesc = "unset algorithm pretty name"
+            , commandDesc = "Unset the pretty name for an algorithm."
+            }
+            $ unsetPrettyName "algorithm" AlgorithmPrettyName <$> keyParser
+        , SingleCommand CommandInfo
+            { commandName = "implementation"
+            , commandHeaderDesc = "unset implementation pretty name"
+            , commandDesc = "Unset the pretty name for an implementation."
+            }
+            $ unsetPrettyName "implementation" ImplementationPrettyName
+                <$> keyParser
+        , SingleCommand CommandInfo
+            { commandName = "external-impl"
+            , commandHeaderDesc = "unset external implementation pretty name"
+            , commandDesc =
+                "Unset the pretty name for an external implementation."
+            }
+            $ unsetPrettyName "external implementation" ExternalImplPrettyName
+                <$> keyParser
+        , SingleCommand CommandInfo
+            { commandName = "graph"
+            , commandHeaderDesc = "unset graph pretty name"
+            , commandDesc = "Unset the pretty name for a graph."
+            }
+            $ unsetPrettyName "graph" GraphPrettyName <$> keyParser
+        , SingleCommand CommandInfo
+            { commandName = "platform"
+            , commandHeaderDesc = "unset platform pretty name"
+            , commandDesc = "Unset the pretty name for a platform."
+            }
+            $ unsetPrettyName "platform" PlatformPrettyName <$> keyParser
+        ]
     ]
   where
     keyParser :: ToBackendKey SqlBackend v => Parser (Key v)
@@ -59,14 +98,26 @@ commands = CommandGroup CommandInfo
 unsetRunCommand :: SqlM ()
 unsetRunCommand = Sql.unsetGlobalVar RunCommand
 
-unsetDefault
+unsetChecked
     :: (SqlRecord r, ToBackendKey SqlBackend r)
-    => String -> EntityField r Bool -> Key r -> SqlM ()
-unsetDefault name field key = do
+    => String -> (Key r -> SqlM ()) -> Key r -> SqlM ()
+unsetChecked name f key = do
     result <- Sql.getEntity key
     case result of
         Nothing -> logErrorN invalidKey >> liftIO exitFailure
-        Just _ -> Sql.update key [field =. False]
+        Just _ -> f key
   where
     invalidKey :: Text
     invalidKey = mconcat ["No ", T.pack name, " with id #", showSqlKey key]
+
+unsetDefault
+    :: (SqlRecord r, ToBackendKey SqlBackend r)
+    => String -> EntityField r Bool -> Key r -> SqlM ()
+unsetDefault name field = unsetChecked name $ \key ->
+    Sql.update key [field =. False]
+
+unsetPrettyName
+    :: (SqlRecord r, ToBackendKey SqlBackend r)
+    => String -> EntityField r (Maybe Text) -> Key r -> SqlM ()
+unsetPrettyName name field = unsetChecked name $ \key ->
+    Sql.update key [field =. Nothing]
