@@ -4,6 +4,7 @@
 module Commands.Query (commands) where
 
 import Data.Proxy (Proxy(..))
+import qualified Data.Text.IO as T
 import System.Exit (exitFailure)
 
 import Core
@@ -21,6 +22,13 @@ commands = CommandGroup CommandInfo
     , commandDesc = "Show information about a registered entry."
     }
     [ SingleCommand CommandInfo
+        { commandName = "run-command"
+        , commandHeaderDesc = "show alternate job running command"
+        , commandDesc =
+            "Show replacement of SLURM's srun as job runner command."
+        }
+        $ pure showRunCommand
+    , SingleCommand CommandInfo
         { commandName = "algorithm"
         , commandHeaderDesc = "list algorithm information"
         , commandDesc = "Show information about a registered algorithm."
@@ -82,6 +90,13 @@ commands = CommandGroup CommandInfo
         }
         $ queryDatabase (Proxy :: Proxy Variant)
     ]
+
+showRunCommand :: SqlM ()
+showRunCommand = do
+    result <- Sql.getGlobalVar RunCommand
+    liftIO $ case result of
+        Just cmd -> T.putStrLn $ "Run Command: " <> cmd
+        Nothing -> putStrLn "Run command not set!"
 
 queryDatabase
     :: forall a proxy
