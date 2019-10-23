@@ -138,6 +138,7 @@ checkMigration migrateSchema = do
         0 -> do
             Sql.runMigrationSilent currentSchema
             checkSchema currentSchema
+            updateIndicesToVersion schemaVersion
             False <$ Sql.setPragma "user_version" schemaVersion
         _ -> do
             version <- Sql.querySingleValue "PRAGMA user_version" []
