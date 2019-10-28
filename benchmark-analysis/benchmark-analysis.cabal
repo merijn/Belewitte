@@ -98,6 +98,7 @@ Library
                         Schema.UnknownPredictions
                         Schema.UnknownPredictions.V0
                         Schema.UnknownPredictions.V1
+                        Schema.UnknownPredictions.V2
                         Schema.Utils
                         Schema.Variant
                         Schema.Variant.V0

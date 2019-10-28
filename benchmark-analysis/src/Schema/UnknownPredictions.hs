@@ -24,12 +24,15 @@ import Schema.Model (PredictionModelId)
 import Schema.Implementation (ImplementationId)
 import qualified Schema.UnknownPredictions.V0 as V0
 import qualified Schema.UnknownPredictions.V1 as V1
+import qualified Schema.UnknownPredictions.V2 as V2
 
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema'"] [persistUpperCase|
 UnknownPrediction
     modelId PredictionModelId
     algorithmId AlgorithmId
+    unknownSetId Int64
     count Int
+    UniqUnknownPrediction modelId unknownSetId
     deriving Eq Show
 
 UnknownPredictionSet
@@ -105,9 +108,24 @@ INNER JOIN
 ) AS AlgorithmMapping
 ON UnknownPrediction.id = AlgorithmMapping.unknownPredId
 |]
-    , 12 .> schema $ do
+    , 12 .> V2.schema $ do
 
         Utils.executeSql [i|
 ALTER TABLE "UnknownSet" RENAME TO "UnknownPredictionSet"
+|]
+    , 13 .> schema $ do
+        Utils.executeSql [i|
+ALTER TABLE "UnknownPrediction"
+ADD COLUMN "unknownSetId" INTEGER
+|]
+
+        Utils.executeSql [i|
+REPLACE INTO "UnknownPrediction"
+SELECT UnknownPrediction.id
+     , UnknownPrediction.modelId
+     , UnknownPrediction.algorithmId
+     , UnknownPrediction.count
+     , 1 + ROW_NUMBER() OVER (PARTITION BY modelId ORDER BY count)
+FROM UnknownPrediction
 |]
     ]

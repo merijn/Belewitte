@@ -1,0 +1,50 @@
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GeneralisedNewtypeDeriving #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
+module Schema.UnknownPredictions.V2 where
+
+import Database.Persist.TH (persistUpperCase)
+import qualified Database.Persist.TH as TH
+
+import Schema.Utils (EntityDef, ForeignDef)
+import qualified Schema.Utils as Utils
+
+import Schema.Algorithm (AlgorithmId)
+import Schema.Model (PredictionModelId)
+import Schema.Implementation (ImplementationId)
+
+TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema'"] [persistUpperCase|
+UnknownPrediction
+    modelId PredictionModelId
+    algorithmId AlgorithmId
+    count Int
+    deriving Eq Show
+
+UnknownPredictionSet
+    unknownPredId UnknownPredictionId
+    implId ImplementationId
+    algorithmId AlgorithmId
+    Primary unknownPredId implId
+    deriving Eq Show
+|]
+
+schema :: [EntityDef]
+schema = Utils.addForeignRef "UnknownPrediction" model
+       . Utils.addForeignRef "UnknownPredictionSet" unknownPred
+       $ schema'
+  where
+    model :: ForeignDef
+    model = Utils.mkForeignRef "PredictionModel"
+        [ ("modelId", "id"), ("algorithmId", "algorithmId") ]
+
+    unknownPred :: ForeignDef
+    unknownPred = Utils.mkForeignRef "UnknownPrediction"
+        [ ("unknownPredId", "id"), ("algorithmId", "algorithmId") ]

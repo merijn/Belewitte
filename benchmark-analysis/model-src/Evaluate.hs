@@ -121,8 +121,11 @@ data VariantAggregate =
 
 aggregateSteps
     :: (MonadFail m, MonadIO m)
-    => Int -> Model -> ConduitT StepInfo Void m VariantAggregate
-aggregateSteps defaultImpl model = do
+    => Int
+    -> (Int -> Int -> Int)
+    -> Model
+    -> ConduitT StepInfo Void m VariantAggregate
+aggregateSteps defaultImpl mispredictionStrategy model = do
     Just StepInfo{stepVariantId,stepTimings} <- C.peek
 
     let zeroTimeVec :: Vector (Int64, Double)
@@ -164,6 +167,7 @@ aggregateSteps defaultImpl model = do
         predictedImpl :: Int
         predictedImpl
           | prediction == -1 = lastImpl
+          | prediction < 0 = mispredictionStrategy lastImpl prediction
           | otherwise = prediction
           where
             prediction = predict model stepProps
@@ -313,8 +317,10 @@ evaluateModel algo platId defImpl reportCfg@Report{..} model trainConfig =
                 "Default implementation not found for algorithm"
                 (getAlgoName algorithm)
 
+    let aggregationConduit = aggregateSteps defaultImpl const model
+
     stats <- runSqlQuery query
-      .| foldGroup ((==) `on` stepVariantId) (aggregateSteps defaultImpl model)
+      .| foldGroup ((==) `on` stepVariantId) aggregationConduit
       .| C.map (addBestNonSwitching impls)
       .| aggregateVariants reportVariants reportRelativeTo implMaps
 

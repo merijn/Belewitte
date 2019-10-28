@@ -14,7 +14,6 @@ import qualified Data.Conduit.Text as C
 import Data.List (sortBy)
 import Data.Ord (comparing)
 import qualified Data.Map as M
-import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 
@@ -40,10 +39,10 @@ reportModelStats ModelStats{..} = renderOutput $ do
     renderFeature :: (Text, Double) -> Text
     renderFeature (lbl, val) = lbl <> ": " <> percent val 1 <> "\n"
 
-    renderImplSet :: (Int, Set Int64) -> SqlM Text
-    renderImplSet (count, implSet) = do
-        names <- foldMap wrap <$> traverse getName (S.toList implSet)
-        return $ percent count modelUnknownCount <> " :\n" <> names
+    renderImplSet :: UnknownSet -> SqlM Text
+    renderImplSet UnknownSet{..} = do
+        names <- foldMap wrap <$> traverse getName (S.toList unknownSetImpls)
+        return $ percent unknownSetOccurence modelUnknownCount <> " :\n" <> names
       where
         wrap :: Text -> Text
         wrap t = "    " <> t <> "\n"
@@ -58,8 +57,8 @@ reportModelStats ModelStats{..} = renderOutput $ do
     sortedFeatures :: [(Text, Double)]
     sortedFeatures = sortBy (flip (comparing snd)) features
 
-    sortedUnknown :: [(Int, Set Int64)]
-    sortedUnknown = sortBy (flip (comparing fst)) modelUnknownPreds
+    sortedUnknown :: [UnknownSet]
+    sortedUnknown = sortBy (flip (comparing unknownSetOccurence)) modelUnknownPreds
 
 querySink
     :: (MonadResource m, MonadThrow m, Show a)

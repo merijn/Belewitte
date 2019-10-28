@@ -70,7 +70,14 @@ arrayTree = []
 translation = { -1 : -1 }
 queue = [0]
 
-unknown = defaultdict(lambda: 0)
+# Start from 2 to distinguish from older unknown predictions
+uniqueSetId = 1
+def newCountAndId():
+    global uniqueSetId
+    uniqueSetId += 1
+    return { 'id' : uniqueSetId, 'count' : 0 }
+
+unknown = defaultdict(newCountAndId)
 while queue:
     node = queue.pop(0)
     left_child = tree.children_left[node]
@@ -86,8 +93,8 @@ while queue:
             pred = thread.decode_table[pred[0]]
         else:
             key = tuple(thread.decode_table[k] for k in np.flatnonzero(proba[:,1]))
-            unknown[key] += 1
-            pred = key[0]
+            unknown[key]['count'] += 1
+            pred = -unknown[key]['id']
         translation[node] = count
         count += 1
         arrayTree.append((threshold, featureIdx, -1, pred))
@@ -99,12 +106,12 @@ while queue:
         queue.append(left_child)
         queue.append(right_child)
 
-total = sum(unknown.values())
+total = sum(pred['count'] for pred in unknown.values())
 
 with fdopen(opts.unknownsFd, 'wb') as unknownsFile:
     print >>unknownsFile, total
     for key, val in sorted(unknown.items(), key=lambda x: x[1], reverse=True):
-        print >>unknownsFile, val, ":", key
+        print >>unknownsFile, val['id'], ":", key, ":", val['count']
 
 def translate(data):
     if data[2] != -1:

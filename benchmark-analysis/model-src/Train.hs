@@ -7,6 +7,7 @@ module Train
     ( ModelDescription(..)
     , ModelStats(..)
     , TrainingConfig(..)
+    , UnknownSet (..)
     , getTotalQuery
     , getTrainingQuery
     , getValidationQuery
@@ -49,12 +50,18 @@ import StepQuery (StepInfo(..), stepInfoQuery)
 import Sql (MonadSql, (==.))
 import qualified Sql
 
+data UnknownSet = UnknownSet
+    { unknownSetId :: Int64
+    , unknownSetOccurence :: Int
+    , unknownSetImpls :: Set Int64
+    } deriving (Eq, Show)
+
 data ModelStats = ModelStats
-     { modelGraphPropImportance :: Map Text Double
-     , modelStepPropImportance :: Map Text Double
-     , modelUnknownCount :: Int
-     , modelUnknownPreds :: [(Int, Set Int64)]
-     } deriving (Eq, Show)
+    { modelGraphPropImportance :: Map Text Double
+    , modelStepPropImportance :: Map Text Double
+    , modelUnknownCount :: Int
+    , modelUnknownPreds :: [UnknownSet]
+    } deriving (Eq, Show)
 
 data TrainingConfig = TrainConfig
     { trainGraphProps :: Set Text
@@ -138,14 +145,14 @@ getModelStats modelId = do
 
     unknowns <- Sql.selectList [UnknownPredictionModelId ==. modelId] []
     modelUnknownPreds <- forM unknowns $ \Sql.Entity{..} -> do
-        let UnknownPrediction{unknownPredictionCount} = entityVal
+        let UnknownPrediction{..} = entityVal
             filters = [UnknownPredictionSetUnknownPredId ==. entityKey]
 
         implSet <- runConduitRes $
             Sql.selectSource filters []
             .| C.foldMap (toImplSet . Sql.entityVal)
 
-        return (unknownPredictionCount, implSet)
+        return $ UnknownSet unknownPredictionUnknownSetId unknownPredictionCount implSet
 
     return ModelStats{..}
   where
@@ -245,10 +252,13 @@ trainModel algoId platId ModelDesc{..} = do
     forM_ (M.toList modelStepPropImportance) $
         Sql.insert_ . uncurry (ModelStepProperty modelId)
 
-    forM_ modelUnknownPreds $ \(count, impls) -> do
-        unknownId <- Sql.insert $ UnknownPrediction modelId algoId count
-        forM_ impls $ \impl ->
-            Sql.insert_ $ UnknownPredictionSet unknownId (toSqlKey impl) algoId
+    forM_ modelUnknownPreds $ \UnknownSet{..} -> do
+        unknownId <- Sql.insert $
+            UnknownPrediction modelId algoId unknownSetId unknownSetOccurence
+
+        forM_ unknownSetImpls $ \impl -> do
+            implKey <- Sql.validateKey "Implementation" impl
+            Sql.insert_ $ UnknownPredictionSet unknownId implKey algoId
 
     return (modelId, model)
   where
@@ -272,19 +282,20 @@ getResult columnCount = runGet parseBlock . LBS.fromStrict
         return (dbls, byteStringToModel bs)
 
 getUnknowns
-    :: (MonadLogger m, MonadThrow m) => Text -> m (Int, [(Int, Set Int64)])
+    :: (MonadLogger m, MonadThrow m) => Text -> m (Int, [UnknownSet])
 getUnknowns txt = case parse parseUnknowns "getUnknowns" txt of
     Left e -> logThrowM . ModelInfoParseFailed . T.pack $ errorBundlePretty e
     Right r -> return r
 
-parseUnknowns :: Parsec Void Text (Int, [(Int, Set Int64)])
+parseUnknowns :: Parsec Void Text (Int, [UnknownSet])
 parseUnknowns = (,) <$> decimal <* eol <*> some parseUnknown
 
-parseUnknown :: Parsec Void Text (Int, Set Int64)
+parseUnknown :: Parsec Void Text UnknownSet
 parseUnknown = do
-    count <- decimal
-    string " : "
+    setId <- decimal <* string " : "
     impls <- between (char '(') (char ')') $
         S.fromList <$> sepBy1 decimal (string ", ")
+    string " : "
+    count <- decimal
     eol
-    return (count, impls)
+    return $ UnknownSet setId count impls
