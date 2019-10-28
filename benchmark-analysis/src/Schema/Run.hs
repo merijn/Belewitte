@@ -84,7 +84,10 @@ FROM (
     SELECT RunConfig.id AS runConfigId
          , Variant.id AS variantId
          , TotalTimer.implId
-         , MAX(MAX(TotalTimer.timestamp, StepTimer.timestamp)) AS timestamp
+         , MAX(MAX
+            ( IFNULL(TotalTimer.timestamp, datetime("now"))
+            , IFNULL(StepTimer.timestamp, datetime("now"))
+            )) AS timestamp
          , MIN(TotalTimer.wrongResult ISNULL AND StepTimer.wrongResult ISNULL)
            AS validated
     FROM RunConfig
@@ -100,7 +103,7 @@ FROM (
     ON  TotalTimer.platformId = RunConfig.platformId
     AND TotalTimer.variantId = Variant.id
 
-    INNER JOIN StepTimer
+    LEFT JOIN StepTimer
     ON  StepTimer.platformId = RunConfig.platformId
     AND StepTimer.variantId = Variant.id
     AND StepTimer.implId = TotalTimer.implid
