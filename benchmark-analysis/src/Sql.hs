@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -25,6 +26,50 @@ import Sql.Core hiding (executeSql, liftProjectPersist)
 
 newtype Avg = Avg { getAvg :: Int } deriving (Show, Eq, Ord)
 newtype Max = Max { getMax :: Int } deriving (Show, Eq, Ord)
+
+validateEntity
+    :: ( MonadLogger m
+       , MonadSql m
+       , MonadThrow m
+       , SqlRecord r
+       , ToBackendKey SqlBackend r
+       )
+    => Text -> Int64 -> m (Entity r)
+validateEntity name k = getEntity (toSqlKey k) >>= \case
+    Nothing -> logThrowM $ MissingEntity name k
+    Just ent -> return ent
+
+validateKey
+    :: ( MonadLogger m
+       , MonadSql m
+       , MonadThrow m
+       , SqlRecord r
+       , ToBackendKey SqlBackend r
+       )
+    => Text -> Int64 -> m (Key r)
+validateKey name = fmap entityKey . validateEntity name
+
+validateUniqEntity
+    :: ( MonadLogger m
+       , MonadSql m
+       , MonadThrow m
+       , Show (Unique r)
+       , SqlRecord r
+       )
+    => Text -> Unique r -> m (Entity r)
+validateUniqEntity name uniq = getBy uniq >>= \case
+    Nothing -> logThrowM $ MissingUniqEntity name uniq
+    Just ent -> return ent
+
+validateUniqKey
+    :: ( MonadLogger m
+       , MonadSql m
+       , MonadThrow m
+       , Show (Unique r)
+       , SqlRecord r
+       )
+    => Text -> Unique r -> m (Key r)
+validateUniqKey name = fmap entityKey . validateUniqEntity name
 
 rawGetGlobalVar
     :: forall a b m

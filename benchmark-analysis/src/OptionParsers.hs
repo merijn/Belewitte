@@ -157,14 +157,9 @@ platformParser = queryPlatform <$> platformOpt
         , help "Platform results to use, numeric or textual" ]
 
     queryPlatform :: Either Text Int64 -> SqlM (Entity Platform)
-    queryPlatform (Right n) = do
-        Just entity <- logIfFail "No Platform with id" (showText n) $
-                Sql.getEntity $ toSqlKey n
-        return entity
-    queryPlatform (Left name) = do
-        Just entity <- logIfFail "No Platform with name" name $
-            Sql.getBy $ UniqPlatform name
-        return entity
+    queryPlatform (Right n) = Sql.validateEntity "Platform" n
+    queryPlatform (Left name) = Sql.validateUniqEntity "platform" $
+        UniqPlatform name
 
 algorithmIdParser :: Parser (SqlM (Key Algorithm))
 algorithmIdParser = fmap entityKey <$> algorithmParser
@@ -178,14 +173,9 @@ algorithmParser = queryAlgorithm <$> algorithmOpt
         , help "Algorithm to use, numeric or textual id" ]
 
     queryAlgorithm :: Either Text Int64 -> SqlM (Entity Algorithm)
-    queryAlgorithm (Right n) = do
-        Just entity <- logIfFail "No algorithm with id" (showText n) $
-                Sql.getEntity $ toSqlKey n
-        return entity
-    queryAlgorithm (Left name) = do
-        Just entity <- logIfFail "No algorithm with name" name $
-                Sql.getBy $ UniqAlgorithm name
-        return entity
+    queryAlgorithm (Right n) = Sql.validateEntity "Algorithm" n
+    queryAlgorithm (Left name) = Sql.validateUniqEntity "Algorithm" $
+        UniqAlgorithm name
 
 intervalReader :: ReadM (IntervalSet Int64)
 intervalReader = maybeReader . parseMaybe $

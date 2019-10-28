@@ -1,4 +1,5 @@
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTSyntax #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -15,10 +16,12 @@ module Exceptions
 import Control.Monad.Catch (Exception(..), MonadThrow, SomeException)
 import qualified Control.Monad.Catch as Except
 import Control.Monad.Logger (MonadLogger, logErrorN)
+import Data.Int (Int64)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Encoding.Error (UnicodeException(..))
 import Data.Typeable (Typeable, cast)
+import Database.Persist.Class (Unique)
 import Database.Persist.Types (SqlType(..), PersistValue(..))
 import Database.Sqlite (Error(..), SqliteException(..))
 
@@ -181,6 +184,36 @@ instance Pretty StdinDisappeared where
         "stdin was unexpectedly closed while waiting for user input!"
 
 instance Exception StdinDisappeared where
+    toException = toRuntimeError
+    fromException = fromRuntimeError
+    displayException = show . pretty
+
+data MissingEntity = MissingEntity Text Int64
+    deriving (Show, Typeable)
+
+instance Pretty MissingEntity where
+    pretty (MissingEntity name k) = Pretty.reflow $
+        "Missing " <> name <> " with id #" <> T.pack (show k)
+
+instance Exception MissingEntity where
+    toException = toRuntimeError
+    fromException = fromRuntimeError
+    displayException = show . pretty
+
+data MissingUniqEntity where
+    MissingUniqEntity
+        :: Show (Unique v) => Text -> (Unique v) -> MissingUniqEntity
+    deriving (Typeable)
+
+instance Show MissingUniqEntity where
+    show (MissingUniqEntity name uniq) =
+        "MissingUniqEntity " <> T.unpack name <> " " <> show uniq
+
+instance Pretty MissingUniqEntity where
+    pretty (MissingUniqEntity name uniq) = Pretty.reflow $
+        "Missing " <> name <> " for " <> T.pack (show uniq)
+
+instance Exception MissingUniqEntity where
     toException = toRuntimeError
     fromException = fromRuntimeError
     displayException = show . pretty
