@@ -137,7 +137,7 @@ migrations =
     ]
 
 schemaVersion :: Int64
-schemaVersion = 11
+schemaVersion = 12
 
 type MigrationAction = ReaderT (RawSqlite SqlBackend) IO [EntityDef]
 

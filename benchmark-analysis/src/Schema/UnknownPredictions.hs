@@ -23,6 +23,7 @@ import Schema.Algorithm (AlgorithmId)
 import Schema.Model (PredictionModelId)
 import Schema.Implementation (ImplementationId)
 import qualified Schema.UnknownPredictions.V0 as V0
+import qualified Schema.UnknownPredictions.V1 as V1
 
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema'"] [persistUpperCase|
 UnknownPrediction
@@ -31,7 +32,7 @@ UnknownPrediction
     count Int
     deriving Eq Show
 
-UnknownSet
+UnknownPredictionSet
     unknownPredId UnknownPredictionId
     implId ImplementationId
     algorithmId AlgorithmId
@@ -41,7 +42,7 @@ UnknownSet
 
 schema :: [EntityDef]
 schema = Utils.addForeignRef "UnknownPrediction" model
-       . Utils.addForeignRef "UnknownSet" unknownPred
+       . Utils.addForeignRef "UnknownPredictionSet" unknownPred
        $ schema'
   where
     model :: ForeignDef
@@ -55,7 +56,7 @@ schema = Utils.addForeignRef "UnknownPrediction" model
 migrations :: MonadSql m => Int64 -> m [EntityDef]
 migrations = Utils.mkMigrationLookup
     [ 0 .= V0.schema
-    , 9 .> schema $ do
+    , 9 .> V1.schema $ do
         Utils.executeSql [i|
 ALTER TABLE "UnknownPrediction"
 ADD COLUMN "algorithmId" INTEGER REFERENCES "Algorithm"
@@ -103,5 +104,10 @@ INNER JOIN
     GROUP BY UnknownSet.unknownPredId, Implementation.algorithmId
 ) AS AlgorithmMapping
 ON UnknownPrediction.id = AlgorithmMapping.unknownPredId
+|]
+    , 12 .> schema $ do
+
+        Utils.executeSql [i|
+ALTER TABLE "UnknownSet" RENAME TO "UnknownPredictionSet"
 |]
     ]

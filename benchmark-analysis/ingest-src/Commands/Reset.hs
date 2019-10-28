@@ -69,4 +69,4 @@ resetModels = do
     Sql.deleteWhere ([] :: [Filter ModelGraphProperty])
     Sql.deleteWhere ([] :: [Filter ModelStepProperty])
     Sql.deleteWhere ([] :: [Filter UnknownPrediction])
-    Sql.deleteWhere ([] :: [Filter UnknownSet])
+    Sql.deleteWhere ([] :: [Filter UnknownPredictionSet])

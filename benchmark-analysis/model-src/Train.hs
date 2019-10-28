@@ -139,9 +139,10 @@ getModelStats modelId = do
     unknowns <- Sql.selectList [UnknownPredictionModelId ==. modelId] []
     modelUnknownPreds <- forM unknowns $ \Sql.Entity{..} -> do
         let UnknownPrediction{unknownPredictionCount} = entityVal
+            filters = [UnknownPredictionSetUnknownPredId ==. entityKey]
 
         implSet <- runConduitRes $
-            Sql.selectSource [UnknownSetUnknownPredId ==. entityKey] []
+            Sql.selectSource filters []
             .| C.foldMap (toImplSet . Sql.entityVal)
 
         return (unknownPredictionCount, implSet)
@@ -154,7 +155,8 @@ getModelStats modelId = do
     stepPropMap ModelStepProperty{..} =
       M.singleton modelStepPropertyProperty modelStepPropertyImportance
 
-    toImplSet UnknownSet{..} = S.singleton $ fromSqlKey unknownSetImplId
+    toImplSet UnknownPredictionSet{..} =
+      S.singleton $ fromSqlKey unknownPredictionSetImplId
 
 trainModel
     :: (MonadMask m, MonadQuery m, MonadTagFail m)
@@ -246,7 +248,7 @@ trainModel algoId platId ModelDesc{..} = do
     forM_ modelUnknownPreds $ \(count, impls) -> do
         unknownId <- Sql.insert $ UnknownPrediction modelId algoId count
         forM_ impls $ \impl ->
-            Sql.insert_ $ UnknownSet unknownId (toSqlKey impl) algoId
+            Sql.insert_ $ UnknownPredictionSet unknownId (toSqlKey impl) algoId
 
     return (modelId, model)
   where

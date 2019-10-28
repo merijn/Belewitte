@@ -97,6 +97,7 @@ Library
                         Schema.Timers.V0
                         Schema.UnknownPredictions
                         Schema.UnknownPredictions.V0
+                        Schema.UnknownPredictions.V1
                         Schema.Utils
                         Schema.Variant
                         Schema.Variant.V0
