@@ -6,8 +6,8 @@
 module Migration (checkMigration) where
 
 import Control.Monad (forM_, unless, when)
-import Control.Monad.Catch (MonadMask, MonadThrow, bracket, catch, onError)
-import Control.Monad.IO.Unlift (MonadUnliftIO, withRunInIO)
+import Control.Monad.Catch (MonadMask, MonadThrow, catch, onError)
+import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger, logWarnN)
 import qualified Control.Monad.Logger as Log
 import Control.Monad.Trans.Resource (MonadResource)
@@ -19,8 +19,6 @@ import Data.String.Interpolate.IsString (i)
 import qualified Data.Text as T
 import Data.Typeable (Typeable)
 import Database.Persist.Sql (Migration)
-import GHC.IO.Handle (hDuplicate, hDuplicateTo)
-import System.IO (Handle, IOMode(WriteMode), hClose, stderr, withFile)
 
 import Exceptions
 import Pretty ((<+>))
@@ -31,21 +29,6 @@ import qualified Sql.Core as Sql
 
 showText :: Show a => a -> Text
 showText = T.pack . show
-
-withSilencedHandle :: MonadUnliftIO m => Handle -> m a -> m a
-withSilencedHandle hnd action = withRunInIO $ \runInIO ->
-    withFile "/dev/null" WriteMode $ \devNull ->
-        bracket (alloc devNull) cleanup $ \_ -> runInIO action
-  where
-    alloc devNull = do
-        hDuplicate hnd <* hDuplicateTo devNull hnd
-
-    cleanup oldStdErr = do
-        hDuplicateTo oldStdErr hnd
-        hClose oldStdErr
-
-silencedUnsafeMigration :: (MonadSql m, MonadUnliftIO m) => Migration -> m ()
-silencedUnsafeMigration = withSilencedHandle stderr . Sql.runMigrationUnsafe
 
 checkForeignKeys
     :: (MonadSql m, MonadLogger m, MonadResource m, MonadThrow m)
@@ -101,7 +84,7 @@ validateSchema migrateSchema version
 
                 Sql.executeSql "BEGIN TRANSACTION"
                 migration <- updateSchemaToVersion (n+1)
-                silencedUnsafeMigration migration
+                Sql.runMigrationUnsafeQuiet migration
                 updateIndicesToVersion (n+1)
 
                 checkSchema migration `catch` migrationFailed
@@ -136,7 +119,7 @@ checkMigration migrateSchema = do
     tableCount <- Sql.querySingleValue "SELECT COUNT(*) FROM sqlite_master" []
     case tableCount :: Int64 of
         0 -> do
-            Sql.runMigrationSilent currentSchema
+            Sql.runMigrationQuiet currentSchema
             checkSchema currentSchema
             updateIndicesToVersion schemaVersion
             False <$ Sql.setPragma "user_version" schemaVersion

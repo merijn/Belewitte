@@ -29,7 +29,7 @@ import Database.Persist.TH (embedEntityDefs)
 import Database.Persist.Types
     (DBName(..), EntityDef(..), ForeignDef(..), HaskellName(..))
 
-import Sql.Core (MonadSql, executeSql, runMigrationSilent)
+import Sql.Core (MonadSql, executeSql, runMigrationQuiet)
 
 (.=) :: Applicative f => a -> b -> (a, (b, f ()))
 (.=) i schema = (i, (schema, pure ()))
@@ -43,7 +43,7 @@ mkMigration ents = mapM_ (migrate embeddedEnts) embeddedEnts
     embeddedEnts = embedEntityDefs . concat $ ents
 
 createTableFromSchema :: MonadSql m => [EntityDef] -> m ()
-createTableFromSchema = void . runMigrationSilent . mkMigration . pure
+createTableFromSchema = void . runMigrationQuiet . mkMigration . pure
 
 mkForeignRef :: Text -> [(Text, Text)] -> ForeignDef
 mkForeignRef foreignTable refs = ForeignDef

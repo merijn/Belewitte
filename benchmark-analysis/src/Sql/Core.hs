@@ -31,6 +31,7 @@ module Sql.Core
     , module Sql.Core
     ) where
 
+import Control.Monad (void)
 import Control.Monad.IO.Unlift (MonadIO)
 import Control.Monad.Logger (MonadLogger)
 import qualified Control.Monad.Logger as Log
@@ -171,11 +172,12 @@ onlyUnique = liftPersist . Sqlite.onlyUnique
 getMigration :: MonadSql m => Migration -> m [Text]
 getMigration = liftProjectPersist . Sqlite.getMigration
 
-runMigrationSilent :: MonadSql m => Migration -> m [Text]
-runMigrationSilent = liftProjectPersist . Sqlite.runMigrationSilent
+runMigrationQuiet :: MonadSql m => Migration -> m [Text]
+runMigrationQuiet = liftProjectPersist . Sqlite.runMigrationQuiet
 
-runMigrationUnsafe :: MonadSql m => Migration -> m ()
-runMigrationUnsafe = liftProjectPersist . Sqlite.runMigrationUnsafe
+runMigrationUnsafeQuiet :: MonadSql m => Migration -> m ()
+runMigrationUnsafeQuiet =
+    void . liftProjectPersist . Sqlite.runMigrationUnsafeQuiet
 
 selectFirst
     :: (MonadSql m, SqlRecord rec)
