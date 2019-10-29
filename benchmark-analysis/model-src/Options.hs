@@ -50,16 +50,14 @@ data ModelCommand
     = Train
       { getConfig :: SqlM TrainingConfig }
     | QueryModel
-      { getModel :: SqlM (Key PredictionModel, Model) }
+      { getModel :: SqlM (Key Algorithm, Key PredictionModel, Model) }
     | Validate
-      { getAlgoId :: SqlM (Key Algorithm)
-      , getPlatformId :: SqlM (Key Platform)
-      , getModel :: SqlM (Key PredictionModel, Model)
+      { getPlatformId :: SqlM (Key Platform)
+      , getModel :: SqlM (Key Algorithm, Key PredictionModel, Model)
       }
     | Evaluate
-      { getAlgorithm :: SqlM (Entity Algorithm)
-      , getPlatformId :: SqlM (Key Platform)
-      , getModel :: SqlM (Key PredictionModel, Model)
+      { getPlatformId :: SqlM (Key Platform)
+      , getModel :: SqlM (Key Algorithm, Key PredictionModel, Model)
       , defaultImpl :: Either Int Text
       , evaluateConfig :: EvaluateReport
       }
@@ -69,8 +67,7 @@ data ModelCommand
       , compareConfig :: CompareReport
       }
     | Export
-      { getAlgoId :: SqlM (Key Algorithm)
-      , getModel :: SqlM (Key PredictionModel, Model)
+      { getModel :: SqlM (Key Algorithm, Key PredictionModel, Model)
       , cppFile :: FilePath
       }
     | QueryTest
@@ -102,7 +99,7 @@ commands name = CommandGroup CommandInfo
         , commandDesc =
             "Compute and report a model's accuracy on validation dataset and \
             \full dataset"
-        } (Validate <$> algorithmIdParser <*> platformIdParser <*> modelParser)
+        } (Validate <$> platformIdParser <*> modelParser)
     , SingleCommand CommandInfo
         { commandName = "evaluate"
         , commandHeaderDesc = "evaluate model performance"
@@ -110,8 +107,8 @@ commands name = CommandGroup CommandInfo
             "Evaluate BDT model performance on full dataset and compare \
             \against performance of other implementations"
         }
-        $ Evaluate <$> algorithmParser <*> platformIdParser <*> modelParser
-                   <*> defaultImplParser <*> evaluateParser
+        $ Evaluate <$> platformIdParser <*> modelParser <*> defaultImplParser
+                   <*> evaluateParser
     , SingleCommand CommandInfo
         { commandName = "compare"
         , commandHeaderDesc = "compare implementation performance"
@@ -122,7 +119,7 @@ commands name = CommandGroup CommandInfo
         { commandName = "export"
         , commandHeaderDesc = "export model to C++"
         , commandDesc = "Export BDT model to C++ file"
-        } (Export <$> algorithmIdParser <*> modelParser <*> cppFile)
+        } (Export <$> modelParser <*> cppFile)
     , HiddenCommand CommandInfo
         { commandName = "query-test"
         , commandHeaderDesc = "check query output"
@@ -156,7 +153,7 @@ defaultImplParser = implParser <|> pure (Right "edge-list")
                \Numeric or textual."
         ]
 
-modelParser :: Parser (SqlM (Key PredictionModel, Model))
+modelParser :: Parser (SqlM (Key Algorithm, Key PredictionModel, Model))
 modelParser = queryModel <$> modelOpt
   where
     modelOpt :: Parser Int64
@@ -165,10 +162,10 @@ modelParser = queryModel <$> modelOpt
         , help "Model to use"
         ]
 
-    queryModel :: Int64 -> SqlM (Key PredictionModel, Model)
+    queryModel :: Int64 -> SqlM (Key Algorithm, Key PredictionModel, Model)
     queryModel n = do
-        PredictionModel{predictionModelModel} <- Sql.getJust key
-        return $ (key, predictionModelModel)
+        PredictionModel{..} <- Sql.getJust key
+        return $ (predictionModelAlgorithmId, key, predictionModelModel)
       where
         key = toSqlKey n
 
