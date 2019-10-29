@@ -54,6 +54,7 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
     int max_iterations;
     unsigned maskBits;
     unsigned bucketSize;
+    double percent;
 
     Kernel<unsigned*> zeroInitDegrees;
     Kernel<unsigned*> computeDegrees;
@@ -66,7 +67,7 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
     , Kernel<unsigned*> zeroInit
     , Kernel<unsigned*> compute
     )
-      : max_iterations(30), maskBits(0), bucketSize(0)
+      : max_iterations(30), maskBits(0), bucketSize(0), percent(0.0)
       , zeroInitDegrees(zeroInit), computeDegrees(compute), kernel(k)
       , consolidate(c)
     {
@@ -76,6 +77,8 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
                     "Number of result bits to mask.");
         options.add('b', "bucket", "NUM", bucketSize,
                     "Number of results bucket.");
+        options.add('t', "top", "NUM", percent,
+                    "Top percent to output.");
     }
 
     virtual void runImplementation(std::ofstream& outputFile) override
@@ -141,7 +144,20 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
         uint32_t mask = mask_N_bits(maskBits);
         outputFile << std::hexfloat;
 
-        if (bucketSize <= 1) {
+        if (percent != 0.0) {
+            std::vector<std::pair<float,size_t>> ranking;
+            ranking.reserve(pageranks.size);
+            for (size_t i = 0; i < pageranks.size; i++) {
+                ranking.emplace_back(pageranks[i], i);
+            }
+
+            std::stable_sort(ranking.rbegin(), ranking.rend());
+
+            size_t count = static_cast<size_t>(pageranks.size * percent);
+            for (size_t i = 0; i < count; i++) {
+                outputFile << ranking[i].second << endl;
+            }
+        } else if (bucketSize <= 1) {
             for (size_t i = 0; i < pageranks.size; i++) {
                 outputFile << i << "\t" << roundPrecision(pageranks[i], mask)
                            << endl;
@@ -166,7 +182,7 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
             }
 
             for (const auto& p : buckets) {
-                outputFile << p.first << endl;
+                outputFile << p.second << endl;
             }
         }
     }
