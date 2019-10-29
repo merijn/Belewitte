@@ -52,6 +52,21 @@ Options::add(char so, const char *lo, string arg, string &var, string help)
     return add(opt);
 }
 
+Options&
+Options::add(const char *lo, string arg, double &var, string help)
+{ return add('\0', lo, arg, var, help); }
+
+Options&
+Options::add(char so, const char *lo, string arg, double &var, string help)
+{
+    auto action = [&](auto s) { var = std::stod(s); };
+    auto reset = [&,initial=var]() { var = initial; };
+    auto opt = Option(so, lo, action, reset, arg, help);
+    opt.defaultVal = std::to_string(var);
+    opt.hasArg = true;
+    return add(opt);
+}
+
 vector<string>
 Options::parseArgs(const vector<string>& args)
 {

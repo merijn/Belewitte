@@ -99,6 +99,8 @@ class Options {
     Options& add(const Option& o);
     Options& add(const char *, std::string, std::string &, std::string);
     Options& add(char, const char *, std::string, std::string &, std::string);
+    Options& add(const char *, std::string, double &, std::string);
+    Options& add(char, const char *, std::string, double &, std::string);
 
     template<typename T>
     Options& add(char so, const char *lo, T& var, T val, std::string help)
