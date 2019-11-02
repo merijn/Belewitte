@@ -12,8 +12,8 @@ revStructEdgeListBfs(StructEdgeList<unsigned> *graph, int *levels, int depth)
     for (uint64_t idx = startIdx; idx < size; idx += blockDim.x * gridDim.x)
     {
         edge<unsigned> myEdge = graph->edges[idx];
-        if (levels[myEdge.in] == depth) {
-            if (atomicMin(&levels[myEdge.out], newDepth) > newDepth) {
+        if (levels[myEdge.out] == depth) {
+            if (atomicMin(&levels[myEdge.in], newDepth) > newDepth) {
                 bfs.update();
             }
         }

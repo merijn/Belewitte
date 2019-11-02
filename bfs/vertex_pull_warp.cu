@@ -3,16 +3,15 @@
 
 static __device__ inline int
 expand_bfs
-(int W_SZ, unsigned W_OFF, unsigned cnt, const unsigned *edges, int *levels, int curr)
+(unsigned mask, int W_SZ, unsigned W_OFF, unsigned cnt, const unsigned *edges, int *levels, int curr)
 {
     int result = 0;
     for (unsigned IDX = W_OFF; IDX < cnt; IDX += W_SZ) {
         if (levels[edges[IDX]] == curr) {
             result = 1;
-            break;
         }
     }
-    return __any_sync(0xffffffff, result);
+    return __any_sync(mask, result);
 }
 
 template<typename BFSVariant>
@@ -25,6 +24,9 @@ vertexPullWarpBfs
     const int THREAD_ID = (blockIdx.x * blockDim.x) + threadIdx.x;
     const uint64_t vertex_count = graph->vertex_count;
     const uint64_t warpsPerBlock = blockDim.x / warp_size;
+
+    const unsigned SUB_WARP_OFFSET = THREAD_ID & (32 - warp_size);
+    const unsigned mask = ((1 << warp_size) - 1) << SUB_WARP_OFFSET;
 
     const uint64_t WARP_ID = THREAD_ID / warp_size;
     const int W_OFF = THREAD_ID % warp_size;
@@ -52,7 +54,7 @@ vertexPullWarpBfs
             const unsigned num_nbr = myVertices[v+1] - myVertices[v];
             const unsigned *nbrs = &graph->edges[myVertices[v]];
             if (myLevels[v] > depth) {
-                if (expand_bfs(warp_size, W_OFF, num_nbr, nbrs, levels, depth)) {
+                if (expand_bfs(mask, warp_size, W_OFF, num_nbr, nbrs, levels, depth)) {
                     myLevels[v] = newDepth;
                 }
             }

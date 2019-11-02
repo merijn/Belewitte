@@ -437,6 +437,16 @@ struct SimpleImplementation : public AlgorithmBase
   private:
     virtual void prepareRun() override
     {
+        if (warp_size < 0) {
+            reportError("Warp size should be positive!");
+        } else if (warp_size > 32) {
+            reportError("Warp size should be less than 32!");
+        } else if (warp_size & (warp_size - 1)) {
+            reportError("Warp size should be a power of 2!");
+        } else if (chunk_size % warp_size != 0) {
+            reportError("Chunk size should be a multiple of warp size!");
+        }
+
         auto setWarpReferences = [this](auto&& k) {
             if (k->isWarp) k->setWarpConfig(warp_size, chunk_size);
         };
