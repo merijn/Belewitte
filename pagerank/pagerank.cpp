@@ -67,8 +67,8 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
     , Kernel<unsigned*> zeroInit
     , Kernel<unsigned*> compute
     )
-      : zeroInitDegrees(zeroInit), computeDegrees(compute), kernel(k)
-      , consolidate(c)
+      : zeroInitDegrees(zeroInit), computeDegrees(compute)
+      , kernel(k), consolidate(c)
     {}
 
     virtual void runImplementation(std::ofstream& outputFile) override

@@ -25,7 +25,7 @@ import Model
 import Options
 import Query
 import Schema
-import Sql (queryImplementations, getJust)
+import qualified Sql
 import StepQuery (StepInfo, stepInfoQuery)
 import Train
 import Validate
@@ -48,7 +48,7 @@ reportModelStats ModelStats{..} = renderOutput $ do
         wrap t = "    " <> t <> "\n"
 
         getName :: Int64 -> SqlM Text
-        getName i = getImplName <$> getJust (toSqlKey i)
+        getName i = getImplName <$> Sql.getJust (toSqlKey i)
 
     features :: [(Text, Double)]
     features = map (first ("Graph:" <>)) (M.toList modelGraphPropImportance)
@@ -96,20 +96,19 @@ main = runSqlM commands $ \case
         liftIO $ print (fromSqlKey modelId)
 
     QueryModel{getModel} -> do
-        modelId <- fst <$> getModel
+        (_, modelId, _) <- getModel
         getModelStats modelId >>= reportModelStats
 
-    Validate{getAlgoId,getPlatformId,getModel} -> do
-        algoId <- getAlgoId
+    Validate{getPlatformId,getModel} -> do
         platformId <- getPlatformId
-        (modelId, model) <- getModel
+        (algoId, modelId, model) <- getModel
         trainConfig <- getModelTrainingConfig modelId
         validateModel algoId platformId model trainConfig
 
-    Evaluate{getAlgorithm,getPlatformId,getModel,defaultImpl,evaluateConfig} -> do
-        algo <- getAlgorithm
+    Evaluate{getPlatformId,getModel,defaultImpl,evaluateConfig} -> do
         platId <- getPlatformId
-        (modelId, model) <- getModel
+        (algoId, modelId, model) <- getModel
+        algo <- Sql.getJustEntity algoId
         trainConfig <- getModelTrainingConfig modelId
         evaluateModel algo platId defaultImpl evaluateConfig model trainConfig
 
@@ -118,10 +117,9 @@ main = runSqlM commands $ \case
         platformId <- getPlatformId
         compareImplementations algoId platformId compareConfig
 
-    Export{getAlgoId,getModel,cppFile} -> do
-        algoId <- getAlgoId
-        impls <- queryImplementations algoId
-        (modelId, model) <- getModel
+    Export{getModel,cppFile} -> do
+        (algoId, modelId, model) <- getModel
+        impls <- Sql.queryImplementations algoId
         TrainConfig{..} <- getModelTrainingConfig modelId
         dumpCppModel cppFile model trainGraphProps trainStepProps
             (implementationName <$> impls)

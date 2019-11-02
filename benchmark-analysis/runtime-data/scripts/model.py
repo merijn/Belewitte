@@ -11,10 +11,8 @@ import struct
 import threading
 import warnings
 
-with warnings.catch_warnings():
-    warnings.filterwarnings("ignore",category=DeprecationWarning)
-    from sklearn.tree import DecisionTreeClassifier, DecisionTreeRegressor, _tree
-    from sklearn.preprocessing import OneHotEncoder, LabelEncoder
+from sklearn.tree import DecisionTreeClassifier, _tree
+from sklearn.preprocessing import OneHotEncoder
 
 if __name__ != "__main__":
     exit(1)
@@ -35,8 +33,7 @@ parser.add_argument('--unknowns-fd', metavar='FD', type=int, action='store',
 
 opts = parser.parse_args()
 
-lble = LabelEncoder()
-ohe = OneHotEncoder()
+ohe = OneHotEncoder(categories='auto')
 
 class ResultReader(threading.Thread):
     def __init__(self, fd):
@@ -46,9 +43,8 @@ class ResultReader(threading.Thread):
     def run(self):
         with fdopen(self.fd, 'rb') as inputFile:
             self.outputs = np.fromfile(inputFile, dtype=np.int64, count=opts.numEntries)
-            self.outputs = lble.fit_transform(self.outputs).reshape(-1, 1) #normalise indices
-            self.outputs = ohe.fit_transform(self.outputs).toarray() # one hot encoding
-            self.decode_table = lble.inverse_transform(ohe.active_features_)
+            # one hot encoding
+            self.outputs = ohe.fit_transform(self.outputs.reshape(-1,1)).toarray()
 
 thread = ResultReader(opts.resultsFd)
 thread.start()
@@ -77,6 +73,12 @@ def newCountAndId():
     uniqueSetId += 1
     return { 'id' : uniqueSetId, 'count' : 0 }
 
+def lookupImpl(n):
+    arr = predictor.n_outputs_ * [0]
+    arr[n] = 1
+    arr = np.array(arr).reshape(1, -1)
+    return ohe.inverse_transform(arr)[0][0]
+
 unknown = defaultdict(newCountAndId)
 while queue:
     node = queue.pop(0)
@@ -89,10 +91,11 @@ while queue:
     if left_child == _tree.TREE_LEAF:
         proba = tree.value[node] / tree.weighted_n_node_samples[node]
         pred = np.argmax(proba, axis=1).nonzero()[0]
+
         if len(pred) == 1:
-            pred = thread.decode_table[pred[0]]
+            pred = lookupImpl(pred[0])
         else:
-            key = tuple(thread.decode_table[k] for k in np.flatnonzero(proba[:,1]))
+            key = tuple(lookupImpl(k) for k in np.flatnonzero(proba[:,1]))
             unknown[key]['count'] += 1
             pred = -unknown[key]['id']
         translation[node] = count

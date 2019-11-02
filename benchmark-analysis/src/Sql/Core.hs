@@ -153,6 +153,9 @@ getEntity = liftPersist . Sqlite.getEntity
 getJust :: (MonadSql m, SqlRecord rec) => Key rec -> m rec
 getJust = liftPersist . Sqlite.getJust
 
+getJustEntity :: (MonadSql m, SqlRecord rec) => Key rec -> m (Entity rec)
+getJustEntity = liftPersist . Sqlite.getJustEntity
+
 insert :: (MonadSql m, SqlRecord rec) => rec -> m (Key rec)
 insert = liftPersist . Sqlite.insert
 
