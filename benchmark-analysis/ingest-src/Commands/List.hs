@@ -366,5 +366,6 @@ commands = CommandGroup CommandInfo
             , "algorithm" =. IdField 'a' $ Simple VariantAlgorithmId
             , "graph" =. IdField 'g' $ Simple VariantGraphId
             , "props-stored" =. EnumField 'p' $ Simple VariantPropsStored
+            , "retries" =. SortOnlyField $ VariantRetryCount
             ]
     ]
