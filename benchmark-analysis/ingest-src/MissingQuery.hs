@@ -64,7 +64,7 @@ validationVariantQuery platformId = Query{..}
         validationArgs =
           [ "-a " <> algoName
           , fromMaybe "" variantFlags
-          , "-n", "1"
+          , "-n", "1", "--validate"
           , graphPath
           ]
 
@@ -128,7 +128,7 @@ validationRunQuery platformId ValidationVariant{..} = Query{..}
         implArgs = fromMaybe ("-k " <> missingRunImplName) implFlags
         missingRunAlgorithmId = validationAlgorithmId
         missingRunVariantId = validationVariantId
-        missingRunArgs = implArgs : validationArgs
+        missingRunArgs = implArgs : "--validate" : validationArgs
 
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
         [ SqlInt64, SqlString, SqlString, SqlInt64 ]

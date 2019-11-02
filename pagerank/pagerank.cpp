@@ -38,6 +38,7 @@ template<typename Platform, typename Vertex, typename Edge>
 struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
 {
     using Impl = ImplementationTemplate<Platform,Vertex,Edge>;
+    using Impl::validate;
     using Impl::run_count;
     using Impl::backend;
     using Impl::setKernelConfig;
@@ -131,30 +132,39 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
         }
 
         auto oldLocale = outputFile.imbue(std::locale("C"));
-        outputFile << std::hexfloat;
+        if (validate) {
+            auto floatDigits = std::numeric_limits<float>::digits10 + 1;
+            outputFile << std::setprecision(floatDigits);
 
-        uint32_t mask = mask_N_bits(maskBits);
+            for (size_t i = 0; i < pageranks.size; i++) {
+                outputFile << i << "\t" << pageranks[i] << endl;
+            }
+        } else {
+            outputFile << std::hexfloat;
 
-        std::vector<std::pair<float,size_t>> buckets;
-        buckets.reserve(pageranks.size);
-        for (size_t i = 0; i < pageranks.size; i++) {
-            buckets.emplace_back(roundPrecision(pageranks[i], mask), i);
-        }
+            uint32_t mask = mask_N_bits(maskBits);
 
-        std::stable_sort(buckets.begin(), buckets.end());
-        for (size_t i = 0; i < buckets.size(); i += bucketSize) {
-            auto start = buckets.begin() + static_cast<long>(i);
-            auto maxIdx = std::min(i + bucketSize, buckets.size() - 1);
-            auto end = buckets.begin() + static_cast<long>(maxIdx);
-            auto compare = [](const auto& a, const auto& b) -> bool {
-                return a.second < b.second;
-            };
+            std::vector<std::pair<float,size_t>> buckets;
+            buckets.reserve(pageranks.size);
+            for (size_t i = 0; i < pageranks.size; i++) {
+                buckets.emplace_back(roundPrecision(pageranks[i], mask), i);
+            }
 
-            std::stable_sort(start, end, compare);
-        }
+            std::stable_sort(buckets.begin(), buckets.end());
+            for (size_t i = 0; i < buckets.size(); i += bucketSize) {
+                auto start = buckets.begin() + static_cast<long>(i);
+                auto maxIdx = std::min(i + bucketSize, buckets.size() - 1);
+                auto end = buckets.begin() + static_cast<long>(maxIdx);
+                auto compare = [](const auto& a, const auto& b) -> bool {
+                    return a.second < b.second;
+                };
 
-        for (const auto& p : buckets) {
-            outputFile << p.second << endl;
+                std::stable_sort(start, end, compare);
+            }
+
+            for (const auto& p : buckets) {
+                outputFile << p.second << endl;
+            }
         }
 
         outputFile.imbue(oldLocale);

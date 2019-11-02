@@ -4,11 +4,15 @@
 #include "options/Options.hpp"
 
 struct ImplementationBase {
+  private:
+    bool validate_;
   protected:
-    ImplementationBase() : run_count(1)
+    ImplementationBase() : validate_(false), run_count(1), validate(validate_)
     {
         options.add('n', "count", "NUM", run_count,
                     "Number of times to run algorithm.");
+        options.add("validate", validate_, true,
+                    "Output validation results.");
     }
 
     ImplementationBase(const ImplementationBase&) = delete;
@@ -24,6 +28,7 @@ struct ImplementationBase {
     virtual void freeGraph() = 0;
 
   public:
+    const bool& validate;
     void operator()(const std::string& graphFile, std::ofstream&& output);
     void operator()(const std::string& graphFile, const std::string& output);
     void help(std::ostream& out, std::string prefix);
