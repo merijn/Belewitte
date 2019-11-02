@@ -51,10 +51,9 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
     template<typename... Args>
     using Kernel = typename Impl::template GraphKernel<Args...>;
 
-    int max_iterations;
-    unsigned maskBits;
-    unsigned bucketSize;
-    double percent;
+    const int max_iterations = 100;
+    const unsigned maskBits = 16;
+    const unsigned bucketSize = 1000;
 
     Kernel<unsigned*> zeroInitDegrees;
     Kernel<unsigned*> computeDegrees;
@@ -67,19 +66,9 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
     , Kernel<unsigned*> zeroInit
     , Kernel<unsigned*> compute
     )
-      : max_iterations(30), maskBits(0), bucketSize(0), percent(0.0)
-      , zeroInitDegrees(zeroInit), computeDegrees(compute), kernel(k)
+      : zeroInitDegrees(zeroInit), computeDegrees(compute), kernel(k)
       , consolidate(c)
-    {
-        options.add('i', "iterations", "NUM", max_iterations,
-                    "Number of pagerank iterations.");
-        options.add("bitmask", "NUM", maskBits,
-                    "Number of result bits to mask.");
-        options.add('b', "bucket", "NUM", bucketSize,
-                    "Number of results bucket.");
-        options.add('t', "top", "NUM", percent,
-                    "Top percent to output.");
-    }
+    {}
 
     virtual void runImplementation(std::ofstream& outputFile) override
     {
@@ -141,50 +130,34 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
             resultTransfer.stop();
         }
 
-        uint32_t mask = mask_N_bits(maskBits);
+        auto oldLocale = outputFile.imbue(std::locale("C"));
         outputFile << std::hexfloat;
 
-        if (percent != 0.0) {
-            std::vector<std::pair<float,size_t>> ranking;
-            ranking.reserve(pageranks.size);
-            for (size_t i = 0; i < pageranks.size; i++) {
-                ranking.emplace_back(pageranks[i], i);
-            }
+        uint32_t mask = mask_N_bits(maskBits);
 
-            std::stable_sort(ranking.rbegin(), ranking.rend());
-
-            size_t count = static_cast<size_t>(pageranks.size * percent);
-            for (size_t i = 0; i < count; i++) {
-                outputFile << ranking[i].second << endl;
-            }
-        } else if (bucketSize <= 1) {
-            for (size_t i = 0; i < pageranks.size; i++) {
-                outputFile << i << "\t" << roundPrecision(pageranks[i], mask)
-                           << endl;
-            }
-        } else {
-            std::vector<std::pair<float,size_t>> buckets;
-            buckets.reserve(pageranks.size);
-            for (size_t i = 0; i < pageranks.size; i++) {
-                buckets.emplace_back(roundPrecision(pageranks[i], mask), i);
-            }
-
-            std::stable_sort(buckets.begin(), buckets.end());
-            for (size_t i = 0; i < buckets.size(); i += bucketSize) {
-                auto start = buckets.begin() + static_cast<long>(i);
-                auto maxIdx = std::min(i + bucketSize, buckets.size() - 1);
-                auto end = buckets.begin() + static_cast<long>(maxIdx);
-                auto compare = [](const auto& a, const auto& b) -> bool {
-                    return a.second < b.second;
-                };
-
-                std::stable_sort(start, end, compare);
-            }
-
-            for (const auto& p : buckets) {
-                outputFile << p.second << endl;
-            }
+        std::vector<std::pair<float,size_t>> buckets;
+        buckets.reserve(pageranks.size);
+        for (size_t i = 0; i < pageranks.size; i++) {
+            buckets.emplace_back(roundPrecision(pageranks[i], mask), i);
         }
+
+        std::stable_sort(buckets.begin(), buckets.end());
+        for (size_t i = 0; i < buckets.size(); i += bucketSize) {
+            auto start = buckets.begin() + static_cast<long>(i);
+            auto maxIdx = std::min(i + bucketSize, buckets.size() - 1);
+            auto end = buckets.begin() + static_cast<long>(maxIdx);
+            auto compare = [](const auto& a, const auto& b) -> bool {
+                return a.second < b.second;
+            };
+
+            std::stable_sort(start, end, compare);
+        }
+
+        for (const auto& p : buckets) {
+            outputFile << p.second << endl;
+        }
+
+        outputFile.imbue(oldLocale);
     }
 };
 
