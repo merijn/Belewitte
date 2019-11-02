@@ -12,6 +12,7 @@ import qualified Data.Text as T
 import System.Directory (doesFileExist)
 import System.FilePath (splitExtension, takeFileName)
 
+import Commands
 import Core
 import InteractiveInput
 import OptionParsers

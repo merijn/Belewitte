@@ -7,6 +7,7 @@ import Data.Proxy (Proxy(..))
 import qualified Data.Text.IO as T
 import System.Exit (exitFailure)
 
+import Commands
 import Core
 import FormattedOutput
 import OptionParsers

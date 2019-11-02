@@ -62,7 +62,8 @@ Common exes
 Library
   Import:               all
   Hs-Source-Dirs:       src
-  Exposed-Modules:      Core
+  Exposed-Modules:      Commands
+                        Core
                         Exceptions
                         FormattedOutput
                         InteractiveInput

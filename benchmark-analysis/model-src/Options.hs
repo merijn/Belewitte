@@ -23,6 +23,7 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 
 import Core
+import Commands
 import Evaluate
     (CompareReport, EvaluateReport, Report(..), RelativeTo(..), SortBy(..))
 import Model (Model)

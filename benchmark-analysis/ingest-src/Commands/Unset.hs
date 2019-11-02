@@ -6,6 +6,7 @@ module Commands.Unset (commands) where
 import qualified Data.Text as T
 import System.Exit (exitFailure)
 
+import Commands
 import Core
 import OptionParsers
 import Schema
