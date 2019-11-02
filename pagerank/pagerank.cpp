@@ -8,13 +8,6 @@
 
 #include "pagerank.hpp"
 
-static inline float
-roundPrecision(float val, int digitPrecision)
-{
-    float rounder = std::pow(10.0f, static_cast<float>(digitPrecision));
-    return std::round(val * rounder) / rounder;
-}
-
 template<typename Platform, typename Vertex, typename Edge>
 struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
 {
@@ -107,10 +100,13 @@ struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
             resultTransfer.stop();
         }
 
-        outputFile << std::scientific << std::setprecision(2);
+        auto oldLocale = outputFile.imbue(std::locale("C"));
+        auto floatDigits = std::numeric_limits<float>::digits10 + 1;
+        outputFile << std::setprecision(floatDigits);
         for (size_t i = 0; i < pageranks.size; i++) {
-            outputFile << i << "\t" << roundPrecision(pageranks[i], 5) << endl;
+            outputFile << i << "\t" << pageranks[i] << endl;
         }
+        outputFile.imbue(oldLocale);
     }
 };
 
