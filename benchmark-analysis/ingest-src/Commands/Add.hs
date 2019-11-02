@@ -17,7 +17,7 @@ import Core
 import InteractiveInput
 import OptionParsers
 import Schema
-import Sql (Entity(..), MonadSql, SqlRecord, (=.), (==.))
+import Sql (Entity(..), Filter, MonadSql, SqlRecord, (=.), (==.))
 import qualified Sql
 
 commands :: Command (Input SqlM ())
@@ -68,9 +68,9 @@ commands = CommandGroup CommandInfo
 
 checkSetDefault
     :: (SqlRecord rec)
-    => Key rec -> EntityField rec Bool -> Text -> Input SqlM ()
-checkSetDefault key field prompt = do
-    n <- Sql.count [field ==. True]
+    => Key rec -> EntityField rec Bool -> Text -> [Filter rec] -> Input SqlM ()
+checkSetDefault key field prompt filters = do
+    n <- Sql.count $ [field ==. True] ++ filters
     when (n == 0) $ do
         isDefault <- getInteractive readInput prompt
         when isDefault $ Sql.update key [field =. True]
@@ -85,7 +85,7 @@ addPlatform = do
     platformId <- Sql.insert $
         Platform platformName prettyName runFlags platformCount False
 
-    checkSetDefault platformId PlatformIsDefault defaultPrompt
+    checkSetDefault platformId PlatformIsDefault defaultPrompt []
   where
     defaultPrompt = "Default platform for computing properties"
 
@@ -162,6 +162,7 @@ addVariant = do
     varCfgId <- Sql.insert $ VariantConfig algoId variantName flags False
 
     checkSetDefault varCfgId VariantConfigIsDefault defaultPrompt
+        [VariantConfigAlgorithmId ==. algoId]
 
     let mkVariant gId = Variant gId varCfgId algoId Nothing False 0
 
