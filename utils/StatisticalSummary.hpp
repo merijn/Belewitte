@@ -66,7 +66,8 @@ struct StatisticalSummary
         mean = total / values.size();
         upperQuantile = (values[upper.first] + values[upper.second])/2.0;
         max = values.back();
-        stdDev = sqrt(S / (k-2));
+        if (k-2 == 0) stdDev = 0.0;
+        else stdDev = sqrt(S / (k-2));
     }
 
     T min;
