@@ -58,17 +58,21 @@ data Job a = Job
     , jobCommand :: Text
     } deriving (Functor, Foldable, Traversable)
 
-makeJob :: a -> Key Variant -> Maybe Text -> [Text] -> Job a
+makeJob :: a -> Key Variant -> Maybe (Key Platform, Text) -> [Text] -> Job a
 makeJob val variantId implName args = Job
     { jobValue = val
     , jobVariant = variantId
     , jobLabel = label
-    , jobCommand = T.unwords $ label: args
+    , jobCommand = T.unwords $ label : args
     }
   where
     label = case implName of
         Nothing -> showSqlKey variantId
-        Just name -> mconcat ["\"", showSqlKey variantId, " ", name, "\""]
+        Just (platformId, name) -> mconcat
+            ["\"", showSqlKey platformId
+            , " ", showSqlKey variantId
+            , " ", name, "\""
+            ]
 
 data Result a = Result
     { resultValue :: a

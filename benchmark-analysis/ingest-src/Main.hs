@@ -128,7 +128,7 @@ runBenchmarks numNodes = lift $ do
                 n = min numNodes (platformAvailable platform)
 
             runSqlQuery (missingBenchmarkQuery runConfigId)
-                .> missingRunToTimingJob
+                .> missingRunToTimingJob (runConfigPlatformId config)
                 .| processJobsParallel n platform
                 .| C.mapM_ (processTiming runConfigId commitId)
   where
