@@ -90,11 +90,6 @@ setPragma pragma val = liftPersist $ Sqlite.rawExecute query []
 executeSql :: MonadSql m => Text -> m ()
 executeSql query = liftPersist $ Sqlite.rawExecute query []
 
-conduitQuery
-    :: (MonadResource m, MonadSql m)
-    => Text -> [PersistValue] -> ConduitT () [PersistValue] m ()
-conduitQuery query args = Sqlite.rawQuery query args
-
 conduitQueryRes
     :: (MonadIO m, MonadSql n)
     => Text -> [PersistValue] -> n (Acquire (ConduitT () [PersistValue] m ()))

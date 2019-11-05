@@ -10,7 +10,8 @@ import Control.Monad.Catch (MonadMask, MonadThrow, catch, onError)
 import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger, logWarnN)
 import qualified Control.Monad.Logger as Log
-import Control.Monad.Trans.Resource (MonadResource)
+import Control.Monad.Trans.Resource (MonadResource, release)
+import Data.Acquire (allocateAcquire)
 import Data.Conduit ((.|), runConduit)
 import qualified Data.Conduit.Combinators as C
 import Data.Monoid (Any(..))
@@ -34,7 +35,9 @@ checkForeignKeys
     :: (MonadSql m, MonadLogger m, MonadResource m, MonadThrow m)
     => m ()
 checkForeignKeys = do
-    result <- runConduit $ Sql.conduitQuery query [] .| C.foldMapM logViolation
+    srcRes <- Sql.conduitQueryRes query []
+    (key, src) <- allocateAcquire srcRes
+    result <- runConduit (src .| C.foldMapM logViolation) <* release key
     when (getAny result) $ logThrowM ForeignKeyViolation
   where
     logViolation l = Any True <$ logWarnN errorMsg
