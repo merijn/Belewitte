@@ -8,7 +8,9 @@
 {-# LANGUAGE TypeFamilies #-}
 module Main(main) where
 
-import Control.Monad (void)
+import BroadcastChan.Conduit
+import Control.Exception (SomeException)
+import Control.Monad (unless, void)
 import Control.Monad.Trans.Maybe (MaybeT(..))
 import Data.Char (isSpace)
 import Data.Conduit (ConduitT, Void, (.|), await, runConduit)
@@ -33,7 +35,7 @@ import MissingQuery (missingBenchmarkQuery, validationVariantQuery)
 import OptionParsers
 import Parsers
 import ProcessPool
-import Query (runSqlQuery)
+import Query (getDistinctFieldQuery, runSqlQuery)
 import qualified RuntimeData
 import Schema
 import Sql (Entity(..), MonadSql, (==.))
@@ -61,14 +63,14 @@ commands name = CommandGroup CommandInfo
         , commandHeaderDesc = "run benchmarks"
         , commandDesc = "Run benchmarks for registered configurations"
         }
-        $ runBenchmarks <$> parallelism
+        $ pure runBenchmarks
     , SingleCommand CommandInfo
         { commandName = "validate"
         , commandHeaderDesc = "validate measurement results"
         , commandDesc =
             "Validate result mismatches for non-deterministic algorithms"
         }
-        $ validate <$> parallelism
+        $ pure validate
     , SingleCommand CommandInfo
         { commandName = "import-results"
         , commandHeaderDesc = "import results of external tools"
@@ -83,8 +85,6 @@ commands name = CommandGroup CommandInfo
         $ queryTest <$> (suffixParser <|> pure Nothing)
     ]
   where
-    parallelism = option auto . mconcat $ [ metavar "N", short 'j', value 2 ]
-
     suffixReader :: String -> Maybe (Maybe String)
     suffixReader "" = Nothing
     suffixReader s
@@ -101,8 +101,18 @@ checkCxxCompiled = void $ do
     RuntimeData.getKernelExecutable
     RuntimeData.getKernelLibPath
 
-runBenchmarks :: Int -> Input SqlM ()
-runBenchmarks numNodes = lift $ do
+pipelineHandler :: (MonadLogger m, Show a) => Handler m a
+pipelineHandler = Handle handler
+  where
+    handler :: (MonadLogger m, Show a) => a -> SomeException -> m Action
+    handler val exc = Drop <$ do
+        logErrorN . T.pack $ mconcat
+            [ "Error while processing: ", show val, "\n"
+            , displayException exc
+            ]
+
+runBenchmarks :: Input SqlM ()
+runBenchmarks = lift $ do
     checkCxxCompiled
 
     Entity _ defaultPlatform <- tryAlternatives
@@ -112,26 +122,39 @@ runBenchmarks numNodes = lift $ do
             Sql.selectFirst [] []
         ]
 
-    let defaultN = min numNodes (platformAvailable defaultPlatform)
+    let numDefaultNodes = platformAvailable defaultPlatform
 
     runConduit $
         Sql.selectSource [] []
         .> variantToPropertyJob
-        .| processJobsParallel defaultN defaultPlatform
+        .| processJobsParallel numDefaultNodes defaultPlatform
         .| C.mapM_ processProperty
 
-    runConduit $
-        Sql.selectSource [] [] .> \(Entity runConfigId config) -> do
-            platform <- Sql.getJust $ runConfigPlatformId config
+    platformQuery <- getDistinctFieldQuery RunConfigPlatformId
 
+    runConduit $ runSqlQuery platformQuery
+        .| parMapM_ pipelineHandler 10 processPlatformRunConfigs
+  where
+    processPlatformRunConfigs :: Key Platform -> SqlM ()
+    processPlatformRunConfigs platformId = runConduit $ do
+        platform <- Sql.getJust platformId
+        let numNodes = platformAvailable platform
+            filters = [RunConfigPlatformId ==. platformId]
+
+        Sql.selectSource filters [] .> \(Entity runConfigId config) -> do
             let commitId = runConfigAlgorithmVersion config
-                n = min numNodes (platformAvailable platform)
+
+            unless (runConfigPlatformId config == platformId) $ do
+                logThrowM . GenericInvariantViolation $ mconcat
+                    [ "Query for platform #", showSqlKey platformId
+                    , " returned run config for different platform!"
+                    ]
 
             runSqlQuery (missingBenchmarkQuery runConfigId)
-                .> missingRunToTimingJob (runConfigPlatformId config)
-                .| processJobsParallel n platform
+                .> missingRunToTimingJob platformId
+                .| processJobsParallel numNodes platform
                 .| C.mapM_ (processTiming runConfigId commitId)
-  where
+
     tryAlternatives :: (MonadIO m, MonadLogger m) => [MaybeT m a] -> m a
     tryAlternatives alts = runMaybeT (asum alts) >>= maybe exitOnNothing return
 
@@ -140,19 +163,22 @@ runBenchmarks numNodes = lift $ do
         logErrorN "No platforms registered!"
         liftIO $ exitFailure
 
-validate :: Int -> Input SqlM ()
-validate numNodes = lift $ do
+validate :: Input SqlM ()
+validate = lift $ do
     checkCxxCompiled
-    runConduit $
-        Sql.selectSource [] [] .> \(Entity platformId platform) -> do
-            let n = min numNodes (platformAvailable platform)
-            withProcessPool n platform $ \procPool -> do
-                runSqlQuery (validationVariantQuery platformId)
-                .| processJobsParallelWithSharedPool n procPool
-                .> validationMissingRuns platformId
-                .| processJobsParallelWithSharedPool n procPool
-                .| validateResults numNodes
-                .| C.mapM_ cleanupValidation
+    runConduit $ Sql.selectSource [] []
+        .| parMapM_ pipelineHandler 10 validateForPlatform
+  where
+    validateForPlatform :: Entity Platform -> SqlM ()
+    validateForPlatform (Entity platformId platform) = runConduit $ do
+        let numNodes = platformAvailable platform
+        withProcessPool numNodes platform $ \procPool -> do
+            runSqlQuery (validationVariantQuery platformId)
+            .| processJobsParallelWithSharedPool numNodes procPool
+            .> validationMissingRuns platformId
+            .| processJobsParallelWithSharedPool numNodes procPool
+            .| validateResults numNodes
+            .| C.mapM_ cleanupValidation
 
 importResults :: Input SqlM ()
 importResults = do

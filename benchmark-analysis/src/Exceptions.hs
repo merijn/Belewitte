@@ -127,6 +127,17 @@ instance Exception UnexpectedMissingData where
     fromException = fromViolatedInvariant
     displayException = show . pretty
 
+data GenericInvariantViolation = GenericInvariantViolation Text
+    deriving (Show, Typeable)
+
+instance Pretty GenericInvariantViolation where
+    pretty (GenericInvariantViolation txt) = Pretty.reflow txt <> Pretty.line
+
+instance Exception GenericInvariantViolation where
+    toException = toViolatedInvariant
+    fromException = fromViolatedInvariant
+    displayException = show . pretty
+
 data RuntimeError where
     RuntimeError :: (Exception e, Pretty e) => e -> RuntimeError
     deriving (Typeable)
