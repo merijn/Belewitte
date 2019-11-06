@@ -13,4 +13,4 @@ if [ $? -ne 0 ] || [ -z "$CABAL" ]; then
 fi
 
 make -C "$BASEPATH/" cabal.project.local >/dev/null
-exec $CABAL -v0 --project-file="$PROJECTFILE" --builddir="$BUILDPATH" v2-run "exe:$(basename "$0")" -- $@
+exec $CABAL -v0 --project-file="$PROJECTFILE" --builddir="$BUILDPATH" v2-run "exe:$(basename "$0")" -- "$@"
