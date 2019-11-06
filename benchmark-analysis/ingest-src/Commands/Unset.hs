@@ -52,6 +52,18 @@ commands = CommandGroup CommandInfo
                        <$> keyParser
         ]
     , CommandGroup CommandInfo
+        { commandName = "flags"
+        , commandHeaderDesc = "unset registered flags"
+        , commandDesc = "Unset the registered flags for database entries."
+        }
+        [ SingleCommand CommandInfo
+            { commandName = "platform"
+            , commandHeaderDesc = "unset platform flags"
+            , commandDesc = "Unset the flags for a platform."
+            }
+            $ unsetFlags "platform" PlatformFlags <$> keyParser
+        ]
+    , CommandGroup CommandInfo
         { commandName = "pretty-name"
         , commandHeaderDesc = "unset registered pretty name"
         , commandDesc = "Unset the registered pretty name for database entries."
@@ -116,6 +128,12 @@ unsetDefault
     => String -> EntityField r Bool -> Key r -> SqlM ()
 unsetDefault name field = unsetChecked name $ \key ->
     Sql.update key [field =. False]
+
+unsetFlags
+    :: (SqlRecord r, ToBackendKey SqlBackend r)
+    => String -> EntityField r (Maybe Text) -> Key r -> SqlM ()
+unsetFlags name field = unsetChecked name $ \key ->
+    Sql.update key [field =. Nothing]
 
 unsetPrettyName
     :: (SqlRecord r, ToBackendKey SqlBackend r)

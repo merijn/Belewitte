@@ -64,6 +64,21 @@ commands = CommandGroup CommandInfo
                      <$> forceOpt <*> keyParser
         ]
     , CommandGroup CommandInfo
+        { commandName = "flags"
+        , commandHeaderDesc = "change registered flags"
+        , commandDesc =
+            "Change the registered flags for database entries."
+        }
+        [ SingleCommand CommandInfo
+            { commandName = "platform"
+            , commandHeaderDesc = "change platform flags"
+            , commandDesc =
+              "Changes the flags used to run on the given platform"
+            }
+            $ setFlags "platform" PlatformFlags
+                <$> forceOpt <*> keyParser <*> flags
+        ]
+    , CommandGroup CommandInfo
         { commandName = "pretty-name"
         , commandHeaderDesc = "change registered pretty name"
         , commandDesc =
@@ -115,6 +130,7 @@ commands = CommandGroup CommandInfo
     numNodes = argument (auto >>= checkPositive) $ mconcat
         [ metavar "N", help "Available machine count." ]
       where
+        -- FIXME report error
         checkPositive n = n <$ guard (n > 0)
 
     forceOpt :: Parser Force
@@ -124,6 +140,10 @@ commands = CommandGroup CommandInfo
     keyParser :: ToBackendKey SqlBackend v => Parser (Key v)
     keyParser = argument (toSqlKey <$> auto) $ mconcat
         [ metavar "ID", help "Id to change." ]
+
+    flags :: Parser Text
+    flags = strArgument $ mconcat
+        [ metavar "FLAGS", help "Flags value to set." ]
 
     prettyName :: Parser Text
     prettyName = strArgument $ mconcat
@@ -177,6 +197,23 @@ setPrettyName name field force key val = withCheckedKey name key $ \ent -> do
         (_, Force) -> Sql.update (entityKey ent) [field =. Just val]
         _ -> liftIO $ do
             putStrLn $ "Pretty name for " <> name <> " is already set!"
+            putStrLn "Use --force to overwrite!"
+            exitFailure
+
+setFlags
+    :: (SqlRecord r, ToBackendKey SqlBackend r)
+    => String
+    -> EntityField r (Maybe Text)
+    -> Force
+    -> Key r
+    -> Text
+    -> SqlM ()
+setFlags name field force key val = withCheckedKey name key $ \ent -> do
+    case (Sql.fieldFromEntity field ent, force) of
+        (Nothing, _) -> Sql.update (entityKey ent) [field =. Just val]
+        (_, Force) -> Sql.update (entityKey ent) [field =. Just val]
+        _ -> liftIO $ do
+            putStrLn $ "Flags for " <> name <> " are already set!"
             putStrLn "Use --force to overwrite!"
             exitFailure
 
