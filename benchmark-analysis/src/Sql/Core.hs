@@ -1,5 +1,6 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -31,14 +32,16 @@ module Sql.Core
     , module Sql.Core
     ) where
 
-import Control.Monad (void)
-import Control.Monad.IO.Unlift (MonadIO)
+import Control.Monad (join, void)
+import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Logger (MonadLogger)
 import qualified Control.Monad.Logger as Log
-import Control.Monad.Reader (MonadReader, ReaderT, withReaderT)
-import Control.Monad.Trans.Resource (MonadResource, MonadThrow)
-import Data.Acquire (Acquire)
-import Data.Conduit (ConduitT, toProducer)
+import Control.Monad.Reader (ReaderT, asks, runReaderT, withReaderT)
+import Control.Monad.Trans (lift)
+import Control.Monad.Trans.Resource (MonadResource, MonadThrow, ResourceT, release)
+import Data.Acquire (Acquire, allocateAcquire)
+import Data.Conduit (ConduitT, toProducer, transPipe)
+import Data.Pool (Pool)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Database.Persist.Sql (Single(Single))
@@ -63,7 +66,6 @@ import Database.Persist.Sqlite
     , Update
     , Migration
     , BackendCompatible
-    , liftPersist
     , fromSqlKey
     , toSqlKey
     )
@@ -72,36 +74,71 @@ import Lens.Micro.Extras (view)
 
 import Exceptions
 
-type MonadSql m = (MonadIO m, MonadReader (RawSqlite SqlBackend) m)
+class MonadIO m => MonadSqlPool m where
+    getConnFromPool :: m (Acquire (RawSqlite SqlBackend))
+
+instance MonadSqlPool m => MonadSqlPool (ConduitT a b m) where
+    getConnFromPool = lift getConnFromPool
+
+instance MonadSqlPool m => MonadSqlPool (ReaderT r m) where
+    getConnFromPool = lift getConnFromPool
+
+instance MonadSqlPool m => MonadSqlPool (ResourceT m) where
+    getConnFromPool = lift getConnFromPool
+
+newtype DummySql a =
+  DummySql (ReaderT (Pool (RawSqlite SqlBackend)) (ResourceT IO) a)
+  deriving (Functor, Applicative, Monad, MonadIO, MonadResource)
+
+instance MonadSqlPool DummySql where
+    getConnFromPool = DummySql $ asks Sqlite.acquireSqlConnFromPool
+
+type MonadSql m = (MonadResource m, MonadSqlPool m)
+
 type SqlRecord rec = (PersistRecordBackend rec (RawSqlite SqlBackend))
 type SqlField rec field = (PersistField field, SqlRecord rec)
 
+runSql :: MonadSql m => ReaderT (RawSqlite SqlBackend) m r -> m r
+runSql act = do
+    (key, conn) <- getConnFromPool >>= allocateAcquire
+    runReaderT act conn <* release key
+
+liftPersistConduit
+    :: MonadSql m
+    => ConduitT a b (ReaderT (RawSqlite SqlBackend) m) r
+    -> ConduitT a b m r
+liftPersistConduit conduit = transPipe runSql conduit
+
 liftProjectPersist
     :: (BackendCompatible sup (RawSqlite SqlBackend), MonadSql m)
-    => ReaderT sup IO a
-    -> m a
-liftProjectPersist = liftPersist . withReaderT Sqlite.projectBackend
+    => ReaderT sup IO a -> m a
+liftProjectPersist =
+    runSql . Sqlite.liftPersist . withReaderT Sqlite.projectBackend
 
 setPragma :: (MonadSql m, Show v) => Text -> v -> m ()
-setPragma pragma val = liftPersist $ Sqlite.rawExecute query []
+setPragma pragma val = runSql $ Sqlite.rawExecute query []
   where
     query = "PRAGMA " <> pragma <> " = " <> T.pack (show val)
 
 executeSql :: MonadSql m => Text -> m ()
-executeSql query = liftPersist $ Sqlite.rawExecute query []
+executeSql query = runSql $ Sqlite.rawExecute query []
 
 conduitQueryRes
     :: (MonadIO m, MonadSql n)
     => Text -> [PersistValue] -> n (Acquire (ConduitT () [PersistValue] m ()))
-conduitQueryRes query args = liftPersist $ Sqlite.rawQueryRes query args
+conduitQueryRes query args = do
+    acquireConn <- getConnFromPool
+    return $ do
+        conn <- acquireConn
+        join . liftIO $ runReaderT (Sqlite.rawQueryRes query args) conn
 
 querySingleValue
-    :: (MonadSql m, MonadLogger m, MonadThrow m, PersistField a)
+    :: (MonadLogger m, MonadSql m, MonadThrow m, PersistField a)
     => Text
     -> [PersistValue]
     -> m a
 querySingleValue query args = do
-    result <- liftPersist $ Sqlite.rawSql query args
+    result <- runSql $ Sqlite.rawSql query args
     case result of
         [Single v] -> return v
         _ -> logThrowM $ ExpectedSingleValue query
@@ -131,87 +168,97 @@ fieldFromEntity field = view (Sqlite.fieldLens field)
 
 -- Generalisations
 deleteBy :: (MonadSql m, SqlRecord rec) => Unique rec -> m ()
-deleteBy = liftPersist . Sqlite.deleteBy
+deleteBy = runSql . Sqlite.deleteBy
 
-deleteWhere :: (MonadSql m, SqlRecord rec) => [Filter rec] -> m ()
-deleteWhere = liftPersist . Sqlite.deleteWhere
+deleteWhere
+    :: (MonadSql m, SqlRecord rec) => [Filter rec] -> m ()
+deleteWhere = runSql . Sqlite.deleteWhere
 
 get :: (MonadSql m, SqlRecord rec) => Key rec -> m (Maybe rec)
-get = liftPersist . Sqlite.get
+get = runSql . Sqlite.get
 
-getBy :: (MonadSql m, SqlRecord rec) => Unique rec -> m (Maybe (Entity rec))
-getBy = liftPersist . Sqlite.getBy
+getBy
+    :: (MonadSql m, SqlRecord rec)
+    => Unique rec -> m (Maybe (Entity rec))
+getBy = runSql . Sqlite.getBy
 
-getEntity :: (MonadSql m, SqlRecord rec) => Key rec -> m (Maybe (Entity rec))
-getEntity = liftPersist . Sqlite.getEntity
+getEntity
+    :: (MonadSql m, SqlRecord rec)
+    => Key rec -> m (Maybe (Entity rec))
+getEntity = runSql . Sqlite.getEntity
 
 getJust :: (MonadSql m, SqlRecord rec) => Key rec -> m rec
-getJust = liftPersist . Sqlite.getJust
+getJust = runSql . Sqlite.getJust
 
-getJustEntity :: (MonadSql m, SqlRecord rec) => Key rec -> m (Entity rec)
-getJustEntity = liftPersist . Sqlite.getJustEntity
+getJustEntity
+    :: (MonadSql m, SqlRecord rec) => Key rec -> m (Entity rec)
+getJustEntity = runSql . Sqlite.getJustEntity
 
 insert :: (MonadSql m, SqlRecord rec) => rec -> m (Key rec)
-insert = liftPersist . Sqlite.insert
+insert = runSql . Sqlite.insert
 
 insert_ :: (MonadSql m, SqlRecord rec) => rec -> m ()
-insert_ = liftPersist . Sqlite.insert_
+insert_ = runSql . Sqlite.insert_
 
 insertBy
-    :: (AtLeastOneUniqueKey rec,  MonadSql m, SqlRecord rec)
+    :: (AtLeastOneUniqueKey rec, MonadSql m, SqlRecord rec)
     => rec -> m (Either (Entity rec) (Key rec))
-insertBy = liftPersist . Sqlite.insertBy
+insertBy = runSql . Sqlite.insertBy
 
 onlyUnique
     :: (MonadSql m, OnlyOneUniqueKey rec, SqlRecord rec)
     => rec -> m (Unique rec)
-onlyUnique = liftPersist . Sqlite.onlyUnique
+onlyUnique = runSql . Sqlite.onlyUnique
 
-getMigration :: MonadSql m => Migration -> m [Text]
+getMigration :: (MonadSql m) => Migration -> m [Text]
 getMigration = liftProjectPersist . Sqlite.getMigration
 
-runMigrationQuiet :: MonadSql m => Migration -> m [Text]
+runMigrationQuiet :: (MonadSql m) => Migration -> m [Text]
 runMigrationQuiet = liftProjectPersist . Sqlite.runMigrationQuiet
 
-runMigrationUnsafeQuiet :: MonadSql m => Migration -> m ()
+runMigrationUnsafeQuiet :: (MonadSql m) => Migration -> m ()
 runMigrationUnsafeQuiet =
     void . liftProjectPersist . Sqlite.runMigrationUnsafeQuiet
 
 selectFirst
     :: (MonadSql m, SqlRecord rec)
     => [Filter rec] -> [SelectOpt rec] -> m (Maybe (Entity rec))
-selectFirst filters select = liftPersist $ Sqlite.selectFirst filters select
+selectFirst filters select = runSql $ Sqlite.selectFirst filters select
 
 selectKeysList
     :: (MonadSql m, SqlRecord rec)
     => [Filter rec] -> [SelectOpt rec] -> m [Key rec]
-selectKeysList filters select =
-  liftPersist $ Sqlite.selectKeysList filters select
+selectKeysList filters select = runSql $ Sqlite.selectKeysList filters select
 
 selectKeys
-    :: (MonadResource m, MonadSql m, SqlRecord rec)
+    :: (MonadSql m, SqlRecord rec)
     => [Filter rec] -> [SelectOpt rec] -> ConduitT a (Key rec) m ()
-selectKeys filters select = toProducer $ Sqlite.selectKeys filters select
+selectKeys filters select =
+    toProducer . liftPersistConduit $ Sqlite.selectKeys filters select
 
 selectList
     :: (MonadSql m, SqlRecord rec)
     => [Filter rec] -> [SelectOpt rec] -> m [Entity rec]
-selectList filters select = liftPersist $ Sqlite.selectList filters select
+selectList filters select = runSql $ Sqlite.selectList filters select
 
 selectSource
-    :: (MonadResource m, MonadSql m, SqlRecord rec)
+    :: (MonadSql m, SqlRecord rec)
     => [Filter rec] -> [SelectOpt rec] -> ConduitT a (Entity rec) m ()
-selectSource filters select = toProducer $ Sqlite.selectSource filters select
+selectSource filters select =
+  toProducer . liftPersistConduit $ Sqlite.selectSource filters select
 
 count :: (MonadSql m, SqlRecord rec) => [Filter rec] -> m Int
-count = liftPersist . Sqlite.count
+count = runSql . Sqlite.count
 
-update :: (MonadSql m, SqlRecord rec) => Key rec -> [Update rec] -> m ()
-update key = liftPersist . Sqlite.update key
+update
+    :: (MonadSql m, SqlRecord rec)
+    => Key rec -> [Update rec] -> m ()
+update key = runSql . Sqlite.update key
 
 updateWhere
-    :: (MonadSql m, SqlRecord rec) => [Filter rec] -> [Update rec] -> m ()
-updateWhere filts  = liftPersist . Sqlite.updateWhere filts
+    :: (MonadSql m, SqlRecord rec)
+    => [Filter rec] -> [Update rec] -> m ()
+updateWhere filts  = runSql . Sqlite.updateWhere filts
 
 showSqlKey :: ToBackendKey SqlBackend record => Key record -> Text
 showSqlKey = T.pack . show . Sqlite.fromSqlKey

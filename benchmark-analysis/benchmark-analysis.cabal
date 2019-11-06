@@ -150,12 +150,13 @@ Library
                ,        haskeline ^>= 0.7.4.2
                ,        megaparsec ^>= 7.0.0
                ,        microlens ^>= 0.4.8
-               ,        persistent ^>= 2.10.2
+               ,        persistent ^>= 2.10.5
                ,        persistent-template ^>= 2.7.2
-               ,        persistent-sqlite ^>= 2.10.4
+               ,        persistent-sqlite ^>= 2.10.6
                ,        prettyprinter ^>= 1.2.0
                ,        prettyprinter-ansi-terminal ^>= 1.1.1
                ,        process ^>= 1.6.0
+               ,        resource-pool ^>= 0.2.3.2
                ,        streaming-commons ^>= 0.2.1
                ,        terminal-size ^>= 0.3.2.1
                ,        transformers

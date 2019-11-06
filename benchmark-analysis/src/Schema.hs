@@ -39,19 +39,17 @@ module Schema
     , updateIndicesToVersion
     ) where
 
-import Control.Monad.Reader (ReaderT)
 import Data.ByteString (ByteString)
 import Data.Int (Int64)
 import Data.IntMap (IntMap)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Database.Persist.Sql
-    (EntityDef, Migration, PersistValue(..), SqlBackend, toPersistValue)
-import Database.Persist.Sqlite (RawSqlite)
+    (EntityDef, Migration, PersistValue(..), toPersistValue)
 
 import Model (Model)
 import Schema.Utils (mkMigration)
-import Sql.Core (MonadSql)
+import Sql.Core (DummySql, MonadSql)
 import Types
 import Utils.Pair (Pair, toPair)
 
@@ -139,7 +137,7 @@ migrations =
 schemaVersion :: Int64
 schemaVersion = 13
 
-type MigrationAction = ReaderT (RawSqlite SqlBackend) IO [EntityDef]
+type MigrationAction = DummySql [EntityDef]
 
 currentSchema :: Migration
 currentSchema = mkMigration $ map fst

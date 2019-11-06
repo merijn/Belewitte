@@ -9,7 +9,7 @@ module Sql (module Sql.Core, module Sql) where
 
 import Control.Monad.Catch (MonadThrow)
 import Control.Monad.Logger (MonadLogger)
-import Conduit (MonadIO, MonadResource, (.|), runConduit)
+import Conduit (MonadIO, (.|), runConduit)
 import qualified Data.Conduit.Combinators as C
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
@@ -18,7 +18,7 @@ import Data.String.Interpolate.IsString (i)
 
 import Core
 import Database.Persist.Sqlite
-    (getFieldName, getTableName, liftPersist, rawExecute, sqlType)
+    (getFieldName, getTableName, rawExecute, sqlType)
 import Query (MonadQuery, Query(..), runSqlQuerySingle, runSqlQuerySingleMaybe)
 import Schema
 import Schema.GlobalVars (Unique(UniqGlobal))
@@ -109,13 +109,13 @@ getGlobalVar_ = rawGetGlobalVar runSqlQuerySingle
 
 initialiseGlobalVar
     :: (MonadSql m, PersistFieldSql a) => GlobalVar a -> a -> m ()
-initialiseGlobalVar var value = liftPersist $ do
+initialiseGlobalVar var value = runSql $ do
     rawExecute query [ toPersistValue (show var), toPersistValue value ]
   where
     query = [i|INSERT INTO GlobalVars ("name","value") VALUES (?,?)|]
 
 setGlobalVar :: (MonadSql m, PersistFieldSql a) => GlobalVar a -> a -> m ()
-setGlobalVar var value = liftPersist $ do
+setGlobalVar var value = runSql $ do
     rawExecute query [ toPersistValue (show var), toPersistValue value ]
   where
     query = [i|INSERT OR REPLACE INTO GlobalVars ("name","value") VALUES (?,?)|]
@@ -128,8 +128,8 @@ getFieldLength
      . (MonadQuery m, SqlRecord rec)
     => EntityField rec a -> m (Avg, Max)
 getFieldLength entityField = do
-    table <- liftPersist $ getTableName (undefined :: rec)
-    field <- liftPersist $ getFieldName entityField
+    table <- runSql $ getTableName (undefined :: rec)
+    field <- runSql $ getFieldName entityField
     let queryText = [i|
 SELECT IFNULL(ROUND(AVG(length(#{table}.#{field}))), 0)
      , IFNULL(MAX(length(#{table}.#{field})), 0)
@@ -160,8 +160,7 @@ FROM #{table}
         [SqlInt64, SqlInt64]
 
 queryExternalImplementations
-    :: (MonadResource m, MonadSql m)
-    => Key Algorithm -> m (IntMap ExternalImpl)
+    :: MonadSql m => Key Algorithm -> m (IntMap ExternalImpl)
 queryExternalImplementations algoId = runConduit $
     selectImpls algoId .| C.foldMap toIntMap
   where
@@ -171,8 +170,7 @@ queryExternalImplementations algoId = runConduit $
     toIntMap (Entity k val) = IM.singleton (fromIntegral $ fromSqlKey k) val
 
 queryImplementations
-    :: (MonadResource m, MonadSql m)
-    => Key Algorithm -> m (IntMap Implementation)
+    :: MonadSql m => Key Algorithm -> m (IntMap Implementation)
 queryImplementations algoId = fmap (IM.union builtinImpls) . runConduit $
     selectImpls algoId .| C.foldMap toIntMap
   where

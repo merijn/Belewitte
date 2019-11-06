@@ -53,6 +53,7 @@ import qualified Database.Persist.Sqlite as Sqlite
 import Database.Sqlite.Internal (Connection(..), Connection'(..))
 import Data.Conduit (ConduitT, (.|), awaitForever)
 import Data.Int (Int64)
+import Data.Pool (Pool)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Foreign (Ptr)
@@ -78,7 +79,7 @@ data Config = Config
     { explainHandle :: Maybe Handle
     , failTag :: Maybe Text
     , pagerValue :: Pager
-    , sqliteHandle :: RawSqlite SqlBackend
+    , sqlitePool :: Pool (RawSqlite SqlBackend)
     }
 
 data QueryMode = Normal | Explain | ExplainLog FilePath
@@ -101,11 +102,8 @@ instance MonadFail SqlM where
             Nothing -> logThrowM . PatternFailed . Left $ T.pack s
             Just msg -> logThrowM . PatternFailed $ Right msg
 
-instance MonadReader (RawSqlite SqlBackend) SqlM where
-    ask = SqlM $ asks sqliteHandle
-    local f (SqlM act) = SqlM $ local apply act
-      where
-        apply cfg = cfg { sqliteHandle = f (sqliteHandle cfg) }
+instance MonadSqlPool SqlM where
+    getConnFromPool = SqlM . asks $ Sqlite.acquireSqlConnFromPool . sqlitePool
 
 instance MonadUnliftIO SqlM where
   askUnliftIO = SqlM $ withUnliftIO $ \u ->
@@ -198,9 +196,6 @@ runSqlMWithOptions Options{..} work = do
     setUncaughtExceptionHandler $ topLevelHandler (logVerbosity > 0)
     getNumProcessors >>= setNumCapabilities
     withQueryLog $ \mHnd -> runStack mHnd . wrapSqliteExceptions $ do
-        sqlitePtr <- asks $ getSqlitePtr . Lens.view Sqlite.rawSqliteConnection
-
-        registerSqlFunctions sqlitePtr
 
         didMigrate <- checkMigration migrateSchema
 
@@ -220,9 +215,12 @@ runSqlMWithOptions Options{..} work = do
     runStack
         :: Maybe Handle -> SqlM a -> IO a
     runStack mHnd act =
-      runLog . Sqlite.withRawSqliteConnInfo connInfo $ runSql act . config
+      runLog . Sqlite.withRawSqlitePoolInfo connInfo setup 20 $ runSqlM act . config
       where
         config = Config mHnd Nothing pager
+        setup conn = registerSqlFunctions ptr
+          where
+            ptr = getSqlitePtr $ Lens.view Sqlite.rawSqliteConnection conn
 
     withQueryLog :: (Maybe Handle -> IO r) -> IO r
     withQueryLog f = case queryMode of
@@ -233,8 +231,8 @@ runSqlMWithOptions Options{..} work = do
     runLog :: LoggingT IO a -> IO a
     runLog = Log.runStderrLoggingT . Log.filterLogger logFilter
 
-    runSql :: SqlM a -> Config -> LoggingT IO a
-    runSql (SqlM act) cfg = runResourceT $ runReaderT act cfg
+    runSqlM :: SqlM a -> Config -> LoggingT IO a
+    runSqlM (SqlM act) cfg = runResourceT $ runReaderT act cfg
 
     connInfo :: SqliteConnectionInfo
     connInfo =

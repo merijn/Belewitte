@@ -1,4 +1,17 @@
 packages: evolve/*.cabal benchmark-analysis/*.cabal
+optional-packages: /home/mverstra/src/persistent/persistent/*.cabal
+
+source-repository-package
+  type: git
+  location: https://github.com/merijn/persistent.git
+  tag: d7615612e370573d66acf7806cffa25966b97671
+  subdir: persistent-sqlite
+
+source-repository-package
+  type: git
+  location: https://github.com/merijn/persistent.git
+  tag: 10e2f0d671a95644959f4335da15219051840ae1
+  subdir: persistent
 
 solver: modular
 doc-index-file: $datadir/doc/$arch-$os-$compiler/index.html

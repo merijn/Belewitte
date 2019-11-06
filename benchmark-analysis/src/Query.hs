@@ -40,22 +40,17 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Vector.Unboxed (Vector)
 import qualified Data.Vector.Unboxed as VU
-import Database.Persist.Sqlite
+import qualified Database.Persist.Sqlite as Sqlite
 import Numeric (showGFloat)
 import System.IO (Handle)
 
 import Core hiding (QueryMode(..))
 import Schema
-import Sql.Core (MonadSql, SqlRecord, conduitQueryRes)
+import Sql.Core (MonadSql, PersistFieldSql, SqlRecord)
+import qualified Sql.Core as Sql
 import Utils.Vector (byteStringToVector)
 
-type MonadQuery m =
-    ( MonadSql m
-    , MonadExplain m
-    , MonadLogger m
-    , MonadResource m
-    , MonadThrow m
-    )
+type MonadQuery m = (MonadSql m, MonadExplain m, MonadLogger m, MonadThrow m)
 
 data Explain = Explain | NoExplain
 
@@ -160,8 +155,8 @@ runSqlQueryConduit query sink =
   runLoggingSqlQuery (\src -> runConduit $ src .| sink) query
 
 runLoggingSqlQuery
-    :: ( MonadLogger m, MonadResource m, MonadSql m, MonadThrow m
-       , MonadExplain n, MonadLogger n, MonadResource n, MonadSql n)
+    :: ( MonadLogger m, MonadResource m, MonadThrow m
+       , MonadExplain n, MonadLogger n, MonadSql n)
     => (ConduitT () r m () -> n a) -> Query r -> n a
 runLoggingSqlQuery f query  = do
     logQueryExplanation $ explainSqlQuery query
@@ -176,11 +171,11 @@ runLoggingSqlQuery f query  = do
     return result
 
 runRawSqlQuery
-    :: ( MonadLogger m, MonadResource m, MonadSql m, MonadThrow m
-       , MonadLogger n, MonadResource n, MonadSql n)
+    :: ( MonadLogger m, MonadResource m, MonadThrow m
+       , MonadLogger n, MonadSql n)
     => Explain -> (ConduitT () r m () -> n a) -> Query r -> n (Text, a)
 runRawSqlQuery isExplain f query@Query{convert,cteParams,params} = do
-    srcRes <- conduitQueryRes queryText queryParams
+    srcRes <- Sql.conduitQueryRes queryText queryParams
     (key, src) <- allocateAcquire srcRes
     (timing, r) <- withTime $ f (src .| C.mapM convert) <* release key
 
@@ -218,9 +213,9 @@ getDistinctFieldQuery
      . (MonadSql m, PersistFieldSql a, SqlRecord rec)
      => EntityField rec a
      -> m (Query a)
-getDistinctFieldQuery entityField = liftPersist $ do
-    table <- getTableName (undefined :: rec)
-    field <- getFieldName entityField
+getDistinctFieldQuery entityField = Sql.runSql $ do
+    table <- Sqlite.getTableName (undefined :: rec)
+    field <- Sqlite.getFieldName entityField
     let queryText = [i|SELECT DISTINCT #{table}.#{field} FROM #{table}|]
     return Query{..}
   where
@@ -238,9 +233,9 @@ getDistinctFieldQuery entityField = liftPersist $ do
 
     convert
         :: (MonadIO n, MonadLogger n, MonadThrow n) => [PersistValue] -> n a
-    convert [v] | Right val <- fromPersistValue v = return val
+    convert [v] | Right val <- Sqlite.fromPersistValue v = return val
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
-        [sqlType (Proxy :: Proxy a)]
+        [Sqlite.sqlType (Proxy :: Proxy a)]
 
 data VariantInfo =
   VariantInfo

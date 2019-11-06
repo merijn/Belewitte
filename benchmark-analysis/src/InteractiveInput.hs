@@ -26,7 +26,7 @@ module InteractiveInput
 import qualified Control.Monad.Catch as Except
 import Control.Monad.Fail (MonadFail)
 import qualified Control.Monad.Fail as Fail
-import Control.Monad.Reader (MonadReader, ask, local, mapReaderT)
+import Control.Monad.Reader (ask, local, mapReaderT)
 import Control.Monad.Trans (MonadTrans(lift))
 import Control.Monad.Trans.Resource (MonadResource(..))
 import Data.Bool (bool)
@@ -40,7 +40,7 @@ import System.Directory (doesFileExist)
 import Text.Read (readMaybe)
 
 import Core
-import Sql (Entity(..), EntityField, RawSqlite, SqlBackend, SqlRecord, Unique)
+import Sql (Entity(..), EntityField, MonadSqlPool(..), SqlRecord, Unique)
 import qualified Sql
 import Utils.Process (CreateProcess, UnexpectedTermination(..))
 import qualified Utils.Process as Process
@@ -59,13 +59,11 @@ data InputQuery m a = InputQuery
 newtype Input m a = Input { unInput :: InputT (ReaderT (Completer m) m) a }
     deriving ( Applicative, Functor, Monad, MonadIO)
 
-type Backend = RawSqlite SqlBackend
-instance MonadReader Backend m => MonadReader Backend (Input m) where
-    ask = Input . lift . lift $ ask
-    local f = Input . mapInputT (mapReaderT (local f)) . unInput
-
 instance MonadResource m => MonadResource (Input m) where
     liftResourceT = Input . lift . liftResourceT
+
+instance MonadSqlPool m => MonadSqlPool (Input m) where
+    getConnFromPool = Input . lift $ getConnFromPool
 
 instance MonadThrow m => MonadThrow (Input m) where
     throwM = Input . lift . Except.throwM
