@@ -201,6 +201,7 @@ instance Pretty UnexpectedTermination where
             ShellCommand s -> Pretty.reflow $ T.pack s
             RawCommand exe args -> mconcat
                 [ "Executable:" <+> pretty exe
+                , Pretty.line
                 , "Arguments:" <+> renderList args
                 ]
 
