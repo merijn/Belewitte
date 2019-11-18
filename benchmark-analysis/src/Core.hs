@@ -72,7 +72,7 @@ import Migration
 import Pretty (AnsiStyle, Doc, LayoutOptions(..), PageWidth(..))
 import qualified Pretty
 import Schema
-import Sql.Core
+import Sql.WrappedPersistent
 import SQLiteExts
 
 data Config = Config

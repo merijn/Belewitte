@@ -107,6 +107,7 @@ Library
                         Schema.VariantConfig
                         Sql
                         Sql.Core
+                        Sql.WrappedPersistent
                         SQLiteExts
                         Types
                         Utils.Pair

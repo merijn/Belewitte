@@ -5,7 +5,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
-module Sql (module Sql.Core, module Sql) where
+module Sql (module Sql.WrappedPersistent, module Sql) where
 
 import Control.Monad.Catch (MonadThrow)
 import Control.Monad.Logger (MonadLogger)
@@ -22,7 +22,7 @@ import Database.Persist.Sqlite
 import Query (MonadQuery, Query(..), runSqlQuerySingle, runSqlQuerySingleMaybe)
 import Schema
 import Schema.GlobalVars (Unique(UniqGlobal))
-import Sql.Core hiding (executeSql, liftProjectPersist)
+import Sql.WrappedPersistent
 
 newtype Avg = Avg { getAvg :: Int } deriving (Show, Eq, Ord)
 newtype Max = Max { getMax :: Int } deriving (Show, Eq, Ord)
