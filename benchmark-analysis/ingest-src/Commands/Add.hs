@@ -17,8 +17,9 @@ import Core
 import InteractiveInput
 import OptionParsers
 import Schema
-import Sql (Entity(..), Filter, MonadSql, SqlRecord, (=.), (==.))
+import Sql (Entity(..), Filter, MonadSql, SqlRecord, Transaction, (=.), (==.))
 import qualified Sql
+import qualified Sql.Transaction as SqlTrans
 
 commands :: Command (Input SqlM ())
 commands = CommandGroup CommandInfo
@@ -68,12 +69,16 @@ commands = CommandGroup CommandInfo
 
 checkSetDefault
     :: (SqlRecord rec)
-    => Key rec -> EntityField rec Bool -> Text -> [Filter rec] -> Input SqlM ()
+    => Key rec
+    -> EntityField rec Bool
+    -> Text
+    -> [Filter rec]
+    -> Transaction (Input SqlM) ()
 checkSetDefault key field prompt filters = do
-    n <- Sql.count $ [field ==. True] ++ filters
+    n <- SqlTrans.count $ [field ==. True] ++ filters
     when (n == 0) $ do
-        isDefault <- getInteractive readInput prompt
-        when isDefault $ Sql.update key [field =. True]
+        isDefault <- lift $ getInteractive readInput prompt
+        when isDefault $ SqlTrans.update key [field =. True]
 
 addPlatform :: Input SqlM ()
 addPlatform = do
@@ -82,23 +87,25 @@ addPlatform = do
     runFlags <- getInteractive optionalInput "Platform Flags"
     platformCount <- getInteractive (readInputEnsure (>0)) "Available Machines"
 
-    platformId <- Sql.insert $
-        Platform platformName prettyName runFlags platformCount False
+    SqlTrans.runTransaction $ do
+        platformId <- SqlTrans.insert $
+            Platform platformName prettyName runFlags platformCount False
 
-    checkSetDefault platformId PlatformIsDefault defaultPrompt []
+        checkSetDefault platformId PlatformIsDefault defaultPrompt []
   where
     defaultPrompt = "Default platform for computing properties"
 
 addGraphs :: [FilePath] -> Input SqlM ()
 addGraphs paths = do
     datasetTag <- getInteractive textInput "Dataset Tag"
-    datasetId <- Sql.insert $ Dataset datasetTag
+    SqlTrans.runTransaction $ do
+        datasetId <- SqlTrans.insert $ Dataset datasetTag
 
-    runConduit $
-        C.yieldMany paths
-        .| C.concatMapM (lift . filterGraphPaths)
-        .| C.mapM (insertGraph datasetId)
-        .> insertVariants
+        runConduit $
+            C.yieldMany paths
+            .| C.concatMapM (lift . lift . filterGraphPaths)
+            .| C.mapM (insertGraph datasetId)
+            .> insertVariants
   where
     filterGraphPaths
         :: (MonadIO m, MonadLogger m) => String -> m (Maybe (String, String))
@@ -117,18 +124,21 @@ addGraphs paths = do
         (graphName, ext) = splitExtension $ takeFileName path
 
     insertGraph
-        :: MonadSql m => Key Dataset -> (String, String) -> m (Key Graph)
-    insertGraph datasetId (graphName, path) =
-        Sql.insert $ Graph (T.pack graphName) (T.pack path) Nothing datasetId
+        :: MonadSql m
+        => Key Dataset -> (String, String) -> Transaction m (Key Graph)
+    insertGraph datasetId (graphName, path) = SqlTrans.insert $
+        Graph (T.pack graphName) (T.pack path) Nothing datasetId
 
     insertVariants
         :: (MonadResource m, MonadSql m)
-        => Key Graph -> ConduitT (Key Graph) Void m ()
-    insertVariants graphId = Sql.selectSource [] [] .| C.mapM_ insertVariant
+        => Key Graph -> ConduitT (Key Graph) Void (Transaction m) ()
+    insertVariants graphId =
+        SqlTrans.selectSource [] [] .| C.mapM_ insertVariant
       where
-        insertVariant :: MonadSql m => Entity VariantConfig -> m ()
+        insertVariant :: MonadSql m => Entity VariantConfig -> Transaction m ()
         insertVariant (Entity variantCfgId (VariantConfig algoId _ _ _)) =
-            Sql.insert_ $ Variant graphId variantCfgId algoId Nothing False 0
+            SqlTrans.insert_ $
+                Variant graphId variantCfgId algoId Nothing False 0
 
 addAlgorithm :: Input SqlM ()
 addAlgorithm = do
@@ -159,14 +169,18 @@ addVariant = do
     Entity algoId _ <- getInteractive algoInput "Algorithm Name"
     variantName <- getInteractive textInput "Variant Name"
     flags <- getInteractive optionalInput "Flags"
-    varCfgId <- Sql.insert $ VariantConfig algoId variantName flags False
 
-    checkSetDefault varCfgId VariantConfigIsDefault defaultPrompt
-        [VariantConfigAlgorithmId ==. algoId]
+    SqlTrans.runTransaction $ do
+        varCfgId <- SqlTrans.insert $
+            VariantConfig algoId variantName flags False
 
-    let mkVariant gId = Variant gId varCfgId algoId Nothing False 0
+        checkSetDefault varCfgId VariantConfigIsDefault defaultPrompt
+            [VariantConfigAlgorithmId ==. algoId]
 
-    runConduit $ Sql.selectKeys [] [] .| C.mapM_ (Sql.insert_ . mkVariant)
+        let mkVariant gId = Variant gId varCfgId algoId Nothing False 0
+
+        runConduit $
+            SqlTrans.selectKeys [] [] .| C.mapM_ (SqlTrans.insert_ . mkVariant)
   where
     algoInput = sqlInput AlgorithmName UniqAlgorithm
     defaultPrompt = "Default Variant (for plotting)"

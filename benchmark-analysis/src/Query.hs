@@ -46,11 +46,12 @@ import System.IO (Handle)
 
 import Core hiding (QueryMode(..))
 import Schema
-import Sql.Core (MonadSql, PersistFieldSql, SqlRecord)
+import Sql.Core (MonadSql, PersistFieldSql, SqlRecord, Transaction(..))
 import qualified Sql.Core as Sql
 import Utils.Vector (byteStringToVector)
 
-type MonadQuery m = (MonadSql m, MonadExplain m, MonadLogger m, MonadThrow m)
+type MonadQuery m =
+    (MonadResource m, MonadSql m, MonadExplain m, MonadLogger m, MonadThrow m)
 
 data Explain = Explain | NoExplain
 
@@ -156,7 +157,7 @@ runSqlQueryConduit query sink =
 
 runLoggingSqlQuery
     :: ( MonadLogger m, MonadResource m, MonadThrow m
-       , MonadExplain n, MonadLogger n, MonadSql n)
+       , MonadExplain n, MonadLogger n, MonadResource n, MonadSql n)
     => (ConduitT () r m () -> n a) -> Query r -> n a
 runLoggingSqlQuery f query  = do
     logQueryExplanation $ explainSqlQuery query
@@ -172,10 +173,10 @@ runLoggingSqlQuery f query  = do
 
 runRawSqlQuery
     :: ( MonadLogger m, MonadResource m, MonadThrow m
-       , MonadLogger n, MonadSql n)
+       , MonadLogger n, MonadResource n, MonadSql n)
     => Explain -> (ConduitT () r m () -> n a) -> Query r -> n (Text, a)
 runRawSqlQuery isExplain f query@Query{convert,cteParams,params} = do
-    srcRes <- Sql.conduitQueryRes queryText queryParams
+    srcRes <- Sql.conduitQuery queryText queryParams
     (key, src) <- allocateAcquire srcRes
     (timing, r) <- withTime $ f (src .| C.mapM convert) <* release key
 
@@ -210,12 +211,12 @@ runSqlQueryCount originalQuery = do
 
 getDistinctFieldQuery
     :: forall a m rec
-     . (MonadSql m, PersistFieldSql a, SqlRecord rec)
+     . (MonadResource m, MonadSql m, PersistFieldSql a, SqlRecord rec)
      => EntityField rec a
      -> m (Query a)
-getDistinctFieldQuery entityField = Sql.runSql $ do
-    table <- Sqlite.getTableName (undefined :: rec)
-    field <- Sqlite.getFieldName entityField
+getDistinctFieldQuery entityField = Sql.runTransaction $ do
+    table <- Transaction $ Sqlite.getTableName (undefined :: rec)
+    field <- Transaction $ Sqlite.getFieldName entityField
     let queryText = [i|SELECT DISTINCT #{table}.#{field} FROM #{table}|]
     return Query{..}
   where

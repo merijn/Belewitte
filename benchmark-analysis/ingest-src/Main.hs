@@ -38,8 +38,9 @@ import ProcessPool
 import Query (getDistinctFieldQuery, runSqlQuery)
 import qualified RuntimeData
 import Schema
-import Sql (Entity(..), MonadSql, (==.))
+import Sql (Entity(..), MonadSql, Transaction, (==.))
 import qualified Sql
+import qualified Sql.Transaction as SqlTrans
 
 main :: IO ()
 main = runSqlM commands $ runInput
@@ -136,24 +137,24 @@ runBenchmarks = lift $ do
         .| parMapM_ pipelineHandler 10 processPlatformRunConfigs
   where
     processPlatformRunConfigs :: Key Platform -> SqlM ()
-    processPlatformRunConfigs platformId = runConduit $ do
+    processPlatformRunConfigs platformId = do
         platform <- Sql.getJust platformId
         let numNodes = platformAvailable platform
-            filters = [RunConfigPlatformId ==. platformId]
+            filts = [RunConfigPlatformId ==. platformId]
 
-        Sql.selectSource filters [] .> \(Entity runConfigId config) -> do
-            let commitId = runConfigAlgorithmVersion config
+        runConduit $ Sql.selectSource filts [] .> \(Entity runCfgId cfg) -> do
+                let commitId = runConfigAlgorithmVersion cfg
 
-            unless (runConfigPlatformId config == platformId) $ do
-                logThrowM . GenericInvariantViolation $ mconcat
-                    [ "Query for platform #", showSqlKey platformId
-                    , " returned run config for different platform!"
-                    ]
+                unless (runConfigPlatformId cfg == platformId) $ do
+                    logThrowM . GenericInvariantViolation $ mconcat
+                        [ "Query for platform #", showSqlKey platformId
+                        , " returned run config for different platform!"
+                        ]
 
-            runSqlQuery (missingBenchmarkQuery runConfigId)
-                .> missingRunToTimingJob platformId
-                .| processJobsParallel numNodes platform
-                .| C.mapM_ (processTiming runConfigId commitId)
+                runSqlQuery (missingBenchmarkQuery runCfgId)
+                    .> missingRunToTimingJob platformId
+                    .| processJobsParallel numNodes platform
+                    .| C.mapM_ (processTiming runCfgId commitId)
 
     tryAlternatives :: (MonadIO m, MonadLogger m) => [MaybeT m a] -> m a
     tryAlternatives alts = runMaybeT (asum alts) >>= maybe exitOnNothing return
@@ -188,7 +189,7 @@ importResults = do
 
     filepath <- getInteractive filepathInput "Result File"
 
-    runConduit $
+    SqlTrans.runTransaction . runConduit $
         C.sourceFile filepath
         .| C.decode C.utf8
         .| C.map (T.replace "," "")
@@ -205,22 +206,22 @@ importResults = do
         -> Key Algorithm
         -> Key ExternalImpl
         -> ExternalResult
-        -> m ()
+        -> Transaction m ()
     insertResult platId algoId implId (ExternalResult gname varName Timing{..}) = do
         [graphId] <- logIfFail "More than one graph found for" gname $
-            Sql.selectKeysList [GraphName ==. gname] []
+            SqlTrans.selectKeysList [GraphName ==. gname] []
 
         let uniqVariantConfig = UniqVariantConfig algoId varName
 
         Just varCfgId <- logIfFail "No variant config found" varName $
-            fmap entityKey <$> Sql.getBy uniqVariantConfig
+            fmap entityKey <$> SqlTrans.getBy uniqVariantConfig
 
         let uniqVariant = UniqVariant graphId varCfgId
 
         Just varId <- logIfFail "No variant found" varCfgId $
-            fmap entityKey <$> Sql.getBy uniqVariant
+            fmap entityKey <$> SqlTrans.getBy uniqVariant
 
-        Sql.insert_ $
+        SqlTrans.insert_ $
           ExternalTimer platId varId implId algoId name minTime avgTime maxTime stddev
 
 queryTest :: Maybe FilePath -> Input SqlM ()

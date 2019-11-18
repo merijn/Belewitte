@@ -52,8 +52,11 @@ import Control.Monad.Trans.Resource (MonadResource, ResourceT, runResourceT)
 import qualified Database.Persist.Sqlite as Sqlite
 import Database.Sqlite.Internal (Connection(..), Connection'(..))
 import Data.Conduit (ConduitT, (.|), awaitForever)
+import Data.Acquire
+    (Acquire, ReleaseType(..), mkAcquire, mkAcquireType, withAcquire)
 import Data.Int (Int64)
-import Data.Pool (Pool)
+import Data.Pool (LocalPool, Pool)
+import qualified Data.Pool as P
 import Data.Text (Text)
 import qualified Data.Text as T
 import Foreign (Ptr)
@@ -72,7 +75,7 @@ import Migration
 import Pretty (AnsiStyle, Doc, LayoutOptions(..), PageWidth(..))
 import qualified Pretty
 import Schema
-import Sql.WrappedPersistent
+import Sql.Core
 import SQLiteExts
 
 data Config = Config
@@ -102,8 +105,29 @@ instance MonadFail SqlM where
             Nothing -> logThrowM . PatternFailed . Left $ T.pack s
             Just msg -> logThrowM . PatternFailed $ Right msg
 
-instance MonadSqlPool SqlM where
+unsafeAcquireConn :: SqlM (Acquire (RawSqlite SqlBackend))
+unsafeAcquireConn = SqlM $ do
+    pool <- asks sqlitePool
+
+    let freeConn
+            :: (RawSqlite SqlBackend, LocalPool (RawSqlite SqlBackend))
+            -> ReleaseType
+            -> IO ()
+        freeConn (res, localPool) relType = case relType of
+            ReleaseException -> P.destroyResource pool localPool res
+            _ -> P.putResource localPool res
+    return $ fst <$> mkAcquireType (P.takeResource pool) freeConn
+
+instance MonadSql SqlM where
     getConnFromPool = SqlM . asks $ Sqlite.acquireSqlConnFromPool . sqlitePool
+    getConnWithoutForeignKeysFromPool = do
+        unsafeConn <- unsafeAcquireConn
+        return $ do
+            conn <- unsafeConn
+            let foreignOff = setPragmaConn "foreign_keys" (0 :: Int64)
+                foreignOn _ = setPragmaConn "foreign_keys" (1 :: Int64) conn
+            () <- mkAcquire (foreignOff conn) foreignOn
+            Sqlite.acquireSqlConn conn
 
 instance MonadUnliftIO SqlM where
   askUnliftIO = SqlM $ withUnliftIO $ \u ->
@@ -117,6 +141,10 @@ instance MonadTagFail SqlM where
       where
         setTag :: Text -> SqlM a -> SqlM a
         setTag t (SqlM m) = SqlM $ local (\cfg -> cfg { failTag = Just t }) m
+
+instance MonadTagFail m => MonadTagFail (Transaction m) where
+    logIfFail txt v (Transaction act) = Transaction . ReaderT $ \r ->
+        logIfFail txt v (runReaderT act r)
 
 showText :: Show a => a -> Text
 showText = T.pack . show
@@ -200,12 +228,14 @@ runSqlMWithOptions Options{..} work = do
         didMigrate <- checkMigration migrateSchema
 
         -- Compacts and reindexes the database when request
-        when (vacuumDb || didMigrate) $ executeSql "VACUUM"
+        when (vacuumDb || didMigrate) $ do
+            conn <- unsafeAcquireConn
+            withAcquire conn $ runReaderT (Sqlite.rawExecute "VACUUM" [])
 
         workResult <- work task
 
         -- Runs the ANALYZE command and updates query planner
-        executeSql "PRAGMA optimize"
+        runTransaction $ executeSql "PRAGMA optimize"
 
         return workResult
   where

@@ -5,71 +5,34 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
-module Sql (module Sql.WrappedPersistent, module Sql) where
+module Sql
+    ( SqlTrans.Avg(..)
+    , SqlTrans.Max(..)
+    , SqlTrans.getFieldLength
+    , SqlTrans.likeFilter
+    , module Sql.Core
+    , module Sql
+    ) where
 
+import Control.Monad (join)
 import Control.Monad.Catch (MonadThrow)
+import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Logger (MonadLogger)
-import Conduit (MonadIO, (.|), runConduit)
-import qualified Data.Conduit.Combinators as C
+import Control.Monad.Trans.Resource (release)
+import Data.Acquire (allocateAcquire)
+import Data.Conduit (ConduitT, toProducer)
 import Data.IntMap (IntMap)
-import qualified Data.IntMap.Strict as IM
 import Data.Proxy (Proxy(Proxy))
 import Data.String.Interpolate.IsString (i)
+import Database.Persist.Sqlite (sqlType)
+import qualified Database.Persist.Sqlite as Sqlite
 
 import Core
-import Database.Persist.Sqlite
-    (getFieldName, getTableName, rawExecute, sqlType)
-import Query (MonadQuery, Query(..), runSqlQuerySingle, runSqlQuerySingleMaybe)
+import Query (MonadQuery, Query(..), runSqlQuerySingleMaybe)
 import Schema
 import Schema.GlobalVars (Unique(UniqGlobal))
-import Sql.WrappedPersistent
-
-newtype Avg = Avg { getAvg :: Int } deriving (Show, Eq, Ord)
-newtype Max = Max { getMax :: Int } deriving (Show, Eq, Ord)
-
-validateEntity
-    :: ( MonadLogger m
-       , MonadSql m
-       , MonadThrow m
-       , SqlRecord r
-       , ToBackendKey SqlBackend r
-       )
-    => Text -> Int64 -> m (Entity r)
-validateEntity name k = getEntity (toSqlKey k) >>= \case
-    Nothing -> logThrowM $ MissingEntity name k
-    Just ent -> return ent
-
-validateKey
-    :: ( MonadLogger m
-       , MonadSql m
-       , MonadThrow m
-       , SqlRecord r
-       , ToBackendKey SqlBackend r
-       )
-    => Text -> Int64 -> m (Key r)
-validateKey name = fmap entityKey . validateEntity name
-
-validateUniqEntity
-    :: ( MonadLogger m
-       , MonadSql m
-       , MonadThrow m
-       , Show (Unique r)
-       , SqlRecord r
-       )
-    => Text -> Unique r -> m (Entity r)
-validateUniqEntity name uniq = getBy uniq >>= \case
-    Nothing -> logThrowM $ MissingUniqEntity name uniq
-    Just ent -> return ent
-
-validateUniqKey
-    :: ( MonadLogger m
-       , MonadSql m
-       , MonadThrow m
-       , Show (Unique r)
-       , SqlRecord r
-       )
-    => Text -> Unique r -> m (Key r)
-validateUniqKey name = fmap entityKey . validateUniqEntity name
+import Sql.Core
+import qualified Sql.Transaction as SqlTrans
 
 rawGetGlobalVar
     :: forall a b m
@@ -104,87 +67,140 @@ rawGetGlobalVar run var = do
 getGlobalVar :: (MonadQuery m, PersistFieldSql a) => GlobalVar a -> m (Maybe a)
 getGlobalVar = rawGetGlobalVar runSqlQuerySingleMaybe
 
-getGlobalVar_ :: (MonadQuery m, PersistFieldSql a) => GlobalVar a -> m a
-getGlobalVar_ = rawGetGlobalVar runSqlQuerySingle
-
 initialiseGlobalVar
     :: (MonadSql m, PersistFieldSql a) => GlobalVar a -> a -> m ()
-initialiseGlobalVar var value = runSql $ do
-    rawExecute query [ toPersistValue (show var), toPersistValue value ]
+initialiseGlobalVar var value = runTransaction $ SqlTrans.rawExecute query
+    [ toPersistValue (show var), toPersistValue value ]
   where
     query = [i|INSERT INTO GlobalVars ("name","value") VALUES (?,?)|]
 
-setGlobalVar :: (MonadSql m, PersistFieldSql a) => GlobalVar a -> a -> m ()
-setGlobalVar var value = runSql $ do
-    rawExecute query [ toPersistValue (show var), toPersistValue value ]
+setGlobalVar
+    :: (MonadSql m, PersistFieldSql a)
+    => GlobalVar a -> a -> m ()
+setGlobalVar var value = runTransaction $ SqlTrans.rawExecute query
+    [ toPersistValue (show var), toPersistValue value ]
   where
     query = [i|INSERT OR REPLACE INTO GlobalVars ("name","value") VALUES (?,?)|]
 
-unsetGlobalVar :: MonadSql m => GlobalVar a -> m ()
-unsetGlobalVar var = deleteBy $ UniqGlobal (showText var)
+unsetGlobalVar :: (MonadSql m) => GlobalVar a -> m ()
+unsetGlobalVar var =
+    runTransaction . SqlTrans.deleteBy $ UniqGlobal (showText var)
 
-getFieldLength
-    :: forall a m rec
-     . (MonadQuery m, SqlRecord rec)
-    => EntityField rec a -> m (Avg, Max)
-getFieldLength entityField = do
-    table <- runSql $ getTableName (undefined :: rec)
-    field <- runSql $ getFieldName entityField
-    let queryText = [i|
-SELECT IFNULL(ROUND(AVG(length(#{table}.#{field}))), 0)
-     , IFNULL(MAX(length(#{table}.#{field})), 0)
-FROM #{table}
-|]
-    runSqlQuerySingle Query{..}
-  where
-    queryName :: Text
-    queryName = "getMaxFieldQuery"
+-- Wrapped re-exports
+validateEntity
+    :: ( MonadLogger m
+       , MonadSql m
+       , MonadThrow m
+       , SqlRecord r
+       , ToBackendKey SqlBackend r
+       )
+    => Text -> Int64 -> m (Entity r)
+validateEntity name k = runTransaction $ SqlTrans.validateEntity name k
 
-    cteParams :: [PersistValue]
-    cteParams = []
+validateKey
+    :: ( MonadLogger m
+       , MonadSql m
+       , MonadThrow m
+       , SqlRecord r
+       , ToBackendKey SqlBackend r
+       )
+    => Text -> Int64 -> m (Key r)
+validateKey name = fmap entityKey . validateEntity name
 
-    commonTableExpressions :: [Text]
-    commonTableExpressions = []
+validateUniqEntity
+    :: ( MonadLogger m
+       , MonadSql m
+       , MonadThrow m
+       , Show (Unique r)
+       , SqlRecord r
+       )
+    => Text -> Unique r -> m (Entity r)
+validateUniqEntity name uniq =
+    runTransaction $ SqlTrans.validateUniqEntity name uniq
 
-    params :: [PersistValue]
-    params = []
+validateUniqKey
+    :: ( MonadLogger m
+       , MonadSql m
+       , MonadThrow m
+       , Show (Unique r)
+       , SqlRecord r
+       )
+    => Text -> Unique r -> m (Key r)
+validateUniqKey name = fmap entityKey . validateUniqEntity name
 
-    convert
-        :: (MonadIO n, MonadLogger n, MonadThrow n)
-        => [PersistValue] -> n (Avg, Max)
-    convert [avgPersistVal, maxPersistVal]
-        | Right avgVal <- fromPersistValue avgPersistVal
-        , Right maxVal <- fromPersistValue maxPersistVal
-        = return (Avg avgVal, Max maxVal)
-    convert actualValues = logThrowM $ QueryResultUnparseable actualValues
-        [SqlInt64, SqlInt64]
+getBy :: (MonadSql m, SqlRecord rec) => Unique rec -> m (Maybe (Entity rec))
+getBy = runTransaction . SqlTrans.getBy
+
+getEntity :: (MonadSql m, SqlRecord rec) => Key rec -> m (Maybe (Entity rec))
+getEntity = runTransaction . SqlTrans.getEntity
+
+getJust :: (MonadSql m, SqlRecord rec) => Key rec -> m rec
+getJust = runTransaction . SqlTrans.getJust
+
+getJustEntity :: (MonadSql m, SqlRecord rec) => Key rec -> m (Entity rec)
+getJustEntity = runTransaction . SqlTrans.getJustEntity
+
+insert :: (MonadSql m, SqlRecord rec) => rec -> m (Key rec)
+insert = runTransaction . SqlTrans.insert
+
+insert_ :: (MonadSql m, SqlRecord rec) => rec -> m ()
+insert_ = runTransaction . SqlTrans.insert_
+
+selectFirst
+    :: (MonadSql m, SqlRecord rec)
+    => [Filter rec] -> [SelectOpt rec] -> m (Maybe (Entity rec))
+selectFirst filters select =
+    runTransaction $ SqlTrans.selectFirst filters select
+
+selectKeys
+    :: (MonadSql m, SqlRecord rec)
+    => [Filter rec]
+    -> [SelectOpt rec]
+    -> ConduitT a (Key rec) m ()
+selectKeys filters select = do
+    acquireConn <- getConnFromPool
+    (key, conduit) <- allocateAcquire $ do
+        conn <- acquireConn
+        join $ runReaderT (Sqlite.selectKeysRes filters select) conn
+    toProducer conduit
+    release key
+
+selectKeysList
+    :: (MonadSql m, SqlRecord rec)
+    => [Filter rec] -> [SelectOpt rec] -> m [Key rec]
+selectKeysList filters = runTransaction . SqlTrans.selectKeysList filters
+
+selectList
+    :: (MonadSql m, SqlRecord rec)
+    => [Filter rec] -> [SelectOpt rec] -> m [Entity rec]
+selectList filters select = runTransaction $ SqlTrans.selectList filters select
+
+selectSource
+    :: (MonadSql m, SqlRecord rec)
+    => [Filter rec]
+    -> [SelectOpt rec]
+    -> ConduitT a (Entity rec) m ()
+selectSource filters select = do
+    acquireConn <- getConnFromPool
+    (key, conduit) <- allocateAcquire $ do
+        conn <- acquireConn
+        join $ runReaderT (Sqlite.selectSourceRes filters select) conn
+    toProducer conduit
+    release key
+
+update :: (MonadSql m, SqlRecord rec) => Key rec -> [Update rec] -> m ()
+update key = runTransaction . SqlTrans.update key
+
+updateWhere
+    :: (MonadSql m, SqlRecord rec) => [Filter rec] -> [Update rec] -> m ()
+updateWhere filts = runTransaction . SqlTrans.updateWhere filts
 
 queryExternalImplementations
     :: MonadSql m => Key Algorithm -> m (IntMap ExternalImpl)
-queryExternalImplementations algoId = runConduit $
-    selectImpls algoId .| C.foldMap toIntMap
-  where
-    selectImpls aId = selectSource [ ExternalImplAlgorithmId ==. aId ] []
-
-    toIntMap :: Entity ExternalImpl -> IntMap ExternalImpl
-    toIntMap (Entity k val) = IM.singleton (fromIntegral $ fromSqlKey k) val
+queryExternalImplementations algoId =
+    runTransaction $ SqlTrans.queryExternalImplementations algoId
 
 queryImplementations
     :: MonadSql m => Key Algorithm -> m (IntMap Implementation)
-queryImplementations algoId = fmap (IM.union builtinImpls) . runConduit $
-    selectImpls algoId .| C.foldMap toIntMap
-  where
-    selectImpls aId = selectSource [ ImplementationAlgorithmId ==. aId ] []
-
-    toIntMap :: Entity Implementation -> IntMap Implementation
-    toIntMap (Entity k val) = IM.singleton (fromIntegral $ fromSqlKey k) val
-
-    mkImpl :: Text -> Text -> Implementation
-    mkImpl short long = Implementation algoId short (Just long) Nothing Builtin
-
-    builtinImpls :: IntMap Implementation
-    builtinImpls = IM.fromList
-        [ (predictedImplId, mkImpl "predicted" "Predicted")
-        , (bestNonSwitchingImplId, mkImpl "best" "Best Non-switching")
-        , (optimalImplId, mkImpl "optimal" "Optimal")
-        ]
+queryImplementations algoId =
+    runTransaction $ SqlTrans.queryImplementations algoId

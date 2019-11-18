@@ -48,7 +48,7 @@ import RuntimeData (getModelScript)
 import Schema
 import StepQuery (StepInfo(..), stepInfoQuery)
 import Sql (MonadSql, (==.))
-import qualified Sql
+import qualified Sql.Transaction as SqlTrans
 
 data UnknownSet = UnknownSet
     { unknownSetId :: Int64
@@ -109,18 +109,18 @@ getTotalQuery algoId platformId TrainConfig{..} =
   stepInfoQuery algoId platformId trainGraphProps trainStepProps
 
 getModelTrainingConfig
-    :: (MonadResource m, MonadSql m) => Key PredictionModel -> m TrainingConfig
-getModelTrainingConfig modelId = do
-    PredictionModel{..} <- Sql.getJust modelId
+    :: MonadSql m => Key PredictionModel -> m TrainingConfig
+getModelTrainingConfig modelId = SqlTrans.runTransaction $ do
+    PredictionModel{..} <- SqlTrans.getJust modelId
 
     graphProps <- runConduit $
-        Sql.selectSource [ModelGraphPropertyModelId ==. modelId] []
-        .| C.map (modelGraphPropertyProperty . Sql.entityVal)
+        SqlTrans.selectSource [ModelGraphPropertyModelId ==. modelId] []
+        .| C.map (modelGraphPropertyProperty . SqlTrans.entityVal)
         .| C.foldMap S.singleton
 
     stepProps <- runConduit $
-        Sql.selectSource [ModelStepPropertyModelId ==. modelId] []
-        .| C.map (modelStepPropertyProperty . Sql.entityVal)
+        SqlTrans.selectSource [ModelStepPropertyModelId ==. modelId] []
+        .| C.map (modelStepPropertyProperty . SqlTrans.entityVal)
         .| C.foldMap S.singleton
 
     return TrainConfig
@@ -131,26 +131,26 @@ getModelTrainingConfig modelId = do
         }
 
 getModelStats :: Key PredictionModel -> SqlM ModelStats
-getModelStats modelId = do
+getModelStats modelId = SqlTrans.runTransaction $ do
     modelUnknownCount <-
-        predictionModelTotalUnknownCount <$> Sql.getJust modelId
+        predictionModelTotalUnknownCount <$> SqlTrans.getJust modelId
 
     modelGraphPropImportance <- runConduit $
-        Sql.selectSource [ModelGraphPropertyModelId ==. modelId] []
-        .| C.foldMap (graphPropMap . Sql.entityVal)
+        SqlTrans.selectSource [ModelGraphPropertyModelId ==. modelId] []
+        .| C.foldMap (graphPropMap . SqlTrans.entityVal)
 
     modelStepPropImportance <- runConduit $
-        Sql.selectSource [ModelStepPropertyModelId ==. modelId] []
-        .| C.foldMap (stepPropMap . Sql.entityVal)
+        SqlTrans.selectSource [ModelStepPropertyModelId ==. modelId] []
+        .| C.foldMap (stepPropMap . SqlTrans.entityVal)
 
-    unknowns <- Sql.selectList [UnknownPredictionModelId ==. modelId] []
-    modelUnknownPreds <- forM unknowns $ \Sql.Entity{..} -> do
+    unknowns <- SqlTrans.selectList [UnknownPredictionModelId ==. modelId] []
+    modelUnknownPreds <- forM unknowns $ \SqlTrans.Entity{..} -> do
         let UnknownPrediction{..} = entityVal
             filters = [UnknownPredictionSetUnknownPredId ==. entityKey]
 
-        implSet <- runConduitRes $
-            Sql.selectSource filters []
-            .| C.foldMap (toImplSet . Sql.entityVal)
+        implSet <- runConduit $
+            SqlTrans.selectSource filters []
+            .| C.foldMap (toImplSet . SqlTrans.entityVal)
 
         return $ UnknownSet unknownPredictionUnknownSetId unknownPredictionCount implSet
 
@@ -233,32 +233,35 @@ trainModel algoId platId ModelDesc{..} = do
 
             return (model, ModelStats{..})
 
-    modelId <- Sql.insert $ PredictionModel
-        { predictionModelPlatformId = platId
-        , predictionModelAlgorithmId = algoId
-        , predictionModelName = modelName
-        , predictionModelPrettyName = modelPrettyName
-        , predictionModelDescription = modelDescription
-        , predictionModelModel = model
-        , predictionModelTrainFraction = trainFraction
-        , predictionModelTrainSeed = trainSeed
-        , predictionModelTotalUnknownCount = modelUnknownCount
-        , predictionModelTimestamp = timestamp
-        }
+    modelId <- SqlTrans.runTransaction $ do
+        modelId <- SqlTrans.insert $ PredictionModel
+            { predictionModelPlatformId = platId
+            , predictionModelAlgorithmId = algoId
+            , predictionModelName = modelName
+            , predictionModelPrettyName = modelPrettyName
+            , predictionModelDescription = modelDescription
+            , predictionModelModel = model
+            , predictionModelTrainFraction = trainFraction
+            , predictionModelTrainSeed = trainSeed
+            , predictionModelTotalUnknownCount = modelUnknownCount
+            , predictionModelTimestamp = timestamp
+            }
 
-    forM_ (M.toList modelGraphPropImportance) $
-        Sql.insert_ . uncurry (ModelGraphProperty modelId)
+        forM_ (M.toList modelGraphPropImportance) $
+            SqlTrans.insert_ . uncurry (ModelGraphProperty modelId)
 
-    forM_ (M.toList modelStepPropImportance) $
-        Sql.insert_ . uncurry (ModelStepProperty modelId)
+        forM_ (M.toList modelStepPropImportance) $
+            SqlTrans.insert_ . uncurry (ModelStepProperty modelId)
 
-    forM_ modelUnknownPreds $ \UnknownSet{..} -> do
-        unknownId <- Sql.insert $
-            UnknownPrediction modelId algoId unknownSetId unknownSetOccurence
+        forM_ modelUnknownPreds $ \UnknownSet{..} -> do
+            unknownId <- SqlTrans.insert $
+                UnknownPrediction modelId algoId unknownSetId unknownSetOccurence
 
-        forM_ unknownSetImpls $ \impl -> do
-            implKey <- Sql.validateKey "Implementation" impl
-            Sql.insert_ $ UnknownPredictionSet unknownId implKey algoId
+            forM_ unknownSetImpls $ \impl -> do
+                implKey <- SqlTrans.validateKey "Implementation" impl
+                SqlTrans.insert_ $ UnknownPredictionSet unknownId implKey algoId
+
+        return modelId
 
     return (modelId, model)
   where

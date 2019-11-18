@@ -17,7 +17,7 @@ import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
 import Pretty.Fields
-import Schema.Utils (EntityDef, Int64, MonadSql, (.>), (.=))
+import Schema.Utils (EntityDef, Int64, MonadSql, Transaction, (.>), (.=))
 import qualified Schema.Utils as Utils
 
 import Schema.Dataset (DatasetId)
@@ -42,7 +42,7 @@ instance PrettyFields Graph where
         , ("Filepath", textField GraphPath)
         ]
 
-migrations :: MonadSql m => Int64 -> m [EntityDef]
+migrations :: MonadSql m => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup
     [ 1 .> V0.schema $ do
         Utils.executeSql [i|

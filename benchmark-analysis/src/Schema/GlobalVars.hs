@@ -15,7 +15,7 @@ import Data.Text (Text)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Schema.Utils (EntityDef, Int64, MonadSql, (.=))
+import Schema.Utils (EntityDef, Int64, MonadSql, Transaction, (.=))
 import qualified Schema.Utils as Utils
 
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
@@ -32,5 +32,5 @@ data GlobalVar a where
 
 deriving instance Show (GlobalVar a)
 
-migrations :: MonadSql m => Int64 -> m [EntityDef]
+migrations :: MonadSql m => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup [ 11 .= schema ]

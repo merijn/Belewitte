@@ -49,7 +49,7 @@ import Database.Persist.Sql
 
 import Model (Model)
 import Schema.Utils (mkMigration)
-import Sql.Core (DummySql, MonadSql)
+import Sql.Core (DummySql, MonadSql, Transaction)
 import Types
 import Utils.Pair (Pair, toPair)
 
@@ -114,7 +114,7 @@ toImplNames
     -> Pair (IntMap Text)
 toImplNames f g = toPair (fmap getImplName . f) (fmap getExternalName . g)
 
-migrations :: MonadSql m => [([EntityDef], Int64 -> m [EntityDef])]
+migrations :: MonadSql m => [([EntityDef], Int64 -> Transaction m [EntityDef])]
 migrations =
     [ (Platform.schema, Platform.migrations)
     , (Dataset.schema, Dataset.migrations)
@@ -137,11 +137,11 @@ migrations =
 schemaVersion :: Int64
 schemaVersion = 13
 
-type MigrationAction = DummySql [EntityDef]
+type MigrationAction = Transaction DummySql [EntityDef]
 
 currentSchema :: Migration
 currentSchema = mkMigration $ map fst
     (migrations :: [([EntityDef], Int64 -> MigrationAction)])
 
-updateSchemaToVersion :: MonadSql m => Int64 -> m Migration
+updateSchemaToVersion :: MonadSql m => Int64 -> Transaction m Migration
 updateSchemaToVersion n = mkMigration <$> mapM (($n) . snd) migrations

@@ -16,7 +16,7 @@ import qualified Database.Persist.TH as TH
 import Database.Persist.Types
 
 import Pretty.Fields
-import Schema.Utils (EntityDef, Int64, MonadSql, (.>), (.=))
+import Schema.Utils (EntityDef, Int64, MonadSql, Transaction, (.>), (.=))
 import qualified Schema.Utils as Utils
 import Types
 
@@ -55,7 +55,7 @@ schema = Utils.addForeignRef "Variant" variantConfig schema'
     variantConfig = Utils.mkForeignRef "VariantConfig"
         [ ("variantConfigId", "id"), ("algorithmId", "algorithmId") ]
 
-migrations :: MonadSql m => Int64 -> m [EntityDef]
+migrations :: MonadSql m => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup
     [ 0 .= V0.schema
     , 7 .= V1.schema

@@ -107,7 +107,7 @@ Library
                         Schema.VariantConfig
                         Sql
                         Sql.Core
-                        Sql.WrappedPersistent
+                        Sql.Transaction
                         SQLiteExts
                         Types
                         Utils.Pair

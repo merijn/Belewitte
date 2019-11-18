@@ -5,6 +5,7 @@
 {-# LANGUAGE ViewPatterns #-}
 module Schema.Utils
     ( MonadSql
+    , Transaction
     , DBName(..)
     , EntityDef
     , ForeignDef
@@ -29,7 +30,7 @@ import Database.Persist.TH (embedEntityDefs)
 import Database.Persist.Types
     (DBName(..), EntityDef(..), ForeignDef(..), HaskellName(..))
 
-import Sql.Core (MonadSql, executeSql, runMigrationQuiet)
+import Sql.Core (MonadSql, Transaction, executeSql, runMigrationQuiet)
 
 (.=) :: Applicative f => a -> b -> (a, (b, f ()))
 (.=) i schema = (i, (schema, pure ()))
@@ -42,7 +43,7 @@ mkMigration ents = mapM_ (migrate embeddedEnts) embeddedEnts
   where
     embeddedEnts = embedEntityDefs . concat $ ents
 
-createTableFromSchema :: MonadSql m => [EntityDef] -> m ()
+createTableFromSchema :: MonadSql m => [EntityDef] -> Transaction m ()
 createTableFromSchema = void . runMigrationQuiet . mkMigration . pure
 
 mkForeignRef :: Text -> [(Text, Text)] -> ForeignDef
@@ -67,8 +68,10 @@ addForeignRef name fk (ent:ents)
     | otherwise = ent { entityForeigns = fk : entityForeigns ent } : ents
 
 mkMigrationLookup
-    :: MonadSql m
-    => [(Int64, ([EntityDef], m ()))] -> Int64 -> m [EntityDef]
+    :: (MonadSql m)
+    => [(Int64, ([EntityDef], Transaction m ()))]
+    -> Int64
+    -> Transaction m [EntityDef]
 mkMigrationLookup (M.fromList -> migrationMap) = \i ->
     case M.lookupLE i migrationMap of
         Nothing -> return []

@@ -6,6 +6,7 @@ import Core
 import Schema
 import Sql (MonadSql, Filter, (=.))
 import qualified Sql
+import qualified Sql.Transaction as SqlTrans
 
 commands :: Command (SqlM ())
 commands = CommandGroup CommandInfo
@@ -52,21 +53,21 @@ resetResults :: MonadSql m => m ()
 resetResults = Sql.updateWhere [] [VariantResult =. Nothing]
 
 resetProperties :: MonadSql m => m ()
-resetProperties = do
-    Sql.deleteWhere ([] :: [Filter GraphProp])
-    Sql.deleteWhere ([] :: [Filter StepProp])
-    Sql.updateWhere [] [VariantPropsStored =. False]
+resetProperties = SqlTrans.runTransaction $ do
+    SqlTrans.deleteWhere ([] :: [Filter GraphProp])
+    SqlTrans.deleteWhere ([] :: [Filter StepProp])
+    SqlTrans.updateWhere [] [VariantPropsStored =. False]
 
 resetMeasurements :: MonadSql m => m ()
-resetMeasurements = do
-    Sql.deleteWhere ([] :: [Filter StepTimer])
-    Sql.deleteWhere ([] :: [Filter TotalTimer])
-    Sql.deleteWhere ([] :: [Filter Run])
+resetMeasurements = SqlTrans.runTransaction $ do
+    SqlTrans.deleteWhere ([] :: [Filter StepTimer])
+    SqlTrans.deleteWhere ([] :: [Filter TotalTimer])
+    SqlTrans.deleteWhere ([] :: [Filter Run])
 
 resetModels :: MonadSql m => m ()
-resetModels = do
-    Sql.deleteWhere ([] :: [Filter PredictionModel])
-    Sql.deleteWhere ([] :: [Filter ModelGraphProperty])
-    Sql.deleteWhere ([] :: [Filter ModelStepProperty])
-    Sql.deleteWhere ([] :: [Filter UnknownPrediction])
-    Sql.deleteWhere ([] :: [Filter UnknownPredictionSet])
+resetModels = SqlTrans.runTransaction $ do
+    SqlTrans.deleteWhere ([] :: [Filter PredictionModel])
+    SqlTrans.deleteWhere ([] :: [Filter ModelGraphProperty])
+    SqlTrans.deleteWhere ([] :: [Filter ModelStepProperty])
+    SqlTrans.deleteWhere ([] :: [Filter UnknownPrediction])
+    SqlTrans.deleteWhere ([] :: [Filter UnknownPredictionSet])

@@ -39,8 +39,9 @@ import ProcessPool (Job, Result(..), makeJob)
 import Query (runSqlQuery)
 import qualified RuntimeData
 import Schema
-import Sql (Entity(..), Key, MonadSql, (=.))
+import Sql (Entity(..), Key, MonadSql, Transaction, (=.))
 import qualified Sql
+import qualified Sql.Transaction as SqlTrans
 import Types (HashDigest)
 
 computeHash :: MonadIO m => FilePath -> m Hash
@@ -86,27 +87,28 @@ processProperty Result{resultValue=(graphId, hash), ..} = do
     logInfoN $ "Property: " <> resultLabel
     liftIO $ removeFile timingFile
 
-    resultHash <- computeHash outputFile
-    loadProps <- case hash of
-        Nothing ->
-            True <$ Sql.update resultVariant [VariantResult =. Just resultHash]
+    SqlTrans.runTransaction $ do
+        resultHash <- computeHash outputFile
+        loadProps <- case hash of
+            Nothing -> True <$ SqlTrans.update resultVariant
+                                    [VariantResult =. Just resultHash]
 
-        Just prevHash | prevHash == resultHash -> return True
-        _ -> False <$ logErrorN
-                ("Hash mismatch for variant: " <> showSqlKey resultVariant)
+            Just prevHash | prevHash == resultHash -> return True
+            _ -> False <$ logErrorN
+                    ("Hash mismatch for variant: " <> showSqlKey resultVariant)
 
-    when loadProps $ do
-        liftIO $ removeFile outputFile
+        when loadProps $ do
+            liftIO $ removeFile outputFile
 
-        runConduit $
-            C.sourceFile propLog
-            .| C.decode C.utf8
-            .| C.map (T.replace "," "")
-            .| conduitParse property
-            .| C.mapM_ insertProperty
+            runConduit $
+                C.sourceFile propLog
+                .| C.decode C.utf8
+                .| C.map (T.replace "," "")
+                .| conduitParse property
+                .| C.mapM_ insertProperty
 
-        liftIO $ removeFile propLog
-        Sql.update resultVariant [VariantPropsStored =. True]
+            liftIO $ removeFile propLog
+            SqlTrans.update resultVariant [VariantPropsStored =. True]
 
     logInfoN $ "Property done: " <> resultLabel
   where
@@ -119,12 +121,12 @@ processProperty Result{resultValue=(graphId, hash), ..} = do
     outputFile :: FilePath
     outputFile = T.unpack resultLabel <> ".output"
 
-    insertProperty :: Property -> SqlM ()
+    insertProperty :: Property -> Transaction SqlM ()
     insertProperty (GraphProperty name val) =
-        Sql.insertUniq $ GraphProp graphId name val
+        SqlTrans.insertUniq $ GraphProp graphId name val
 
     insertProperty (StepProperty n name val) =
-        Sql.insertUniq $ StepProp resultVariant n name val
+        SqlTrans.insertUniq $ StepProp resultVariant n name val
 
     insertProperty Prediction{} = return ()
 
@@ -167,10 +169,11 @@ processTiming runConfigId commit Result{..} = do
         , showSqlKey implId, "! Expected commit ", commit, " found commit "
         , resultAlgorithmVersion
         ]
-       else do
+       else SqlTrans.runTransaction $ do
         let validated = resultHash == hash
 
-        runId <- Sql.insert $ Run runConfigId resultVariant implId algoId time validated
+        runId <- SqlTrans.insert $
+            Run runConfigId resultVariant implId algoId time validated
 
         unless validated $ do
             logErrorN . mconcat $
@@ -195,11 +198,11 @@ processTiming runConfigId commit Result{..} = do
     timingFile = T.unpack resultLabel <> ".timings"
     outputFile = T.unpack resultLabel <> ".output"
 
-    insertTiming :: MonadSql m => Key Run -> Timer -> m ()
-    insertTiming runId (TotalTiming Timing{..}) = Sql.insert_ $
+    insertTiming :: MonadSql m => Key Run -> Timer -> Transaction m ()
+    insertTiming runId (TotalTiming Timing{..}) = SqlTrans.insert_ $
         TotalTimer runId name minTime avgTime maxTime stddev
 
-    insertTiming runId (StepTiming n Timing{..})= Sql.insert_ $
+    insertTiming runId (StepTiming n Timing{..}) = SqlTrans.insert_ $
         StepTimer runId n name minTime avgTime maxTime stddev
 
 data Validation = Validation

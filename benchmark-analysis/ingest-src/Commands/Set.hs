@@ -12,8 +12,9 @@ import Commands
 import Core
 import OptionParsers
 import Schema
-import Sql (SqlBackend, SqlRecord, ToBackendKey, (==.), (=.))
+import Sql (SqlBackend, SqlRecord, ToBackendKey, Transaction, (==.), (=.))
 import qualified Sql
+import qualified Sql.Transaction as SqlTrans
 
 data Force = NoForce | Force deriving (Show, Eq)
 
@@ -168,16 +169,16 @@ setRunCommand force = setCommand
 
 setAvailable :: Key Platform -> Int -> SqlM ()
 setAvailable key n = withCheckedKey "platform" key $ \_ -> do
-    Sql.update key [PlatformAvailable =. n]
+    SqlTrans.update key [PlatformAvailable =. n]
 
 withCheckedKey
     :: (SqlRecord r, ToBackendKey SqlBackend r)
-    => String -> Key r -> (Entity r -> SqlM ()) -> SqlM ()
-withCheckedKey name key act = do
-    ent <- Sql.getEntity key >>= checkExists
+    => String -> Key r -> (Entity r -> Transaction SqlM ()) -> SqlM ()
+withCheckedKey name key act = SqlTrans.runTransaction $ do
+    ent <- SqlTrans.getEntity key >>= checkExists
     act ent
   where
-    checkExists :: Maybe (Entity a) -> SqlM (Entity a)
+    checkExists :: Maybe (Entity a) -> Transaction SqlM (Entity a)
     checkExists = maybe (logErrorN msg >> liftIO exitFailure) return
 
     msg :: Text
@@ -192,9 +193,9 @@ setPrettyName
     -> Text
     -> SqlM ()
 setPrettyName name field force key val = withCheckedKey name key $ \ent -> do
-    case (Sql.fieldFromEntity field ent, force) of
-        (Nothing, _) -> Sql.update (entityKey ent) [field =. Just val]
-        (_, Force) -> Sql.update (entityKey ent) [field =. Just val]
+    case (SqlTrans.fieldFromEntity field ent, force) of
+        (Nothing, _) -> SqlTrans.update (entityKey ent) [field =. Just val]
+        (_, Force) -> SqlTrans.update (entityKey ent) [field =. Just val]
         _ -> liftIO $ do
             putStrLn $ "Pretty name for " <> name <> " is already set!"
             putStrLn "Use --force to overwrite!"
@@ -209,9 +210,9 @@ setFlags
     -> Text
     -> SqlM ()
 setFlags name field force key val = withCheckedKey name key $ \ent -> do
-    case (Sql.fieldFromEntity field ent, force) of
-        (Nothing, _) -> Sql.update (entityKey ent) [field =. Just val]
-        (_, Force) -> Sql.update (entityKey ent) [field =. Just val]
+    case (SqlTrans.fieldFromEntity field ent, force) of
+        (Nothing, _) -> SqlTrans.update (entityKey ent) [field =. Just val]
+        (_, Force) -> SqlTrans.update (entityKey ent) [field =. Just val]
         _ -> liftIO $ do
             putStrLn $ "Flags for " <> name <> " are already set!"
             putStrLn "Use --force to overwrite!"
@@ -221,12 +222,12 @@ setDefault
     :: (SqlRecord r, ToBackendKey SqlBackend r)
     => String -> EntityField r Bool -> Force -> Key r -> SqlM ()
 setDefault name field force key = withCheckedKey name key $ \ent -> do
-    numDefault <- Sql.count [field ==. True]
+    numDefault <- SqlTrans.count [field ==. True]
     case (numDefault, force) of
-        (0, _) -> Sql.update (entityKey ent) [field =. True]
+        (0, _) -> SqlTrans.update (entityKey ent) [field =. True]
         (_, Force) -> do
-            Sql.updateWhere [] [field =. False]
-            Sql.update (entityKey ent) [field =. True]
+            SqlTrans.updateWhere [] [field =. False]
+            SqlTrans.update (entityKey ent) [field =. True]
         _ -> liftIO $ do
             putStrLn $ "Default " <> name <> " is already set!"
             putStrLn "Use --force to overwrite."

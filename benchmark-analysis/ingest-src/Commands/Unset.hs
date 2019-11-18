@@ -10,8 +10,9 @@ import Commands
 import Core
 import OptionParsers
 import Schema
-import Sql (SqlBackend, SqlRecord, ToBackendKey, (=.))
+import Sql (SqlBackend, SqlRecord, ToBackendKey, Transaction, (=.))
 import qualified Sql
+import qualified Sql.Transaction as SqlTrans
 
 data Force = NoForce | Force deriving (Show, Eq)
 
@@ -113,9 +114,9 @@ unsetRunCommand = Sql.unsetGlobalVar RunCommand
 
 unsetChecked
     :: (SqlRecord r, ToBackendKey SqlBackend r)
-    => String -> (Key r -> SqlM ()) -> Key r -> SqlM ()
-unsetChecked name f key = do
-    result <- Sql.getEntity key
+    => String -> (Key r -> Transaction SqlM ()) -> Key r -> SqlM ()
+unsetChecked name f key = SqlTrans.runTransaction $ do
+    result <- SqlTrans.getEntity key
     case result of
         Nothing -> logErrorN invalidKey >> liftIO exitFailure
         Just _ -> f key
@@ -127,16 +128,16 @@ unsetDefault
     :: (SqlRecord r, ToBackendKey SqlBackend r)
     => String -> EntityField r Bool -> Key r -> SqlM ()
 unsetDefault name field = unsetChecked name $ \key ->
-    Sql.update key [field =. False]
+    SqlTrans.update key [field =. False]
 
 unsetFlags
     :: (SqlRecord r, ToBackendKey SqlBackend r)
     => String -> EntityField r (Maybe Text) -> Key r -> SqlM ()
 unsetFlags name field = unsetChecked name $ \key ->
-    Sql.update key [field =. Nothing]
+    SqlTrans.update key [field =. Nothing]
 
 unsetPrettyName
     :: (SqlRecord r, ToBackendKey SqlBackend r)
     => String -> EntityField r (Maybe Text) -> Key r -> SqlM ()
 unsetPrettyName name field = unsetChecked name $ \key ->
-    Sql.update key [field =. Nothing]
+    SqlTrans.update key [field =. Nothing]

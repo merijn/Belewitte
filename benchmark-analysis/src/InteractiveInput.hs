@@ -40,7 +40,7 @@ import System.Directory (doesFileExist)
 import Text.Read (readMaybe)
 
 import Core
-import Sql (Entity(..), EntityField, MonadSqlPool(..), SqlRecord, Unique)
+import Sql (Entity(..), EntityField, MonadSql(..), SqlRecord, Unique)
 import qualified Sql
 import Utils.Process (CreateProcess, UnexpectedTermination(..))
 import qualified Utils.Process as Process
@@ -62,8 +62,10 @@ newtype Input m a = Input { unInput :: InputT (ReaderT (Completer m) m) a }
 instance MonadResource m => MonadResource (Input m) where
     liftResourceT = Input . lift . liftResourceT
 
-instance MonadSqlPool m => MonadSqlPool (Input m) where
+instance MonadSql m => MonadSql (Input m) where
     getConnFromPool = Input . lift $ getConnFromPool
+    getConnWithoutForeignKeysFromPool = Input $
+        lift getConnWithoutForeignKeysFromPool
 
 instance MonadThrow m => MonadThrow (Input m) where
     throwM = Input . lift . Except.throwM

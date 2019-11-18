@@ -7,11 +7,8 @@ module Migration (checkMigration) where
 
 import Control.Monad (forM_, unless, when)
 import Control.Monad.Catch (MonadMask, MonadThrow, catch, onError)
-import Control.Monad.IO.Unlift (MonadUnliftIO)
 import Control.Monad.Logger (MonadLogger, logWarnN)
 import qualified Control.Monad.Logger as Log
-import Control.Monad.Trans.Resource (MonadResource, release)
-import Data.Acquire (allocateAcquire)
 import Data.Conduit ((.|), runConduit)
 import qualified Data.Conduit.Combinators as C
 import Data.Monoid (Any(..))
@@ -19,25 +16,21 @@ import Data.Int (Int64)
 import Data.String.Interpolate.IsString (i)
 import qualified Data.Text as T
 import Data.Typeable (Typeable)
-import Database.Persist.Sql (Migration)
 
 import Exceptions
 import Pretty ((<+>))
 import qualified Pretty
 import Schema
-import Sql.Core (MonadSql)
+import Sql.Core (Migration, MonadSql, Transaction)
 import qualified Sql.Core as Sql
 
 showText :: Show a => a -> Text
 showText = T.pack . show
 
 checkForeignKeys
-    :: (MonadSql m, MonadLogger m, MonadResource m, MonadThrow m)
-    => m ()
-checkForeignKeys = do
-    srcRes <- Sql.conduitQueryRes query []
-    (key, src) <- allocateAcquire srcRes
-    result <- runConduit (src .| C.foldMapM logViolation) <* release key
+    :: (MonadLogger m, MonadSql m, MonadThrow m) => Transaction m ()
+checkForeignKeys = runConduit $ do
+    result <- Sql.conduitQueryTrans query [] .| C.foldMapM logViolation
     when (getAny result) $ logThrowM ForeignKeyViolation
   where
     logViolation l = Any True <$ logWarnN errorMsg
@@ -59,69 +52,64 @@ GROUP BY origin.rowid
 |]
 
 checkSchema
-    :: (MonadSql m, MonadLogger m, MonadThrow m) => Migration -> m ()
+    :: (MonadLogger m, MonadSql m, MonadThrow m)
+    => Migration -> Transaction m ()
 checkSchema schema = do
     noChanges <- null <$> Sql.getMigration schema
     unless noChanges $ logThrowM WrongSchema
 
 validateSchema
-    :: (MonadLogger m, MonadMask m, MonadResource m, MonadSql m, MonadUnliftIO m)
+    :: (MonadLogger m, MonadMask m, MonadSql m)
     => Bool -> Int64 -> m Bool
 validateSchema _ v
     | v > schemaVersion = logThrowM $ TooNew v
-    | v == schemaVersion = False <$ checkSchema currentSchema
+    | v == schemaVersion = Sql.runTransaction $
+                                False <$ checkSchema currentSchema
 
 validateSchema migrateSchema version
     | not migrateSchema = logThrowM $ MigrationNeeded version
     | otherwise = True <$ do
-        checkForeignKeys
+      Sql.runTransaction checkForeignKeys
 
-        Log.logInfoN $ "Migrating schema."
-        forM_ [version..schemaVersion - 1] $ \n -> do
-            Log.logInfoN $ mconcat
-                [ "Migrating file from schema version ", showText n
-                , " to version " , showText (n+1), "." ]
+      Log.logInfoN $ "Migrating schema."
+      forM_ [version..schemaVersion - 1] $ \n -> do
+          Log.logInfoN $ mconcat
+              [ "Migrating file from schema version ", showText n
+              , " to version " , showText (n+1), "." ]
 
-            reportMigrationFailure n $ do
-                Sql.setPragma "foreign_keys" (0 :: Int64)
+          reportMigrationFailure n . Sql.runTransactionWithoutForeignKeys $ do
+              migration <- updateSchemaToVersion (n+1)
+              Sql.runMigrationUnsafeQuiet migration
+              updateIndicesToVersion (n+1)
 
-                Sql.executeSql "BEGIN TRANSACTION"
-                migration <- updateSchemaToVersion (n+1)
-                Sql.runMigrationUnsafeQuiet migration
-                updateIndicesToVersion (n+1)
+              checkSchema migration `catch` migrationFailed
 
-                checkSchema migration `catch` migrationFailed
+              checkForeignKeys
 
-                checkForeignKeys
-                Sql.executeSql "COMMIT TRANSACTION"
-                Sql.setPragma "user_version" (n + 1 :: Int64)
-                Sql.setPragma "foreign_keys" (1 :: Int64)
+              Sql.setPragma "user_version" (n + 1 :: Int64)
 
-            Log.logInfoN $ mconcat
-                [ "Succesfully migrated to version ", showText (n+1), "!"]
+          Log.logInfoN $ mconcat
+              [ "Succesfully migrated to version ", showText (n+1), "!"]
 
-        Log.logInfoN $ "Migration complete!"
+      Log.logInfoN $ "Migration complete!"
   where
     reportMigrationFailure
-        :: (MonadSql m, MonadLogger m, MonadMask m) => Int64 -> m a -> m a
+        :: (MonadLogger m, MonadMask m) => Int64 -> m a -> m a
     reportMigrationFailure n act = onError act $ do
-        Sql.executeSql "ROLLBACK TRANSACTION"
         Log.logErrorN $ mconcat
             [ "Migration failed while migrating to version ", showText (n+1)
             , ".\nRolling back to version ", showText n
             ]
 
-    migrationFailed
-        :: (MonadSql m, MonadLogger m, MonadThrow m) => SchemaWrong -> m a
+    migrationFailed :: (MonadLogger m, MonadThrow m) => SchemaWrong -> m a
     migrationFailed WrongSchema = logThrowM AbortMigration
 
-checkMigration
-    :: (MonadLogger m, MonadMask m, MonadResource m, MonadSql m, MonadUnliftIO m)
-    => Bool -> m Bool
+checkMigration :: (MonadLogger m, MonadMask m, MonadSql m) => Bool -> m Bool
 checkMigration migrateSchema = do
     tableCount <- Sql.querySingleValue "SELECT COUNT(*) FROM sqlite_master" []
+
     case tableCount :: Int64 of
-        0 -> do
+        0 -> Sql.runTransaction $ do
             Sql.runMigrationQuiet currentSchema
             checkSchema currentSchema
             updateIndicesToVersion schemaVersion
