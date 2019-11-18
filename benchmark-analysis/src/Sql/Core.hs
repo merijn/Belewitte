@@ -120,6 +120,12 @@ setPragma pragma val = runSql $ Sqlite.rawExecute query []
   where
     query = "PRAGMA " <> pragma <> " = " <> T.pack (show val)
 
+setPragmaConn
+    :: (MonadIO m, Show v) => Text -> v -> RawSqlite SqlBackend -> m ()
+setPragmaConn pragma val = runReaderT (Sqlite.rawExecute query [])
+  where
+    query = "PRAGMA " <> pragma <> " = " <> T.pack (show val)
+
 executeSql :: MonadSql m => Text -> m ()
 executeSql query = runSql $ Sqlite.rawExecute query []
 

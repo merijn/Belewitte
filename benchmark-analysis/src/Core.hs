@@ -199,9 +199,6 @@ runSqlMWithOptions Options{..} work = do
 
         didMigrate <- checkMigration migrateSchema
 
-        -- Wait longer before timing out query steps
-        setPragma "busy_timeout" (1000 :: Int64)
-
         -- Compacts and reindexes the database when request
         when (vacuumDb || didMigrate) $ executeSql "VACUUM"
 
@@ -218,7 +215,10 @@ runSqlMWithOptions Options{..} work = do
       runLog . Sqlite.withRawSqlitePoolInfo connInfo setup 20 $ runSqlM act . config
       where
         config = Config mHnd Nothing pager
-        setup conn = registerSqlFunctions ptr
+        setup conn = do
+            registerSqlFunctions ptr
+            -- Wait longer before timing out query steps
+            setPragmaConn "busy_timeout" (1000 :: Int64) conn
           where
             ptr = getSqlitePtr $ Lens.view Sqlite.rawSqliteConnection conn
 
