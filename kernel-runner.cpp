@@ -179,8 +179,7 @@ handle_subcommands(Backend& backend, const vector<string>& args)
         exit(backend.deviceCount(platform));
     } else if (args[0] == "list" && args[1] == "algorithms") {
         for (auto& [algoName, algorithm] : algorithms) {
-            cout << algoName << " (version: " << algorithm.commit()
-                 << ")" << endl;
+            cout << algoName << endl;
 
             if (verbose) {
                 for (auto & [kernelName, kernel] : algorithm) {
