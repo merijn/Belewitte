@@ -158,9 +158,11 @@ extern "C" int32_t lookup()
 
     relabel :: (Builder, IntMap Int) -> TreeNode -> (Builder, IntMap Int)
     relabel (!out, !imap) Node{..}
-      | leftNode /= -1 || rightNode == -1 = (treeRow rightNode, imap)
+      | leftNode /= -1 = (treeRow rightNode, imap)
+      | rightNode < 0 = (treeRow (-1), imap)
       | otherwise = (treeRow newVal, newMap)
       where
+        treeRow :: Int -> Builder
         treeRow x = mconcat
             [ out
             , "    { "
