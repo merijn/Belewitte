@@ -201,8 +201,9 @@ void
 Options::usage(ostream& out, string prefix)
 {
     auto renderOpt = [&](const Option& opt) {
+        out << prefix;
         if (opt.shortOption != '\0') {
-            out << prefix << '-' << opt.shortOption;
+            out << '-' << opt.shortOption;
             if (opt.hasArg) out << " " << opt.argName;
             out << " | ";
         }
