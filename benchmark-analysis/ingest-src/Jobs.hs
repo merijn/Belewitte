@@ -84,7 +84,7 @@ variantToPropertyJob
 
 processProperty :: Result (Key Graph, Maybe Hash) -> SqlM ()
 processProperty Result{resultValue=(graphId, hash), ..} = do
-    logInfoN $ "Property: " <> resultLabel
+    logDebugN $ "Property: " <> resultLabel
     liftIO $ removeFile timingFile
 
     SqlTrans.runTransaction $ do
@@ -110,7 +110,7 @@ processProperty Result{resultValue=(graphId, hash), ..} = do
             liftIO $ removeFile propLog
             SqlTrans.update resultVariant [VariantPropsStored =. True]
 
-    logInfoN $ "Property done: " <> resultLabel
+    logDebugN $ "Property done: " <> resultLabel
   where
     propLog :: FilePath
     propLog = T.unpack resultLabel <> ".log"
@@ -158,7 +158,7 @@ processTiming
     -> Result (Key Algorithm, Key Implementation, Hash)
     -> m ()
 processTiming runConfigId commit Result{..} = do
-    logInfoN $ "Timing: " <> resultLabel
+    logDebugN $ "Timing: " <> resultLabel
     time <- liftIO getCurrentTime
     resultHash <- computeHash outputFile
     liftIO $ removeFile outputFile
@@ -190,7 +190,7 @@ processTiming runConfigId commit Result{..} = do
             .| conduitParse timer
             .| C.mapM_ (insertTiming runId)
 
-        logInfoN $ "Timing done: " <> resultLabel
+        logDebugN $ "Timing done: " <> resultLabel
 
     liftIO $ removeFile timingFile
   where
