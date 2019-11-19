@@ -39,13 +39,12 @@ module Core
 
 import Control.Monad (guard, join, when)
 import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow, SomeException)
-import Control.Monad.Fail (MonadFail(fail))
 import Control.Monad.IO.Unlift
     (MonadIO(liftIO), MonadUnliftIO(..), UnliftIO(..), withUnliftIO)
 import Control.Monad.Logger
     (LoggingT, LogLevel(..), LogSource, MonadLogger, MonadLoggerIO)
 import qualified Control.Monad.Logger as Log
-import Control.Monad.Reader (MonadReader(..), ReaderT(..), asks)
+import Control.Monad.Reader (ReaderT(..), asks)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Maybe (MaybeT(..))
 import Control.Monad.Trans.Resource (MonadResource, ResourceT, runResourceT)
@@ -80,7 +79,6 @@ import SQLiteExts
 
 data Config = Config
     { explainHandle :: Maybe Handle
-    , failTag :: Maybe Text
     , pagerValue :: Pager
     , sqlitePool :: Pool (RawSqlite SqlBackend)
     }
@@ -98,12 +96,6 @@ instance MonadException SqlM where
       where
         unliftToRunIO :: Monad m => UnliftIO m -> RunIO m
         unliftToRunIO (UnliftIO g) = RunIO (fmap return . g)
-
-instance MonadFail SqlM where
-    fail s = SqlM $ do
-        asks failTag >>= \case
-            Nothing -> logThrowM . PatternFailed . Left $ T.pack s
-            Just msg -> logThrowM . PatternFailed $ Right msg
 
 unsafeAcquireConn :: SqlM (Acquire (RawSqlite SqlBackend))
 unsafeAcquireConn = SqlM $ do
@@ -132,19 +124,6 @@ instance MonadSql SqlM where
 instance MonadUnliftIO SqlM where
   askUnliftIO = SqlM $ withUnliftIO $ \u ->
                             return (UnliftIO (\(SqlM m) -> unliftIO u m))
-
-class MonadFail m => MonadTagFail m where
-    logIfFail :: Show v => Text -> v -> m a -> m a
-
-instance MonadTagFail SqlM where
-    logIfFail tag val = setTag $ tag <> ": " <> showText val
-      where
-        setTag :: Text -> SqlM a -> SqlM a
-        setTag t (SqlM m) = SqlM $ local (\cfg -> cfg { failTag = Just t }) m
-
-instance MonadTagFail m => MonadTagFail (Transaction m) where
-    logIfFail txt v (Transaction act) = Transaction . ReaderT $ \r ->
-        logIfFail txt v (runReaderT act r)
 
 showText :: Show a => a -> Text
 showText = T.pack . show
@@ -244,7 +223,7 @@ runSqlMWithOptions Options{..} work = do
     runStack mHnd act =
       runLog . Sqlite.withRawSqlitePoolInfo connInfo setup 20 $ runSqlM act . config
       where
-        config = Config mHnd Nothing pager
+        config = Config mHnd pager
         setup conn = do
             registerSqlFunctions ptr
             -- Wait longer before timing out query steps

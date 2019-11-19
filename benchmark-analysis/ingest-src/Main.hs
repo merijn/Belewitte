@@ -189,7 +189,7 @@ importResults = do
 
     filepath <- getInteractive filepathInput "Result File"
 
-    SqlTrans.runTransaction . runConduit $
+    lift . SqlTrans.runTransaction . runConduit $
         C.sourceFile filepath
         .| C.decode C.utf8
         .| C.map (T.replace "," "")
@@ -201,25 +201,33 @@ importResults = do
     implInput algoId = sqlInput ExternalImplName (UniqExternalImpl algoId)
 
     insertResult
-        :: (MonadSql m, MonadTagFail m)
+        :: (MonadLogger m, MonadSql m, MonadThrow m)
         => Key Platform
         -> Key Algorithm
         -> Key ExternalImpl
         -> ExternalResult
         -> Transaction m ()
     insertResult platId algoId implId (ExternalResult gname varName Timing{..}) = do
-        [graphId] <- logIfFail "More than one graph found for" gname $
-            SqlTrans.selectKeysList [GraphName ==. gname] []
+        graphId <- SqlTrans.selectKeysList [GraphName ==. gname] [] >>= \case
+            [graphId] -> return graphId
+            [] -> logThrowM . PatternFailed $
+                "No graphs found for name \"" <> gname <> "\""
+            _ -> logThrowM . PatternFailed $
+                "More than one graph found for \"" <> gname <> "\""
 
         let uniqVariantConfig = UniqVariantConfig algoId varName
 
-        Just varCfgId <- logIfFail "No variant config found" varName $
-            fmap entityKey <$> SqlTrans.getBy uniqVariantConfig
+        varCfgId <- SqlTrans.getBy uniqVariantConfig >>= \case
+            Just (Entity key _) -> return key
+            Nothing -> logThrowM . PatternFailed $
+                "No variant config found with name \"" <> varName <> "\""
 
         let uniqVariant = UniqVariant graphId varCfgId
 
-        Just varId <- logIfFail "No variant found" varCfgId $
-            fmap entityKey <$> SqlTrans.getBy uniqVariant
+        varId <- SqlTrans.getBy uniqVariant >>= \case
+            Just (Entity key _) -> return key
+            Nothing -> logThrowM . PatternFailed $
+                "Variant not found for specified graph"
 
         SqlTrans.insert_ $
           ExternalTimer platId varId implId algoId name minTime avgTime maxTime stddev

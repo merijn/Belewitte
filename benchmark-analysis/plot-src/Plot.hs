@@ -10,7 +10,6 @@
 module Main (main) where
 
 import Control.Monad (forM, forM_, void)
-import Control.Monad.Fail (MonadFail)
 import Data.Bifunctor (bimap, second)
 import Data.Char (isSpace)
 import Data.Conduit as C
@@ -51,9 +50,15 @@ queryVariants algoId graphs = do
         .| C.map Sql.entityKey
         .| C.foldMap S.singleton
 
-    [variantConfigId] <- Sql.selectKeysList
+    variantConfigId <- Sql.selectKeysList
         [VariantConfigAlgorithmId ==. algoId, VariantConfigIsDefault ==. True]
-        []
+        [] >>= \case
+            [key] -> return key
+            [] -> logThrowM . PatternFailed $
+              "No default variant config for algorithm #" <> showSqlKey algoId
+            _ -> logThrowM . PatternFailed . mconcat $
+                [ "Multiple default variant configs for algorithm #"
+                , showSqlKey algoId ]
 
     variants <- forM (S.toList gids) $ \gId ->
         Sql.getBy $ UniqVariant gId variantConfigId
@@ -173,10 +178,14 @@ commands name = CommandGroup CommandInfo
         [ metavar "SUFFIX" ]
 
 reportData
-    :: (MonadFail m, MonadIO m, MonadLogger m, MonadThrow m)
+    :: (MonadIO m, MonadLogger m, MonadThrow m)
     => Handle -> Bool -> ConduitT (Text, Vector (Text, Double)) Void m ()
 reportData hnd normalise = do
-    Just (_, V.map fst -> impls) <- C.peek
+    impls <- C.peek >>= \case
+        Just (_, v) -> return $ V.map fst v
+        Nothing -> logThrowM . PatternFailed $
+            "Expected at least one output row"
+
     liftIO . T.hPutStrLn hnd $ toColumnLabels impls
     C.mapM_ $ printGraph impls
   where

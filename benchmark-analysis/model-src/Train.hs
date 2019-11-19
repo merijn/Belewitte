@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -166,7 +167,7 @@ getModelStats modelId = SqlTrans.runTransaction $ do
       S.singleton $ fromSqlKey unknownPredictionSetImplId
 
 trainModel
-    :: (MonadMask m, MonadQuery m, MonadTagFail m)
+    :: (MonadMask m, MonadQuery m)
     => Key Algorithm
     -> Key Platform
     -> ModelDescription
@@ -178,8 +179,10 @@ trainModel algoId platId ModelDesc{..} = do
 
     numEntries <- runSqlQueryCount trainQuery
 
-    Just propCount <- logIfFail "Unable to compute property count" empty $
-        fmap (VU.length . fst) <$> runSqlQueryConduit trainQuery C.head
+    propCount <- runSqlQueryConduit trainQuery C.head >>= \case
+        Just (v, _) -> return $ VU.length v
+        Nothing -> logThrowM . PatternFailed $
+            "Unable to compute property count for model"
 
     timestamp <- liftIO getCurrentTime
     (model, ModelStats{..}) <- runProcessCreation_ $ do
@@ -266,9 +269,6 @@ trainModel algoId platId ModelDesc{..} = do
     return (modelId, model)
   where
     reduceInfo StepInfo{..} = (stepProps, stepBestImpl)
-
-    empty :: String
-    empty = ""
 
 putProps :: Vector Double -> ByteString
 putProps = LBS.toStrict . runPut . VU.mapM_ putDoublehost

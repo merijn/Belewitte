@@ -24,9 +24,7 @@ module InteractiveInput
     ) where
 
 import qualified Control.Monad.Catch as Except
-import Control.Monad.Fail (MonadFail)
-import qualified Control.Monad.Fail as Fail
-import Control.Monad.Reader (ask, local, mapReaderT)
+import Control.Monad.Reader (ask, local)
 import Control.Monad.Trans (MonadTrans(lift))
 import Control.Monad.Trans.Resource (MonadResource(..))
 import Data.Bool (bool)
@@ -57,7 +55,7 @@ data InputQuery m a = InputQuery
     }
 
 newtype Input m a = Input { unInput :: InputT (ReaderT (Completer m) m) a }
-    deriving ( Applicative, Functor, Monad, MonadIO)
+    deriving (Applicative, Functor, Monad, MonadIO)
 
 instance MonadResource m => MonadResource (Input m) where
     liftResourceT = Input . lift . liftResourceT
@@ -69,12 +67,6 @@ instance MonadSql m => MonadSql (Input m) where
 
 instance MonadThrow m => MonadThrow (Input m) where
     throwM = Input . lift . Except.throwM
-
-instance MonadFail m => MonadFail (Input m) where
-    fail = Input . lift . lift . Fail.fail
-
-instance MonadTagFail m => MonadTagFail (Input m) where
-    logIfFail s v = Input . mapInputT (mapReaderT (logIfFail s v)) . unInput
 
 instance MonadTrans Input where
     lift = Input . lift . lift

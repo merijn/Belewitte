@@ -16,7 +16,6 @@ module Evaluate
     , compareImplementations
     ) where
 
-import Control.Monad.Fail (MonadFail)
 import Control.Monad.Fix (fix)
 import Data.Bifunctor (second)
 import Data.Conduit as C
@@ -120,13 +119,16 @@ data VariantAggregate =
   }
 
 aggregateSteps
-    :: (MonadFail m, MonadIO m)
+    :: (MonadLogger m, MonadThrow m)
     => Int
     -> (Int -> Int -> Int)
     -> Model
     -> ConduitT StepInfo Void m VariantAggregate
 aggregateSteps defaultImpl mispredictionStrategy model = do
-    Just StepInfo{stepVariantId,stepTimings} <- C.peek
+    StepInfo{stepVariantId,stepTimings} <- C.peek >>= \case
+        Just info -> return info
+        Nothing -> logThrowM . PatternFailed $
+            "Expected at least one step input"
 
     let zeroTimeVec :: Vector (Int64, Double)
         zeroTimeVec = VU.map (second (const 0)) stepTimings `VU.snoc`
@@ -187,13 +189,17 @@ data TotalStatistics =
   }
 
 aggregateVariants
-    :: (MonadFail m, MonadIO m)
+    :: (MonadLogger m, MonadThrow m)
     => IntervalSet Int64
     -> RelativeTo
     -> Pair (IntMap Text)
     -> ConduitT VariantAggregate Text m TotalStatistics
 aggregateVariants variantIntervals relTo implMaps = do
-    Just VariantAgg{implTimes} <- C.peek
+    VariantAgg{implTimes} <- C.peek >>= \case
+        Just v -> return v
+        Nothing -> logThrowM . PatternFailed $
+            "Expected at least one aggregate result"
+
     C.mapAccum aggregate (initial implTimes)
   where
     initial :: Unbox a => Pair (Vector (Int64, a)) -> TotalStatistics

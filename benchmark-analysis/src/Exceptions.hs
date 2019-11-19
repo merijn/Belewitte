@@ -88,21 +88,11 @@ fromViolatedInvariant exc = do
     ViolatedInvariant e <- fromException exc
     cast e
 
-data PatternFailed = PatternFailed (Either Text Text)
+data PatternFailed = PatternFailed Text
     deriving (Show, Typeable)
 
 instance Pretty PatternFailed where
-    pretty (PatternFailed (Left txt)) = mconcat
-        [ Pretty.group $ mconcat
-            [ Pretty.reflow "Unexpected pattern match failure:"
-            , Pretty.line
-            , Pretty.reflow txt
-            ]
-        , Pretty.hardline
-        , Pretty.reflow "Report this missing diagnostic as a bug."
-        ]
-
-    pretty (PatternFailed (Right txt)) = Pretty.group $ mconcat
+    pretty (PatternFailed txt) = Pretty.group $ mconcat
         [ Pretty.reflow "A database lookup failed due to erroneous user input:"
         , Pretty.line
         , Pretty.reflow txt
