@@ -51,11 +51,9 @@ import Control.Monad.Trans.Resource (MonadResource, ResourceT, runResourceT)
 import qualified Database.Persist.Sqlite as Sqlite
 import Database.Sqlite.Internal (Connection(..), Connection'(..))
 import Data.Conduit (ConduitT, (.|), awaitForever)
-import Data.Acquire
-    (Acquire, ReleaseType(..), mkAcquire, mkAcquireType, withAcquire)
+import Data.Acquire (mkAcquire, withAcquire)
 import Data.Int (Int64)
-import Data.Pool (LocalPool, Pool)
-import qualified Data.Pool as P
+import Data.Pool (Pool)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Foreign (Ptr)
@@ -97,25 +95,12 @@ instance MonadException SqlM where
         unliftToRunIO :: Monad m => UnliftIO m -> RunIO m
         unliftToRunIO (UnliftIO g) = RunIO (fmap return . g)
 
-unsafeAcquireConn :: SqlM (Acquire (RawSqlite SqlBackend))
-unsafeAcquireConn = SqlM $ do
-    pool <- asks sqlitePool
-
-    let freeConn
-            :: (RawSqlite SqlBackend, LocalPool (RawSqlite SqlBackend))
-            -> ReleaseType
-            -> IO ()
-        freeConn (res, localPool) relType = case relType of
-            ReleaseException -> P.destroyResource pool localPool res
-            _ -> P.putResource localPool res
-    return $ fst <$> mkAcquireType (P.takeResource pool) freeConn
-
 instance MonadSql SqlM where
     getConnFromPool = SqlM . asks $ Sqlite.acquireSqlConnFromPool . sqlitePool
     getConnWithoutForeignKeysFromPool = do
-        unsafeConn <- unsafeAcquireConn
+        pool <- SqlM $ asks sqlitePool
         return $ do
-            conn <- unsafeConn
+            conn <- Sqlite.unsafeAcquireSqlConnFromPool pool
             let foreignOff = setPragmaConn "foreign_keys" (0 :: Int64)
                 foreignOn _ = setPragmaConn "foreign_keys" (1 :: Int64) conn
             () <- mkAcquire (foreignOff conn) foreignOn
@@ -208,7 +193,8 @@ runSqlMWithOptions Options{..} work = do
 
         -- Compacts and reindexes the database when request
         when (vacuumDb || didMigrate) $ do
-            conn <- unsafeAcquireConn
+            pool <- SqlM $ asks sqlitePool
+            let conn = Sqlite.unsafeAcquireSqlConnFromPool pool
             withAcquire conn $ runReaderT (Sqlite.rawExecute "VACUUM" [])
 
         workResult <- work task
