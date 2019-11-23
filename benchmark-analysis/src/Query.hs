@@ -27,7 +27,7 @@ module Query
     , variantInfoQuery
     ) where
 
-import Control.Monad ((>=>), void)
+import Control.Monad ((>=>), void, when)
 import Data.Acquire (allocateAcquire)
 import Control.Monad.Trans.Resource (release)
 import Data.Conduit (ConduitT, Void, (.|), await, runConduit, toProducer, yield)
@@ -38,14 +38,12 @@ import Data.Monoid ((<>))
 import Data.Proxy (Proxy(Proxy))
 import Data.String.Interpolate.IsString (i)
 import qualified Data.Text as T
-import qualified Data.Text.IO as T
 import Data.Vector.Unboxed (Vector)
 import qualified Data.Vector.Unboxed as VU
 import qualified Database.Persist.Sqlite as Sqlite
 import Numeric (showGFloat)
-import System.IO (Handle)
 
-import Core hiding (QueryMode(..))
+import Core
 import Schema
 import Sql.Core (MonadSql, PersistFieldSql, SqlRecord, Transaction(..))
 import qualified Sql.Core as Sql
@@ -72,13 +70,15 @@ instance Functor Query where
 
 toQueryText :: Query r -> Text
 toQueryText Query{..} = mconcat $
-    [ mIf (not $ null commonTableExpressions) "\nWITH"
-    ] <> intersperse ",\n\n" commonTableExpressions <> ["\n", queryText]
+    [ mIf hasCTEs "\nWITH" ] <> intersperse ",\n\n" commonTableExpressions <>
+    [ mIf hasCTEs "\n", queryText ]
+  where
+    hasCTEs = not $ null commonTableExpressions
 
 renderExplainTree
     :: (MonadLogger m, MonadThrow m) => ConduitT (Int64, Int64, Text) Text m ()
 renderExplainTree = void $ do
-    yield "QUERY PLAN\n"
+    yield "\nQUERY PLAN\n"
     C.mapAccumM renderTree [0]
   where
     renderTree
@@ -91,17 +91,11 @@ renderExplainTree = void $ do
       where
         branches = mconcat $ intersperse "  " $ replicate (length stack) "|"
 
-explainSqlQuery :: MonadQuery m => Query r -> Handle -> m ()
-explainSqlQuery originalQuery hnd = do
-    liftIO . T.hPutStrLn hnd . mconcat $
-        [ T.replicate 80 "#", toQueryText originalQuery,  ""]
-
-    queryPlan <- runConduit $
-        void (runRawSqlQuery Explain id explainQuery)
-        .| renderExplainTree
-        .| C.fold
-
-    liftIO $ T.hPutStrLn hnd queryPlan
+explainSqlQuery :: MonadQuery m => Query r -> m Text
+explainSqlQuery originalQuery = runConduit $
+    void (runRawSqlQuery Explain id explainQuery)
+    .| renderExplainTree
+    .| C.fold
   where
     explain
         :: (MonadIO m, MonadLogger m, MonadThrow m)
@@ -156,18 +150,29 @@ runSqlQueryConduit query sink =
   runLoggingSqlQuery (\src -> runConduit $ src .| sink) query
 
 runLoggingSqlQuery
-    :: ( MonadLogger m, MonadResource m, MonadThrow m
-       , MonadExplain n, MonadLogger n, MonadResource n, MonadSql n)
+    :: ( MonadLogger m
+       , MonadResource m
+       , MonadThrow m
+       , MonadExplain n
+       , MonadLogger n
+       , MonadSql n
+       , MonadThrow n
+       )
     => (ConduitT () r m () -> n a) -> Query r -> n a
-runLoggingSqlQuery f query  = do
-    logQueryExplanation $ explainSqlQuery query
-
+runLoggingSqlQuery f query = do
     (formattedTime, result) <- runRawSqlQuery NoExplain f query
 
-    logQueryExplanation $ \hnd -> liftIO $ do
-        T.hPutStrLn hnd $ queryName query <> " time: " <> formattedTime
-        T.hPutStrLn hnd $ ""
-        T.hPutStrLn hnd $ T.replicate 80 "#"
+    shouldExplain <- shouldExplainQuery (queryName query)
+
+    when shouldExplain $ do
+        logQuery (queryName query) . mconcat $
+            [ toQueryText query
+            , "\n"
+            , queryName query <> " time: " <> formattedTime
+            , "\n"
+            ]
+
+        explainSqlQuery query >>= logExplain (queryName query)
 
     return result
 

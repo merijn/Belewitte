@@ -67,7 +67,6 @@ import qualified Lens.Micro.Extras as Lens
 import System.Clock (Clock(Monotonic), diffTimeSpec, getTime, toNanoSecs)
 import System.Console.Haskeline.MonadException (MonadException(..), RunIO(..))
 import System.Console.Terminal.Size (hSize, width)
-import System.IO (Handle, IOMode(WriteMode))
 import qualified System.IO as System
 
 import Exceptions
@@ -79,13 +78,10 @@ import Sql.Core
 import SQLiteExts
 
 data Config = Config
-    { explainHandle :: Maybe Handle
+    { explainQuerySet :: Maybe (Set Text)
     , pagerValue :: Pager
     , sqlitePool :: Pool (RawSqlite SqlBackend)
     }
-
-data QueryMode = Normal | Explain | ExplainLog FilePath
-    deriving (Eq, Read, Show)
 
 newtype SqlM a = SqlM (ReaderT Config (ResourceT (LoggingT IO)) a)
   deriving
@@ -113,6 +109,12 @@ instance MonadUnliftIO SqlM where
   askUnliftIO = SqlM $ withUnliftIO $ \u ->
                             return (UnliftIO (\(SqlM m) -> unliftIO u m))
 
+logExplain :: MonadLogger m => Text -> Text -> m ()
+logExplain name = Log.logOtherNS name (LevelOther "Explain")
+
+logQuery :: MonadLogger m => Text -> Text -> m ()
+logQuery name = Log.logOtherNS name (LevelOther "Query")
+
 showText :: Show a => a -> Text
 showText = T.pack . show
 
@@ -138,7 +140,7 @@ data Options a =
     , vacuumDb :: Bool
     , logLevel :: LogLevel
     , debugPrefixes :: Maybe (Set Text)
-    , queryMode :: QueryMode
+    , explainSet :: Maybe (Set Text)
     , migrateSchema :: Bool
     , pager :: Pager
     , task :: a
@@ -148,17 +150,18 @@ pagerSetting :: SqlM Pager
 pagerSetting = SqlM $ asks pagerValue
 
 class Monad m => MonadExplain m where
-    logQueryExplanation :: (Handle -> SqlM ()) -> m ()
+    shouldExplainQuery :: Text -> m Bool
 
 instance MonadExplain SqlM where
-    logQueryExplanation queryLogger = do
-        queryHandle <- SqlM $ asks explainHandle
-        case queryHandle of
-            Nothing -> return ()
-            Just hnd -> queryLogger hnd
+    shouldExplainQuery name = SqlM $ do
+        querySet <- asks explainQuerySet
+        case querySet of
+            Nothing -> return True
+            Just names | S.member name names -> return True
+            _ -> return False
 
 instance MonadExplain m => MonadExplain (ConduitT a b m) where
-    logQueryExplanation = lift . logQueryExplanation
+    shouldExplainQuery = lift . shouldExplainQuery
 
 stderrTerminalWidth :: IO (Maybe Int)
 stderrTerminalWidth = runMaybeT $ do
@@ -189,7 +192,7 @@ runSqlMWithOptions :: Options a -> (a -> SqlM b) -> IO b
 runSqlMWithOptions Options{..} work = do
     setUncaughtExceptionHandler topLevelHandler
     getNumProcessors >>= setNumCapabilities
-    withQueryLog $ \mHnd -> runStack mHnd . wrapSqliteExceptions $ do
+    runStack . wrapSqliteExceptions $ do
 
         didMigrate <- checkMigration migrateSchema
 
@@ -206,24 +209,17 @@ runSqlMWithOptions Options{..} work = do
 
         return workResult
   where
-    runStack
-        :: Maybe Handle -> SqlM a -> IO a
-    runStack mHnd act =
-      runLog . Sqlite.withRawSqlitePoolInfo connInfo setup 20 $ runSqlM act . config
+    runStack :: SqlM a -> IO a
+    runStack act = runLog . runPool $ runSqlM act . Config explainSet pager
       where
-        config = Config mHnd pager
+        runPool = Sqlite.withRawSqlitePoolInfo connInfo setup 20
+
         setup conn = do
             registerSqlFunctions ptr
             -- Wait longer before timing out query steps
             setPragmaConn "busy_timeout" (1000 :: Int64) conn
           where
             ptr = getSqlitePtr $ Lens.view Sqlite.rawSqliteConnection conn
-
-    withQueryLog :: (Maybe Handle -> IO r) -> IO r
-    withQueryLog f = case queryMode of
-        Normal -> f Nothing
-        Explain -> f (Just System.stdout)
-        ExplainLog p -> System.withFile p WriteMode $ f . Just
 
     runLog :: LoggingT IO a -> IO a
     runLog = Log.runStderrLoggingT . Log.filterLogger logFilter

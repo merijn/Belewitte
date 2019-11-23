@@ -147,8 +147,8 @@ runSqlM commandFromName work = do
   where
     mkOptions p =
       Options <$> databaseOption <*> vacuumOption <*> verbosityOption
-              <*> debugOption <*> queryOption <*> migrateOption <*> pagerOption
-              <*> p
+              <*> debugOption <*> explainOption <*> migrateOption
+              <*> pagerOption <*> p
 
     pagerOption :: Parser Pager
     pagerOption = optionParserFromValues pagerValues "PAGER" helpTxt $ mconcat
@@ -203,15 +203,11 @@ textSetOption opts = combine <$> many (option reader opts)
         commaFreeString :: Parsec Void String String
         commaFreeString = takeWhile1P Nothing (/=',')
 
-queryOption :: Parser QueryMode
-queryOption = explainFlag <|> ExplainLog <$> explainOpt <|> pure Normal
-  where
-    explainFlag = flag' Explain $ mconcat
-        [ long "explain", help "Log query plans to stdout." ]
-
-    explainOpt = strOption . mconcat $
-        [ metavar "FILE", long "explain-log"
-        , help "Log query plans to log file." ]
+explainOption :: Parser (Maybe (Set Text))
+explainOption = textSetOption . mconcat $
+    [ metavar "QUERY", long "explain"
+    , help "Log query plans for specified names to stdout."
+    ]
 
 verbosityOption :: Parser LogLevel
 verbosityOption = quiet <|> verb <|> pure LevelWarn
