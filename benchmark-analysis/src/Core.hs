@@ -24,6 +24,7 @@ module Core
     , Log.logWarnN
     , Log.logInfoN
     , Log.logDebugN
+    , Log.logDebugNS
     , MonadResource
     , MonadCatch
     , MonadMask
@@ -54,6 +55,8 @@ import Data.Acquire (mkAcquire, withAcquire)
 import Data.Conduit (ConduitT, (.|), awaitForever)
 import Data.Int (Int64)
 import Data.Pool (Pool)
+import Data.Set (Set)
+import qualified Data.Set as S
 import Data.Text (Text)
 import qualified Data.Text as T
 import Foreign (Ptr)
@@ -134,6 +137,7 @@ data Options a =
     { database :: Text
     , vacuumDb :: Bool
     , logLevel :: LogLevel
+    , debugPrefixes :: Maybe (Set Text)
     , queryMode :: QueryMode
     , migrateSchema :: Bool
     , pager :: Pager
@@ -235,6 +239,16 @@ runSqlMWithOptions Options{..} work = do
     getSqlitePtr (Connection _ (Connection' ptr)) = ptr
 
     logFilter :: LogSource -> LogLevel -> Bool
+    logFilter src LevelDebug
+        | srcInPrefixSet = True
+        | otherwise = False
+      where
+        srcInPrefixSet = case debugPrefixes of
+            Nothing -> True
+            Just prefixes -> case S.lookupLE (T.toLower src) prefixes of
+                Nothing -> False
+                Just prefix -> T.isPrefixOf prefix (T.toLower src)
+
     logFilter _ lvl
         | lvl >= logLevel = True
         | otherwise = False

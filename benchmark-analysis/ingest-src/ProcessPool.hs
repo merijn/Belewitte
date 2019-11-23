@@ -190,7 +190,7 @@ withProcessPool n Platform{platformName,platformFlags} f = do
             Just procId <- Proc.getPid procHandle
 
             return Process{..}
-        proc <$ logDebugN ("Started new process: " <> showText procId)
+        proc <$ logDebugNS "Process#Start" (showText procId)
 
     destroyProcess :: String -> Process -> LoggingT IO ()
     destroyProcess hostName Process{..} = do
@@ -201,7 +201,7 @@ withProcessPool n Platform{platformName,platformFlags} f = do
             Proc.waitForProcess procHandle
             tryRemoveFile $ "kernel-runner.0" <.> show procId <.> hostName
             tryRemoveFile $ ".PRUN_ENVIRONMENT" <.> show procId <.> hostName
-        logDebugN $ "Destroyed process: " <> showText procId
+        logDebugNS "Process#End" $ showText procId
 
     tryRemoveFile :: FilePath -> IO ()
     tryRemoveFile path =
@@ -256,7 +256,7 @@ processJobsParallelWithSharedPool numNodes procPool =
         withResource procPool $ \process@Process{inHandle,outHandle} -> do
             checkProcess process
             handleErrors $ do
-                logDebugN $ "Running: " <> jobCommand
+                logDebugNS "Process#Job#Start" jobCommand
                 result <- liftIO $ do
                     T.hPutStrLn inHandle jobCommand
                     T.hGetLine outHandle
@@ -265,7 +265,7 @@ processJobsParallelWithSharedPool numNodes procPool =
                         (version:rest) -> (T.concat rest, version)
                         [] -> ("", "")
 
-                logDebugN $ "Finished: " <> jobCommand
+                logDebugNS "Process#Job#End" jobCommand
                 return $ Result jobValue jobVariant label commit
   where
     checkNotExist :: SomeException -> Bool

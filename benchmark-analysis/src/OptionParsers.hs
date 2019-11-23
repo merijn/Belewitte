@@ -29,14 +29,17 @@ import qualified Data.IntervalSet as IS
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
+import Data.Set (Set)
+import qualified Data.Set as S
 import Data.Text (Text)
 import qualified Data.Text as T
+import Data.Void (Void)
 import Options.Applicative hiding (Completer)
 import Options.Applicative.Help (Doc, (</>))
 import qualified Options.Applicative.Help as Help
 import System.Environment (getProgName)
 import qualified System.IO as System
-import Text.Megaparsec (Parsec, parseMaybe, sepBy1, try)
+import Text.Megaparsec (Parsec, parseMaybe, sepBy1, takeWhile1P, try)
 import Text.Megaparsec.Char (char)
 import Text.Megaparsec.Char.Lexer (decimal)
 
@@ -144,7 +147,8 @@ runSqlM commandFromName work = do
   where
     mkOptions p =
       Options <$> databaseOption <*> vacuumOption <*> verbosityOption
-              <*> queryOption <*> migrateOption <*> pagerOption <*> p
+              <*> debugOption <*> queryOption <*> migrateOption <*> pagerOption
+              <*> p
 
     pagerOption :: Parser Pager
     pagerOption = optionParserFromValues pagerValues "PAGER" helpTxt $ mconcat
@@ -172,6 +176,32 @@ databaseOption = strOption . mconcat $
     , value "benchmarks.db", help "Path of SQLite database to use."
     , showDefaultWith T.unpack
     ]
+
+debugOption :: Parser (Maybe (Set Text))
+debugOption = textSetOption . mconcat $
+    [metavar "PREFIX", long "debug", help "Debug prefixes to log/report."]
+
+textSetOption
+    :: Mod OptionFields (Maybe (Set Text)) -> Parser (Maybe (Set Text))
+textSetOption opts = combine <$> many (option reader opts)
+  where
+    reader :: ReadM (Maybe (Set Text))
+    reader = allReader <|> Just <$> textSetReader
+
+    combine :: [Maybe (Set Text)] -> Maybe (Set Text)
+    combine sets = S.unions <$> sequence sets
+
+    allReader :: ReadM (Maybe a)
+    allReader = maybeReader $ \s -> case map toLower s of
+        "all" -> Just Nothing
+        _ -> Nothing
+
+    textSetReader :: ReadM (Set Text)
+    textSetReader = fmap S.fromList . maybeReader . parseMaybe $
+        map (T.toLower . T.pack) <$> sepBy1 commaFreeString (char ',')
+      where
+        commaFreeString :: Parsec Void String String
+        commaFreeString = takeWhile1P Nothing (/=',')
 
 queryOption :: Parser QueryMode
 queryOption = explainFlag <|> ExplainLog <$> explainOpt <|> pure Normal
