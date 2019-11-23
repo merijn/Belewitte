@@ -7,7 +7,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 module ProcessPool
-    ( Job
+    ( Job(jobValue)
     , Result(..)
     , Process(Process,inHandle,outHandle)
     , makeJob

@@ -13,7 +13,8 @@ import Control.Exception (SomeException)
 import Control.Monad (unless, void)
 import Control.Monad.Trans.Maybe (MaybeT(..))
 import Data.Char (isSpace)
-import Data.Conduit (ConduitT, Void, (.|), await, runConduit)
+import Data.Conduit (ConduitT, Void, ZipConduit(..), (.|), runConduit)
+import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.Text as C
 import Data.Foldable (asum)
@@ -31,7 +32,7 @@ import qualified Commands.Unset as Unset
 import Core
 import InteractiveInput
 import Jobs
-import MissingQuery (missingBenchmarkQuery, validationVariantQuery)
+import MissingQuery
 import OptionParsers
 import Parsers
 import ProcessPool
@@ -233,17 +234,28 @@ importResults = do
           ExternalTimer platId varId implId algoId name minTime avgTime maxTime stddev
 
 queryTest :: Maybe FilePath -> Input SqlM ()
-queryTest outputSuffix = lift . runConduit $ do
-    Sql.selectKeys [] []
+queryTest outputSuffix = lift $ do
+    runConduit $ Sql.selectKeys [] []
         .> runSqlQuery . missingBenchmarkQuery
-        .| querySink outputSuffix
+        .| querySink "missingQuery-"
+
+    let querySink1 = ZipConduit $ querySink "validationVariantQuery-"
+        querySink2 = ZipConduit $ C.awaitForever C.yield
+            .> \validationCfg -> Sql.selectKeys [] []
+            .> \pId -> runSqlQuery (validationRunQuery pId validationCfg)
+            .| querySink "validationRunQuery-"
+
+    runConduit $ Sql.selectKeys [] []
+        .> runSqlQuery . validationVariantQuery
+        .| C.map jobValue
+        .| getZipConduit (mappend <$> querySink1 <*> querySink2)
   where
     querySink
         :: (MonadResource m, MonadThrow m, Show a)
-        => Maybe String -> ConduitT a Void m ()
-    querySink Nothing = void await
-    querySink (Just suffix) =
-        C.map showText
-        .| C.map (`T.snoc` '\n')
-        .| C.encode C.utf8
-        .| C.sinkFile ("missingQuery-" <> suffix)
+        => String -> ConduitT a Void m ()
+    querySink name = case outputSuffix of
+        Nothing -> void C.await
+        Just suffix -> C.map showText
+            .| C.map (`T.snoc` '\n')
+            .| C.encode C.utf8
+            .| C.sinkFile (name <> suffix)
