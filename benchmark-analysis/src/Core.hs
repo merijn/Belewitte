@@ -133,7 +133,7 @@ data Options a =
   Options
     { database :: Text
     , vacuumDb :: Bool
-    , logVerbosity :: Int
+    , logLevel :: LogLevel
     , queryMode :: QueryMode
     , migrateSchema :: Bool
     , pager :: Pager
@@ -161,12 +161,10 @@ stderrTerminalWidth = runMaybeT $ do
     guard =<< liftIO (System.hIsTerminalDevice System.stderr)
     width <$> MaybeT (hSize System.stderr)
 
-topLevelHandler :: Bool -> SomeException -> IO ()
-topLevelHandler quiet exc
-    | Just (BenchmarkException e) <- fromException exc
-    = when (not quiet) $ do
-        pageWidth <- terminalToPageWidth <$> stderrTerminalWidth
-        renderError pageWidth $ pretty e
+topLevelHandler :: SomeException -> IO ()
+topLevelHandler exc
+    | Just (BenchmarkException _) <- fromException exc
+    = return ()
 
     | otherwise = do
         pageWidth <- terminalToPageWidth <$> stderrTerminalWidth
@@ -185,7 +183,7 @@ topLevelHandler quiet exc
 
 runSqlMWithOptions :: Options a -> (a -> SqlM b) -> IO b
 runSqlMWithOptions Options{..} work = do
-    setUncaughtExceptionHandler $ topLevelHandler (logVerbosity > 0)
+    setUncaughtExceptionHandler topLevelHandler
     getNumProcessors >>= setNumCapabilities
     withQueryLog $ \mHnd -> runStack mHnd . wrapSqliteExceptions $ do
 
@@ -237,12 +235,9 @@ runSqlMWithOptions Options{..} work = do
     getSqlitePtr (Connection _ (Connection' ptr)) = ptr
 
     logFilter :: LogSource -> LogLevel -> Bool
-    logFilter
-        | logVerbosity <= 0 = \_ _ -> False
-        | otherwise = \_ lvl -> lvl >= verbosity
-      where
-        verbosity = levels !! logVerbosity
-        levels = LevelError : LevelWarn : LevelInfo : repeat LevelDebug
+    logFilter _ lvl
+        | lvl >= logLevel = True
+        | otherwise = False
 
 (.>) :: Monad m
      => ConduitT a b m ()
