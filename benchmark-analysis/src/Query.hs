@@ -30,8 +30,9 @@ module Query
 import Control.Monad ((>=>), void)
 import Data.Acquire (allocateAcquire)
 import Control.Monad.Trans.Resource (release)
-import Data.Conduit (ConduitT, Void, (.|), await, runConduit, toProducer)
+import Data.Conduit (ConduitT, Void, (.|), await, runConduit, toProducer, yield)
 import qualified Data.Conduit.Combinators as C
+import qualified Data.Conduit.List as C hiding (fold, mapM)
 import Data.List (intersperse)
 import Data.Monoid ((<>))
 import Data.Proxy (Proxy(Proxy))
@@ -74,34 +75,33 @@ toQueryText Query{..} = mconcat $
     [ mIf (not $ null commonTableExpressions) "\nWITH"
     ] <> intersperse ",\n\n" commonTableExpressions <> ["\n", queryText]
 
-printExplainTree
-    :: (MonadIO m, MonadLogger m, MonadThrow m)
-    => Handle -> ConduitT (Int64, Int64, Text) Void m ()
-printExplainTree hnd= do
-    liftIO . T.hPutStrLn hnd $ "QUERY PLAN"
-    void $ C.foldM renderTree [0]
+renderExplainTree
+    :: (MonadLogger m, MonadThrow m) => ConduitT (Int64, Int64, Text) Text m ()
+renderExplainTree = void $ do
+    yield "QUERY PLAN\n"
+    C.mapAccumM renderTree [0]
   where
     renderTree
-        :: (MonadIO m, MonadLogger m, MonadThrow m)
-        => [Int64] -> (Int64, Int64, Text) -> m [Int64]
-    renderTree [] _ = logThrowM $ QueryPlanUnparseable
-    renderTree stack@(parent:parents) node@(parentId, nodeId, plan)
-      | parent /= parentId = renderTree parents node
-      | otherwise = liftIO $ do
-          T.hPutStrLn hnd $ branches <> "--" <> plan
-          return $ nodeId:stack
+        :: (MonadLogger m, MonadThrow m)
+        => (Int64, Int64, Text) -> [Int64] -> m ([Int64], Text)
+    renderTree _ [] = logThrowM $ QueryPlanUnparseable
+    renderTree node@(parentId, nodeId, plan) stack@(parent:parents)
+      | parent /= parentId = renderTree node parents
+      | otherwise = return (nodeId:stack, branches <> "--" <> plan <> "\n")
       where
         branches = mconcat $ intersperse "  " $ replicate (length stack) "|"
 
 explainSqlQuery :: MonadQuery m => Query r -> Handle -> m ()
 explainSqlQuery originalQuery hnd = do
-    liftIO $ do
-        T.hPutStrLn hnd $ T.replicate 80 "#"
-        T.hPutStrLn hnd $ toQueryText originalQuery
-        T.hPutStrLn hnd $ ""
+    liftIO . T.hPutStrLn hnd . mconcat $
+        [ T.replicate 80 "#", toQueryText originalQuery,  ""]
 
-    runConduit $
-        void (runRawSqlQuery Explain id explainQuery) .| printExplainTree hnd
+    queryPlan <- runConduit $
+        void (runRawSqlQuery Explain id explainQuery)
+        .| renderExplainTree
+        .| C.fold
+
+    liftIO $ T.hPutStrLn hnd queryPlan
   where
     explain
         :: (MonadIO m, MonadLogger m, MonadThrow m)
