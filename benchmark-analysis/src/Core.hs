@@ -157,7 +157,7 @@ instance MonadExplain SqlM where
         querySet <- asks explainQuerySet
         case querySet of
             Nothing -> return True
-            Just names | S.member name names -> return True
+            Just names | S.member (T.toLower name) names -> return True
             _ -> return False
 
 instance MonadExplain m => MonadExplain (ConduitT a b m) where
