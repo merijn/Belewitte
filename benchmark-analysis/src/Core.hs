@@ -34,8 +34,20 @@ module Core
     , UnliftIO(..)
     , ReaderT(..)
     , Text
-    , module Core
     , module Exceptions
+    , MonadExplain(..)
+    , Options(..)
+    , Pager(..)
+    , SqlM
+    , (.>)
+    , logExplain
+    , logQuery
+    , mIf
+    , pagerSetting
+    , runSqlMWithOptions
+    , showText
+    , stderrTerminalWidth
+    , withTime
     ) where
 
 import Control.Monad (guard, join, when)
@@ -45,7 +57,7 @@ import Control.Monad.IO.Unlift
 import Control.Monad.Logger
     (LoggingT, LogLevel(..), LogSource, MonadLogger, MonadLoggerIO)
 import qualified Control.Monad.Logger as Log
-import Control.Monad.Reader (ReaderT(..), asks)
+import Control.Monad.Reader (MonadReader, ReaderT(..), ask, asks)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Maybe (MaybeT(..))
 import Control.Monad.Trans.Resource (MonadResource, ResourceT, runResourceT)
@@ -80,10 +92,20 @@ import SQLiteExts
 data Config = Config
     { explainQuerySet :: Maybe (Set Text)
     , pagerValue :: Pager
-    , sqlitePool :: Pool (RawSqlite SqlBackend)
     }
 
-newtype SqlM a = SqlM (ReaderT Config (ResourceT (LoggingT IO)) a)
+type SqlPool = Pool (RawSqlite SqlBackend)
+
+newtype CoreM a = CoreM (ReaderT Config (ResourceT (LoggingT IO)) a)
+  deriving
+  ( Applicative, Functor, Monad, MonadCatch, MonadIO, MonadLogger
+  , MonadLoggerIO, MonadMask, MonadReader Config, MonadResource, MonadThrow)
+
+instance MonadUnliftIO CoreM where
+  askUnliftIO = CoreM $ withUnliftIO $ \u ->
+                            return (UnliftIO (\(CoreM m) -> unliftIO u m))
+
+newtype SqlM a = SqlM { unSqlM :: ReaderT SqlPool CoreM a }
   deriving
   ( Applicative, Functor, Monad, MonadCatch, MonadIO, MonadLogger
   , MonadLoggerIO, MonadMask, MonadResource, MonadThrow)
@@ -95,9 +117,9 @@ instance MonadException SqlM where
         unliftToRunIO (UnliftIO g) = RunIO (fmap return . g)
 
 instance MonadSql SqlM where
-    getConnFromPool = SqlM . asks $ Sqlite.acquireSqlConnFromPool . sqlitePool
+    getConnFromPool = SqlM $ asks Sqlite.acquireSqlConnFromPool
     getConnWithoutForeignKeysFromPool = do
-        pool <- SqlM $ asks sqlitePool
+        pool <- SqlM $ ask
         return $ do
             conn <- Sqlite.unsafeAcquireSqlConnFromPool pool
             let foreignOff = setPragmaConn "foreign_keys" (0 :: Int64)
@@ -147,18 +169,21 @@ data Options a =
     }
 
 pagerSetting :: SqlM Pager
-pagerSetting = SqlM $ asks pagerValue
+pagerSetting = SqlM . lift . CoreM $ asks pagerValue
 
 class Monad m => MonadExplain m where
     shouldExplainQuery :: Text -> m Bool
 
-instance MonadExplain SqlM where
-    shouldExplainQuery name = SqlM $ do
+instance MonadExplain CoreM where
+    shouldExplainQuery name = do
         querySet <- asks explainQuerySet
         case querySet of
             Nothing -> return True
             Just names | S.member (T.toLower name) names -> return True
             _ -> return False
+
+instance MonadExplain SqlM where
+    shouldExplainQuery = SqlM . lift . shouldExplainQuery
 
 instance MonadExplain m => MonadExplain (ConduitT a b m) where
     shouldExplainQuery = lift . shouldExplainQuery
@@ -192,13 +217,13 @@ runSqlMWithOptions :: Options a -> (a -> SqlM b) -> IO b
 runSqlMWithOptions Options{..} work = do
     setUncaughtExceptionHandler topLevelHandler
     getNumProcessors >>= setNumCapabilities
-    runStack . wrapSqliteExceptions $ do
+    runSqlM . wrapSqliteExceptions $ do
 
         didMigrate <- checkMigration migrateSchema
 
         -- Compacts and reindexes the database when request
         when (vacuumDb || didMigrate) $ do
-            pool <- SqlM $ asks sqlitePool
+            pool <- SqlM ask
             let conn = Sqlite.unsafeAcquireSqlConnFromPool pool
             withAcquire conn $ runReaderT (Sqlite.rawExecute "VACUUM" [])
 
@@ -209,11 +234,23 @@ runSqlMWithOptions Options{..} work = do
 
         return workResult
   where
-    runStack :: SqlM a -> IO a
-    runStack act = runLog . runPool $ runSqlM act . Config explainSet pager
+    runSqlM :: SqlM a -> IO a
+    runSqlM = runLog . runStack . runPool . runReaderT . unSqlM
       where
+        runStack :: CoreM a -> LoggingT IO a
+        runStack (CoreM act) = runResourceT $ runReaderT act config
+
+        config :: Config
+        config = Config explainSet pager
+
+        runPool
+            :: (MonadLogger m, MonadUnliftIO m, MonadThrow m)
+            => (SqlPool -> m a) -> m a
         runPool = Sqlite.withRawSqlitePoolInfo connInfo setup 20
 
+        setup
+            :: (MonadIO m, MonadLogger m, MonadThrow m)
+            => RawSqlite SqlBackend -> m ()
         setup conn = do
             registerSqlFunctions ptr
             -- Wait longer before timing out query steps
@@ -223,9 +260,6 @@ runSqlMWithOptions Options{..} work = do
 
     runLog :: LoggingT IO a -> IO a
     runLog = Log.runStderrLoggingT . Log.filterLogger logFilter
-
-    runSqlM :: SqlM a -> Config -> LoggingT IO a
-    runSqlM (SqlM act) cfg = runResourceT $ runReaderT act cfg
 
     connInfo :: SqliteConnectionInfo
     connInfo =
