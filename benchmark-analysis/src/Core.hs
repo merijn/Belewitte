@@ -6,6 +6,7 @@
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
@@ -44,6 +45,7 @@ module Core
     , logQuery
     , mIf
     , pagerSetting
+    , redirectLogging
     , runSqlMWithOptions
     , showText
     , stderrTerminalWidth
@@ -55,17 +57,19 @@ import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow, SomeException)
 import Control.Monad.IO.Unlift
     (MonadIO(liftIO), MonadUnliftIO(..), UnliftIO(..), withUnliftIO)
 import Control.Monad.Logger
-    (LoggingT, LogLevel(..), LogSource, MonadLogger, MonadLoggerIO)
+    (LogLevel(..), LogSource, MonadLogger, MonadLoggerIO)
 import qualified Control.Monad.Logger as Log
-import Control.Monad.Reader (MonadReader, ReaderT(..), ask, asks)
+import Control.Monad.Reader (MonadReader(..), ReaderT(..), asks)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Maybe (MaybeT(..))
 import Control.Monad.Trans.Resource (MonadResource, ResourceT, runResourceT)
 import qualified Database.Persist.Sqlite as Sqlite
 import Database.Sqlite.Internal (Connection(..), Connection'(..))
 import Data.Acquire (mkAcquire, withAcquire)
+import qualified Data.ByteString as BS
 import Data.Conduit (ConduitT, (.|), awaitForever)
 import Data.Int (Int64)
+import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef, writeIORef)
 import Data.Pool (Pool)
 import Data.Set (Set)
 import qualified Data.Set as S
@@ -80,6 +84,7 @@ import System.Clock (Clock(Monotonic), diffTimeSpec, getTime, toNanoSecs)
 import System.Console.Haskeline.MonadException (MonadException(..), RunIO(..))
 import System.Console.Terminal.Size (hSize, width)
 import qualified System.IO as System
+import System.Log.FastLogger (fromLogStr)
 
 import Exceptions
 import Migration
@@ -92,14 +97,29 @@ import SQLiteExts
 data Config = Config
     { explainQuerySet :: Maybe (Set Text)
     , pagerValue :: Pager
+    , logWriteRef :: IORef (ByteString -> IO ())
+    , logFilterFun :: LogSource -> LogLevel -> Bool
     }
 
 type SqlPool = Pool (RawSqlite SqlBackend)
 
-newtype CoreM a = CoreM (ReaderT Config (ResourceT (LoggingT IO)) a)
+newtype CoreM a = CoreM (ReaderT Config (ResourceT IO) a)
   deriving
-  ( Applicative, Functor, Monad, MonadCatch, MonadIO, MonadLogger
-  , MonadLoggerIO, MonadMask, MonadReader Config, MonadResource, MonadThrow)
+  ( Applicative, Functor, Monad, MonadCatch, MonadIO, MonadMask
+  , MonadReader Config, MonadResource, MonadThrow)
+
+instance MonadLogger CoreM where
+    monadLoggerLog loc src lvl msg = do
+        logger <- Log.askLoggerIO
+        liftIO $ logger loc src lvl (Log.toLogStr msg)
+
+instance MonadLoggerIO CoreM where
+    askLoggerIO = do
+        logFilter <- asks logFilterFun
+        ref <- asks logWriteRef
+        return $ \loc src lvl msg -> when (logFilter src lvl) $ do
+            logFun <- readIORef ref
+            logFun . fromLogStr $ Log.defaultLogStr loc src lvl msg
 
 instance MonadUnliftIO CoreM where
   askUnliftIO = CoreM $ withUnliftIO $ \u ->
@@ -171,6 +191,12 @@ data Options a =
 pagerSetting :: SqlM Pager
 pagerSetting = SqlM . lift . CoreM $ asks pagerValue
 
+redirectLogging :: (ByteString -> IO ()) -> SqlM a -> SqlM a
+redirectLogging logFun (SqlM act) = SqlM $ do
+    ref <- lift $ asks logWriteRef
+    let swapLogFun = atomicModifyIORef' ref (\oldFun -> (logFun, oldFun))
+    withAcquire (mkAcquire swapLogFun (writeIORef ref)) $ \_ -> act
+
 class Monad m => MonadExplain m where
     shouldExplainQuery :: Text -> m Bool
 
@@ -235,13 +261,15 @@ runSqlMWithOptions Options{..} work = do
         return workResult
   where
     runSqlM :: SqlM a -> IO a
-    runSqlM = runLog . runStack . runPool . runReaderT . unSqlM
+    runSqlM sqlAct = do
+        ref <- newIORef $ BS.hPutStr System.stderr
+        runStack ref . runPool $ runReaderT (unSqlM sqlAct)
       where
-        runStack :: CoreM a -> LoggingT IO a
-        runStack (CoreM act) = runResourceT $ runReaderT act config
+        runStack :: IORef (ByteString -> IO ()) -> CoreM a -> IO a
+        runStack ref (CoreM act) = runResourceT . runReaderT act $ config ref
 
-        config :: Config
-        config = Config explainSet pager
+        config :: IORef (ByteString -> IO ()) -> Config
+        config ref = Config explainSet pager ref logFilter
 
         runPool
             :: (MonadLogger m, MonadUnliftIO m, MonadThrow m)
@@ -257,9 +285,6 @@ runSqlMWithOptions Options{..} work = do
             setPragmaConn "busy_timeout" (1000 :: Int64) conn
           where
             ptr = getSqlitePtr $ Lens.view Sqlite.rawSqliteConnection conn
-
-    runLog :: LoggingT IO a -> IO a
-    runLog = Log.runStderrLoggingT . Log.filterLogger logFilter
 
     connInfo :: SqliteConnectionInfo
     connInfo =

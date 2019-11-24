@@ -24,7 +24,7 @@ module InteractiveInput
     ) where
 
 import qualified Control.Monad.Catch as Except
-import Control.Monad.Reader (ask, local)
+import Control.Monad.Reader (ask, local, mapReaderT)
 import Control.Monad.Trans (MonadTrans(lift))
 import Control.Monad.Trans.Resource (MonadResource(..))
 import Data.Bool (bool)
@@ -32,6 +32,8 @@ import Data.Char (toLower)
 import Data.Function (on)
 import Data.List (isPrefixOf)
 import qualified Data.Text as T
+import qualified Data.Text.Encoding as T
+import qualified Data.Text.Encoding.Error as T
 import Lens.Micro.Extras (view)
 import System.Console.Haskeline hiding (Handler)
 import System.Directory (doesFileExist)
@@ -78,10 +80,16 @@ dynCompleter completeArgs = do
         FileCompletion -> completeFilename completeArgs
 
 runInput :: Input SqlM a -> SqlM a
-runInput (Input act) = runReaderT (runInputT settings act) emptyCompletion
+runInput (Input act) =
+    runReaderT (runInputT settings redirectedLogging) emptyCompletion
   where
     emptyCompletion = SimpleCompletion $ const (return [])
     settings = setComplete dynCompleter defaultSettings
+
+    redirectedLogging = do
+        logFun <- getExternalPrint
+        let newLogFun = logFun . T.unpack . T.decodeUtf8With T.lenientDecode
+        mapInputT (mapReaderT (redirectLogging newLogFun)) act
 
 withCompletion :: Monad m => Completer m -> Input m a -> Input m a
 withCompletion completion = Input . mapInputT (local (const completion)) . unInput
