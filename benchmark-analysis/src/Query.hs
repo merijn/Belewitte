@@ -266,7 +266,7 @@ variantInfoQuery algoId platformId = Query{..}
             , PersistDouble variantBestNonSwitching
             , PersistByteString (byteStringToVector -> impls)
             , PersistByteString (byteStringToVector -> timings)
-            , PersistByteString (byteStringToVector -> externalImpls)
+            , externalImpls
             , externalTimings
             ]
 
@@ -277,16 +277,20 @@ variantInfoQuery algoId platformId = Query{..}
             | PersistNull <- stepOptimal
             , Just variantExternalTimings <- maybeExternalTimings
             = let variantOptimal = infinity in return VariantInfo{..}
-            where
-              !infinity = 1/0
-              variantTimings = VU.zip impls timings
+      where
+        !infinity = 1/0
+        variantTimings = VU.zip impls timings
 
-              maybeExternalTimings :: Maybe (Vector (Int64, Double))
-              maybeExternalTimings = case externalTimings of
-                  PersistNull -> Just $ VU.map (, infinity) externalImpls
-                  PersistByteString times -> Just $
-                    VU.zip externalImpls (byteStringToVector times)
-                  _ -> Nothing
+        maybeExternalTimings :: Maybe (Vector (Int64, Double))
+        maybeExternalTimings = case (externalImpls, externalTimings) of
+            (PersistNull, PersistNull) -> Just VU.empty
+            (PersistNull, PersistByteString _) -> Nothing
+            (PersistByteString extImpls, PersistNull) ->
+                Just $ VU.map (, infinity) (byteStringToVector extImpls)
+            (PersistByteString extImpls, PersistByteString times) ->
+                Just $ VU.zip (byteStringToVector extImpls)
+                              (byteStringToVector times)
+            _ -> Nothing
 
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
         [SqlInt64, SqlReal, SqlReal, SqlBlob, SqlBlob, SqlBlob, SqlBlob]

@@ -56,9 +56,7 @@ void int64_vector_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
     if (!vector) {
         sqlite3_result_error(ctxt, "Aggregate allocation failed!", -1);
         return;
-    }
-
-    if (!vector->data) {
+    } else if (!vector->data) {
         vector->size = sqlite3_value_int(args[2]);
         vector->idx = 0;
         vector->data = sqlite3_malloc(vector->size * sizeof *vector->data);
@@ -80,10 +78,13 @@ void int64_vector_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
 void int64_vector_finalise(sqlite3_context *ctxt)
 {
     int64_vector_t *vector = sqlite3_aggregate_context(ctxt, 0);
+
     if (!vector) {
-        sqlite3_result_error(ctxt, "Aggregate allocation failed!", -1);
+        sqlite3_result_null(ctxt);
         return;
-    } else if (!vector->data) {
+    }
+
+    if (!vector->data) {
         sqlite3_result_error(ctxt, "Vector construction failed!", -1);
         return;
     }
@@ -103,9 +104,7 @@ void double_vector_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
     if (!vector) {
         sqlite3_result_error(ctxt, "Aggregate allocation failed!", -1);
         return;
-    }
-
-    if (!vector->data) {
+    } else if (!vector->data) {
         vector->size = sqlite3_value_int(args[2]);
         vector->idx = 0;
         vector->data = sqlite3_malloc(vector->size * sizeof *vector->data);
@@ -127,8 +126,9 @@ void double_vector_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
 void double_vector_finalise(sqlite3_context *ctxt)
 {
     double_vector_t *vector = sqlite3_aggregate_context(ctxt, 0);
+
     if (!vector) {
-        sqlite3_result_error(ctxt, "Aggregate allocation failed!", -1);
+        sqlite3_result_null(ctxt);
         return;
     } else if (!vector->data) {
         sqlite3_result_error(ctxt, "Vector construction failed!", -1);
