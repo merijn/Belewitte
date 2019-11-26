@@ -81,7 +81,7 @@ checkSetDefault key field prompt filters = do
         when isDefault $ SqlTrans.update key [field =. True]
 
 addPlatform :: Input SqlM ()
-addPlatform = do
+addPlatform = withInteractiveLogging $ do
     platformName <- getInteractive textInput "Platform (Slurm) Name"
     prettyName <- getInteractive optionalInput "Platform Pretty Name"
     runFlags <- getInteractive optionalInput "Platform Flags"
@@ -97,7 +97,9 @@ addPlatform = do
 
 addGraphs :: [FilePath] -> Input SqlM ()
 addGraphs paths = do
-    datasetTag <- getInteractive textInput "Dataset Tag"
+    datasetTag <- withInteractiveLogging $
+        getInteractive textInput "Dataset Tag"
+
     SqlTrans.runTransaction $ do
         datasetId <- SqlTrans.insert $ Dataset datasetTag
 
@@ -141,7 +143,7 @@ addGraphs paths = do
                 Variant graphId variantCfgId algoId Nothing False 0
 
 addAlgorithm :: Input SqlM ()
-addAlgorithm = do
+addAlgorithm = withInteractiveLogging $ do
     algoName <- getInteractive input "Algorithm Name"
     prettyName <- getInteractive optionalInput "Algorithm Pretty Name"
     Sql.insert_ $ Algorithm algoName prettyName
@@ -149,7 +151,7 @@ addAlgorithm = do
     input = processCompleterText ["list","algorithms"]
 
 addImplementation :: Input SqlM ()
-addImplementation = do
+addImplementation = withInteractiveLogging $ do
     Entity algoId Algorithm{..} <- getInteractive algoInput "Algorithm Name"
     implName <- getInteractive (implInput algorithmName) "Implementation Name"
 
@@ -166,13 +168,14 @@ addImplementation = do
 
 addVariant :: Input SqlM ()
 addVariant = do
-    Entity algoId _ <- getInteractive algoInput "Algorithm Name"
-    variantName <- getInteractive textInput "Variant Name"
-    flags <- getInteractive optionalInput "Flags"
+    (algoId, variantConfig) <- withInteractiveLogging $ do
+        Entity algoId _ <- getInteractive algoInput "Algorithm Name"
+        variantName <- getInteractive textInput "Variant Name"
+        flags <- getInteractive optionalInput "Flags"
+        return $ (algoId, VariantConfig algoId variantName flags False)
 
     SqlTrans.runTransaction $ do
-        varCfgId <- SqlTrans.insert $
-            VariantConfig algoId variantName flags False
+        varCfgId <- SqlTrans.insert $ variantConfig
 
         checkSetDefault varCfgId VariantConfigIsDefault defaultPrompt
             [VariantConfigAlgorithmId ==. algoId]
@@ -186,7 +189,7 @@ addVariant = do
     defaultPrompt = "Default Variant (for plotting)"
 
 addRunConfig :: Input SqlM ()
-addRunConfig = do
+addRunConfig = withInteractiveLogging $ do
     Entity algoId Algorithm{..} <- getInteractive algoInput "Algorithm Name"
     Entity platformId _ <- getInteractive platformInput "Platform Name"
     Entity datasetId _ <- getInteractive datasetInput "Dataset Name"

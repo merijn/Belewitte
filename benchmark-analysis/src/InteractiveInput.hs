@@ -21,6 +21,7 @@ module InteractiveInput
     , readInput
     , readInputEnsure
     , textInput
+    , withInteractiveLogging
     ) where
 
 import qualified Control.Monad.Catch as Except
@@ -80,16 +81,16 @@ dynCompleter completeArgs = do
         FileCompletion -> completeFilename completeArgs
 
 runInput :: Input SqlM a -> SqlM a
-runInput (Input act) =
-    runReaderT (runInputT settings redirectedLogging) emptyCompletion
+runInput (Input act) = runReaderT (runInputT settings act) emptyCompletion
   where
     emptyCompletion = SimpleCompletion $ const (return [])
     settings = setComplete dynCompleter defaultSettings
 
-    redirectedLogging = do
-        logFun <- getExternalPrint
-        let newLogFun = logFun . T.unpack . T.decodeUtf8With T.lenientDecode
-        mapInputT (mapReaderT (redirectLogging newLogFun)) act
+withInteractiveLogging :: Input SqlM a -> Input SqlM a
+withInteractiveLogging (Input act) = Input $ do
+    logFun <- getExternalPrint
+    let newLogFun = logFun . T.unpack . T.decodeUtf8With T.lenientDecode
+    mapInputT (mapReaderT (redirectLogging newLogFun)) act
 
 withCompletion :: Monad m => Completer m -> Input m a -> Input m a
 withCompletion completion = Input . mapInputT (local (const completion)) . unInput
