@@ -63,16 +63,13 @@ makeJob val variantId implName args = Job
     { jobValue = val
     , jobVariant = variantId
     , jobLabel = label
-    , jobCommand = T.unwords $ label : args
+    , jobCommand = T.unwords $ "\"" <> label <> "\"" : args
     }
   where
     label = case implName of
         Nothing -> showSqlKey variantId
         Just (platformId, name) -> mconcat
-            ["\"", showSqlKey platformId
-            , " ", showSqlKey variantId
-            , " ", name, "\""
-            ]
+            [ showSqlKey platformId, " ", showSqlKey variantId, " ", name ]
 
 data Result a = Result
     { resultValue :: a
