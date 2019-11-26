@@ -241,8 +241,8 @@ queryTest outputSuffix = lift $ do
 
     let querySink1 = ZipConduit $ querySink "validationVariantQuery-"
         querySink2 = ZipConduit $ C.awaitForever C.yield
-            .> \validationCfg -> Sql.selectKeys [] []
-            .> \pId -> runSqlQuery (validationRunQuery pId validationCfg)
+            .> (\validationCfg -> Sql.selectKeys [] []
+            .> \pId -> runSqlQuery (validationRunQuery pId validationCfg))
             .| querySink "validationRunQuery-"
 
     runConduit $ Sql.selectKeys [] []
