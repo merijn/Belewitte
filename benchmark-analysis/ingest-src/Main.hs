@@ -39,7 +39,7 @@ import ProcessPool
 import Query (getDistinctFieldQuery, runSqlQuery)
 import qualified RuntimeData
 import Schema
-import Sql (Entity(..), MonadSql, Transaction, (==.))
+import Sql (Entity(..), MonadSql, Transaction, (==.), (||.))
 import qualified Sql
 import qualified Sql.Transaction as SqlTrans
 
@@ -125,9 +125,11 @@ runBenchmarks = lift $ do
         ]
 
     let numDefaultNodes = platformAvailable defaultPlatform
+        variantFilters = [VariantPropsStored ==. False] ||.
+                         [VariantResult ==. Nothing]
 
     runConduit $
-        Sql.selectSource [] []
+        Sql.selectSource variantFilters []
         .> variantToPropertyJob
         .| processJobsParallel numDefaultNodes defaultPlatform
         .| C.mapM_ processProperty
