@@ -119,7 +119,7 @@ INNER JOIN
     INNER JOIN IndexedImpls
     ON IndexedImpls.implId = Run.implId
 
-    WHERE name = "computation"
+    WHERE name = 'computation'
     GROUP BY Run.runConfigId, Run.variantId
     HAVING Run.variantId IN #{inExpression variants}
 ) AS Total
@@ -141,7 +141,7 @@ LEFT JOIN
      FROM ExternalTimer
      INNER JOIN IndexedExternalImpls
      ON ExternalTimer.implId = IndexedExternalImpls.implId
-     WHERE platformId = ? AND ExternalTimer.name = "computation"
+     WHERE platformId = ? AND ExternalTimer.name = 'computation'
      GROUP BY variantId
 ) AS External
 ON Total.variantId = External.variantId

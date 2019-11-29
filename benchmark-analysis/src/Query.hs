@@ -351,9 +351,7 @@ LEFT JOIN
         SELECT Run.runConfigId
              , Run.variantId
              , stepId
-             ,  MIN(CASE Implementation.type
-                    WHEN "Core" THEN avgTime
-                    ELSE NULL END) AS minTime
+             , MIN(avgTime) FILTER (WHERE type == 'Core') AS minTime
         FROM StepTimer
 
         INNER JOIN Run
@@ -370,9 +368,7 @@ ON RunConfig.id = OptimalStep.runConfigId
 
 INNER JOIN
 (   SELECT Run.variantId
-         , MIN(CASE IndexedImpls.type
-               WHEN "Core" THEN avgTime
-               ELSE NULL END) AS bestNonSwitching
+         , MIN(avgTime) FILTER (WHERE type == 'Core') AS bestNonSwitching
          , double_vector(avgTime, idx, (SELECT COUNT(*) FROM IndexedImpls))
            AS timings
       FROM TotalTimer
@@ -383,7 +379,7 @@ INNER JOIN
       INNER JOIN IndexedImpls
       ON Run.implId = IndexedImpls.implId
 
-      WHERE TotalTimer.name = "computation"
+      WHERE TotalTimer.name = 'computation'
       GROUP BY Run.variantId
 ) AS Total
 ON OptimalStep.variantId = Total.variantId
@@ -395,7 +391,7 @@ LEFT JOIN
       FROM ExternalTimer
       INNER JOIN IndexedExternalImpls
       ON ExternalTimer.implId = IndexedExternalImpls.implId
-      WHERE platformId = ? AND ExternalTimer.name = "computation"
+      WHERE platformId = ? AND ExternalTimer.name = 'computation'
       GROUP BY variantId
 ) AS External
 ON OptimalStep.variantId = External.variantId

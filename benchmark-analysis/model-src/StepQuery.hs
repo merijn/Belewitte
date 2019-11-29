@@ -96,9 +96,7 @@ ImplVector(impls) AS (
 
 Step(runConfigId, variantId, stepId, implId, minTime, timings) AS (
     SELECT Run.runConfigId, Run.variantId, stepId, IndexedImpls.implId
-         , MIN(CASE IndexedImpls.type
-               WHEN "Core" THEN avgTime
-               ELSE NULL END)
+         , MIN(avgTime) FILTER (WHERE IndexedImpls.type == 'Core')
          , double_vector(avgTime, idx, (SELECT COUNT(*) FROM IndexedImpls))
            AS timings
     FROM StepTimer
