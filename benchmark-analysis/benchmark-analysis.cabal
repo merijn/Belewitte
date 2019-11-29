@@ -154,7 +154,7 @@ Library
                ,        microlens ^>= 0.4.8
                ,        persistent ^>= 2.10.5
                ,        persistent-template ^>= 2.7.2
-               ,        persistent-sqlite ^>= 2.10.6
+               ,        persistent-sqlite ^>= 2.10.7
                ,        prettyprinter ^>= 1.2.0
                ,        prettyprinter-ansi-terminal ^>= 1.1.1
                ,        process ^>= 1.6.0
@@ -187,7 +187,7 @@ Executable Ingest
                         TypeFamilies
 
   Build-Depends:        benchmark-analysis
-               ,        broadcast-chan-conduit ^>= 0.2.0
+               ,        broadcast-chan-conduit ^>= 0.2.1
                ,        attoparsec ^>= 0.13.1
                ,        cryptonite-conduit ^>= 0.2.0
                ,        directory ^>= 1.3.4.0
