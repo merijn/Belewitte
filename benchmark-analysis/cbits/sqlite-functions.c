@@ -35,14 +35,12 @@ typedef struct
 {
     double *data;
     size_t size;
-    size_t idx;
 } double_vector_t;
 
 typedef struct vector
 {
     int64_t *data;
     size_t size;
-    size_t idx;
 } int64_vector_t;
 
 void int64_vector_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
@@ -58,7 +56,6 @@ void int64_vector_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
         return;
     } else if (!vector->data) {
         vector->size = sqlite3_value_int(args[2]);
-        vector->idx = 0;
         vector->data = sqlite3_malloc(vector->size * sizeof *vector->data);
 
         if (!vector->data) {
@@ -106,7 +103,6 @@ void double_vector_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
         return;
     } else if (!vector->data) {
         vector->size = sqlite3_value_int(args[2]);
-        vector->idx = 0;
         vector->data = sqlite3_malloc(vector->size * sizeof *vector->data);
 
         if (!vector->data) {
