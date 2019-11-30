@@ -20,7 +20,7 @@
 #include "Algorithm.hpp"
 #include "Backend.hpp"
 #include "CUDA.hpp"
-#include "ImplementationBase.hpp"
+#include "ImplementationTemplate.hpp"
 #include "OpenCL.hpp"
 #include "options/Options.hpp"
 #include "Timer.hpp"
@@ -34,6 +34,12 @@
 
 using namespace std;
 using namespace boost::filesystem;
+
+ImplementationTemplateBase<false>::~ImplementationTemplateBase()
+{}
+
+ImplementationTemplateBase<true>::~ImplementationTemplateBase()
+{}
 
 enum class framework { cuda, opencl };
 

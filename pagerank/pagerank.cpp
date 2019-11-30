@@ -34,10 +34,10 @@ roundPrecision(float val, uint32_t mask = 0)
     return val;
 }
 
-template<typename Platform, typename Vertex, typename Edge>
-struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge>
+template<typename Platform, typename Vertex, typename Edge, bool switching>
+struct PageRank : public ImplementationTemplate<Platform,Vertex,Edge,switching>
 {
-    using Impl = ImplementationTemplate<Platform,Vertex,Edge>;
+    using Impl = ImplementationTemplate<Platform,Vertex,Edge,switching>;
     using Impl::validate;
     using Impl::run_count;
     using Impl::backend;

@@ -7,10 +7,10 @@
 
 #include "bfs.hpp"
 
-template<typename Platform, typename Vertex, typename Edge>
-struct BFS : public ImplementationTemplate<Platform,Vertex,Edge>
+template<typename Platform, typename Vertex, typename Edge, bool switching>
+struct BFS : public ImplementationTemplate<Platform,Vertex,Edge,switching>
 {
-    using Impl = ImplementationTemplate<Platform,Vertex,Edge>;
+    using Impl = ImplementationTemplate<Platform,Vertex,Edge,switching>;
     using Impl::run_count;
     using Impl::backend;
     using Impl::loader;
@@ -86,9 +86,9 @@ struct BFS : public ImplementationTemplate<Platform,Vertex,Edge>
                 absVisited = 0;
                 relVisited = 0;
                 this->predictInitial();
-            } else {
-                setKernelConfig(kernel);
             }
+
+            setKernelConfig(kernel);
 
             do {
                 auto& levelTimer = levelTimers[static_cast<size_t>(curr)];
@@ -100,7 +100,7 @@ struct BFS : public ImplementationTemplate<Platform,Vertex,Edge>
 
                 if constexpr (isSwitching) {
                     setProps(frontier);
-                    this->predict();
+                    if (this->predict()) setKernelConfig(kernel);
                 }
             } while (frontier);
             bfs.stop();

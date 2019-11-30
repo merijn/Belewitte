@@ -17,7 +17,7 @@ enum class work_division { vertex, edge };
 template<typename Platform>
 struct BaseKernel
 {
-    template<typename, typename, typename>
+    template<typename, typename, typename, bool>
     friend struct ImplementationTemplate;
 
     using KernelType = typename Platform::kernel_type;
@@ -305,20 +305,44 @@ template<typename T>
 KernelMap(std::initializer_list<std::pair<const char*,T>> l)
     -> KernelMap<std::string,T>;
 
-template<typename Platform, typename V, typename E>
-struct ImplementationTemplate : public ImplementationBase
+template<bool switching>
+struct ImplementationTemplateBase;
+
+template<>
+struct ImplementationTemplateBase<false> : public ImplementationBase
+{
+    static constexpr bool isSwitching = false;
+    virtual ~ImplementationTemplateBase();
+};
+
+class prop_ref;
+
+template<>
+struct ImplementationTemplateBase<true> : public ImplementationBase
+{
+    static constexpr bool isSwitching = true;
+    virtual ~ImplementationTemplateBase();
+    virtual void predictInitial() = 0;
+    virtual bool predict() = 0;
+
+    refmap<std::string,prop_ref> graphProperties;
+    refmap<std::string,prop_ref> algorithmProperties;
+
+};
+
+template<typename Platform, typename V, typename E, bool switching>
+struct ImplementationTemplate : public ImplementationTemplateBase<switching>
 {
     typedef V Vertex;
     typedef E Edge;
-    using ImplementationBase::options;
+    using ImplementationTemplateBase<switching>::options;
+    using ImplementationTemplateBase<switching>::run_count;
 
     template<typename T>
     using alloc_t = typename Platform::template alloc_t<T>;
 
     template<typename... Args>
     using GraphKernel = GraphKernel<Platform,V,E,Args...>&;
-
-    static constexpr bool isSwitching = false;
 
   protected:
     Platform& backend;
@@ -464,13 +488,13 @@ struct SimpleImplementation : public AlgorithmBase
 };
 
 template
-< template<typename,typename,typename> class BaseImpl
+< template<typename,typename,typename,bool> class BaseImpl
 , typename Platform
 , typename Vertex
 , typename Edge
 , typename... KernelArgs
 , typename... Kernels
-, typename Impl = BaseImpl<Platform,Vertex,Edge>
+, typename Impl = BaseImpl<Platform,Vertex,Edge,false>
 >
 std::unique_ptr<ImplementationBase>
 make_implementation
@@ -483,9 +507,6 @@ make_implementation
     return std::make_unique<SimpleImpl>(kernels);
 }
 
-template<typename AlgorithmBase, typename... Kernels>
-struct SwitchImplementation;
-
 class prop_ref : public std::reference_wrapper<double>
 {
     static double dummyProp;
@@ -494,14 +515,13 @@ class prop_ref : public std::reference_wrapper<double>
     prop_ref(prop_ref&&) = delete;
     prop_ref(const prop_ref&) = delete;
 
-    prop_ref(const std::string&, ImplementationBase&)
+    prop_ref(const std::string&, ImplementationTemplateBase<false>&)
      : std::reference_wrapper<double>(dummyProp)
     {}
 
-    template<typename AlgorithmBase, typename... Kernels>
     prop_ref
         ( const std::string& name
-        , SwitchImplementation<AlgorithmBase,Kernels...>& cfg
+        , ImplementationTemplateBase<true>& cfg
         , bool graphProp = false
         )
         : std::reference_wrapper<double>(dummyProp)
@@ -527,6 +547,8 @@ struct SwitchImplementation : public AlgorithmBase
 {
     using typename AlgorithmBase::Vertex;
     using typename AlgorithmBase::Edge;
+    using AlgorithmBase::algorithmProperties;
+    using AlgorithmBase::graphProperties;
     using AlgorithmBase::loader;
     using AlgorithmBase::options;
     using AlgorithmBase::setKernelConfig;
@@ -534,9 +556,6 @@ struct SwitchImplementation : public AlgorithmBase
     using prop_set =  std::set<std::string>;
     using KernelMap = KernelMap<std::string,std::tuple<Kernels...>>;
 
-    friend prop_ref;
-
-    static constexpr bool isSwitching = true;
     std::tuple<Kernels...> kernels;
 
     class graph_prop
@@ -629,7 +648,7 @@ struct SwitchImplementation : public AlgorithmBase
     }
 
   protected:
-    void predictInitial()
+    virtual void predictInitial() override final
     {
         stepNum = 0;
         logGraphProps();
@@ -639,10 +658,9 @@ struct SwitchImplementation : public AlgorithmBase
         if (lastKernel == -1) lastKernel = defaultKernel;
 
         kernels = implementations[static_cast<size_t>(lastKernel)];
-        setKernelConfig(kernels);
     }
 
-    void predict()
+    virtual bool predict() override final
     {
         ++stepNum;
         logAlgorithmProps();
@@ -650,9 +668,12 @@ struct SwitchImplementation : public AlgorithmBase
         int32_t result = lookup();
         if (result != -1 && result != lastKernel) {
             kernels = implementations[static_cast<size_t>(result)];
-            setKernelConfig(kernels);
             lastKernel = result;
+
+            return true;
         }
+
+        return false;
     }
 
     virtual void prepareRun() override final
@@ -856,22 +877,19 @@ struct SwitchImplementation : public AlgorithmBase
     std::vector<std::tuple<Kernels...>> implementations;
     std::map<std::string,std::tuple<Kernels...>> kernelMap;
 
-    refmap<std::string,prop_ref> graphProperties;
-    refmap<std::string,prop_ref> algorithmProperties;
-
     prop_ref vertices, edges;
     graph_prop min, lowerQuantile, mean, median, upperQuantile, max, stdDev;
     size_t stepNum;
 };
 
 template
-< template<typename, typename, typename> class AlgorithmBase
+< template<typename, typename, typename, bool> class AlgorithmBase
 , typename Platform
 , typename Vertex
 , typename Edge
 , typename... KernelArgs
 , typename... Kernels
-, typename Impl = AlgorithmBase<Platform,Vertex,Edge>
+, typename Impl = AlgorithmBase<Platform,Vertex,Edge,true>
 >
 std::unique_ptr<ImplementationBase>
 make_switch_implementation
