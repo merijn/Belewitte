@@ -48,10 +48,17 @@ stepInfoQuery algoId platformId graphProperties stepProperties = Query{..}
             , PersistByteString (byteStringToVector -> impls)
             , PersistByteString (byteStringToVector -> timings)
             , PersistByteString (byteStringToVector -> graphProps)
-            , PersistByteString (byteStringToVector -> rawStepProps)
-            ] = return $ StepInfo{..}
+            , rawStepProps
+            ]
+            | Just stepProps <- maybeStepProps
+            = return $ StepInfo{..}
       where
-        stepProps = graphProps <> rawStepProps
+        maybeStepProps = case rawStepProps of
+            PersistNull -> Just graphProps
+            PersistByteString (byteStringToVector -> stepProps) ->
+                Just $ graphProps <> stepProps
+            _ -> Nothing
+
         stepTimings = VU.zip impls timings
 
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
@@ -141,7 +148,7 @@ INNER JOIN
 ) AS GraphProps
 ON GraphProps.graphId = Variant.graphId
 
-INNER JOIN
+LEFT JOIN
 (   SELECT variantId, stepId
          , double_vector(value, idx, ?) AS props
     FROM IndexedStepProps
