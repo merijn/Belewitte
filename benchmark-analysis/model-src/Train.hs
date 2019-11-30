@@ -69,6 +69,7 @@ data TrainingConfig = TrainConfig
     , trainStepProps :: Set Text
     , trainFraction :: Double
     , trainSeed :: Int
+    , trainTimestamp :: UTCTime
     }
 
 data ModelDescription = ModelDesc
@@ -107,7 +108,7 @@ getValidationQuery algoId platformId = fmap snd . splitQuery algoId platformId
 getTotalQuery
     :: Key Algorithm -> Key Platform -> TrainingConfig -> Query StepInfo
 getTotalQuery algoId platformId TrainConfig{..} =
-  stepInfoQuery algoId platformId trainGraphProps trainStepProps
+  stepInfoQuery algoId platformId trainGraphProps trainStepProps trainTimestamp
 
 getModelTrainingConfig
     :: MonadSql m => Key PredictionModel -> m TrainingConfig
@@ -129,6 +130,7 @@ getModelTrainingConfig modelId = SqlTrans.runTransaction $ do
         , trainStepProps = stepProps
         , trainFraction = predictionModelTrainFraction
         , trainSeed = predictionModelTrainSeed
+        , trainTimestamp = predictionModelTimestamp
         }
 
 getModelStats :: Key PredictionModel -> SqlM ModelStats

@@ -7,8 +7,8 @@ module StepQuery (StepInfo(..), stepInfoQuery) where
 
 import Data.Set (Set)
 import qualified Data.Set as S
-import qualified Data.Text as T
 import Data.String.Interpolate.IsString (i)
+import qualified Data.Text as T
 import Data.Vector.Unboxed (Vector)
 import qualified Data.Vector.Unboxed as VU
 
@@ -27,8 +27,13 @@ data StepInfo =
     } deriving (Show)
 
 stepInfoQuery
-    :: Key Algorithm -> Key Platform -> Set Text -> Set Text -> Query StepInfo
-stepInfoQuery algoId platformId graphProperties stepProperties = Query{..}
+    :: Key Algorithm
+    -> Key Platform
+    -> Set Text
+    -> Set Text
+    -> UTCTime
+    -> Query StepInfo
+stepInfoQuery algoId platformId graphProperties stepProperties ts = Query{..}
   where
     queryName :: Text
     queryName = "stepInfoQuery"
@@ -65,7 +70,7 @@ stepInfoQuery algoId platformId graphProperties stepProperties = Query{..}
         [ SqlInt64, SqlInt64, SqlInt64, SqlBlob, SqlBlob, SqlBlob, SqlBlob ]
 
     cteParams :: [PersistValue]
-    cteParams = [ toPersistValue algoId ]
+    cteParams = [ toPersistValue algoId , toPersistValue ts ]
 
     commonTableExpressions :: [Text]
     commonTableExpressions = [[i|
@@ -114,7 +119,7 @@ Step(runConfigId, variantId, stepId, implId, minTime, timings) AS (
     INNER JOIN IndexedImpls
     ON Run.implId = IndexedImpls.implId
 
-    WHERE Run.validated == 1
+    WHERE Run.validated == 1 AND Run.timestamp < ?
     GROUP BY Run.runConfigId, Run.variantId, stepId
 )|]]
 

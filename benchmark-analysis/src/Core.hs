@@ -40,6 +40,7 @@ module Core
     , Options(..)
     , Pager(..)
     , SqlM
+    , UTCTime
     , (.>)
     , logExplain
     , logQuery
@@ -75,6 +76,7 @@ import Data.Set (Set)
 import qualified Data.Set as S
 import Data.Text (Text)
 import qualified Data.Text as T
+import Data.Time.Clock (UTCTime)
 import Foreign (Ptr)
 import GHC.Conc.Sync
     (getNumProcessors, setNumCapabilities, setUncaughtExceptionHandler)
