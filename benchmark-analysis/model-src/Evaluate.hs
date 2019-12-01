@@ -18,7 +18,6 @@ module Evaluate
 
 import Control.Applicative (ZipList(..))
 import Control.Monad.Fix (fix)
-import Data.Bifunctor (second)
 import Data.Conduit as C
 import Data.Conduit.List as C (mapAccum)
 import qualified Data.Conduit.Combinators as C
@@ -36,8 +35,8 @@ import Data.Semigroup (Max, getMax)
 import qualified Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Text as T
-import Data.Vector.Unboxed (Unbox, Vector)
-import qualified Data.Vector.Unboxed as VU
+import Data.Vector.Storable (Storable, Vector)
+import qualified Data.Vector.Storable as VS
 import Numeric (showFFloat)
 
 import Core
@@ -48,6 +47,7 @@ import Schema
 import StepQuery (StepInfo(..))
 import Sql (queryImplementations, queryExternalImplementations)
 import Train
+import Utils.ImplTiming
 import Utils.Pair (Pair(..), mapFirst, mergePair)
 
 percent :: Real n => n -> n -> Text
@@ -59,9 +59,10 @@ percent x y = T.pack $ showFFloat (Just 2) val "%"
 padText :: Word -> Text -> Text
 padText n t = t <> T.replicate (fromIntegral n - T.length t) " "
 
-liftTuple :: (a -> b -> c) -> (Int64, a) -> (Int64, b) -> (Int64, c)
-liftTuple f (i1, v1) (i2, v2)
-    | i1 == i2 = (i1, f v1 v2)
+liftImplTiming
+    :: (Double -> Double -> Double) -> ImplTiming -> ImplTiming -> ImplTiming
+liftImplTiming f (ImplTiming i1 v1) (ImplTiming i2 v2)
+    | i1 == i2 = ImplTiming i1 (f v1 v2)
     | otherwise = error $ mconcat
         [ "Shouldn't happen! Found: " , show i1, " and ", show i2]
 
@@ -115,7 +116,7 @@ data VariantAggregate =
   VariantAgg
   { variantid :: {-# UNPACK #-} !(Key Variant)
   , optimalTime :: {-# UNPACK #-} !Double
-  , implTimes :: {-# UNPACK #-} !(Pair (Vector (Int64, Double)))
+  , implTimes :: {-# UNPACK #-} !(Pair (Vector ImplTiming))
   }
 
 aggregateSteps
@@ -130,22 +131,26 @@ aggregateSteps defaultImpl mispredictionStrategy model = do
         Nothing -> logThrowM . PatternFailed $
             "Expected at least one step input"
 
-    let zeroTimeVec :: Vector (Int64, Double)
-        zeroTimeVec = VU.map (second (const 0)) stepTimings `VU.snoc`
-            (predictedImplId, 0)
+    let zerooutTiming :: ImplTiming -> ImplTiming
+        zerooutTiming implTime = implTime { implTimingTiming = 0 }
+
+        zeroTimeVec :: Vector ImplTiming
+        zeroTimeVec = VS.map zerooutTiming stepTimings `VS.snoc`
+            ImplTiming predictedImplId 0
 
         initial :: (Int, VariantAggregate)
         initial = (defaultImpl, VariantAgg
             { variantid = stepVariantId
             , optimalTime = 0
-            , implTimes = Pair zeroTimeVec VU.empty
+            , implTimes = Pair zeroTimeVec VS.empty
             })
 
-        mapImpl :: Vector (Int64, Double) -> Vector (Int, Int)
-        mapImpl = VU.imap (\i (impl, _) -> (fromIntegral impl, i))
-
         translateMap :: IntMap Int
-        translateMap = IM.fromList . VU.toList .  mapImpl $ zeroTimeVec
+        translateMap = VS.ifoldl' build IM.empty zeroTimeVec
+          where
+            build :: IntMap Int -> Int -> ImplTiming -> IntMap Int
+            build implMap idx (ImplTiming impl _) =
+                IM.insert (fromIntegral impl) idx implMap
 
     snd <$> C.foldl (aggregate translateMap) initial
 
@@ -159,12 +164,12 @@ aggregateSteps defaultImpl mispredictionStrategy model = do
       (predictedImpl, VariantAgg
             { variantid = stepVariantId
             , optimalTime = optimalTime + getTime stepBestImpl
-            , implTimes = VU.zipWith (liftTuple (+)) <$> implTimes <*>
-                    Pair (stepTimings `VU.snoc` newPrediction) VU.empty
+            , implTimes = VS.zipWith (liftImplTiming (+)) <$> implTimes <*>
+                    Pair (stepTimings `VS.snoc` newPrediction) VS.empty
             })
       where
-        newPrediction :: (Int64, Double)
-        newPrediction = (predictedImplId, getTime predictedImpl)
+        newPrediction :: ImplTiming
+        newPrediction = ImplTiming predictedImplId (getTime predictedImpl)
 
         predictedImpl :: Int
         predictedImpl
@@ -175,13 +180,13 @@ aggregateSteps defaultImpl mispredictionStrategy model = do
             prediction = predict model stepProps
 
         getTime :: Integral n => n -> Double
-        getTime ix = snd $
-            stepTimings `VU.unsafeIndex` (translateMap IM.! fromIntegral ix)
+        getTime ix = implTimingTiming $
+            stepTimings `VS.unsafeIndex` (translateMap IM.! fromIntegral ix)
 
 data TotalStatistics =
   TotalStats
   { variantCount :: {-# UNPACK #-} !Int
-  , timesCumRelError :: {-# UNPACK #-} !(Pair (Vector (Int64, Double)))
+  , timesCumRelError :: {-# UNPACK #-} !(Pair (Vector ImplTiming))
   , relErrorOneToTwo :: {-# UNPACK #-} !(Pair (Vector Int))
   , relErrorMoreThanFive :: {-# UNPACK #-} !(Pair (Vector Int))
   , relErrorMoreThanTwenty :: {-# UNPACK #-} !(Pair (Vector Int))
@@ -202,39 +207,43 @@ aggregateVariants variantIntervals relTo implMaps = do
 
     C.mapAccum aggregate (initial implTimes)
   where
-    initial :: Unbox a => Pair (Vector (Int64, a)) -> TotalStatistics
+    initial :: Pair (Vector ImplTiming) -> TotalStatistics
     initial v = TotalStats
         { variantCount = 0
-        , timesCumRelError = VU.map (second (const 0)) <$> v
+        , timesCumRelError = VS.map zerooutTiming <$> v
         , relErrorOneToTwo = zeroIntVector
         , relErrorMoreThanFive = zeroIntVector
         , relErrorMoreThanTwenty = zeroIntVector
         , timesMaxRelError = zeroDoubleVector
         }
       where
-        zeroIntVector = VU.map (const 0) <$> v
-        zeroDoubleVector = VU.map (const 0) <$> v
+        zerooutTiming :: ImplTiming -> ImplTiming
+        zerooutTiming implTime = implTime { implTimingTiming = 0 }
+
+        zeroIntVector = VS.map (const 0) <$> v
+        zeroDoubleVector = VS.map (const 0) <$> v
 
     aggregate
         :: VariantAggregate -> TotalStatistics -> (TotalStatistics, Text)
     aggregate VariantAgg{..} TotalStats{..} = (, variantReport) TotalStats
           { variantCount = variantCount + 1
           , timesCumRelError =
-                VU.zipWith (liftTuple (+)) <$> timesCumRelError <*> relTimings
+                VS.zipWith (liftImplTiming (+)) <$> timesCumRelError
+                                                <*> relTimings
 
           , relErrorOneToTwo =
-                VU.zipWith (lessThan 2) <$> relTimings <*> relErrorOneToTwo
+                VS.zipWith (lessThan 2) <$> relTimings <*> relErrorOneToTwo
 
           , relErrorMoreThanFive =
-                VU.zipWith (moreThan 5) <$> relTimings <*> relErrorMoreThanFive
+                VS.zipWith (moreThan 5) <$> relTimings <*> relErrorMoreThanFive
 
           , relErrorMoreThanTwenty =
-                VU.zipWith (moreThan 20) <$> relTimings
+                VS.zipWith (moreThan 20) <$> relTimings
                                          <*> relErrorMoreThanTwenty
 
           , timesMaxRelError =
-                VU.zipWith max <$> timesMaxRelError
-                               <*> (VU.map snd <$> relTimings)
+                VS.zipWith max <$> timesMaxRelError
+                               <*> (VS.map implTimingTiming <$> relTimings)
           }
       where
         shouldReportVariant :: Bool
@@ -247,21 +256,26 @@ aggregateVariants variantIntervals relTo implMaps = do
             , "\n"
             ]
 
-        lessThan :: Double -> (Int64, Double) -> Int -> Int
-        lessThan x (_, val) count
+        lessThan :: Double -> ImplTiming -> Int -> Int
+        lessThan x (ImplTiming _ val) count
             | val < x = count + 1
             | otherwise = count
 
-        moreThan :: Double -> (Int64, Double) -> Int -> Int
-        moreThan x (_, val) count
+        moreThan :: Double -> ImplTiming -> Int -> Int
+        moreThan x (ImplTiming _ val) count
             | val > x = count + 1
             | otherwise = count
 
-        relTimings = VU.map (second (/relToTime)) <$> implTimes
+        relTimings = VS.map makeRelative <$> implTimes
+          where
+            makeRelative (ImplTiming impl timing) =
+                ImplTiming impl (timing / relToTime)
 
         findImplTime :: Int64 -> Maybe Double
         findImplTime i =
-          snd <$> VU.find ((i==) . fst) (regular timesCumRelError)
+            implTimingTiming <$> VS.find compareImpl (regular timesCumRelError)
+          where
+            compareImpl (ImplTiming impl _) = impl == i
 
         relToTime :: Double
         relToTime = fromMaybe (error "Implementation not found!") $
@@ -272,9 +286,10 @@ aggregateVariants variantIntervals relTo implMaps = do
 
         relTiming t = percent t optimalTime <> " (" <> showText t <> ")\n"
 
-        results = VU.toList <$> mapFirst (VU.cons optimalTiming) implTimes
+        results = unwrapImplTiming <$> mapFirst (VS.cons optimalTiming) implTimes
           where
-            optimalTiming = (optimalImplId, optimalTime)
+            unwrapImplTiming = map (\(ImplTiming i v) -> (i, v)) . VS.toList
+            optimalTiming = ImplTiming optimalImplId optimalTime
 
         comparison (i, v1) (j, v2)
             | i == optimalImplId = LT
@@ -351,12 +366,13 @@ evaluateModel algo platId defImpl reportCfg@Report{..} model trainConfig =
             Just Implementation{implementationType = Core} -> True
             _ -> False
 
-        addBest v = VU.snoc v (bestNonSwitchingImplId, bestNonSwitchingTime)
+        addBest v = v `VS.snoc`
+            ImplTiming bestNonSwitchingImplId bestNonSwitchingTime
 
         !bestNonSwitchingTime =
-          VU.minimum
-          . VU.map snd
-          . VU.filter (isCoreImpl . fst)
+          VS.minimum
+          . VS.map implTimingTiming
+          . VS.filter (isCoreImpl . implTimingImpl)
           . regular
           $ implTimes
 
@@ -391,7 +407,8 @@ compareImplementations algoId platformId cfg@Report{..} = renderOutput $ do
                 Pair variantTimings variantExternalTimings
         }
       where
-        addBest v = VU.snoc v (bestNonSwitchingImplId, variantBestNonSwitching)
+        addBest v = v `VS.snoc`
+            ImplTiming bestNonSwitchingImplId variantBestNonSwitching
 
 reportTotalStatistics
     :: Monad m
@@ -416,11 +433,11 @@ reportTotalStatistics Report{..} implMaps TotalStats{..} = do
       where
         roundedVal val = showFFloat (Just 3) val ""
 
-    vectorToZipList :: Unbox a => Pair (Vector a) -> Compose Pair ZipList a
-    vectorToZipList = Compose . fmap (ZipList . VU.toList)
+    vectorToZipList :: Storable a => Pair (Vector a) -> Compose Pair ZipList a
+    vectorToZipList = Compose . fmap (ZipList . VS.toList)
 
     reportTimings :: Pair [(Int64, (Double, Int, Int, Int, Double))]
-    reportTimings = decompose $ (\(i,a) b c d e -> (i,(a,b,c,d,e)))
+    reportTimings = decompose $ (\(ImplTiming i a) b c d e -> (i,(a,b,c,d,e)))
             <$> vectorToZipList timesCumRelError
             <*> vectorToZipList relErrorOneToTwo
             <*> vectorToZipList relErrorMoreThanFive

@@ -41,6 +41,7 @@ import RuntimeData (getBarPlotScript)
 import Schema
 import Sql ((==.))
 import qualified Sql
+import Utils.ImplTiming
 import Utils.Pair (Pair(..), toPair, mergePair)
 
 queryVariants :: Key Algorithm -> Set Text -> SqlM (Set (Key Variant))
@@ -219,15 +220,15 @@ reportData hnd normalise = do
             | normalise = V.map (/ maxTime) timings
             | otherwise = timings
 
-dataFromVariantInfo :: VariantInfo -> SqlM (Text, Pair (Vector (Int64,Double)))
+dataFromVariantInfo :: VariantInfo -> SqlM (Text, Pair (Vector ImplTiming))
 dataFromVariantInfo VariantInfo{..} = do
     graphId <- variantGraphId <$> Sql.getJust variantId
     name <- graphName <$> Sql.getJust graphId
     return (name, Pair extendedTimings (V.convert variantExternalTimings))
   where
     extendedTimings = V.convert variantTimings
-        `V.snoc` (bestNonSwitchingImplId, variantBestNonSwitching)
-        `V.snoc` (optimalImplId, variantOptimal)
+        `V.snoc` ImplTiming bestNonSwitchingImplId variantBestNonSwitching
+        `V.snoc` ImplTiming optimalImplId variantOptimal
 
 plot
     :: PlotConfig
@@ -266,14 +267,14 @@ runQueryDump _ (Just suffix) name mkQuery vals =
             .| C.sinkHandle hnd
 
 nameImplementations
-    :: Generic.Vector v (Int64, Double)
+    :: Generic.Vector v ImplTiming
     => IntMap Text
-    -> v (Int64, Double)
+    -> v ImplTiming
     -> Vector (Text, Double)
 nameImplementations impls = V.mapMaybe translate . V.convert
   where
-    translate :: (Int64, a) -> Maybe (Text, a)
-    translate (i, v) = (,v) <$> impls IM.!? fromIntegral i
+    translate :: ImplTiming -> Maybe (Text, Double)
+    translate (ImplTiming impl val) = (,val) <$> impls IM.!? fromIntegral impl
 
 main :: IO ()
 main = runSqlM commands $ \case
@@ -289,7 +290,7 @@ main = runSqlM commands $ \case
     let implMaps@Pair{regular} =
           toImplNames (filterImpls implNames) (filterExternal implNames) impls
 
-        translatePair :: Pair (Vector (Int64, Double)) -> Vector (Text, Double)
+        translatePair :: Pair (Vector ImplTiming) -> Vector (Text, Double)
         translatePair x = mergePair $ nameImplementations <$> implMaps <*> x
 
     case plotType of

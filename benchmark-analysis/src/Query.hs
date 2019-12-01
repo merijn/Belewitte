@@ -38,8 +38,8 @@ import Data.Monoid ((<>))
 import Data.Proxy (Proxy(Proxy))
 import Data.String.Interpolate.IsString (i)
 import qualified Data.Text as T
-import Data.Vector.Unboxed (Vector)
-import qualified Data.Vector.Unboxed as VU
+import Data.Vector.Storable (Vector)
+import qualified Data.Vector.Storable as VS
 import qualified Database.Persist.Sqlite as Sqlite
 import Numeric (showGFloat)
 
@@ -47,6 +47,7 @@ import Core
 import Schema
 import Sql.Core (MonadSql, PersistFieldSql, SqlRecord, Transaction(..))
 import qualified Sql.Core as Sql
+import Utils.ImplTiming
 import Utils.Vector (byteStringToVector)
 
 type MonadQuery m =
@@ -248,8 +249,8 @@ data VariantInfo =
     { variantId :: {-# UNPACK #-} !(Key Variant)
     , variantOptimal :: {-# UNPACK #-} !Double
     , variantBestNonSwitching :: {-# UNPACK #-} !Double
-    , variantTimings :: {-# UNPACK #-} !(Vector (Int64, Double))
-    , variantExternalTimings :: {-# UNPACK #-} !(Vector (Int64, Double))
+    , variantTimings :: {-# UNPACK #-} !(Vector ImplTiming)
+    , variantExternalTimings :: {-# UNPACK #-} !(Vector ImplTiming)
     } deriving (Show)
 
 variantInfoQuery :: Key Algorithm -> Key Platform -> Query VariantInfo
@@ -279,17 +280,18 @@ variantInfoQuery algoId platformId = Query{..}
             = let variantOptimal = infinity in return VariantInfo{..}
       where
         !infinity = 1/0
-        variantTimings = VU.zip impls timings
+        variantTimings = VS.zipWith ImplTiming impls timings
 
-        maybeExternalTimings :: Maybe (Vector (Int64, Double))
+        maybeExternalTimings :: Maybe (Vector ImplTiming)
         maybeExternalTimings = case (externalImpls, externalTimings) of
-            (PersistNull, PersistNull) -> Just VU.empty
+            (PersistNull, PersistNull) -> Just VS.empty
             (PersistNull, PersistByteString _) -> Nothing
             (PersistByteString extImpls, PersistNull) ->
-                Just $ VU.map (, infinity) (byteStringToVector extImpls)
+                Just $ VS.map (\impl -> ImplTiming impl infinity)
+                              (byteStringToVector extImpls)
             (PersistByteString extImpls, PersistByteString times) ->
-                Just $ VU.zip (byteStringToVector extImpls)
-                              (byteStringToVector times)
+                Just $ VS.zipWith ImplTiming (byteStringToVector extImpls)
+                                             (byteStringToVector times)
             _ -> Nothing
 
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues

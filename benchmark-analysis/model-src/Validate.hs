@@ -10,7 +10,7 @@ import Data.Conduit (ConduitT, (.|))
 import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Text as T
-import Data.Vector.Unboxed (Vector)
+import Data.Vector.Storable (Vector)
 
 import Core
 import Evaluate (percent)

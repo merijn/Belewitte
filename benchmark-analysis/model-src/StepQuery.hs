@@ -9,12 +9,13 @@ import Data.Set (Set)
 import qualified Data.Set as S
 import Data.String.Interpolate.IsString (i)
 import qualified Data.Text as T
-import Data.Vector.Unboxed (Vector)
-import qualified Data.Vector.Unboxed as VU
+import Data.Vector.Storable (Vector)
+import qualified Data.Vector.Storable as VS
 
 import Core
 import Query
 import Schema
+import Utils.ImplTiming
 import Utils.Vector (byteStringToVector)
 
 data StepInfo =
@@ -23,7 +24,7 @@ data StepInfo =
     , stepBestImpl :: {-# UNPACK #-} !Int64
     , stepVariantId :: {-# UNPACK #-} !(Key Variant)
     , stepId :: {-# UNPACK #-} !Int64
-    , stepTimings :: {-# UNPACK #-} !(Vector (Int64, Double))
+    , stepTimings :: {-# UNPACK #-} !(Vector ImplTiming)
     } deriving (Show)
 
 stepInfoQuery
@@ -64,7 +65,7 @@ stepInfoQuery algoId platformId graphProperties stepProperties ts = Query{..}
                 Just $ graphProps <> stepProps
             _ -> Nothing
 
-        stepTimings = VU.zip impls timings
+        stepTimings = VS.zipWith ImplTiming impls timings
 
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
         [ SqlInt64, SqlInt64, SqlInt64, SqlBlob, SqlBlob, SqlBlob, SqlBlob ]

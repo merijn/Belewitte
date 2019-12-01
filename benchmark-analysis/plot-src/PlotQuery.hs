@@ -12,19 +12,20 @@ import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import Data.String.Interpolate.IsString (i)
-import Data.Vector.Unboxed (Vector)
-import qualified Data.Vector.Unboxed as VU
+import Data.Vector.Storable (Vector)
+import qualified Data.Vector.Storable as VS
 
 import Core
 import Query
 import Schema
+import Utils.ImplTiming
 import Utils.Vector (byteStringToVector)
 
 timePlotQuery
     :: Key Algorithm
     -> Key Platform
     -> Set (Key Variant)
-    -> Query (Text, (Vector (Int64, Double), Vector (Int64, Double)))
+    -> Query (Text, (Vector ImplTiming, Vector ImplTiming))
 timePlotQuery algoId platformId variants = Query{..}
   where
     queryName :: Text
@@ -39,7 +40,7 @@ timePlotQuery algoId platformId variants = Query{..}
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
         => [PersistValue]
-        -> m (Text, (Vector (Int64, Double), Vector (Int64, Double)))
+        -> m (Text, (Vector ImplTiming, Vector ImplTiming))
     convert [ PersistText graph
             , PersistByteString (byteStringToVector -> impls)
             , PersistByteString (byteStringToVector -> timings)
@@ -50,17 +51,18 @@ timePlotQuery algoId platformId variants = Query{..}
             = return $ (graph, (implTimings, extImplTimings))
       where
         !infinity = 1/0
-        implTimings = VU.zip impls timings
+        implTimings = VS.zipWith ImplTiming impls timings
 
-        maybeExternalTimings :: Maybe (Vector (Int64, Double))
+        maybeExternalTimings :: Maybe (Vector ImplTiming)
         maybeExternalTimings = case (externalImpls, externalTimings) of
-            (PersistNull, PersistNull) -> Just VU.empty
+            (PersistNull, PersistNull) -> Just VS.empty
             (PersistNull, PersistByteString _) -> Nothing
             (PersistByteString extImpls, PersistNull) ->
-                Just $ VU.map (, infinity) (byteStringToVector extImpls)
+                Just $ VS.map (\impl -> ImplTiming impl infinity)
+                              (byteStringToVector extImpls)
             (PersistByteString extImpls, PersistByteString times) ->
-                Just $ VU.zip (byteStringToVector extImpls)
-                              (byteStringToVector times)
+                Just $ VS.zipWith ImplTiming (byteStringToVector extImpls)
+                                             (byteStringToVector times)
             _ -> Nothing
 
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
@@ -158,7 +160,7 @@ WHERE RunConfig.algorithmId = ? AND RunConfig.platformId = ?
 ORDER BY Total.variantId ASC|]
 
 levelTimePlotQuery
-    :: Key Platform -> Key Variant -> Query (Int64, Vector (Int64, Double))
+    :: Key Platform -> Key Variant -> Query (Int64, Vector ImplTiming)
 levelTimePlotQuery platformId variant = Query{..}
   where
     queryName :: Text
@@ -166,12 +168,12 @@ levelTimePlotQuery platformId variant = Query{..}
 
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
-        => [PersistValue] -> m (Int64, Vector (Int64, Double))
+        => [PersistValue] -> m (Int64, Vector ImplTiming)
     convert [ PersistInt64 stepId
             , PersistByteString (byteStringToVector -> impls)
             , PersistByteString (byteStringToVector -> timings)
             ] =
-        return $ (stepId, VU.zip impls timings)
+        return $ (stepId, VS.zipWith ImplTiming impls timings)
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
         [ SqlInt64, SqlBlob, SqlBlob ]
 

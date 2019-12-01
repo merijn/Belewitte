@@ -33,8 +33,8 @@ import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Data.Time.Clock (getCurrentTime)
-import Data.Vector.Unboxed (Vector)
-import qualified Data.Vector.Unboxed as VU
+import Data.Vector.Storable (Vector)
+import qualified Data.Vector.Storable as VS
 import System.IO (hClose)
 import Text.Megaparsec (Parsec, parse, between, sepBy1)
 import Text.Megaparsec.Char (char, eol, string)
@@ -182,7 +182,7 @@ trainModel algoId platId ModelDesc{..} = do
     numEntries <- runSqlQueryCount trainQuery
 
     propCount <- runSqlQueryConduit trainQuery C.head >>= \case
-        Just (v, _) -> return $ VU.length v
+        Just (v, _) -> return $ VS.length v
         Nothing -> logThrowM . PatternFailed $
             "Unable to compute property count for model"
 
@@ -223,18 +223,18 @@ trainModel algoId platId ModelDesc{..} = do
             unknownTxt <- liftIO $ T.hGetContents unknownsHnd
             (modelUnknownCount, modelUnknownPreds) <- getUnknowns unknownTxt
 
-            let (graphProps, stepProps) = VU.splitAt (S.size trainGraphProps)
+            let (graphProps, stepProps) = VS.splitAt (S.size trainGraphProps)
                                                      featureImportance
 
                 modelGraphPropImportance :: Map Text Double
                 modelGraphPropImportance = M.fromList $
                     zip (S.toAscList trainGraphProps)
-                        (VU.toList graphProps)
+                        (VS.toList graphProps)
 
                 modelStepPropImportance :: Map Text Double
                 modelStepPropImportance = M.fromList $
                     zip (S.toAscList trainStepProps)
-                        (VU.toList stepProps)
+                        (VS.toList stepProps)
 
             return (model, ModelStats{..})
 
@@ -273,7 +273,7 @@ trainModel algoId platId ModelDesc{..} = do
     reduceInfo StepInfo{..} = (stepProps, stepBestImpl)
 
 putProps :: Vector Double -> ByteString
-putProps = LBS.toStrict . runPut . VU.mapM_ putDoublehost
+putProps = LBS.toStrict . runPut . VS.mapM_ putDoublehost
 
 putResults :: Int64 -> ByteString
 putResults = LBS.toStrict . runPut . putInt64host
@@ -282,7 +282,7 @@ getResult :: Int -> ByteString -> (Vector Double, Model)
 getResult columnCount = runGet parseBlock . LBS.fromStrict
   where
     parseBlock = do
-        dbls <- VU.replicateM columnCount getDoublehost
+        dbls <- VS.replicateM columnCount getDoublehost
         bs <- LBS.toStrict <$> getRemainingLazyByteString
         return (dbls, byteStringToModel bs)
 
