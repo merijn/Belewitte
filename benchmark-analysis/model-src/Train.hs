@@ -17,7 +17,7 @@ module Train
     , trainModel
     ) where
 
-import Control.Monad (forM, forM_)
+import Control.Monad (forM, forM_, replicateM)
 import Control.Monad.Trans.Resource (register, release)
 import Data.Binary.Get (getDoublehost, getRemainingLazyByteString, runGet)
 import Data.Binary.Put (putDoublehost, putInt64host, runPut)
@@ -36,7 +36,7 @@ import Data.Time.Clock (getCurrentTime)
 import Data.Vector.Unboxed (Vector)
 import qualified Data.Vector.Unboxed as VU
 import System.IO (hClose)
-import Text.Megaparsec (Parsec, parse, between, sepBy1, some)
+import Text.Megaparsec (Parsec, parse, between, sepBy1)
 import Text.Megaparsec.Char (char, eol, string)
 import Text.Megaparsec.Char.Lexer (decimal)
 import Text.Megaparsec.Error (errorBundlePretty)
@@ -293,10 +293,14 @@ getUnknowns txt = case parse parseUnknowns "getUnknowns" txt of
     Right r -> return r
 
 parseUnknowns :: Parsec Void Text (Int, [UnknownSet])
-parseUnknowns = (,) <$> decimal <* eol <*> some parseUnknown
+parseUnknowns = do
+    unknownCount <- decimal <* eol
+    uniqUnknownSets <- decimal <* eol
+    unknowns <- replicateM uniqUnknownSets parseUnknownSet
+    return (unknownCount, unknowns)
 
-parseUnknown :: Parsec Void Text UnknownSet
-parseUnknown = do
+parseUnknownSet :: Parsec Void Text UnknownSet
+parseUnknownSet = do
     setId <- decimal <* string " : "
     impls <- between (char '(') (char ')') $
         S.fromList <$> sepBy1 decimal (string ", ")

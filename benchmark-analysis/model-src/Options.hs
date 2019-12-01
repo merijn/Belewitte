@@ -8,6 +8,7 @@
 {-# LANGUAGE TypeFamilies #-}
 module Options (ModelCommand(..), commands, runSqlM) where
 
+import Control.Monad.Reader (ask)
 import Data.Char (isSpace, toLower)
 import qualified Data.Conduit.Combinators as C
 import Data.Functor.Compose (Compose(..))
@@ -32,7 +33,7 @@ import Model (Model)
 import OptionParsers
 import Query (getDistinctFieldQuery, runSqlQueryConduit)
 import Schema
-import Sql (SqlField)
+import Sql ((==.))
 import qualified Sql
 import Train (TrainingConfig(..))
 
@@ -51,7 +52,7 @@ dropProps input db
 
 data ModelCommand
     = Train
-      { getConfig :: SqlM TrainingConfig }
+      { getConfig :: Key Algorithm -> SqlM TrainingConfig }
     | QueryModel
       { getModel :: SqlM (Key Algorithm, Key PredictionModel, Model) }
     | Validate
@@ -254,12 +255,12 @@ compareParser = reportParser defaultRelativeToValues implTypes
     implTypes = implTypesParser ((mempty,) . S.singleton) extraVals
     extraVals = M.singleton "comparison" (Any True, S.empty)
 
-type SqlParser = Compose Parser SqlM
+type SqlParser = Compose Parser (ReaderT (Key Algorithm) SqlM)
 
-trainingConfig :: Parser (SqlM TrainingConfig)
-trainingConfig = getCompose $
-    TrainConfig <$> props GraphPropProperty "graph"
-                <*> props StepPropProperty "step"
+trainingConfig :: Parser (Key Algorithm -> SqlM TrainingConfig)
+trainingConfig = fmap runReaderT . getCompose $
+    TrainConfig <$> props "graph" gatherGraphProps
+                <*> props "step" gatherStepProps
                 <*> trainFract
                 <*> seedOpt
                 <*> Compose (pure (liftIO getCurrentTime))
@@ -272,37 +273,35 @@ trainingConfig = getCompose $
         [ metavar "PERCENT", short 'p', long "percent", value 0.8, showDefault
         , help "Training set as percentage of data." ]
 
-    props
-        :: SqlField rec Text
-        => Sql.EntityField rec Text -> String -> SqlParser (Set Text)
-    props field name = asum
-        [keepFilter field name, dropFilter field name, gatherProps field]
+    props :: String -> SqlParser (Set Text) -> SqlParser (Set Text)
+    props name gather = asum
+        [keepFilter gather name, dropFilter gather name, gather]
 
-    keepFilter
-        :: SqlField rec Text
-        => Sql.EntityField rec Text -> String -> SqlParser (Set Text)
-    keepFilter field name =
-        keepProps <$> gatherProps field <*> Compose (readProps <$> keepOpt)
+    keepFilter :: SqlParser (Set Text) -> String -> SqlParser (Set Text)
+    keepFilter gather name =
+        keepProps <$> gather <*> Compose (readProps <$> keepOpt)
       where
         keepOpt = strOption $ mconcat
             [ metavar "FILE", long ("keep-" <> name <> "-props")
             , help "File listing properties to use for training, one per line."
             ]
 
-    dropFilter
-        :: SqlField rec Text
-        => Sql.EntityField rec Text -> String -> SqlParser (Set Text)
-    dropFilter field name =
-        dropProps <$> gatherProps field <*> Compose (readProps <$> dropOpt)
+    dropFilter :: SqlParser (Set Text) -> String -> SqlParser (Set Text)
+    dropFilter gather name =
+        dropProps <$> gather <*> Compose (readProps <$> dropOpt)
       where
         dropOpt = strOption $ mconcat
             [ metavar "FILE", long ("drop-" <> name <> "-props")
             , help "File listing properties not to use for training, \
                    \one per line."]
 
-    gatherProps
-        :: (SqlField rec Text)
-        => Sql.EntityField rec Text -> SqlParser (Set Text)
-    gatherProps field = Compose . pure $ do
-        query <- getDistinctFieldQuery field
+    gatherGraphProps :: SqlParser (Set Text)
+    gatherGraphProps = Compose . pure . lift $ do
+        query <- getDistinctFieldQuery GraphPropProperty
         runSqlQueryConduit query $ C.foldMap S.singleton
+
+    gatherStepProps :: SqlParser (Set Text)
+    gatherStepProps = Compose . pure $ do
+        algoId <- ask
+        stepProps <- Sql.selectList [StepPropAlgorithmId ==. algoId] []
+        return . S.fromList $ map (stepPropProperty . entityVal) stepProps

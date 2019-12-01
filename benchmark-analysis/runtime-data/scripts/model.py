@@ -113,6 +113,7 @@ total = sum(pred['count'] for pred in unknown.values())
 
 with fdopen(opts.unknownsFd, 'wb') as unknownsFile:
     print >>unknownsFile, total
+    print >>unknownsFile, len(unknown)
     for key, val in sorted(unknown.items(), key=lambda x: x[1], reverse=True):
         print >>unknownsFile, val['id'], ":", key, ":", val['count']
 

@@ -128,6 +128,7 @@ Step(runConfigId, variantId, stepId, implId, minTime, timings) AS (
              , toPersistValue $ S.size stepProperties
              , toPersistValue algoId
              , toPersistValue platformId
+             , toPersistValue $ S.size stepProperties
              ]
 
     queryText = [i|
@@ -163,4 +164,5 @@ ON Step.variantId = StepProps.variantId AND Step.stepId = StepProps.stepId
 
 LEFT JOIN ImplVector
 WHERE RunConfig.algorithmId = ? AND RunConfig.platformId = ?
+  AND (StepProps.props NOT NULL OR ? = 0)
 ORDER BY Step.variantId, Step.stepId ASC|]

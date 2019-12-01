@@ -26,6 +26,7 @@ import Model
 import Options
 import Query
 import Schema
+import Sql ((==.))
 import qualified Sql
 import StepQuery (StepInfo, stepInfoQuery)
 import Train
@@ -90,7 +91,7 @@ main = runSqlM commands $ \case
                 | T.null desc = Nothing
                 | otherwise = Just desc
 
-        modelTrainConfig <- lift getConfig
+        modelTrainConfig <- lift $ getConfig algoId
 
         modelId <- lift $ fst <$> trainModel algoId platformId ModelDesc{..}
 
@@ -131,10 +132,10 @@ main = runSqlM commands $ \case
         timestamp <- maybe (liftIO getCurrentTime) return utcTime
 
         graphPropQuery <- getDistinctFieldQuery GraphPropProperty
-        stepPropQuery <- getDistinctFieldQuery StepPropProperty
-
         graphprops <- runSqlQueryConduit graphPropQuery $ C.foldMap S.singleton
-        stepprops <- runSqlQueryConduit stepPropQuery $ C.foldMap S.singleton
+
+        stepprops <- S.fromList . map (stepPropProperty . entityVal) <$>
+            Sql.selectList [StepPropAlgorithmId ==. algoId] []
 
         let stepQuery :: Query StepInfo
             stepQuery =
