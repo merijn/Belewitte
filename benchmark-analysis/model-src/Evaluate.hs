@@ -16,12 +16,14 @@ module Evaluate
     , compareImplementations
     ) where
 
+import Control.Applicative (ZipList(..))
 import Control.Monad.Fix (fix)
 import Data.Bifunctor (second)
 import Data.Conduit as C
 import Data.Conduit.List as C (mapAccum)
 import qualified Data.Conduit.Combinators as C
 import Data.Function (on)
+import Data.Functor.Compose (Compose(..))
 import Data.IntervalSet (IntervalSet)
 import qualified Data.IntervalSet as IS
 import Data.IntMap (IntMap, (!?))
@@ -70,19 +72,17 @@ filterImpls implTypes = IM.filter (implFilter . implementationType)
     implFilter = getAny . foldMap (\i -> Any . (==i)) implTypes
 
 reportImplementations
-    :: Unbox a
-    => Int
+    :: Int
     -> Pair (IntMap Text)
     -> ((Int64, a) -> (Int64, a) -> Ordering)
     -> (a -> Text)
-    -> Pair (Vector (Int64, a))
+    -> Pair [(Int64, a)]
     -> Text
 reportImplementations pad implMaps cmp f =
     foldMap renderEntry
         . sortBy (cmp `on` snd)
         . mergePair
         . filterLabelEntries
-        . fmap VU.toList
   where
     lookupName :: IntMap Text -> (Int64, a) -> Maybe (Text, (Int64, a))
     lookupName implNames v@(i, _) = (,v) <$> implNames !? fromIntegral i
@@ -272,7 +272,9 @@ aggregateVariants variantIntervals relTo implMaps = do
 
         relTiming t = percent t optimalTime <> " (" <> showText t <> ")\n"
 
-        results = mapFirst (VU.cons (optimalImplId, optimalTime)) implTimes
+        results = VU.toList <$> mapFirst (VU.cons optimalTiming) implTimes
+          where
+            optimalTiming = (optimalImplId, optimalTime)
 
         comparison (i, v1) (j, v2)
             | i == optimalImplId = LT
@@ -414,13 +416,19 @@ reportTotalStatistics Report{..} implMaps TotalStats{..} = do
       where
         roundedVal val = showFFloat (Just 3) val ""
 
-    reportTimings :: Pair (Vector (Int64, (Double, Int, Int, Int, Double)))
-    reportTimings = VU.zipWith5 (\(i,a) b c d e-> (i,(a,b,c,d,e)))
-            <$> timesCumRelError
-            <*> relErrorOneToTwo
-            <*> relErrorMoreThanFive
-            <*> relErrorMoreThanTwenty
-            <*> timesMaxRelError
+    vectorToZipList :: Unbox a => Pair (Vector a) -> Compose Pair ZipList a
+    vectorToZipList = Compose . fmap (ZipList . VU.toList)
+
+    reportTimings :: Pair [(Int64, (Double, Int, Int, Int, Double))]
+    reportTimings = decompose $ (\(i,a) b c d e -> (i,(a,b,c,d,e)))
+            <$> vectorToZipList timesCumRelError
+            <*> vectorToZipList relErrorOneToTwo
+            <*> vectorToZipList relErrorMoreThanFive
+            <*> vectorToZipList relErrorMoreThanTwenty
+            <*> vectorToZipList timesMaxRelError
+      where
+        decompose :: Compose Pair ZipList a -> Pair [a]
+        decompose = fmap getZipList . getCompose
 
     comparison
         :: (Int64, (Double, Int, Int, Int, Double))
