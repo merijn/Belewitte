@@ -86,9 +86,9 @@ processProperty :: Result (Key Algorithm, Key Graph, Maybe Hash) -> SqlM ()
 processProperty Result{resultValue=(algoId, graphId, hash), ..} = do
     logDebugNS "Property#Start" resultLabel
     liftIO $ removeFile timingFile
+    resultHash <- computeHash outputFile
 
     SqlTrans.runTransaction $ do
-        resultHash <- computeHash outputFile
         loadProps <- case hash of
             Nothing -> True <$ SqlTrans.update resultVariant
                                     [VariantResult =. Just resultHash]
