@@ -74,8 +74,9 @@ instance PrettyFields GraphProp where
         ]
 
 instance PrettyFields StepPropValue where
-    prettyFieldInfo = ("Variant", idField StepPropValueVariantId) :|
-        [ ("Step", StepPropValueStepId `fieldVia` prettyShow)
+    prettyFieldInfo = ("Algorithm", idField StepPropValueAlgorithmId) :|
+        [ ("Variant", idField StepPropValueVariantId)
+        , ("Step", StepPropValueStepId `fieldVia` prettyShow)
         , ("Property", textField StepPropValueProperty)
         , ("Value", StepPropValueValue `fieldVia` prettyDouble)
         ]

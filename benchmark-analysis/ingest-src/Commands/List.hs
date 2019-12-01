@@ -277,7 +277,8 @@ commands = CommandGroup CommandInfo
         , commandDesc = "List all step properties."
         }
         $ buildOptionsWithoutId
-            [ AnyField StepPropValueVariantId
+            [ AnyField StepPropValueAlgorithmId
+            , AnyField StepPropValueVariantId
             , AnyField StepPropValueStepId
             , AnyField StepPropValueProperty
             ]
