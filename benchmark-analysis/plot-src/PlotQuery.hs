@@ -43,20 +43,24 @@ timePlotQuery algoId platformId variants = Query{..}
     convert [ PersistText graph
             , PersistByteString (byteStringToVector -> impls)
             , PersistByteString (byteStringToVector -> timings)
-            , PersistByteString (byteStringToVector -> extImpls)
-            , extTimings
+            , externalImpls
+            , externalTimings
             ]
-            | Just extImplTimings <- maybeExtTimings
+            | Just extImplTimings <- maybeExternalTimings
             = return $ (graph, (implTimings, extImplTimings))
       where
         !infinity = 1/0
         implTimings = VU.zip impls timings
 
-        maybeExtTimings :: Maybe (Vector (Int64, Double))
-        maybeExtTimings = case extTimings of
-            PersistNull -> Just $ VU.map (, infinity) extImpls
-            PersistByteString times -> Just $
-                VU.zip extImpls (byteStringToVector times)
+        maybeExternalTimings :: Maybe (Vector (Int64, Double))
+        maybeExternalTimings = case (externalImpls, externalTimings) of
+            (PersistNull, PersistNull) -> Just VU.empty
+            (PersistNull, PersistByteString _) -> Nothing
+            (PersistByteString extImpls, PersistNull) ->
+                Just $ VU.map (, infinity) (byteStringToVector extImpls)
+            (PersistByteString extImpls, PersistByteString times) ->
+                Just $ VU.zip (byteStringToVector extImpls)
+                              (byteStringToVector times)
             _ -> Nothing
 
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
