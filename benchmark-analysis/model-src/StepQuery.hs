@@ -89,7 +89,7 @@ IndexedStepProps(variantId, stepId, idx, property, value) AS (
          , ROW_NUMBER() OVER (PARTITION BY variantId, stepId ORDER BY property)
          , property
          , value
-    FROM StepProp
+    FROM StepPropValue
     WHERE property IN #{inExpression stepProperties}
 ),
 

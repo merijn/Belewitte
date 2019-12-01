@@ -277,15 +277,16 @@ commands = CommandGroup CommandInfo
         , commandDesc = "List all step properties."
         }
         $ buildOptionsWithoutId
-            [ AnyField StepPropVariantId
-            , AnyField StepPropStepId
-            , AnyField StepPropProperty
+            [ AnyField StepPropValueVariantId
+            , AnyField StepPropValueStepId
+            , AnyField StepPropValueProperty
             ]
 
-            [ "variant" =. IdField 'v' $ Simple StepPropVariantId
-            , "step" =. IntField 's' $ Simple StepPropStepId
-            , "property" =. StringField 'p' $ Simple StepPropProperty
-            , "value" =. SortOnlyField $ StepPropValue
+            [ "algorithm" =. IdField 'a' $ Simple StepPropValueAlgorithmId
+            , "variant" =. IdField 'v' $ Simple StepPropValueVariantId
+            , "step" =. IntField 's' $ Simple StepPropValueStepId
+            , "property" =. StringField 'p' $ Simple StepPropValueProperty
+            , "value" =. SortOnlyField $ StepPropValueValue
             ]
     , SingleCommand CommandInfo
         { commandName = "run-config"

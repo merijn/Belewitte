@@ -135,7 +135,7 @@ migrations =
     ]
 
 schemaVersion :: Int64
-schemaVersion = 13
+schemaVersion = 14
 
 type MigrationAction = Transaction DummySql [EntityDef]
 

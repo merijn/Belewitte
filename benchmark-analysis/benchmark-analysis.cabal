@@ -91,6 +91,7 @@ Library
                         Schema.Platform
                         Schema.Platform.V0
                         Schema.Properties
+                        Schema.Properties.V0
                         Schema.Run
                         Schema.Run.V0
                         Schema.RunConfig

@@ -52,7 +52,7 @@ computeHash path = do
 variantToPropertyJob
     :: Entity Variant
     -> ConduitT (Entity Variant)
-                (Job (Key Graph, Maybe Hash))
+                (Job (Key Algorithm, Key Graph, Maybe Hash))
                 SqlM
                 ()
 variantToPropertyJob
@@ -74,7 +74,7 @@ variantToPropertyJob
         Graph _ path _ _ <- Sql.getJust graphId
         VariantConfig algoId _ flags _ <- Sql.getJust variantCfgId
         Algorithm algo _ <- Sql.getJust algoId
-        yield . makeJob (graphId,hash) varId Nothing $
+        yield . makeJob (algoId,graphId,hash) varId Nothing $
             [ "-a", algo
             , "-k switch --log"
             , showSqlKey varId <> ".log"
@@ -82,8 +82,8 @@ variantToPropertyJob
             , path
             ]
 
-processProperty :: Result (Key Graph, Maybe Hash) -> SqlM ()
-processProperty Result{resultValue=(graphId, hash), ..} = do
+processProperty :: Result (Key Algorithm, Key Graph, Maybe Hash) -> SqlM ()
+processProperty Result{resultValue=(algoId, graphId, hash), ..} = do
     logDebugNS "Property#Start" resultLabel
     liftIO $ removeFile timingFile
 
@@ -97,9 +97,9 @@ processProperty Result{resultValue=(graphId, hash), ..} = do
             _ -> False <$ logErrorN
                     ("Hash mismatch for variant: " <> showSqlKey resultVariant)
 
-        when loadProps $ do
-            liftIO $ removeFile outputFile
+        liftIO $ removeFile outputFile
 
+        when loadProps $ do
             runConduit $
                 C.sourceFile propLog
                 .| C.decode C.utf8
@@ -107,8 +107,9 @@ processProperty Result{resultValue=(graphId, hash), ..} = do
                 .| conduitParse property
                 .| C.mapM_ insertProperty
 
-            liftIO $ removeFile propLog
             SqlTrans.update resultVariant [VariantPropsStored =. True]
+
+        liftIO $ removeFile propLog
 
     logDebugNS "Property#End" resultLabel
   where
@@ -125,8 +126,9 @@ processProperty Result{resultValue=(graphId, hash), ..} = do
     insertProperty (GraphProperty name val) =
         SqlTrans.insertUniq $ GraphProp graphId name val
 
-    insertProperty (StepProperty n name val) =
-        SqlTrans.insertUniq $ StepProp resultVariant n name val
+    insertProperty (StepProperty n name val) = do
+        SqlTrans.insertUniq $ StepProp algoId name
+        SqlTrans.insertUniq $ StepPropValue algoId resultVariant n name val
 
     insertProperty Prediction{} = return ()
 
