@@ -111,6 +111,7 @@ Library
                         Sql.Transaction
                         SQLiteExts
                         Types
+                        Utils.ImplTiming
                         Utils.Pair
                         Utils.Process
                         Utils.Vector
