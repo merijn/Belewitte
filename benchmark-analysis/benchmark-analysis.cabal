@@ -105,6 +105,7 @@ Library
                         Schema.Variant
                         Schema.Variant.V0
                         Schema.Variant.V1
+                        Schema.Variant.V2
                         Schema.VariantConfig
                         Sql
                         Sql.Core

@@ -28,12 +28,13 @@ import Data.Conduit (ConduitT, (.|), runConduit, yield)
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.Text as C
 import Data.Maybe (fromMaybe)
+import Data.Semigroup (Max(..))
 import qualified Data.Text as T
 import Data.Time.Clock (getCurrentTime)
 import System.Directory (removeFile)
 
 import Core
-import MissingQuery (MissingRun(..), ValidationVariant(..), validationRunQuery)
+import MissingQuery
 import Parsers
 import ProcessPool (Job, Result(..), makeJob)
 import Query (runSqlQuery)
@@ -52,11 +53,11 @@ computeHash path = do
 variantToPropertyJob
     :: Entity Variant
     -> ConduitT (Entity Variant)
-                (Job (Key Algorithm, Key Graph, Maybe Hash))
+                (Job (Key Algorithm, Key Graph, Maybe Hash, Int))
                 SqlM
                 ()
 variantToPropertyJob
-    (Entity varId (Variant graphId variantCfgId _ hash hasProps retries)) =
+    (Entity varId (Variant graphId variantCfgId _ hash step hasProps retries)) =
         case hash of
             Nothing
                 | retries < 5 -> yieldJob
@@ -74,7 +75,7 @@ variantToPropertyJob
         Graph _ path _ _ <- Sql.getJust graphId
         VariantConfig algoId _ flags _ <- Sql.getJust variantCfgId
         Algorithm algo _ <- Sql.getJust algoId
-        yield . makeJob (algoId,graphId,hash) varId Nothing $
+        yield . makeJob (algoId,graphId,hash,step) varId Nothing $
             [ "-a", algo
             , "-k switch --log"
             , showSqlKey varId <> ".log"
@@ -82,13 +83,14 @@ variantToPropertyJob
             , path
             ]
 
-processProperty :: Result (Key Algorithm, Key Graph, Maybe Hash) -> SqlM ()
-processProperty Result{resultValue=(algoId, graphId, hash), ..} = do
+processProperty
+    :: Result (Key Algorithm, Key Graph, Maybe Hash, Int) -> SqlM ()
+processProperty Result{resultValue=(algoId, graphId, hash, maxStep), ..} = do
     logDebugNS "Property#Start" resultLabel
     liftIO $ removeFile timingFile
     resultHash <- computeHash outputFile
 
-    SqlTrans.runTransaction $ do
+    SqlTrans.tryAbortableTransaction $ do
         loadProps <- case hash of
             Nothing -> True <$ SqlTrans.update resultVariant
                                     [VariantResult =. Just resultHash]
@@ -100,12 +102,34 @@ processProperty Result{resultValue=(algoId, graphId, hash), ..} = do
         liftIO $ removeFile outputFile
 
         when loadProps $ do
-            runConduit $
+            stepCount <- runConduit $
                 C.sourceFile propLog
                 .| C.decode C.utf8
                 .| C.map (T.replace "," "")
                 .| conduitParse property
-                .| C.mapM_ insertProperty
+                .| C.foldMapM insertProperty
+
+            case stepCount of
+                Nothing -> logWarnN $ mconcat
+                    [ "Did't find step count for variant: "
+                    , showSqlKey resultVariant
+                    ]
+
+                Just n
+                  | maxStep == -1 -> SqlTrans.update resultVariant
+                        [VariantMaxStepId =. getMax n]
+
+                  | getMax n < maxStep -> SqlTrans.abortTransaction $ mconcat
+                        [ "Found less than expected step count for variant: "
+                        , showSqlKey resultVariant
+                        ]
+
+                 | getMax n > maxStep -> SqlTrans.abortTransaction $ mconcat
+                        [ "Found more than expected step count for variant: "
+                        , showSqlKey resultVariant
+                        ]
+
+                 | otherwise -> return ()
 
             SqlTrans.update resultVariant [VariantPropsStored =. True]
 
@@ -122,42 +146,45 @@ processProperty Result{resultValue=(algoId, graphId, hash), ..} = do
     outputFile :: FilePath
     outputFile = T.unpack resultLabel <> ".output"
 
-    insertProperty :: Property -> Transaction SqlM ()
-    insertProperty (GraphProperty name val) =
+    insertProperty :: Property -> Transaction SqlM (Maybe (Max Int))
+    insertProperty (GraphProperty name val) = Nothing <$ do
         SqlTrans.insertUniq $ GraphProp graphId name val
 
-    insertProperty (StepProperty n name val) = do
+    insertProperty (StepProperty n _ _)
+        | maxStep /= -1 && n > maxStep = SqlTrans.abortTransaction
+            "Found step property with a step count larger than stored maximum."
+
+    insertProperty (StepProperty n name val) = Just (Max n) <$ do
         SqlTrans.insertUniq $ StepProp algoId name
         SqlTrans.insertUniq $ StepPropValue algoId resultVariant n name val
 
-    insertProperty Prediction{} = return ()
+    insertProperty Prediction{} = return Nothing
 
 missingRunToTimingJob
     :: (MonadLogger m, MonadResource m, MonadSql m)
     => Key Platform
-    -> MissingRun (Maybe Hash)
-    -> ConduitT (MissingRun (Maybe Hash))
-                (Job (Key Algorithm, Key Implementation, Hash))
+    -> MissingRun ExtraVariantInfo
+    -> ConduitT (MissingRun ExtraVariantInfo)
+                (Job (Key Algorithm, Key Implementation, Hash, Int))
                 m
                 ()
-missingRunToTimingJob platformId MissingRun{..}
-  | Nothing <- missingRunExtraInfo
-  = logErrorN . mconcat $
+missingRunToTimingJob platformId MissingRun{..} = case missingRunExtraInfo of
+    ExtraVariantInfo Nothing _ -> logErrorN . mconcat $
         [ "Algorithm #", showSqlKey missingRunAlgorithmId
         , " results missing for variant #", showSqlKey missingRunVariantId
         ]
 
-  | Just hash <- missingRunExtraInfo = yield $ makeJob
-            (missingRunAlgorithmId, missingRunImplId, hash)
+    ExtraVariantInfo (Just hash) steps -> yield $ makeJob
+            (missingRunAlgorithmId, missingRunImplId, hash, steps)
             missingRunVariantId
             (Just (platformId, missingRunImplName))
             missingRunArgs
 
 processTiming
-    :: (MonadLogger m, MonadResource m, MonadSql m, MonadThrow m)
+    :: (MonadCatch m, MonadLogger m, MonadResource m, MonadSql m)
     => Key RunConfig
     -> Text
-    -> Result (Key Algorithm, Key Implementation, Hash)
+    -> Result (Key Algorithm, Key Implementation, Hash, Int)
     -> m ()
 processTiming runConfigId commit Result{..} = do
     logDebugNS "Timing#Start " resultLabel
@@ -171,7 +198,7 @@ processTiming runConfigId commit Result{..} = do
         , showSqlKey implId, "! Expected commit ", commit, " found commit "
         , resultAlgorithmVersion
         ]
-       else SqlTrans.runTransaction $ do
+       else SqlTrans.tryAbortableTransaction $ do
         let validated = resultHash == hash
 
         runId <- SqlTrans.insert $
@@ -196,13 +223,17 @@ processTiming runConfigId commit Result{..} = do
 
     liftIO $ removeFile timingFile
   where
-    (algoId, implId, hash) = resultValue
+    (algoId, implId, hash, maxStep) = resultValue
     timingFile = T.unpack resultLabel <> ".timings"
     outputFile = T.unpack resultLabel <> ".output"
 
-    insertTiming :: MonadSql m => Key Run -> Timer -> Transaction m ()
+    insertTiming
+        :: (MonadThrow m, MonadSql m) => Key Run -> Timer -> Transaction m ()
     insertTiming runId (TotalTiming Timing{..}) = SqlTrans.insert_ $
         TotalTimer runId name minTime avgTime maxTime stddev
+
+    insertTiming _ (StepTiming n _) | n > maxStep = SqlTrans.abortTransaction
+            "Found step property with a step count larger than stored maximum."
 
     insertTiming runId (StepTiming n Timing{..}) = SqlTrans.insert_ $
         StepTimer runId n name minTime avgTime maxTime stddev

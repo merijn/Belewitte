@@ -8,6 +8,7 @@
 {-# LANGUAGE ViewPatterns #-}
 module MissingQuery
     ( MissingRun(..)
+    , ExtraVariantInfo(..)
     , ValidationVariant(..)
     , missingBenchmarkQuery
     , validationVariantQuery
@@ -31,6 +32,11 @@ data MissingRun a = MissingRun
     , missingRunArgs :: ![Text]
     , missingRunExtraInfo :: !a
     } deriving (Functor, Show)
+
+data ExtraVariantInfo = ExtraVariantInfo
+    { extraVariantHash :: !(Maybe Hash)
+    , extraVariantSteps :: {-# UNPACK #-} !Int
+    } deriving (Show)
 
 data ValidationVariant = ValidationVariant
     { validationAlgorithmId :: {-# UNPACK #-} !(Key Algorithm)
@@ -161,7 +167,7 @@ WHERE RunConfig.platformId = ?
   AND NOT Run.validated
 |]
 
-missingBenchmarkQuery :: Key RunConfig -> Query (MissingRun (Maybe Hash))
+missingBenchmarkQuery :: Key RunConfig -> Query (MissingRun ExtraVariantInfo)
 missingBenchmarkQuery runConfigId = Query{..}
   where
     queryName :: Text
@@ -169,19 +175,21 @@ missingBenchmarkQuery runConfigId = Query{..}
 
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
-        => [PersistValue] -> m (MissingRun (Maybe Hash))
+        => [PersistValue] -> m (MissingRun ExtraVariantInfo)
     convert [ PersistInt64 numRepeats
             , PersistText graphPath
             , PersistInt64 (toSqlKey -> missingRunAlgorithmId)
             , PersistText algoName
             , PersistInt64 (toSqlKey -> missingRunVariantId)
             , (fromPersistValue -> Right variantFlags)
-            , (fromPersistValue -> Right missingRunExtraInfo)
+            , (fromPersistValue -> Right extraVariantHash)
+            , (fromPersistValue -> Right extraVariantSteps)
             , PersistInt64 (toSqlKey -> missingRunImplId)
             , PersistText missingRunImplName
             , (fromPersistValue -> Right implFlags)
             ] = return $ MissingRun{..}
       where
+        missingRunExtraInfo = ExtraVariantInfo{..}
         missingRunArgs =
           [ "-a " <> algoName
           , fromMaybe ("-k " <> missingRunImplName) implFlags
@@ -192,7 +200,7 @@ missingBenchmarkQuery runConfigId = Query{..}
 
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
         [ SqlInt64, SqlString, SqlInt64, SqlString, SqlInt64, SqlString
-        , SqlBlob, SqlInt64, SqlString, SqlString ]
+        , SqlBlob, SqlInt64, SqlInt64, SqlString, SqlString ]
 
     cteParams :: [PersistValue]
     cteParams = []
@@ -211,6 +219,7 @@ SELECT DISTINCT RunConfig.repeats
               , Variant.id
               , VariantConfig.flags
               , Variant.result
+              , Variant.maxStepId
               , Implementation.id
               , Implementation.name
               , Implementation.flags
