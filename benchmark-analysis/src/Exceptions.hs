@@ -449,6 +449,18 @@ fromSqlException exc = do
     SqlException e <- fromException exc
     cast e
 
+data AbortTransaction = AbortTransaction Text
+    deriving (Show, Typeable)
+
+instance Pretty AbortTransaction where
+    pretty (AbortTransaction txt) = Pretty.vsep
+        [ "Aborted transaction:", Pretty.reflow txt ]
+
+instance Exception AbortTransaction where
+    toException = toSqlException
+    fromException = fromSqlException
+    displayException = show . pretty
+
 data ExpectedSingleValue = ExpectedSingleValue Text
     deriving (Show, Typeable)
 

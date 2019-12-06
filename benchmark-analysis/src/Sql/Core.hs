@@ -33,10 +33,10 @@ module Sql.Core
     ) where
 
 import Control.Monad (join, void)
-import Control.Monad.Catch (MonadThrow, MonadCatch)
+import Control.Monad.Catch (MonadThrow, MonadCatch, handle, throwM)
 import Control.Monad.Fail (MonadFail)
 import Control.Monad.IO.Unlift (MonadIO)
-import Control.Monad.Logger (MonadLogger)
+import Control.Monad.Logger (MonadLogger, logErrorN)
 import Control.Monad.Reader
     (MonadReader, ReaderT, asks, runReaderT, withReaderT)
 import Control.Monad.Trans (MonadTrans, lift)
@@ -115,6 +115,9 @@ newtype Transaction m r = Transaction
 type SqlRecord rec = (PersistRecordBackend rec (RawSqlite SqlBackend))
 type SqlField rec field = (PersistField field, SqlRecord rec)
 
+abortTransaction :: MonadThrow m => Text -> Transaction m r
+abortTransaction txt = Transaction . throwM $ AbortTransaction txt
+
 runTransaction :: MonadSql m => Transaction m r -> m r
 runTransaction (Transaction transaction) = do
     (key, conn) <- getConnFromPool >>= allocateAcquire
@@ -124,6 +127,14 @@ runTransactionWithoutForeignKeys :: MonadSql m => Transaction m r -> m r
 runTransactionWithoutForeignKeys (Transaction transaction) = do
     (key, conn) <- getConnWithoutForeignKeysFromPool >>= allocateAcquire
     runReaderT transaction conn <* release key
+
+tryAbortableTransaction
+    :: (MonadCatch m, MonadLogger m, MonadSql m) => Transaction m () -> m ()
+tryAbortableTransaction = handle abortException . runTransaction
+  where
+    abortException :: MonadLogger m => AbortTransaction -> m ()
+    abortException (AbortTransaction msg) =
+      logErrorN $ "Transaction aborted: " <> msg
 
 liftProjectPersist
     :: (BackendCompatible sup (RawSqlite SqlBackend), MonadSql m)
