@@ -99,8 +99,10 @@ struct BFS : public ImplementationTemplate<Platform,Vertex,Edge,switching>
                 levelTimer.stop();
 
                 if constexpr (isSwitching) {
-                    setProps(frontier);
-                    if (this->predict()) setKernelConfig(kernel);
+                    if (frontier) {
+                        setProps(frontier);
+                        if (this->predict()) setKernelConfig(kernel);
+                    }
                 }
             } while (frontier);
             bfs.stop();
