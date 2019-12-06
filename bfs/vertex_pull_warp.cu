@@ -60,6 +60,8 @@ vertexPullWarpBfs
             }
         }
 
+        __syncwarp();
+
         for (unsigned IDX = W_OFF; IDX < chunk_size; IDX += warp_size) {
             if (myLevels[IDX] == newDepth) bfs.update();
         }
