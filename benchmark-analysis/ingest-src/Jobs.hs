@@ -53,29 +53,60 @@ computeHash path = do
 variantToPropertyJob
     :: Entity Variant
     -> ConduitT (Entity Variant)
-                (Job (Key Algorithm, Key Graph, Maybe Hash, Int))
+                (Job (Key Algorithm, Key Graph, Maybe Hash, Maybe Int))
                 SqlM
                 ()
 variantToPropertyJob
     (Entity varId (Variant graphId variantCfgId _ hash step hasProps retries)) =
         case hash of
             Nothing
-                | retries < 5 -> yieldJob
-                | otherwise -> logWarnN $
+                | retries < 5 && not hasProps && step == 0 -> yieldJob
+                | hasProps -> logErrorN $
+                    "Properties stored, but not result hash for variant #"
+                    <> showSqlKey varId
+
+                | not hasProps && step /= 0 -> logErrorN $
+                    "No properties, but did find max steps for variant #"
+                    <> showSqlKey varId
+
+                | retries >= 5 -> logWarnN $
                     "Hash missing, but too many retries for variant #"
                     <> showSqlKey varId
 
+                | otherwise -> logErrorN $
+                    "Variant information for #" <> showSqlKey varId
+                    <> " is in an inconsistent state!"
+
             Just _
-                | not hasProps && retries < 5 -> yieldJob
-                | not hasProps -> logWarnN $
-                    "Too many retries for variant #" <> showSqlKey varId
-                | otherwise -> return ()
+                | retries < 5 && not hasProps && step == 0 -> do
+                    logWarnN $ mconcat
+                      [ "Found a stored result, but no properties for variant#"
+                      , showSqlKey varId
+                      ]
+                    yieldJob
+
+                | hasProps -> return ()
+
+                | not hasProps && step /= 0 -> logErrorN $
+                    "No properties, but did find max steps for variant #"
+                    <> showSqlKey varId
+
+                | retries >= 5 -> logWarnN $
+                    "No properties, but too many retries for variant #"
+                    <> showSqlKey varId
+
+                | otherwise -> logErrorN $
+                    "Variant information for #" <> showSqlKey varId
+                    <> " is in an inconsistent state!"
   where
+    maxStep | not hasProps && step == 0 = Nothing
+            | otherwise = Just step
+
     yieldJob = do
         Graph _ path _ _ <- Sql.getJust graphId
         VariantConfig algoId _ flags _ <- Sql.getJust variantCfgId
         Algorithm algo _ <- Sql.getJust algoId
-        yield . makeJob (algoId,graphId,hash,step) varId Nothing $
+        yield . makeJob (algoId,graphId,hash,maxStep) varId Nothing $
             [ "-a", algo
             , "-k switch --log"
             , showSqlKey varId <> ".log"
@@ -84,7 +115,7 @@ variantToPropertyJob
             ]
 
 processProperty
-    :: Result (Key Algorithm, Key Graph, Maybe Hash, Int) -> SqlM ()
+    :: Result (Key Algorithm, Key Graph, Maybe Hash, Maybe Int) -> SqlM ()
 processProperty Result{resultValue=(algoId, graphId, hash, maxStep), ..} = do
     logDebugNS "Property#Start" resultLabel
     liftIO $ removeFile timingFile
@@ -109,27 +140,28 @@ processProperty Result{resultValue=(algoId, graphId, hash, maxStep), ..} = do
                 .| conduitParse property
                 .| C.foldMapM insertProperty
 
-            case stepCount of
-                Nothing -> logWarnN $ mconcat
-                    [ "Did't find step count for variant: "
+            case (maxStep, stepCount) of
+                (_, Nothing) -> logInfoN $ mconcat
+                    [ "Did't find step count for algorithm #"
+                    , showSqlKey algoId, " and variant #"
                     , showSqlKey resultVariant
                     ]
 
-                Just n
-                  | maxStep == -1 -> SqlTrans.update resultVariant
-                        [VariantMaxStepId =. getMax n]
+                (Nothing, Just (Max n)) ->
+                        SqlTrans.update resultVariant [VariantMaxStepId =. n]
 
-                  | getMax n < maxStep -> SqlTrans.abortTransaction $ mconcat
+                (Just step, Just (Max n))
+                    | n < step -> SqlTrans.abortTransaction $ mconcat
                         [ "Found less than expected step count for variant: "
                         , showSqlKey resultVariant
                         ]
 
-                 | getMax n > maxStep -> SqlTrans.abortTransaction $ mconcat
+                    | n > step -> SqlTrans.abortTransaction $ mconcat
                         [ "Found more than expected step count for variant: "
                         , showSqlKey resultVariant
                         ]
 
-                 | otherwise -> return ()
+                    | otherwise -> return ()
 
             SqlTrans.update resultVariant [VariantPropsStored =. True]
 
@@ -151,7 +183,8 @@ processProperty Result{resultValue=(algoId, graphId, hash, maxStep), ..} = do
         SqlTrans.insertUniq $ GraphProp graphId name val
 
     insertProperty (StepProperty n _ _)
-        | maxStep /= -1 && n > maxStep = SqlTrans.abortTransaction
+        | Just i <- maxStep
+        , n > i = SqlTrans.abortTransaction
             "Found step property with a step count larger than stored maximum."
 
     insertProperty (StepProperty n name val) = Just (Max n) <$ do

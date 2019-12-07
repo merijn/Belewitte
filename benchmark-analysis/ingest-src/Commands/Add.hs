@@ -140,7 +140,7 @@ addGraphs paths = do
         insertVariant :: MonadSql m => Entity VariantConfig -> Transaction m ()
         insertVariant (Entity variantCfgId (VariantConfig algoId _ _ _)) =
             SqlTrans.insert_ $
-                Variant graphId variantCfgId algoId Nothing (-1) False 0
+                Variant graphId variantCfgId algoId Nothing 0 False 0
 
 addAlgorithm :: Input SqlM ()
 addAlgorithm = withInteractiveLogging $ do
@@ -180,7 +180,7 @@ addVariant = do
         checkSetDefault varCfgId VariantConfigIsDefault defaultPrompt
             [VariantConfigAlgorithmId ==. algoId]
 
-        let mkVariant gId = Variant gId varCfgId algoId Nothing (-1) False 0
+        let mkVariant gId = Variant gId varCfgId algoId Nothing 0 False 0
 
         runConduit $
             SqlTrans.selectKeys [] [] .| C.mapM_ (SqlTrans.insert_ . mkVariant)
