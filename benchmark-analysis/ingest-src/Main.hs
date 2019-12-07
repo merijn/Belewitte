@@ -103,14 +103,16 @@ checkCxxCompiled = void $ do
     RuntimeData.getKernelExecutable
     RuntimeData.getKernelLibPath
 
-pipelineHandler :: (MonadLogger m, Show a) => Handler m a
-pipelineHandler = Handle handler
+pipelineHandler
+    :: MonadLogger m => (a -> Key Platform) -> Handler m a
+pipelineHandler f = Handle (handler . f)
   where
-    handler :: (MonadLogger m, Show a) => a -> SomeException -> m Action
+    handler :: MonadLogger m => Key Platform -> SomeException -> m Action
     handler val exc = Drop <$ do
-        logErrorN . T.pack $ mconcat
-            [ "Error while processing: ", show val, "\n"
-            , displayException exc
+        logErrorN $ mconcat
+            [ "Error while processing platform: "
+            , showSqlKey val, "\n"
+            , T.pack $ displayException exc
             ]
 
 runBenchmarks :: Input SqlM ()
@@ -137,7 +139,7 @@ runBenchmarks = lift $ do
     platformQuery <- getDistinctFieldQuery RunConfigPlatformId
 
     runConduit $ runSqlQuery platformQuery
-        .| parMapM_ pipelineHandler 10 processPlatformRunConfigs
+        .| parMapM_ (pipelineHandler id) 10 processPlatformRunConfigs
   where
     processPlatformRunConfigs :: Key Platform -> SqlM ()
     processPlatformRunConfigs platformId = do
@@ -171,7 +173,7 @@ validate :: Input SqlM ()
 validate = lift $ do
     checkCxxCompiled
     runConduit $ Sql.selectSource [] []
-        .| parMapM_ pipelineHandler 10 validateForPlatform
+        .| parMapM_ (pipelineHandler entityKey) 10 validateForPlatform
   where
     validateForPlatform :: Entity Platform -> SqlM ()
     validateForPlatform (Entity platformId platform) = runConduit $ do
