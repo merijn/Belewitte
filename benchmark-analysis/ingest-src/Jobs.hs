@@ -36,7 +36,7 @@ import System.Directory (removeFile)
 import Core
 import MissingQuery
 import Parsers
-import ProcessPool (Job, Result(..), makeJob)
+import ProcessPool (Job, Result(..), makePropertyJob, makeTimingJob)
 import Query (runSqlQuery)
 import qualified RuntimeData
 import Schema
@@ -106,19 +106,34 @@ variantToPropertyJob
         Graph _ path _ _ <- Sql.getJust graphId
         VariantConfig algoId _ flags _ <- Sql.getJust variantCfgId
         Algorithm algo _ <- Sql.getJust algoId
-        yield . makeJob (algoId,graphId,hash,maxStep) varId Nothing $
-            [ "-a", algo
-            , "-k switch --log"
-            , showSqlKey varId <> ".log"
-            , fromMaybe "" flags
-            , path
-            ]
+        yield . makePropertyJob (algoId,graphId,hash,maxStep) varId Nothing $
+            [ "-a", algo, fromMaybe "" flags, path ]
 
 processProperty
     :: Result (Key Algorithm, Key Graph, Maybe Hash, Maybe Int) -> SqlM ()
-processProperty Result{resultValue=(algoId, graphId, hash, maxStep), ..} = do
+processProperty Result
+  { resultValue=(algoId, _, _, _)
+  , resultOutput = (_, outputKey)
+  , resultTimings = (_, timingKey)
+  , resultPropLog = Nothing
+  , ..
+  } = do
+    release outputKey
+    release timingKey
+    logThrowM . GenericInvariantViolation $ mconcat
+        [ "Found property run without property log file for algorithm #"
+        , showSqlKey algoId, " variant #", showSqlKey resultVariant
+        ]
+
+processProperty Result
+  { resultValue = (algoId, graphId, hash, maxStep)
+  , resultOutput = (outputFile, outputKey)
+  , resultTimings = (_, timingKey)
+  , resultPropLog = Just (propLog, propKey)
+  , ..
+  } = do
     logDebugNS "Property#Start" resultLabel
-    liftIO $ removeFile timingFile
+    release timingKey
     resultHash <- computeHash outputFile
 
     SqlTrans.tryAbortableTransaction $ do
@@ -130,7 +145,7 @@ processProperty Result{resultValue=(algoId, graphId, hash, maxStep), ..} = do
             _ -> False <$ logErrorN
                     ("Hash mismatch for variant: " <> showSqlKey resultVariant)
 
-        liftIO $ removeFile outputFile
+        release outputKey
 
         when loadProps $ do
             stepCount <- runConduit $
@@ -165,19 +180,10 @@ processProperty Result{resultValue=(algoId, graphId, hash, maxStep), ..} = do
 
             SqlTrans.update resultVariant [VariantPropsStored =. True]
 
-        liftIO $ removeFile propLog
+        release propKey
 
     logDebugNS "Property#End" resultLabel
   where
-    propLog :: FilePath
-    propLog = T.unpack resultLabel <> ".log"
-
-    timingFile :: FilePath
-    timingFile = T.unpack resultLabel <> ".timings"
-
-    outputFile :: FilePath
-    outputFile = T.unpack resultLabel <> ".output"
-
     insertProperty :: Property -> Transaction SqlM (Maybe (Max Int))
     insertProperty (GraphProperty name val) = Nothing <$ do
         SqlTrans.insertUniq $ GraphProp graphId name val
@@ -210,7 +216,7 @@ missingRunToTimingJob platformId MissingRun{..} = case missingRunExtraInfo of
         , " results missing for variant #", showSqlKey missingRunVariantId
         ]
 
-    ExtraVariantInfo (Just hash) steps -> yield $ makeJob
+    ExtraVariantInfo (Just hash) steps -> yield $ makeTimingJob
             (missingRunAlgorithmId, missingRunImplId, hash, steps)
             missingRunVariantId
             (Just (platformId, missingRunImplName))
@@ -307,7 +313,7 @@ validationMissingRuns platformId Result{..} = do
         mkValidation = Validation onCompletion validationCommit outputFile
 
         toValidationJob :: MissingRun (Key Run) -> Job Validation
-        toValidationJob MissingRun{..} = makeJob
+        toValidationJob MissingRun{..} = makeTimingJob
             (mkValidation missingRunExtraInfo)
             missingRunVariantId
             (Just (platformId, missingRunImplName))

@@ -19,7 +19,7 @@ import Data.Maybe (fromMaybe)
 import Data.String.Interpolate.IsString (i)
 
 import Core
-import ProcessPool (Job, makeJob)
+import ProcessPool (Job, makeTimingJob)
 import Query
 import Schema
 import Sql (fromPersistValue)
@@ -62,7 +62,7 @@ validationVariantQuery platformId = Query{..}
             , PersistInt64 validationMissingCount
             , (fromPersistValue -> Right variantFlags)
             , PersistText graphPath
-            ] = return $ makeJob ValidationVariant{..}
+            ] = return $ makeTimingJob ValidationVariant{..}
                                  validationVariantId
                                  Nothing
                                  ("-k switch" : validationArgs)

@@ -6,11 +6,13 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TupleSections #-}
 module ProcessPool
     ( Job(jobValue)
     , Result(..)
     , Process(Process,inHandle,outHandle)
-    , makeJob
+    , makePropertyJob
+    , makeTimingJob
     , processJobsParallel
     , processJobsParallelWithSharedPool
     , withProcessPool
@@ -21,7 +23,7 @@ import Control.Monad.Catch (SomeException, onError, try, uninterruptibleMask_)
 import Control.Monad.Logger
     (Loc, LogLevel, LogSource, LogStr, LoggingT, MonadLoggerIO)
 import qualified Control.Monad.Logger as Log
-import Control.Monad.Trans.Resource (allocate, release)
+import Control.Monad.Trans.Resource (ReleaseKey, allocate, register, release)
 import Data.Conduit (ConduitT)
 import Data.Acquire (withAcquire, mkAcquireType, ReleaseType(ReleaseException))
 import Data.Maybe (fromMaybe)
@@ -56,26 +58,51 @@ data Job a = Job
     , jobVariant :: Key Variant
     , jobLabel :: Text
     , jobCommand :: Text
+    , jobLogProperties :: Bool
     } deriving (Functor, Foldable, Traversable)
 
-makeJob :: a -> Key Variant -> Maybe (Key Platform, Text) -> [Text] -> Job a
-makeJob val variantId implName args = Job
+makeJob
+    :: Bool
+    -> a
+    -> Key Variant
+    -> Maybe (Key Platform, Text)
+    -> [Text]
+    -> Job a
+makeJob logProps val variantId implName args = Job
     { jobValue = val
     , jobVariant = variantId
     , jobLabel = label
-    , jobCommand = T.unwords $ "\"" <> label <> "\"" : args
+    , jobCommand = T.unwords $ "\"" <> label <> "\"" : finalArgs
+    , jobLogProperties = logProps
     }
   where
+    finalArgs
+        | logProps = "-k switch --log" : logFile : args
+        | otherwise = args
+
+    logFile = "\"" <> label <> ".log" <> "\""
+
     label = case implName of
         Nothing -> showSqlKey variantId
         Just (platformId, name) -> mconcat
             [ showSqlKey platformId, " ", showSqlKey variantId, " ", name ]
+
+makePropertyJob
+    :: a -> Key Variant -> Maybe (Key Platform, Text) -> [Text] -> Job a
+makePropertyJob = makeJob True
+
+makeTimingJob
+    :: a -> Key Variant -> Maybe (Key Platform, Text) -> [Text] -> Job a
+makeTimingJob = makeJob False
 
 data Result a = Result
     { resultValue :: a
     , resultVariant :: Key Variant
     , resultLabel :: Text
     , resultAlgorithmVersion :: Text
+    , resultOutput :: (FilePath, ReleaseKey)
+    , resultTimings :: (FilePath, ReleaseKey)
+    , resultPropLog :: Maybe (FilePath, ReleaseKey)
     } deriving (Functor, Foldable, Traversable)
 
 data Timeout = Timeout deriving (Show)
@@ -244,11 +271,15 @@ processJobsParallelWithSharedPool numNodes procPool =
     parMapM taskHandler numNodes $ \Job{..} -> do
 
         let fileStem = T.unpack jobLabel
+            outputFile = fileStem <.> "output"
+            timingFile = fileStem <.> "timings"
+            logFile = fileStem <.> "log"
+
             handleErrors act = act `onError` do
                 logErrorN ("Failed: " <> jobCommand)
-                tryRemoveFile $ fileStem <.> "timings"
-                tryRemoveFile $ fileStem <.> "output"
-                tryRemoveFile $ fileStem <.> "log"
+                tryRemoveFile $ outputFile
+                tryRemoveFile $ timingFile
+                tryRemoveFile $ logFile
 
         withResource procPool $ \process@Process{inHandle,outHandle} -> do
             checkProcess process
@@ -263,10 +294,27 @@ processJobsParallelWithSharedPool numNodes procPool =
                         [] -> ("", "")
 
                 logDebugNS "Process#Job#End" jobCommand
-                return $ Result jobValue jobVariant label commit
+                outputKey <- registerFile outputFile
+                timingKey <- registerFile timingFile
+                logKey <- if jobLogProperties
+                             then Just <$> registerFile logFile
+                             else return Nothing
+
+                return $ Result
+                    { resultValue = jobValue
+                    , resultVariant = jobVariant
+                    , resultLabel = label
+                    , resultAlgorithmVersion = commit
+                    , resultOutput = outputKey
+                    , resultTimings = timingKey
+                    , resultPropLog = logKey
+                    }
   where
     checkNotExist :: SomeException -> Bool
     checkNotExist e = fromMaybe False $ isDoesNotExistError <$> fromException e
+
+    registerFile :: MonadResource m => FilePath -> m (FilePath, ReleaseKey)
+    registerFile path = fmap (path,) . register $ removeFile path
 
     tryRemoveFile path = do
         result <- try . liftIO $ removeFile path
