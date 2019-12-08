@@ -268,8 +268,13 @@ processTiming runConfigId commit Result{..} = do
     insertTiming runId (TotalTiming Timing{..}) = SqlTrans.insert_ $
         TotalTimer runId name minTime avgTime maxTime stddev
 
-    insertTiming _ (StepTiming n _) | n > maxStep = SqlTrans.abortTransaction
-            "Found step property with a step count larger than stored maximum."
+    insertTiming _ (StepTiming n _) | n > maxStep =
+        SqlTrans.abortTransaction $ mconcat
+            [ "Found step timing with a step count (", showText n
+            , ") larger than stored maximum (", showText maxStep
+            , ") for algorithm #", showSqlKey algoId, " variant #"
+            , showSqlKey resultVariant
+            ]
 
     insertTiming runId (StepTiming n Timing{..}) = SqlTrans.insert_ $
         StepTimer runId n name minTime avgTime maxTime stddev
