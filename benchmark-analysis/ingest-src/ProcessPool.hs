@@ -18,14 +18,17 @@ module ProcessPool
     , withProcessPool
     ) where
 
-import Control.Monad (guard, void)
+import Control.Monad (guard, unless, void)
 import Control.Monad.Catch (SomeException, onError, try, uninterruptibleMask_)
 import Control.Monad.Logger
     (Loc, LogLevel, LogSource, LogStr, LoggingT, MonadLoggerIO)
 import qualified Control.Monad.Logger as Log
 import Control.Monad.Trans.Resource (ReleaseKey, allocate, register, release)
-import Data.Conduit (ConduitT)
 import Data.Acquire (withAcquire, mkAcquireType, ReleaseType(ReleaseException))
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Lazy as LBS
+import qualified Data.ByteString.Builder as BS
+import Data.Conduit (ConduitT)
 import Data.Maybe (fromMaybe)
 import Data.Pool (Pool)
 import qualified Data.Pool as Pool
@@ -115,10 +118,25 @@ instance Exception Timeout where
     fromException = fromRuntimeError
     displayException = show . pretty
 
+nonBlockingLogHandle :: (MonadIO m, MonadLogger m) => Handle -> m ()
+nonBlockingLogHandle hnd = do
+    initial <- liftIO $ BS.hGetNonBlocking hnd 4096
+    unless (BS.null initial) $ do
+        fullOutput <- liftIO $ go (BS.byteString initial)
+        Log.logWithoutLoc "Process#Error" Log.LevelDebug fullOutput
+  where
+    go :: BS.Builder -> IO LBS.ByteString
+    go start = do
+        rest <- BS.hGetNonBlocking hnd 4096
+        if BS.null rest
+           then return $ BS.toLazyByteString start
+           else go (start <> BS.byteString rest)
+
 data Process =
   Process
   { inHandle :: Handle
   , outHandle :: Handle
+  , errHandle :: Handle
   , procHandle :: ProcessHandle
   , procId :: Pid
   , procToException :: ExitCode -> UnexpectedTermination
@@ -200,35 +218,45 @@ withProcessPool n Platform{platformName,platformFlags} f = do
     allocateProcess createRunnerProc = do
         exePath <- getKernelExecutable
         libPath <- getKernelLibPath
-        proc@Process{procId} <- liftIO $ do
+        proc@Process{procId,errHandle} <- liftIO $ do
             runnerProc <- createRunnerProc [exePath, "-L", libPath, "-W", "-S"]
 
-            let p = runnerProc { std_in = CreatePipe, std_out = CreatePipe }
+            let p = runnerProc
+                    { std_in = CreatePipe
+                    , std_out = CreatePipe
+                    , std_err = CreatePipe
+                    }
                 procToException = unexpectedTermination p
 
-            (Just inHandle, Just outHandle, Nothing, procHandle) <-
+            (Just inHandle, Just outHandle, Just errHandle, procHandle) <-
                 Proc.createProcess p
 
             System.hSetBuffering inHandle LineBuffering
             System.hSetBuffering outHandle LineBuffering
+            System.hSetBuffering errHandle LineBuffering
             Just procId <- Proc.getPid procHandle
 
             return Process{..}
+
+        nonBlockingLogHandle errHandle
         proc <$ logDebugNS "Process#Start" (showText procId)
 
     destroyProcess :: String -> Process -> LoggingT IO ()
     destroyProcess hostName Process{..} = do
-        liftIO . uninterruptibleMask_ $ do
-            Proc.getPid procHandle >>= mapM_ (signalProcess sigKILL)
-            System.hClose inHandle
-            System.hClose outHandle
-            Proc.waitForProcess procHandle
+        uninterruptibleMask_ $ do
+            err <- liftIO $ do
+                Proc.getPid procHandle >>= mapM_ (signalProcess sigKILL)
+                System.hClose inHandle
+                System.hClose outHandle
+                Proc.waitForProcess procHandle
+                T.hGetContents errHandle <* System.hClose errHandle
+            logDebugNS "Process#ExitError" err
             tryRemoveFile $ "kernel-runner.0" <.> show procId <.> hostName
             tryRemoveFile $ ".PRUN_ENVIRONMENT" <.> show procId <.> hostName
         logDebugNS "Process#End" $ showText procId
 
-    tryRemoveFile :: FilePath -> IO ()
-    tryRemoveFile path =
+    tryRemoveFile :: MonadIO m => FilePath -> m ()
+    tryRemoveFile path = liftIO $
         void (try $ removeFile path :: IO (Either SomeException ()))
 
 checkProcess :: (MonadIO m, MonadLogger m, MonadThrow m) => Process -> m ()
@@ -281,8 +309,9 @@ processJobsParallelWithSharedPool numNodes procPool =
                 tryRemoveFile $ timingFile
                 tryRemoveFile $ logFile
 
-        withResource procPool $ \process@Process{inHandle,outHandle} -> do
-            checkProcess process
+        withResource procPool $ \proc@Process{inHandle,outHandle,errHandle} -> do
+            checkProcess proc
+
             handleErrors $ do
                 logDebugNS "Process#Job#Start" jobCommand
                 result <- liftIO $ do
@@ -299,6 +328,8 @@ processJobsParallelWithSharedPool numNodes procPool =
                 logKey <- if jobLogProperties
                              then Just <$> registerFile logFile
                              else return Nothing
+
+                nonBlockingLogHandle errHandle
 
                 return $ Result
                     { resultValue = jobValue
