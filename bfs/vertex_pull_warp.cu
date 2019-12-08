@@ -62,7 +62,7 @@ vertexPullWarpBfs
 
         __syncwarp();
 
-        for (unsigned IDX = W_OFF; IDX < chunk_size; IDX += warp_size) {
+        for (unsigned IDX = W_OFF; IDX < end; IDX += warp_size) {
             if (myLevels[IDX] == newDepth) bfs.update();
         }
         memcpy_SIMD(warp_size, W_OFF, end, &levels[v_], myLevels);
