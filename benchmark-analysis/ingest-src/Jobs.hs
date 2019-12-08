@@ -184,8 +184,11 @@ processProperty Result{resultValue=(algoId, graphId, hash, maxStep), ..} = do
 
     insertProperty (StepProperty n _ _)
         | Just i <- maxStep
-        , n > i = SqlTrans.abortTransaction
-            "Found step property with a step count larger than stored maximum."
+        , n > i = SqlTrans.abortTransaction $ mconcat
+            [ "Found step property with a step count (", showText n
+            , ") larger than stored maximum (", showText i, ") for algorithm #"
+            , showSqlKey algoId, " variant #", showSqlKey resultVariant
+            ]
 
     insertProperty (StepProperty n name val) = Just (Max n) <$ do
         SqlTrans.insertUniq $ StepProp algoId name
