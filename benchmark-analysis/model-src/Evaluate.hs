@@ -119,6 +119,13 @@ data VariantAggregate =
   , implTimes :: {-# UNPACK #-} !(Pair (Vector ImplTiming))
   }
 
+data StepVariantAggregate =
+  StepVariantAgg
+  { stepVariantid :: {-# UNPACK #-} !(Key Variant)
+  , stepOptimalTime :: {-# UNPACK #-} !Double
+  , stepImplTimes :: {-# UNPACK #-} !(Vector ImplTiming)
+  }
+
 aggregateSteps
     :: (MonadLogger m, MonadThrow m)
     => Int
@@ -138,11 +145,11 @@ aggregateSteps defaultImpl mispredictionStrategy model = do
         zeroTimeVec = VS.map zerooutTiming stepTimings `VS.snoc`
             ImplTiming predictedImplId 0
 
-        initial :: (Int, VariantAggregate)
-        initial = (defaultImpl, VariantAgg
-            { variantid = stepVariantId
-            , optimalTime = 0
-            , implTimes = Pair zeroTimeVec VS.empty
+        initial :: (Int, StepVariantAggregate)
+        initial = (defaultImpl, StepVariantAgg
+            { stepVariantid = stepVariantId
+            , stepOptimalTime = 0
+            , stepImplTimes = zeroTimeVec
             })
 
         translateMap :: IntMap Int
@@ -152,20 +159,26 @@ aggregateSteps defaultImpl mispredictionStrategy model = do
             build implMap idx (ImplTiming impl _) =
                 IM.insert (fromIntegral impl) idx implMap
 
-    snd <$> C.foldl (aggregate translateMap) initial
-
+    toVariantAggregate . snd <$> C.foldl (aggregate translateMap) initial
   where
+    toVariantAggregate :: StepVariantAggregate -> VariantAggregate
+    toVariantAggregate StepVariantAgg{..} = VariantAgg
+        { variantid = stepVariantid
+        , optimalTime = stepOptimalTime
+        , implTimes = Pair stepImplTimes VS.empty
+        }
+
     aggregate
         :: IntMap Int
-        -> (Int, VariantAggregate)
+        -> (Int, StepVariantAggregate)
         -> StepInfo
-        -> (Int, VariantAggregate)
-    aggregate translateMap (!lastImpl, !VariantAgg{..}) !StepInfo{..} =
-      (predictedImpl, VariantAgg
-            { variantid = stepVariantId
-            , optimalTime = optimalTime + getTime stepBestImpl
-            , implTimes = VS.zipWith (liftImplTiming (+)) <$> implTimes <*>
-                    Pair (stepTimings `VS.snoc` newPrediction) VS.empty
+        -> (Int, StepVariantAggregate)
+    aggregate translateMap (!lastImpl, !StepVariantAgg{..}) !StepInfo{..} =
+      (predictedImpl, StepVariantAgg
+            { stepVariantid = stepVariantId
+            , stepOptimalTime = stepOptimalTime + getTime stepBestImpl
+            , stepImplTimes = VS.zipWith (liftImplTiming (+)) stepImplTimes
+                    (stepTimings `VS.snoc` newPrediction)
             })
       where
         newPrediction :: ImplTiming
