@@ -24,8 +24,8 @@ import Data.Text.Lazy.Builder (Builder, fromText, toLazyText)
 import Data.Text.Lazy.Builder.Int (decimal)
 import Data.Text.Lazy.Builder.RealFloat (realFloat)
 import qualified Data.Text.Lazy.IO as LT
+import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as VS
-import qualified Data.Vector.Generic as V
 import Database.Persist.Class (PersistField(..))
 import Database.Persist.Sql (PersistFieldSql(..))
 import Foreign.Ptr (castPtr)
@@ -43,7 +43,7 @@ instance PersistField Model where
 instance PersistFieldSql Model where
     sqlType proxy = sqlType $ vectorToByteString . getModelVector <$> proxy
 
-predict :: V.Vector v Double => Model -> v Double -> Int
+predict :: Model -> Vector Double -> Int
 predict (Model tree) props = go (tree `VS.unsafeIndex` 0)
   where
     go :: TreeNode -> Int
@@ -52,7 +52,8 @@ predict (Model tree) props = go (tree `VS.unsafeIndex` 0)
         | belowThreshold = go (tree `VS.unsafeIndex` leftNode)
         | otherwise = go (tree `VS.unsafeIndex` rightNode)
         where
-          belowThreshold = props `V.unsafeIndex` propIdx <= threshold
+          belowThreshold = props `VS.unsafeIndex` propIdx <= threshold
+{-# INLINE predict #-}
 
 dumpCppModel
     :: MonadIO m
@@ -203,6 +204,7 @@ instance Storable TreeNode where
           where
             doubleSize = sizeOf (0.0 :: Double)
             int32Size = sizeOf (0 :: Int32)
+        {-# INLINE peekInt32 #-}
 
     poke ptr Node{..} = do
         poke (castPtr ptr) threshold
