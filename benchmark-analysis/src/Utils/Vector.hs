@@ -18,10 +18,10 @@ byteStringToVector bs = v
   where
     v = VS.unsafeFromForeignPtr0 (plusForeignPtr fptr off) (len `div` elemSize)
     (fptr, off, len) = BS.toForeignPtr bs
-    elemSize = sizeOf (undefined `asTypeOf` VS.head v)
+    elemSize = sizeOf $ VS.head v
 
 vectorToByteString :: Storable a => Vector a -> ByteString
 vectorToByteString vec = BS.fromForeignPtr (castForeignPtr fptr) 0 byteLen
   where
     (fptr, len) = VS.unsafeToForeignPtr0 vec
-    byteLen = len * sizeOf (undefined `asTypeOf` VS.head vec)
+    byteLen = len * sizeOf (VS.head vec)

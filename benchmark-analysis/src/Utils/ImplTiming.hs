@@ -15,11 +15,11 @@ instance Show ImplTiming where
                         . shows implTimingTiming $ ")"
 
 instance Storable ImplTiming where
-    sizeOf _ = sizeOf (undefined :: Int64) + sizeOf (undefined :: Double)
-    alignment _ = alignment (undefined :: Double)
+    sizeOf _ = sizeOf (0 :: Int64) + sizeOf (0.0 :: Double)
+    alignment _ = alignment (0.0 :: Double)
     peek ptr = ImplTiming <$> peek (castPtr ptr)
-                          <*> peekByteOff ptr (sizeOf (undefined :: Int64))
+                          <*> peekByteOff ptr (sizeOf (0 :: Int64))
 
     poke ptr ImplTiming{..} = do
         poke (castPtr ptr) implTimingImpl
-        pokeByteOff ptr (sizeOf (undefined :: Int64)) implTimingTiming
+        pokeByteOff ptr (sizeOf (0 :: Int64)) implTimingTiming

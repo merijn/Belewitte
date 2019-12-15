@@ -191,8 +191,8 @@ data TreeNode
       } deriving (Show)
 
 instance Storable TreeNode where
-    sizeOf _ = sizeOf (undefined :: Double) + 4 * sizeOf (undefined :: Int32)
-    alignment _ = alignment (undefined :: Double)
+    sizeOf _ = sizeOf (0.0 :: Double) + 4 * sizeOf (0 :: Int32)
+    alignment _ = alignment (0.0 :: Double)
     peek ptr = Node <$> peek (castPtr ptr)
                     <*> (fromIntegral <$> peekInt32 0)
                     <*> (fromIntegral <$> peekInt32 1)
@@ -201,8 +201,8 @@ instance Storable TreeNode where
         peekInt32 :: Int -> IO Int32
         peekInt32 n = peekByteOff ptr (doubleSize + n * int32Size)
           where
-            doubleSize = sizeOf (undefined :: Double)
-            int32Size = sizeOf (undefined :: Int32)
+            doubleSize = sizeOf (0.0 :: Double)
+            int32Size = sizeOf (0 :: Int32)
 
     poke ptr Node{..} = do
         poke (castPtr ptr) threshold
@@ -213,8 +213,8 @@ instance Storable TreeNode where
         pokeInt32 :: Int -> Int32 -> IO ()
         pokeInt32 n val = pokeByteOff ptr (doubleSize + n * int32Size) val
           where
-            doubleSize = sizeOf (undefined :: Double)
-            int32Size = sizeOf (undefined :: Int32)
+            doubleSize = sizeOf (0.0 :: Double)
+            int32Size = sizeOf (0 :: Int32)
 
 dumpModel :: MonadIO m => Model -> FilePath -> m ()
 dumpModel (Model vec) fp = liftIO . BS.writeFile fp $ vectorToByteString vec
