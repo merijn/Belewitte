@@ -27,7 +27,7 @@ Data-Files:             runtime-data/kernel-runner
                         runtime-data/scripts/bar-plot.py
                         runtime-data/virtualenv
 
-Extra-Source-Files:     cbits/*.h src/schema
+Extra-Source-Files:     cbits/*.h
 
 Common all
   Default-Language:     Haskell2010
