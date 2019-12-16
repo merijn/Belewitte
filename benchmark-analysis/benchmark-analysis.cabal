@@ -22,6 +22,7 @@ Description:
 
 Data-Files:             runtime-data/kernel-runner
                         runtime-data/kernels
+                        runtime-data/numdiff.awk
                         runtime-data/requirements.txt
                         runtime-data/scripts/model.py
                         runtime-data/scripts/bar-plot.py
