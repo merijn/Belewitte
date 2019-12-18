@@ -75,43 +75,47 @@ stepInfoQuery algoId platformId graphProperties stepProperties ts = Query{..}
 
     commonTableExpressions :: [Text]
     commonTableExpressions = [[i|
-IndexedGraphProps(graphId, idx, property, value) AS (
+IndexedGraphProps(graphId, idx, property, value, count) AS (
     SELECT graphId
-         , ROW_NUMBER() OVER (PARTITION BY graphId ORDER BY property)
+         , ROW_NUMBER() OVER (graph ORDER BY property)
          , property
          , value
+         , COUNT() OVER graph
     FROM GraphProp
     WHERE property IN #{inExpression graphProperties}
+    WINDOW graph AS (PARTITION BY graphId)
 ),
 
-IndexedStepProps(variantId, stepId, idx, property, value) AS (
+IndexedStepProps(variantId, stepId, idx, property, value, count) AS (
     SELECT variantId
          , stepId
-         , ROW_NUMBER() OVER (PARTITION BY variantId, stepId ORDER BY property)
+         , ROW_NUMBER() OVER (variantStep ORDER BY property)
          , property
          , value
+         , COUNT() OVER variantStep
     FROM StepPropValue
     WHERE property IN #{inExpression stepProperties}
+    WINDOW variantStep AS (PARTITION BY variantId, stepId)
 ),
 
-IndexedImpls(idx, implId, type) AS (
+IndexedImpls(idx, implId, type, count) AS (
     SELECT ROW_NUMBER() OVER (ORDER BY id)
          , id
          , type
+         , COUNT() OVER ()
     FROM Implementation
     WHERE algorithmId = ?
 ),
 
 ImplVector(impls) AS (
-    SELECT int64_vector(implId, idx, (SELECT COUNT(*) FROM IndexedImpls))
+    SELECT int64_vector(implId, idx, count)
     FROM IndexedImpls
 ),
 
 Step(runConfigId, variantId, stepId, implId, minTime, timings) AS (
     SELECT Run.runConfigId, Run.variantId, stepId, IndexedImpls.implId
          , MIN(avgTime) FILTER (WHERE IndexedImpls.type == 'Core')
-         , double_vector(avgTime, idx, (SELECT COUNT(*) FROM IndexedImpls))
-           AS timings
+         , double_vector(avgTime, idx, count) AS timings
     FROM StepTimer
 
     INNER JOIN Run
@@ -125,9 +129,7 @@ Step(runConfigId, variantId, stepId, implId, minTime, timings) AS (
 )|]]
 
     params :: [PersistValue]
-    params = [ toPersistValue $ S.size graphProperties
-             , toPersistValue $ S.size stepProperties
-             , toPersistValue algoId
+    params = [ toPersistValue algoId
              , toPersistValue platformId
              , toPersistValue $ S.size stepProperties
              ]
@@ -149,7 +151,7 @@ INNER JOIN Variant
 ON Step.variantId = Variant.id
 
 INNER JOIN
-(   SELECT graphId, double_vector(value, idx, ?) AS props
+(   SELECT graphId, double_vector(value, idx, count) AS props
     FROM IndexedGraphProps
     GROUP BY graphId
 ) AS GraphProps
@@ -157,7 +159,7 @@ ON GraphProps.graphId = Variant.graphId
 
 LEFT JOIN
 (   SELECT variantId, stepId
-         , double_vector(value, idx, ?) AS props
+         , double_vector(value, idx, count) AS props
     FROM IndexedStepProps
     GROUP BY variantId, stepId
 ) AS StepProps

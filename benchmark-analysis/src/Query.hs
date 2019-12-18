@@ -302,23 +302,25 @@ variantInfoQuery algoId platformId = Query{..}
 
     commonTableExpressions :: [Text]
     commonTableExpressions = [[i|
-    IndexedImpls(idx, implId, type) AS (
+    IndexedImpls(idx, implId, type, count) AS (
         SELECT ROW_NUMBER() OVER (ORDER BY id)
              , id
              , type
+             , COUNT() OVER ()
         FROM Implementation
         WHERE algorithmId = ?
         ORDER BY id
     ),
 
     ImplVector(impls) AS (
-        SELECT int64_vector(implId, idx, (SELECT COUNT(*) FROM IndexedImpls))
+        SELECT int64_vector(implId, idx, count)
           FROM IndexedImpls
     ),
 
-    IndexedExternalImpls(idx, implId) AS (
+    IndexedExternalImpls(idx, implId, count) AS (
         SELECT ROW_NUMBER() OVER (ORDER BY implId)
              , implId
+             , COUNT() OVER ()
           FROM (SELECT id AS implId
                   FROM ExternalImpl
                  WHERE algorithmId = ?)
@@ -326,7 +328,7 @@ variantInfoQuery algoId platformId = Query{..}
     ),
 
     ExternalImplVector(impls) AS (
-        SELECT int64_vector(implId, idx, (SELECT COUNT(*) FROM IndexedExternalImpls))
+        SELECT int64_vector(implId, idx, count)
           FROM IndexedExternalImpls
     )|]]
 
@@ -371,8 +373,7 @@ ON RunConfig.id = OptimalStep.runConfigId
 INNER JOIN
 (   SELECT Run.variantId
          , MIN(avgTime) FILTER (WHERE type == 'Core') AS bestNonSwitching
-         , double_vector(avgTime, idx, (SELECT COUNT(*) FROM IndexedImpls))
-           AS timings
+         , double_vector(avgTime, idx, count) AS timings
       FROM TotalTimer
 
       INNER JOIN Run
@@ -388,8 +389,7 @@ ON OptimalStep.variantId = Total.variantId
 
 LEFT JOIN
 (   SELECT variantId
-         , double_vector(avgTime, idx, (SELECT COUNT(*) FROM IndexedExternalImpls))
-           AS timings
+         , double_vector(avgTime, idx, count) AS timings
       FROM ExternalTimer
       INNER JOIN IndexedExternalImpls
       ON ExternalTimer.implId = IndexedExternalImpls.implId
