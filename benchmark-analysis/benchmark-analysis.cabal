@@ -28,7 +28,7 @@ Data-Files:             runtime-data/kernel-runner
                         runtime-data/scripts/bar-plot.py
                         runtime-data/virtualenv
 
-Extra-Source-Files:     cbits/*.h
+Extra-Source-Files:     cbits/*.h sqlite3exts/*.h
 
 Common all
   Default-Language:     Haskell2010
@@ -60,8 +60,19 @@ Common all
 Common exes
   GHC-Options:          -rtsopts -threaded -with-rtsopts=-qg
 
+Common sqlite3exts
+  Include-Dirs:         sqlite3exts
+  Includes:             sqlite3ext.h
+
+Library SQLiteExts
+  Import:               sqlite3exts
+  Default-Language:     Haskell2010
+  C-Sources:            sqlite3exts/series.c
+  CC-Options:           -Wall -pedantic -std=c11 -g -O3 -DSQLITE_CORE
+  Build-Depends:        persistent-sqlite ^>= 2.10.7
+
 Library
-  Import:               all
+  Import:               all, sqlite3exts
   Hs-Source-Dirs:       src
   Exposed-Modules:      Commands
                         Core
@@ -122,7 +133,7 @@ Library
   Other-Modules:        Paths_benchmark_analysis
 
   C-Sources:            cbits/sqlite-functions.c
-  CC-Options:           -Wall -Wextra -pedantic -std=c11 -g
+  CC-Options:           -Wall -Wextra -pedantic -std=c11 -g -O3
   Include-Dirs:         cbits
   Includes:             sqlite-functions.h
 
@@ -145,7 +156,8 @@ Library
                         TypeFamilies
                         UndecidableInstances
 
-  Build-Depends:        bytestring
+  Build-Depends:        SQLiteExts
+               ,        bytestring
                ,        binary ^>= 0.8.7
                ,        clock ^>= 0.8
                ,        cryptonite ^>= 0.26

@@ -1,19 +1,44 @@
 {-# LANGUAGE CApiFFI #-}
 {-# LANGUAGE MonadFailDesugaring #-}
-module SQLiteExts (registerSqlFunctions, wrapSqliteExceptions) where
+{-# LANGUAGE OverloadedStrings #-}
+module SQLiteExts
+    ( initialiseSqlite
+    , registerSqlFunctions
+    , wrapSqliteExceptions
+    ) where
 
 import Control.Monad ((>=>), when)
 import Control.Monad.Catch (MonadCatch, MonadThrow, handle, throwM)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Logger (MonadLogger)
-import qualified Control.Monad.Logger as Log
 import qualified Data.ByteString as BS
+import Data.Text (Text)
 import Data.Text.Encoding (decodeUtf8')
+import Data.Typeable (Typeable)
 import Database.Sqlite (SqliteException(..))
-import Foreign (Ptr, FunPtr, nullPtr, nullFunPtr)
+import Foreign (Ptr, FunPtr, castFunPtr, nullPtr, nullFunPtr)
 import Foreign.C (CInt(..), CString, withCString)
 
 import Exceptions
+import Pretty (Pretty(pretty))
+import qualified Pretty
+
+data SqliteErrorCode = SqliteErrorCode CInt Text
+    deriving (Show, Typeable)
+
+instance Pretty SqliteErrorCode where
+    pretty (SqliteErrorCode c_errno msg) = Pretty.vsep
+        [ "SQLite function returned error code #" <> pretty errno <> ":"
+        , Pretty.reflow msg
+        ]
+      where
+        errno :: Integer
+        errno = fromIntegral c_errno
+
+instance Exception SqliteErrorCode where
+    toException = toSqlException
+    fromException = fromSqlException
+    displayException = show . pretty
 
 registerSqlFunctions
     :: (MonadIO m, MonadLogger m, MonadThrow m) => Ptr () -> m ()
@@ -72,6 +97,19 @@ foreign import ccall "sqlite3.h sqlite3_create_function"
               -> FunPtr (Ptr () -> IO ())
               -> IO CInt
 
+foreign import ccall "sqlite3.h &sqlite3_series_init"
+    sqlite3_series_init
+        :: FunPtr (Ptr () -> Ptr CString -> Ptr () -> IO CInt)
+
+foreign import ccall "sqlite3.h sqlite3_auto_extension"
+    registerAutoExtension :: FunPtr (IO ()) -> IO CInt
+
+initialiseSqlite :: (MonadIO m, MonadThrow m) => m ()
+initialiseSqlite = do
+    result <- liftIO $ registerAutoExtension (castFunPtr sqlite3_series_init)
+    when (result /= sqliteOk) $ do
+        throwM . SqliteErrorCode result $ ""
+
 createSqliteFun
     :: (MonadIO m, MonadLogger m, MonadThrow m)
     => CInt
@@ -88,7 +126,7 @@ createSqliteFun nArgs strName sqlFun aggStep aggFinal sqlPtr = do
         bs <- liftIO $ unpackError sqlPtr
         case decodeUtf8' bs of
             Left exc -> logThrowM $ PrettyUnicodeException exc
-            Right txt -> Log.logErrorN txt
+            Right txt -> logThrowM $ SqliteErrorCode result txt
   where
     unpackError = getExtendedError >=> getErrorString >=> BS.packCString
 

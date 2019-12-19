@@ -243,6 +243,7 @@ topLevelHandler exc
 
 runSqlMWithOptions :: Options a -> (a -> SqlM b) -> IO b
 runSqlMWithOptions Options{..} work = do
+    initialiseSqlite
     setUncaughtExceptionHandler topLevelHandler
     getNumProcessors >>= setNumCapabilities
     runSqlM . wrapSqliteExceptions $ do
