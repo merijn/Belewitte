@@ -154,7 +154,8 @@ getJobTimeOut = liftIO $ do
           | otherwise -> []
   where
     timeoutFlag :: Int -> [String]
-    timeoutFlag h = ["-t", show h ++ ":00:00"]
+    timeoutFlag h | h > 0     = ["-t", show h ++ ":00:00"]
+                  | otherwise = []
 
 type LogFun = Loc -> LogSource -> LogLevel -> LogStr -> IO ()
 
