@@ -13,6 +13,9 @@ module ProcessPool
     , Process(Process,inHandle,outHandle)
     , makePropertyJob
     , makeTimingJob
+    , cleanupTimings
+    , cleanupOutput
+    , cleanupProperties
     , processJobsParallel
     , processJobsParallelWithSharedPool
     , withProcessPool
@@ -107,6 +110,17 @@ data Result a = Result
     , resultTimings :: (FilePath, ReleaseKey)
     , resultPropLog :: Maybe (FilePath, ReleaseKey)
     } deriving (Functor, Foldable, Traversable)
+
+cleanupOutput :: MonadIO m => Result a -> m ()
+cleanupOutput Result{resultOutput = (_, key)} = release key
+
+cleanupTimings :: MonadIO m => Result a -> m ()
+cleanupTimings Result{resultTimings = (_, key)} = release key
+
+cleanupProperties :: MonadIO m => Result a -> m ()
+cleanupProperties Result{resultPropLog} = case resultPropLog of
+    Just (_, key) -> release key
+    Nothing -> return ()
 
 data Timeout = Timeout deriving (Show)
 

@@ -21,7 +21,6 @@ module Jobs
 import BroadcastChan.Conduit
 import qualified Control.Concurrent.STM as STM
 import Control.Monad (unless, when)
-import Control.Monad.Trans.Resource (register, release)
 import Crypto.Hash.Conduit (hashFile)
 import qualified Data.ByteArray (convert)
 import Data.Conduit (ConduitT, (.|), runConduit, yield)
@@ -31,12 +30,12 @@ import Data.Maybe (fromMaybe)
 import Data.Semigroup (Max(..))
 import qualified Data.Text as T
 import Data.Time.Clock (getCurrentTime)
-import System.Directory (removeFile)
 
 import Core
 import MissingQuery
 import Parsers
 import ProcessPool (Job, Result(..), makePropertyJob, makeTimingJob)
+import qualified ProcessPool
 import Query (runSqlQuery)
 import qualified RuntimeData
 import Schema
@@ -111,29 +110,26 @@ variantToPropertyJob
 
 processProperty
     :: Result (Key Algorithm, Key Graph, Maybe Hash, Maybe Int) -> SqlM ()
-processProperty Result
+processProperty result@Result
   { resultValue=(algoId, _, _, _)
-  , resultOutput = (_, outputKey)
-  , resultTimings = (_, timingKey)
   , resultPropLog = Nothing
   , ..
   } = do
-    release outputKey
-    release timingKey
+    ProcessPool.cleanupOutput result
+    ProcessPool.cleanupTimings result
     logThrowM . GenericInvariantViolation $ mconcat
         [ "Found property run without property log file for algorithm #"
         , showSqlKey algoId, " variant #", showSqlKey resultVariant
         ]
 
-processProperty Result
+processProperty result@Result
   { resultValue = (algoId, graphId, hash, maxStep)
-  , resultOutput = (outputFile, outputKey)
-  , resultTimings = (_, timingKey)
-  , resultPropLog = Just (propLog, propKey)
+  , resultOutput = (outputFile, _)
+  , resultPropLog = Just (propLog, _)
   , ..
   } = do
     logDebugNS "Property#Start" resultLabel
-    release timingKey
+    ProcessPool.cleanupTimings result
     resultHash <- computeHash outputFile
 
     SqlTrans.tryAbortableTransaction $ do
@@ -145,7 +141,7 @@ processProperty Result
             _ -> False <$ logErrorN
                     ("Hash mismatch for variant: " <> showSqlKey resultVariant)
 
-        release outputKey
+        ProcessPool.cleanupOutput result
 
         when loadProps $ do
             stepCount <- runConduit $
@@ -180,7 +176,7 @@ processProperty Result
 
             SqlTrans.update resultVariant [VariantPropsStored =. True]
 
-        release propKey
+        ProcessPool.cleanupProperties result
 
     logDebugNS "Property#End" resultLabel
   where
@@ -228,11 +224,12 @@ processTiming
     -> Text
     -> Result (Key Algorithm, Key Implementation, Hash, Int)
     -> m ()
-processTiming runConfigId commit Result{..} = do
+processTiming runConfigId commit result@Result{..} = do
     logDebugNS "Timing#Start " resultLabel
     time <- liftIO getCurrentTime
     resultHash <- computeHash outputFile
-    liftIO $ removeFile outputFile
+    ProcessPool.cleanupProperties result
+    ProcessPool.cleanupOutput result
 
     if commit /= resultAlgorithmVersion
        then logErrorN $ mconcat
@@ -263,7 +260,7 @@ processTiming runConfigId commit Result{..} = do
 
         logDebugNS "Timing#End" resultLabel
 
-    liftIO $ removeFile timingFile
+    ProcessPool.cleanupTimings result
   where
     (algoId, implId, hash, maxStep) = resultValue
     timingFile = T.unpack resultLabel <> ".timings"
@@ -296,10 +293,10 @@ validationMissingRuns
     :: Key Platform
     -> Result ValidationVariant
     -> ConduitT (Result ValidationVariant) (Job Validation) SqlM ()
-validationMissingRuns platformId Result{..} = do
-    liftIO $ removeFile timingFile
+validationMissingRuns platformId result@Result{..} = do
+    ProcessPool.cleanupTimings result
+    ProcessPool.cleanupProperties result
     refCounter <- liftIO $ STM.newTVarIO validationMissingCount
-    key <- register $ removeFile outputFile
 
     let onCompletion :: SqlM ()
         onCompletion = do
@@ -307,7 +304,7 @@ validationMissingRuns platformId Result{..} = do
                 STM.modifyTVar' refCounter (subtract 1)
                 STM.readTVar refCounter
 
-            when (count == 0) $ release key
+            when (count == 0) $ ProcessPool.cleanupOutput result
 
         mkValidation :: Key Run -> Validation
         mkValidation = Validation onCompletion validationCommit outputFile
@@ -324,7 +321,6 @@ validationMissingRuns platformId Result{..} = do
   where
     ValidationVariant{..} = resultValue
     outputFile = T.unpack resultLabel <> ".output"
-    timingFile = T.unpack resultLabel <> ".timings"
 
 validateResults
     :: Int -> ConduitT (Result Validation) (Result Validation) SqlM ()
@@ -336,7 +332,7 @@ validateResults numProcs = do
         :: (FilePath -> FilePath -> SqlM Bool)
         -> Result Validation
         -> SqlM (Result Validation)
-    process check res@Result{resultAlgorithmVersion, resultLabel, resultValue}
+    process check res@Result{resultAlgorithmVersion, resultOutput, resultValue}
       | originalCommit /= resultAlgorithmVersion = do
             res <$ logErrorN "Result validation used wrong algorithm version!"
       | otherwise = do
@@ -348,16 +344,11 @@ validateResults numProcs = do
             return res
       where
         Validation{..} = resultValue
-        outputFile = T.unpack resultLabel <> ".output"
+        (outputFile, _) = resultOutput
 
 cleanupValidation :: Result Validation -> SqlM ()
-cleanupValidation Result{resultLabel, resultValue} = do
-    liftIO $ do
-        removeFile outputFile
-        removeFile timingFile
+cleanupValidation result@Result{resultValue = Validation{..}} = do
+    ProcessPool.cleanupOutput result
+    ProcessPool.cleanupTimings result
+    ProcessPool.cleanupProperties result
     cleanData
-  where
-    Validation{..} = resultValue
-
-    timingFile = T.unpack resultLabel <> ".timings"
-    outputFile = T.unpack resultLabel <> ".output"
