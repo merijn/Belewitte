@@ -1,6 +1,6 @@
-===
-TBD
-===
+==============
+Belewitte [1]_
+==============
 
 This repository is made up of 5 (mostly) independent components:
 
@@ -269,6 +269,10 @@ cabal-install 2.4
     rm cabal.sig cabal-install-2.4.1.0-x86_64-unknown-linux.tar.xz
 
 -------------------------------------------------------------------------------
+
+.. [1] Mythological being associated with precognition/prediction and graves [2]_
+
+.. [2] This is funny if you know Dutch...
 
 .. [SNAP] http://snap.stanford.edu/data/index.html
 
