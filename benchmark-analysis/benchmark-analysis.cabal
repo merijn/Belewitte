@@ -128,6 +128,7 @@ Library
                         Utils.Pair
                         Utils.Process
                         Utils.Vector
+                        VariantQuery
 
   Autogen-Modules:      Paths_benchmark_analysis
   Other-Modules:        Paths_benchmark_analysis

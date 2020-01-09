@@ -31,6 +31,7 @@ import qualified Sql
 import StepQuery (StepInfo, stepInfoQuery)
 import Train
 import Validate
+import VariantQuery
 
 reportModelStats :: ModelStats -> SqlM ()
 reportModelStats ModelStats{..} = renderOutput $ do

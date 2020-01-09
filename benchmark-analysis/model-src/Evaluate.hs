@@ -49,6 +49,7 @@ import Sql (queryImplementations, queryExternalImplementations)
 import Train
 import Utils.ImplTiming
 import Utils.Pair (Pair(..), mapFirst, mergePair)
+import VariantQuery
 
 percent :: Real n => n -> n -> Text
 percent x y = T.pack $ showFFloat (Just 2) val "%"

@@ -43,6 +43,7 @@ import Sql ((==.))
 import qualified Sql
 import Utils.ImplTiming
 import Utils.Pair (Pair(..), toPair, mergePair)
+import VariantQuery
 
 queryVariants :: Key Algorithm -> Set Text -> SqlM (Set (Key Variant))
 queryVariants algoId graphs = do
