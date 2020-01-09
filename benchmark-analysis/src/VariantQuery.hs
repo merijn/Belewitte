@@ -118,7 +118,7 @@ SELECT OptimalStep.variantId
      , External.timings
 FROM RunConfig
 
-LEFT JOIN
+INNER JOIN
 (   SELECT runConfigId
          , variantId
          , SUM(Step.minTime) AS optimal
