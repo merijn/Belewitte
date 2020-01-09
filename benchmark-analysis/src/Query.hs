@@ -161,21 +161,17 @@ runLoggingSqlQuery
        )
     => (ConduitT () r m () -> n a) -> Query r -> n a
 runLoggingSqlQuery f query = do
-    (formattedTime, result) <- runRawSqlQuery NoExplain f query
-
     shouldExplain <- shouldExplainQuery (queryName query)
 
     when shouldExplain $ do
         logQuery (queryName query) . mconcat $
             [ toQueryText query
             , "\n"
-            , queryName query <> " time: " <> formattedTime
-            , "\n"
             ]
 
         explainSqlQuery query >>= logExplain (queryName query)
 
-    return result
+    snd <$> runRawSqlQuery NoExplain f query
 
 runRawSqlQuery
     :: ( MonadLogger m, MonadResource m, MonadThrow m
