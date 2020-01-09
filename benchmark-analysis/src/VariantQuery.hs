@@ -142,7 +142,7 @@ LEFT JOIN
 ON RunConfig.id = OptimalStep.runConfigId
 
 INNER JOIN
-(   SELECT Run.variantId
+(   SELECT Run.runConfigId, Run.variantId
          , MIN(avgTime) FILTER (WHERE type == 'Core') AS bestNonSwitching
          , double_vector(avgTime, idx, count) AS timings
       FROM TotalTimer
@@ -154,9 +154,9 @@ INNER JOIN
       ON Run.implId = IndexedImpls.implId
 
       WHERE TotalTimer.name = 'computation'
-      GROUP BY Run.variantId
+      GROUP BY Run.runConfigId, Run.variantId
 ) AS Total
-ON OptimalStep.variantId = Total.variantId
+ON OptimalStep.variantId = Total.variantId AND RunConfig.id = Total.runConfigId
 
 LEFT JOIN
 (   SELECT variantId
