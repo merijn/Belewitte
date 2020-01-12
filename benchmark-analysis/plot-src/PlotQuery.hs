@@ -222,5 +222,5 @@ ON Run.id = StepTimer.runId
 LEFT JOIN ImplVector
 
 WHERE RunConfig.platformId = ? AND Run.variantId = ?
-GROUP BY stepId
-ORDER BY stepId ASC|]
+GROUP BY RunConfig.id, stepId
+ORDER BY RunConfig.id, stepId ASC|]
