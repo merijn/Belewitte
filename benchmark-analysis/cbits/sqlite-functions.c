@@ -7,14 +7,10 @@
 
 void randomFun(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
 {
+    (void) nArgs;
     void *auxWasSet;
     unsigned int *seed;
     sqlite3_int64 result;
-
-    if (nArgs != 1) {
-        sqlite3_result_error(ctxt, "Wrong number of arguments!", -1);
-        return;
-    }
 
     auxWasSet = seed = sqlite3_get_auxdata(ctxt, 0);
     if (!seed) seed = sqlite3_malloc(sizeof *seed);
@@ -45,10 +41,7 @@ typedef struct vector
 
 void int64_vector_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
 {
-    if (nArgs != 3) {
-        sqlite3_result_error(ctxt, "Incorrect argument count!", -1);
-        return;
-    }
+    (void) nArgs;
 
     int64_vector_t *vector = sqlite3_aggregate_context(ctxt, sizeof *vector);
     if (!vector) {
@@ -92,10 +85,7 @@ void int64_vector_finalise(sqlite3_context *ctxt)
 
 void double_vector_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
 {
-    if (nArgs != 3) {
-        sqlite3_result_error(ctxt, "Incorrect argument count!", -1);
-        return;
-    }
+    (void) nArgs;
 
     double_vector_t *vector = sqlite3_aggregate_context(ctxt, sizeof *vector);
     if (!vector) {

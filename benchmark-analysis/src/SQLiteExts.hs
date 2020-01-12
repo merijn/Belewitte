@@ -48,6 +48,8 @@ registerSqlFunctions sqlitePtr = mapM_ ($sqlitePtr)
         double_vector_step double_vector_finalise
     , createSqlAggregate 3 "int64_vector"
         int64_vector_step int64_vector_finalise
+    , createSqlAggregate 4 "key_value_vector"
+        key_value_vector_step key_value_vector_finalise
     ]
 
 wrapSqliteExceptions :: (MonadLogger m, MonadCatch m) => m r -> m r
@@ -77,6 +79,12 @@ foreign import ccall "sqlite-functions.h &double_vector_step"
 
 foreign import ccall "sqlite-functions.h &double_vector_finalise"
     double_vector_finalise :: FunPtr (Ptr () -> IO ())
+
+foreign import ccall "sqlite-functions.h &key_value_vector_step"
+    key_value_vector_step :: FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
+
+foreign import ccall "sqlite-functions.h &key_value_vector_finalise"
+    key_value_vector_finalise :: FunPtr (Ptr () -> IO ())
 
 foreign import capi "sqlite3.h value SQLITE_ANY"
     sqliteAny :: CInt
