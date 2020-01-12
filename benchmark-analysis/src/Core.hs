@@ -285,6 +285,7 @@ runSqlMWithOptions Options{..} work = do
         setup conn = do
             registerSqlFunctions ptr
             -- Wait longer before timing out query steps
+            setPragmaConn "threads" (4 :: Int64) conn
             setPragmaConn "busy_timeout" (5000 :: Int64) conn
           where
             ptr = getSqlitePtr $ Lens.view Sqlite.rawSqliteConnection conn
