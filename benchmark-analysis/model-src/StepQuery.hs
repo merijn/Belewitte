@@ -10,7 +10,6 @@ import qualified Data.Set as S
 import Data.String.Interpolate.IsString (i)
 import qualified Data.Text as T
 import Data.Vector.Storable (Vector)
-import qualified Data.Vector.Storable as VS
 
 import Core
 import Query
@@ -51,8 +50,7 @@ stepInfoQuery algoId platformId graphProperties stepProperties ts = Query{..}
     convert [ PersistInt64 (toSqlKey -> stepVariantId)
             , PersistInt64 stepId
             , PersistInt64 stepBestImpl
-            , PersistByteString (byteStringToVector -> impls)
-            , PersistByteString (byteStringToVector -> timings)
+            , PersistByteString (byteStringToVector -> stepTimings)
             , PersistByteString (byteStringToVector -> graphProps)
             , rawStepProps
             ]
@@ -65,13 +63,16 @@ stepInfoQuery algoId platformId graphProperties stepProperties ts = Query{..}
                 Just $ graphProps <> stepProps
             _ -> Nothing
 
-        stepTimings = VS.zipWith ImplTiming impls timings
-
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
-        [ SqlInt64, SqlInt64, SqlInt64, SqlBlob, SqlBlob, SqlBlob, SqlBlob ]
+        [ SqlInt64, SqlInt64, SqlInt64, SqlBlob, SqlBlob, SqlBlob ]
 
     cteParams :: [PersistValue]
-    cteParams = [ toPersistValue algoId , toPersistValue ts ]
+    cteParams =
+      [ toPersistValue algoId
+      , toPersistValue ts
+      , toPersistValue algoId
+      , toPersistValue platformId
+      ]
 
     commonTableExpressions :: [Text]
     commonTableExpressions = [[i|
@@ -107,65 +108,71 @@ IndexedImpls(idx, implId, type, count) AS (
     WHERE algorithmId = ?
 ),
 
-ImplVector(impls) AS (
-    SELECT int64_vector(implId, idx, count)
-    FROM IndexedImpls
-),
+StepTiming(runConfigId, graphId, variantId, stepId, implId, minTime, timings) AS (
+    SELECT RunConfig.id
+         , Graph.id
+         , Variant.id
+         , Step.value
+         , Impls.implId
+         , MIN(avgTime) FILTER (WHERE Impls.type == 'Core')
+         , key_value_vector(count, idx, Impls.implId, avgTime) AS timings
+    FROM RunConfig
 
-Step(runConfigId, variantId, stepId, implId, minTime, timings) AS (
-    SELECT Run.runConfigId, Run.variantId, stepId, IndexedImpls.implId
-         , MIN(avgTime) FILTER (WHERE IndexedImpls.type == 'Core')
-         , double_vector(avgTime, idx, count) AS timings
-    FROM StepTimer
+    INNER JOIN Graph
+    ON RunConfig.datasetId = Graph.datasetId
 
-    INNER JOIN Run
-    ON StepTimer.runId = Run.id
+    INNER JOIN Variant
+    ON Graph.id = Variant.graphId
 
-    INNER JOIN IndexedImpls
-    ON Run.implId = IndexedImpls.implId
+    JOIN generate_series(0, Variant.maxStepId) AS Step
+    JOIN IndexedImpls AS Impls
 
-    WHERE Run.validated == 1 AND Run.timestamp < ?
-    GROUP BY Run.runConfigId, Run.variantId, stepId
-)|]]
+    LEFT JOIN
+    ( SELECT Run.runConfigId, Run.implId, Run.variantId, stepId, avgTime
+      FROM Run
+
+      INNER JOIN StepTimer
+      ON Run.id = StepTimer.runId
+
+      WHERE Run.validated = 1 AND Run.timestamp < ?
+    ) AS Timings
+    ON RunConfig.id = Timings.runConfigId
+    AND Variant.id = Timings.variantId
+    AND Impls.implId = Timings.implId
+    AND Step.value = Timings.stepId
+
+    WHERE RunConfig.algorithmId = ? AND RunConfig.platformId = ?
+    GROUP BY RunConfig.id, Variant.id, Step.value
+    HAVING timings NOT NULL
+)
+|]]
 
     params :: [PersistValue]
-    params = [ toPersistValue algoId
-             , toPersistValue platformId
-             , toPersistValue $ S.size stepProperties
-             ]
+    params = [ toPersistValue $ S.size stepProperties ]
 
     queryText = [i|
-SELECT Step.variantId
-     , Step.stepId
-     , Step.implId
-     , ImplVector.impls
-     , Step.timings
+SELECT StepTiming.variantId
+     , StepTiming.stepId
+     , StepTiming.implId
+     , StepTiming.timings
      , GraphProps.props
      , StepProps.props
-FROM RunConfig
-
-INNER JOIN Step
-ON RunConfig.id = Step.runConfigId
-
-INNER JOIN Variant
-ON Step.variantId = Variant.id
+FROM StepTiming
 
 INNER JOIN
 (   SELECT graphId, double_vector(value, idx, count) AS props
     FROM IndexedGraphProps
     GROUP BY graphId
 ) AS GraphProps
-ON GraphProps.graphId = Variant.graphId
+ON GraphProps.graphId = StepTiming.graphId
 
 LEFT JOIN
-(   SELECT variantId, stepId
-         , double_vector(value, idx, count) AS props
+(   SELECT variantId, stepId, double_vector(value, idx, count) AS props
     FROM IndexedStepProps
     GROUP BY variantId, stepId
 ) AS StepProps
-ON Step.variantId = StepProps.variantId AND Step.stepId = StepProps.stepId
+ON StepTiming.variantId = StepProps.variantId
+AND StepTiming.stepId = StepProps.stepId
 
-LEFT JOIN ImplVector
-WHERE RunConfig.algorithmId = ? AND RunConfig.platformId = ?
-  AND (StepProps.props NOT NULL OR ? = 0)
-ORDER BY Step.variantId, Step.stepId ASC|]
+WHERE StepProps.props NOT NULL OR ? = 0
+ORDER BY StepTiming.variantId, StepTiming.stepId ASC|]

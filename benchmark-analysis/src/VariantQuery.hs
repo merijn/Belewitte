@@ -10,8 +10,8 @@ import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as VS
 
 import Core
-import Schema
 import Query
+import Schema
 import Utils.ImplTiming
 import Utils.Vector (byteStringToVector)
 
@@ -36,9 +36,7 @@ variantInfoQuery algoId platformId = Query{..}
     convert [ PersistInt64 (toSqlKey -> variantId)
             , stepOptimal
             , PersistDouble variantBestNonSwitching
-            , PersistByteString (byteStringToVector -> impls)
-            , PersistByteString (byteStringToVector -> timings)
-            , externalImpls
+            , PersistByteString (byteStringToVector -> variantTimings)
             , externalTimings
             ]
 
@@ -51,72 +49,105 @@ variantInfoQuery algoId platformId = Query{..}
             = let variantOptimal = infinity in return VariantInfo{..}
       where
         !infinity = 1/0
-        variantTimings = VS.zipWith ImplTiming impls timings
 
         maybeExternalTimings :: Maybe (Vector ImplTiming)
-        maybeExternalTimings = case (externalImpls, externalTimings) of
-            (PersistNull, PersistNull) -> Just VS.empty
-            (PersistNull, PersistByteString _) -> Nothing
-            (PersistByteString extImpls, PersistNull) ->
-                Just $ VS.map (\impl -> ImplTiming impl infinity)
-                              (byteStringToVector extImpls)
-            (PersistByteString extImpls, PersistByteString times) ->
-                Just $ VS.zipWith ImplTiming (byteStringToVector extImpls)
-                                             (byteStringToVector times)
+        maybeExternalTimings = case externalTimings of
+            PersistNull -> Just VS.empty
+            PersistByteString (byteStringToVector -> extImpls) -> Just extImpls
             _ -> Nothing
 
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
-        [SqlInt64, SqlReal, SqlReal, SqlBlob, SqlBlob, SqlBlob, SqlBlob]
+        [SqlInt64, SqlReal, SqlReal, SqlBlob, SqlBlob ]
 
     cteParams :: [PersistValue]
-    cteParams = [toPersistValue algoId, toPersistValue algoId]
+    cteParams =
+      [ toPersistValue algoId
+      , toPersistValue algoId
+      , toPersistValue algoId
+      , toPersistValue platformId
+      , toPersistValue platformId
+      ]
 
     commonTableExpressions :: [Text]
     commonTableExpressions = [[i|
-    IndexedImpls(idx, implId, type, count) AS (
-        SELECT ROW_NUMBER() OVER (ORDER BY id)
-             , id
-             , type
-             , COUNT() OVER ()
-        FROM Implementation
-        WHERE algorithmId = ?
-        ORDER BY id
-    ),
+IndexedImpls(idx, implId, type, count) AS (
+    SELECT ROW_NUMBER() OVER (ORDER BY id)
+            , id
+            , type
+            , COUNT() OVER ()
+    FROM Implementation
+    WHERE algorithmId = ?
+    ORDER BY id
+),
 
-    ImplVector(impls) AS (
-        SELECT int64_vector(implId, idx, count)
-          FROM IndexedImpls
-    ),
+IndexedExternalImpls(idx, implId, count) AS (
+    SELECT ROW_NUMBER() OVER (ORDER BY implId)
+            , implId
+            , COUNT() OVER ()
+        FROM (SELECT id AS implId
+                FROM ExternalImpl
+                WHERE algorithmId = ?)
+        ORDER BY implId
+),
 
-    IndexedExternalImpls(idx, implId, count) AS (
-        SELECT ROW_NUMBER() OVER (ORDER BY implId)
-             , implId
-             , COUNT() OVER ()
-          FROM (SELECT id AS implId
-                  FROM ExternalImpl
-                 WHERE algorithmId = ?)
-         ORDER BY implId
-    ),
+VariantTiming(runConfigId, variantId, bestNonSwitching, timings) AS (
+    SELECT RunConfig.id
+         , Variant.id
+         , MIN(avgTime) FILTER (WHERE type == 'Core') AS bestNonSwitching
+         , key_value_vector(Impls.count, Impls.idx, Impls.implId, avgTime)
+           AS timings
+    FROM RunConfig
 
-    ExternalImplVector(impls) AS (
-        SELECT int64_vector(implId, idx, count)
-          FROM IndexedExternalImpls
-    )|]]
+    INNER JOIN Graph
+    ON Graph.datasetId = RunConfig.datasetId
+
+    INNER JOIN Variant
+    ON Variant.graphId = Graph.id
+
+    JOIN IndexedImpls AS Impls
+
+    LEFT JOIN
+    ( SELECT Run.runConfigId, Run.implId, Run.variantId, avgTime
+      FROM Run
+
+      INNER JOIN TotalTimer
+      ON Run.id = TotalTimer.runId
+
+      WHERE TotalTimer.name = 'computation'
+    ) AS Timings
+    ON RunConfig.id = Timings.runConfigId
+    AND Variant.id = Timings.variantId
+    AND Impls.implId = Timings.implId
+
+    WHERE RunConfig.algorithmId = ? AND RunConfig.platformId = ?
+
+    GROUP BY RunConfig.id, Variant.id
+),
+
+ExternalTiming(variantId, timings) AS (
+   SELECT Variant.id
+         , key_value_vector(count, idx, Impls.implId, avgTime)
+    FROM Variant, IndexedExternalImpls AS Impls
+
+    LEFT JOIN ExternalTimer
+    ON Impls.implId = ExternalTimer.implId
+    AND ExternalTimer.name = 'computation' AND platformId = ?
+    GROUP BY variantId
+)|]]
 
     params :: [PersistValue]
-    params = [ toPersistValue platformId, toPersistValue algoId
-             , toPersistValue platformId
-             ]
+    params = []
 
     queryText = [i|
-SELECT OptimalStep.variantId
+SELECT VariantTiming.variantId
      , OptimalStep.optimal
-     , Total.bestNonSwitching
-     , ImplVector.impls
-     , Total.timings
-     , ExternalImplVector.impls
-     , External.timings
-FROM RunConfig
+     , VariantTiming.bestNonSwitching
+     , VariantTiming.timings
+     , ExternalTiming.timings
+FROM VariantTiming
+
+LEFT JOIN ExternalTiming
+ON VariantTiming.variantId = ExternalTiming.variantId
 
 INNER JOIN
 (   SELECT runConfigId
@@ -139,38 +170,7 @@ INNER JOIN
     ) AS Step
     GROUP BY runConfigId, variantId
 ) AS OptimalStep
-ON RunConfig.id = OptimalStep.runConfigId
+ON VariantTiming.runConfigId = OptimalStep.runConfigId
+AND VariantTiming.variantId = OptimalStep.variantId
 
-INNER JOIN
-(   SELECT Run.runConfigId, Run.variantId
-         , MIN(avgTime) FILTER (WHERE type == 'Core') AS bestNonSwitching
-         , double_vector(avgTime, idx, count) AS timings
-      FROM TotalTimer
-
-      INNER JOIN Run
-      ON TotalTimer.runId = Run.id
-
-      INNER JOIN IndexedImpls
-      ON Run.implId = IndexedImpls.implId
-
-      WHERE TotalTimer.name = 'computation'
-      GROUP BY Run.runConfigId, Run.variantId
-) AS Total
-ON OptimalStep.variantId = Total.variantId AND RunConfig.id = Total.runConfigId
-
-LEFT JOIN
-(   SELECT variantId
-         , double_vector(avgTime, idx, count) AS timings
-      FROM ExternalTimer
-      INNER JOIN IndexedExternalImpls
-      ON ExternalTimer.implId = IndexedExternalImpls.implId
-      WHERE platformId = ? AND ExternalTimer.name = 'computation'
-      GROUP BY variantId
-) AS External
-ON OptimalStep.variantId = External.variantId
-
-LEFT JOIN ImplVector
-LEFT JOIN ExternalImplVector
-
-WHERE RunConfig.algorithmId = ? AND RunConfig.platformId = ?
-ORDER BY OptimalStep.variantId ASC|]
+ORDER BY VariantTiming.runConfigId, VariantTiming.variantId ASC|]
