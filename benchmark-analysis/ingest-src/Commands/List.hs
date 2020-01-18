@@ -38,10 +38,12 @@ fromAnyField f (AnyField field) = f field
 data Field rec v where
     Simple :: EntityField rec v -> Field rec v
     Optional :: EntityField rec (Maybe v) -> Field rec v
+    Converted :: PersistField x => EntityField rec x -> (v -> x) -> Field rec v
 
 fromField :: (forall v . EntityField rec v -> a) -> Field rec x -> a
 fromField f (Simple field) = f field
 fromField f (Optional field) = f field
+fromField f (Converted field _) = f field
 
 data FieldSpec rec where
     IdField
@@ -87,10 +89,12 @@ toFilter name field = parseMultiple <|> pure []
     fieldEq :: PersistField v => Field rec v -> v -> Filter rec
     fieldEq (Simple f) val = f ==. val
     fieldEq (Optional f) val = f ==. Just val
+    fieldEq (Converted f convert) val = f ==. convert val
 
     fieldLike :: Field rec Text -> Text -> Filter rec
     fieldLike (Simple f) val = f `Sql.likeFilter` val
     fieldLike (Optional f) val = f `Sql.likeFilter` val
+    fieldLike (Converted f _) val = f `Sql.likeFilter` val
 
     optParser :: FieldSpec rec -> Parser (Filter rec)
     optParser (IdField c f) = fieldEq f . toSqlKey <$> option auto config
