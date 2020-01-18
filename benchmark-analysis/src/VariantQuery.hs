@@ -3,9 +3,16 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
-module VariantQuery (VariantInfo(..), variantInfoQuery) where
+module VariantQuery
+    ( VariantInfo(..)
+    , variantInfoQuery
+    , sortVariantTimings
+    ) where
 
+import Control.Monad.ST (runST)
+import Data.Ord (comparing)
 import Data.String.Interpolate.IsString (i)
+import qualified Data.Vector.Algorithms.Insertion as V
 import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as VS
 
@@ -24,6 +31,18 @@ data VariantInfo =
     , variantExternalTimings :: {-# UNPACK #-} !(Vector ImplTiming)
     } deriving (Show)
 
+sortVariantTimings :: VariantInfo -> VariantInfo
+sortVariantTimings info@VariantInfo{..} = info
+    { variantTimings = sortVector variantTimings
+    , variantExternalTimings = sortVector variantExternalTimings
+    }
+  where
+    sortVector :: Vector ImplTiming -> Vector ImplTiming
+    sortVector vec = runST $ do
+        mvec <- VS.thaw vec
+        V.sortBy (comparing implTimingImpl) mvec
+        VS.unsafeFreeze mvec
+
 variantInfoQuery :: Key Algorithm -> Key Platform -> Query VariantInfo
 variantInfoQuery algoId platformId = Query{..}
   where
@@ -34,22 +53,14 @@ variantInfoQuery algoId platformId = Query{..}
         :: (MonadIO m, MonadLogger m, MonadThrow m)
         => [PersistValue] -> m VariantInfo
     convert [ PersistInt64 (toSqlKey -> variantId)
-            , stepOptimal
+            , PersistDouble variantOptimal
             , PersistDouble variantBestNonSwitching
             , PersistByteString (byteStringToVector -> variantTimings)
             , externalTimings
             ]
-
-            | PersistDouble variantOptimal <- stepOptimal
-            , Just variantExternalTimings <- maybeExternalTimings
+            | Just variantExternalTimings <- maybeExternalTimings
             = return VariantInfo{..}
-
-            | PersistNull <- stepOptimal
-            , Just variantExternalTimings <- maybeExternalTimings
-            = let variantOptimal = infinity in return VariantInfo{..}
       where
-        !infinity = 1/0
-
         maybeExternalTimings :: Maybe (Vector ImplTiming)
         maybeExternalTimings = case externalTimings of
             PersistNull -> Just VS.empty
@@ -71,23 +82,20 @@ variantInfoQuery algoId platformId = Query{..}
     commonTableExpressions :: [Text]
     commonTableExpressions = [[i|
 IndexedImpls(idx, implId, type, count) AS (
-    SELECT ROW_NUMBER() OVER (ORDER BY id)
-            , id
-            , type
-            , COUNT() OVER ()
+    SELECT ROW_NUMBER() OVER ()
+         , id
+         , type
+         , COUNT() OVER ()
     FROM Implementation
     WHERE algorithmId = ?
-    ORDER BY id
 ),
 
 IndexedExternalImpls(idx, implId, count) AS (
-    SELECT ROW_NUMBER() OVER (ORDER BY implId)
-            , implId
-            , COUNT() OVER ()
-        FROM (SELECT id AS implId
-                FROM ExternalImpl
-                WHERE algorithmId = ?)
-        ORDER BY implId
+    SELECT ROW_NUMBER() OVER ()
+         , id
+         , COUNT() OVER ()
+    FROM ExternalImpl
+    WHERE algorithmId = ?
 ),
 
 VariantTiming(runConfigId, variantId, bestNonSwitching, timings) AS (
@@ -111,9 +119,7 @@ VariantTiming(runConfigId, variantId, bestNonSwitching, timings) AS (
       FROM Run
 
       INNER JOIN TotalTimer
-      ON Run.id = TotalTimer.runId
-
-      WHERE TotalTimer.name = 'computation'
+      ON Run.id = TotalTimer.runId AND TotalTimer.name = 'computation'
     ) AS Timings
     ON RunConfig.id = Timings.runConfigId
     AND Variant.id = Timings.variantId
@@ -124,35 +130,8 @@ VariantTiming(runConfigId, variantId, bestNonSwitching, timings) AS (
     GROUP BY RunConfig.id, Variant.id
 ),
 
-ExternalTiming(variantId, timings) AS (
-   SELECT Variant.id
-         , key_value_vector(count, idx, Impls.implId, avgTime)
-    FROM Variant, IndexedExternalImpls AS Impls
-
-    LEFT JOIN ExternalTimer
-    ON Impls.implId = ExternalTimer.implId
-    AND ExternalTimer.name = 'computation' AND platformId = ?
-    GROUP BY variantId
-)|]]
-
-    params :: [PersistValue]
-    params = []
-
-    queryText = [i|
-SELECT VariantTiming.variantId
-     , OptimalStep.optimal
-     , VariantTiming.bestNonSwitching
-     , VariantTiming.timings
-     , ExternalTiming.timings
-FROM VariantTiming
-
-LEFT JOIN ExternalTiming
-ON VariantTiming.variantId = ExternalTiming.variantId
-
-INNER JOIN
-(   SELECT runConfigId
-         , variantId
-         , SUM(Step.minTime) AS optimal
+OptimalStep(runConfigId, variantId, optimal) AS (
+    SELECT runConfigId, variantId, SUM(Step.minTime) AS optimal
     FROM (
         SELECT Run.runConfigId
              , Run.variantId
@@ -169,8 +148,34 @@ INNER JOIN
         GROUP BY Run.runConfigId, Run.variantId, stepId
     ) AS Step
     GROUP BY runConfigId, variantId
-) AS OptimalStep
+),
+
+ExternalTiming(variantId, timings) AS (
+   SELECT Variant.id, key_value_vector(count, idx, Impls.implId, avgTime)
+   FROM Variant, IndexedExternalImpls AS Impls
+
+   LEFT JOIN ExternalTimer
+   ON Impls.implId = ExternalTimer.implId
+   AND ExternalTimer.name = 'computation' AND platformId = ?
+   GROUP BY variantId
+)|]]
+
+    params :: [PersistValue]
+    params = []
+
+    queryText = [i|
+SELECT VariantTiming.variantId
+     , OptimalStep.optimal
+     , VariantTiming.bestNonSwitching
+     , VariantTiming.timings
+     , ExternalTiming.timings
+FROM VariantTiming
+
+INNER JOIN OptimalStep
 ON VariantTiming.runConfigId = OptimalStep.runConfigId
 AND VariantTiming.variantId = OptimalStep.variantId
+
+LEFT JOIN ExternalTiming
+ON VariantTiming.variantId = ExternalTiming.variantId
 
 ORDER BY VariantTiming.runConfigId, VariantTiming.variantId ASC|]

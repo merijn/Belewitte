@@ -146,4 +146,6 @@ main = runSqlM commands $ \case
             variantQuery = variantInfoQuery algoId platformId
 
         runSqlQueryConduit stepQuery $ querySink outputSuffix "stepInfoQuery-"
-        runSqlQueryConduit variantQuery $ querySink outputSuffix "variantInfoQuery-"
+        runSqlQueryConduit variantQuery $
+            C.map sortVariantTimings
+            .| querySink outputSuffix "variantInfoQuery-"
