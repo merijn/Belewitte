@@ -12,26 +12,28 @@
 module Schema.RunConfig where
 
 import Data.String.Interpolate.IsString (i)
-import Data.Text (Text)
 import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
 import Pretty.Fields
-import Schema.Utils (EntityDef, Int64, MonadSql, Transaction, (.>))
+import Schema.Utils (EntityDef, Int64, MonadSql, Transaction, (.>), (.=))
 import qualified Schema.Utils as Utils
+import Types
 
 import Schema.Algorithm (AlgorithmId)
 import Schema.Dataset (DatasetId)
 import Schema.Platform (PlatformId)
+import qualified Schema.RunConfig.V0 as V0
 
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
 RunConfig
     algorithmId AlgorithmId
     platformId PlatformId
     datasetId DatasetId
-    algorithmVersion Text
+    algorithmVersion CommitId
     repeats Int
+    UniqRunConfig algorithmId platformId datasetId algorithmVersion
     deriving Eq Show
 |]
 
@@ -41,12 +43,12 @@ instance PrettyFields RunConfig where
         , ("Platform", idField RunConfigPlatformId)
         , ("Dataset", idField RunConfigDatasetId)
         , ("Repeats", RunConfigRepeats `fieldVia` prettyShow)
-        , ("Algorithm Commit", textField RunConfigAlgorithmVersion)
+        , ("Algorithm Commit", RunConfigAlgorithmVersion `fieldVia` getCommitId)
         ]
 
 migrations :: MonadSql m => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup
-    [ 6 .> schema $ do
+    [ 6 .> V0.schema $ do
         Utils.createTableFromSchema schema
 
         Utils.executeSql [i|
@@ -68,4 +70,5 @@ FROM (
     ON Graph.id = Variant.graphId
 )
 |]
+    , 16 .= schema
     ]

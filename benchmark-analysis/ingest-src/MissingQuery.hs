@@ -41,7 +41,7 @@ data ExtraVariantInfo = ExtraVariantInfo
 data ValidationVariant = ValidationVariant
     { validationAlgorithmId :: {-# UNPACK #-} !(Key Algorithm)
     , validationVariantId :: {-# UNPACK #-} !(Key Variant)
-    , validationCommit :: {-# UNPACK #-} !Text
+    , validationCommit :: {-# UNPACK #-} !CommitId
     , validationMissingCount :: {-# UNPACK #-} !Int64
     , validationArgs :: ![Text]
     } deriving (Show)
@@ -58,7 +58,7 @@ validationVariantQuery platformId = Query{..}
     convert [ PersistInt64 (toSqlKey -> validationAlgorithmId)
             , PersistText algoName
             , PersistInt64 (toSqlKey -> validationVariantId)
-            , PersistText validationCommit
+            , (fromPersistValue -> Right validationCommit)
             , PersistInt64 validationMissingCount
             , (fromPersistValue -> Right variantFlags)
             , PersistText graphPath

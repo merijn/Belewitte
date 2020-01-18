@@ -302,7 +302,8 @@ commands = CommandGroup CommandInfo
             [ "algorithm" =. IdField 'a' $ Simple RunConfigAlgorithmId
             , "platform" =. IdField 'p' $ Simple RunConfigPlatformId
             , "dataset" =. IdField 'd' $ Simple RunConfigDatasetId
-            , "commit" =. StringField 'c' $ Simple RunConfigAlgorithmVersion
+            , "commit" =. StringField 'c' $
+                    Converted RunConfigAlgorithmVersion CommitId
             , "repeats" =. SortOnlyField $ RunConfigRepeats
             ]
     , SingleCommand CommandInfo

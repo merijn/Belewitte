@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Schema
     ( ByteString
+    , CommitId(..)
     , GlobalVars.GlobalVar(..)
     , Hash(..)
     , ImplType(..)
@@ -135,7 +136,7 @@ migrations =
     ]
 
 schemaVersion :: Int64
-schemaVersion = 15
+schemaVersion = 16
 
 type MigrationAction = Transaction DummySql [EntityDef]
 

@@ -105,7 +105,7 @@ data Result a = Result
     { resultValue :: a
     , resultVariant :: Key Variant
     , resultLabel :: Text
-    , resultAlgorithmVersion :: Text
+    , resultAlgorithmVersion :: CommitId
     , resultOutput :: (FilePath, ReleaseKey)
     , resultTimings :: (FilePath, ReleaseKey)
     , resultPropLog :: Maybe (FilePath, ReleaseKey)
@@ -350,7 +350,7 @@ processJobsParallelWithSharedPool numNodes procPool =
                     { resultValue = jobValue
                     , resultVariant = jobVariant
                     , resultLabel = label
-                    , resultAlgorithmVersion = commit
+                    , resultAlgorithmVersion = CommitId commit
                     , resultOutput = outputKey
                     , resultTimings = timingKey
                     , resultPropLog = logKey

@@ -196,7 +196,8 @@ addRunConfig = withInteractiveLogging $ do
     version <- getInteractive (versionInput algorithmName) "Algorithm Version"
     repeats <- getInteractive (readInputEnsure (>0)) "Number of runs"
 
-    Sql.insert_ $ RunConfig algoId platformId datasetId version repeats
+    Sql.insert_ $
+        RunConfig algoId platformId datasetId (CommitId version) repeats
   where
     algoInput = sqlInput AlgorithmName UniqAlgorithm
     platformInput = sqlInput PlatformName UniqPlatform

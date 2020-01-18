@@ -221,7 +221,7 @@ missingRunToTimingJob platformId MissingRun{..} = case missingRunExtraInfo of
 processTiming
     :: (MonadCatch m, MonadLogger m, MonadResource m, MonadSql m)
     => Key RunConfig
-    -> Text
+    -> CommitId
     -> Result (Key Algorithm, Key Implementation, Hash, Int)
     -> m ()
 processTiming runConfigId commit result@Result{..} = do
@@ -234,8 +234,8 @@ processTiming runConfigId commit result@Result{..} = do
     if commit /= resultAlgorithmVersion
        then logErrorN $ mconcat
         [ "Unexpected algorithm version for implementation #"
-        , showSqlKey implId, "! Expected commit ", commit, " found commit "
-        , resultAlgorithmVersion
+        , showSqlKey implId, "! Expected commit ", getCommitId commit
+        , " found commit ", getCommitId resultAlgorithmVersion
         ]
        else SqlTrans.tryAbortableTransaction $ do
         let validated = resultHash == hash
@@ -284,7 +284,7 @@ processTiming runConfigId commit result@Result{..} = do
 
 data Validation = Validation
     { cleanData :: SqlM ()
-    , originalCommit :: Text
+    , originalCommit :: CommitId
     , referenceResult :: FilePath
     , runId :: Key Run
     }
