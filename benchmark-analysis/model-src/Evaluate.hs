@@ -308,7 +308,7 @@ aggregateVariants variantIntervals relTo implMaps = do
         comparison (i, v1) (j, v2)
             | i == optimalImplId = LT
             | j == optimalImplId = GT
-            | otherwise = compare v1 v2
+            | otherwise = compare v1 v2 <> compare i j
 
 data RelativeTo = Optimal | Predicted | BestNonSwitching
     deriving (Eq,Ord,Show,Read)
@@ -465,7 +465,7 @@ reportTotalStatistics Report{..} implMaps TotalStats{..} = do
         :: (Int64, (Double, Int, Int, Int, Double))
         -> (Int64, (Double, Int, Int, Int, Double))
         -> Ordering
-    comparison = comparing compareTime
+    comparison = comparing compareTime <> comparing fst
       where
         compareTime :: (Int64, (Double, Int, Int, Int, Double)) -> Double
         compareTime (_, (avgTime, _, _, _, maxTime)) = case reportSortBy of
