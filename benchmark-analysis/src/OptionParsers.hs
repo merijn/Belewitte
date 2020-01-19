@@ -5,10 +5,13 @@
 {-# LANGUAGE TupleSections #-}
 module OptionParsers
     ( reflow
-    , platformIdParser
-    , platformParser
     , algorithmIdParser
     , algorithmParser
+    , commitIdParser
+    , datasetIdParser
+    , datasetParser
+    , platformIdParser
+    , platformParser
     , intervalReader
     , readCI
     , mapOption
@@ -45,28 +48,14 @@ import Text.Megaparsec.Char.Lexer (decimal)
 
 import Core
 import Commands (Command, buildCommand)
+import FieldQuery (getDistinctFieldLikeQuery)
+import Query (runSqlQuerySingle)
 import Schema
 import Sql (Key, Entity(..))
 import qualified Sql
 
 reflow :: String -> Doc
 reflow = Help.fillSep . map Help.text . words
-
-platformIdParser :: Parser (SqlM (Key Platform))
-platformIdParser = fmap entityKey <$> platformParser
-
-platformParser :: Parser (SqlM (Entity Platform))
-platformParser = queryPlatform <$> platformOpt
-  where
-    platformOpt :: Parser (Either Text Int64)
-    platformOpt = option (Right <$> auto <|> Left <$> str) $ mconcat
-        [ metavar "ID", short 'p', long "platform"
-        , help "Platform results to use, numeric or textual" ]
-
-    queryPlatform :: Either Text Int64 -> SqlM (Entity Platform)
-    queryPlatform (Right n) = Sql.validateEntity "Platform" n
-    queryPlatform (Left name) = Sql.validateUniqEntity "platform" $
-        UniqPlatform name
 
 algorithmIdParser :: Parser (SqlM (Key Algorithm))
 algorithmIdParser = fmap entityKey <$> algorithmParser
@@ -83,6 +72,51 @@ algorithmParser = queryAlgorithm <$> algorithmOpt
     queryAlgorithm (Right n) = Sql.validateEntity "Algorithm" n
     queryAlgorithm (Left name) = Sql.validateUniqEntity "Algorithm" $
         UniqAlgorithm name
+
+commitIdParser :: Parser (SqlM CommitId)
+commitIdParser = checkUniqueCommitId <$> commitIdOpt
+  where
+    commitIdOpt :: Parser Text
+    commitIdOpt = option str $ mconcat
+        [ metavar "COMMIT", short 'c', long "commit"
+        , help "Algorithm version to use" ]
+
+    checkUniqueCommitId :: Text -> SqlM CommitId
+    checkUniqueCommitId txt = do
+        query <- getDistinctFieldLikeQuery RunConfigAlgorithmVersion txt
+        runSqlQuerySingle query
+
+datasetIdParser :: Parser (SqlM (Key Dataset))
+datasetIdParser = fmap entityKey <$> datasetParser
+
+datasetParser :: Parser (SqlM (Entity Dataset))
+datasetParser = queryDataset <$> datasetOpt
+  where
+    datasetOpt :: Parser (Either Text Int64)
+    datasetOpt = option (Right <$> auto <|> Left <$> str) $ mconcat
+        [ metavar "ID", long "dataset"
+        , help "Dataset results to use, numeric or textual" ]
+
+    queryDataset :: Either Text Int64 -> SqlM (Entity Dataset)
+    queryDataset (Right n) = Sql.validateEntity "Dataset" n
+    queryDataset (Left name) = Sql.validateUniqEntity "Dataset" $
+        UniqDataset name
+
+platformIdParser :: Parser (SqlM (Key Platform))
+platformIdParser = fmap entityKey <$> platformParser
+
+platformParser :: Parser (SqlM (Entity Platform))
+platformParser = queryPlatform <$> platformOpt
+  where
+    platformOpt :: Parser (Either Text Int64)
+    platformOpt = option (Right <$> auto <|> Left <$> str) $ mconcat
+        [ metavar "ID", short 'p', long "platform"
+        , help "Platform results to use, numeric or textual" ]
+
+    queryPlatform :: Either Text Int64 -> SqlM (Entity Platform)
+    queryPlatform (Right n) = Sql.validateEntity "Platform" n
+    queryPlatform (Left name) = Sql.validateUniqEntity "platform" $
+        UniqPlatform name
 
 intervalReader :: ReadM (IntervalSet Int64)
 intervalReader = maybeReader . parseMaybe $
