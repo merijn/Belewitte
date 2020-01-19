@@ -20,6 +20,7 @@ import Data.Time.Clock (getCurrentTime)
 
 import Core
 import Evaluate (evaluateModel, compareImplementations, percent)
+import FieldQuery (getDistinctFieldQuery)
 import FormattedOutput (renderOutput)
 import InteractiveInput
 import Model

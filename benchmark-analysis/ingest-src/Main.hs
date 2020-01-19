@@ -30,13 +30,14 @@ import qualified Commands.Reset as Reset
 import qualified Commands.Set as Set
 import qualified Commands.Unset as Unset
 import Core
+import FieldQuery (getDistinctFieldQuery)
 import InteractiveInput
 import Jobs
 import MissingQuery
 import OptionParsers
 import Parsers
 import ProcessPool
-import Query (Query, getDistinctFieldQuery, runSqlQuery, runSqlQueryConduit)
+import Query (Query, runSqlQuery, runSqlQueryConduit)
 import qualified RuntimeData
 import Schema
 import Sql (Entity(..), MonadSql, Transaction, (==.), (||.))

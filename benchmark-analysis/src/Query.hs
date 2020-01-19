@@ -7,9 +7,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
-{-# LANGUAGE TypeFamilies #-}
 module Query
     ( MonadQuery
     , Query(..)
@@ -20,7 +18,6 @@ module Query
     , runSqlQuerySingle
     , runSqlQueryConduit
     , runSqlQueryCount
-    , getDistinctFieldQuery
     ) where
 
 import Control.Monad ((>=>), void, when)
@@ -31,15 +28,13 @@ import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.List as C hiding (fold, mapM)
 import Data.List (intersperse)
 import Data.Monoid ((<>))
-import Data.Proxy (Proxy(Proxy))
 import Data.String.Interpolate.IsString (i)
 import qualified Data.Text as T
-import qualified Database.Persist.Sqlite as Sqlite
 import Numeric (showGFloat)
 
 import Core
 import Schema
-import Sql.Core (MonadSql, PersistFieldSql, SqlRecord, Transaction(..))
+import Sql.Core (MonadSql)
 import qualified Sql.Core as Sql
 
 type MonadQuery m =
@@ -197,32 +192,3 @@ runSqlQueryCount originalQuery = do
             actualValues -> logThrowM $ QueryResultUnparseable actualValues
                 [SqlInt64]
         }
-
-getDistinctFieldQuery
-    :: forall a m rec
-     . (MonadResource m, MonadSql m, PersistFieldSql a, SqlRecord rec)
-     => EntityField rec a
-     -> m (Query a)
-getDistinctFieldQuery entityField = Sql.runTransaction $ do
-    table <- Transaction $ Sqlite.getTableName (undefined :: rec)
-    field <- Transaction $ Sqlite.getFieldName entityField
-    let queryText = [i|SELECT DISTINCT #{table}.#{field} FROM #{table}|]
-    return Query{..}
-  where
-    queryName :: Text
-    queryName = "getDistinctFieldQuery"
-
-    cteParams :: [PersistValue]
-    cteParams = []
-
-    commonTableExpressions :: [Text]
-    commonTableExpressions = []
-
-    params :: [PersistValue]
-    params = []
-
-    convert
-        :: (MonadIO n, MonadLogger n, MonadThrow n) => [PersistValue] -> n a
-    convert [v] | Right val <- Sqlite.fromPersistValue v = return val
-    convert actualValues = logThrowM $ QueryResultUnparseable actualValues
-        [Sqlite.sqlType (Proxy :: Proxy a)]

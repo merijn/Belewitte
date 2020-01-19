@@ -6,7 +6,7 @@
 module Validate (validateModel) where
 
 import Data.Bifunctor (first)
-import Data.Conduit (ConduitT, (.|))
+import Data.Conduit (ConduitT)
 import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Text as T
