@@ -146,6 +146,16 @@ insert = runTransaction . SqlTrans.insert
 insert_ :: (MonadSql m, SqlRecord rec) => rec -> m ()
 insert_ = runTransaction . SqlTrans.insert_
 
+selectSingleMaybe
+    :: (MonadLogger m, MonadSql m, MonadThrow m, SqlRecord rec)
+    => [Filter rec] -> m (Maybe (Entity rec))
+selectSingleMaybe = runTransaction . SqlTrans.selectSingleMaybe
+
+selectSingle
+    :: (MonadLogger m, MonadSql m, MonadThrow m, SqlRecord rec)
+    => [Filter rec] -> m (Entity rec)
+selectSingle = runTransaction . SqlTrans.selectSingle
+
 selectFirst
     :: (MonadSql m, SqlRecord rec)
     => [Filter rec] -> [SelectOpt rec] -> m (Maybe (Entity rec))

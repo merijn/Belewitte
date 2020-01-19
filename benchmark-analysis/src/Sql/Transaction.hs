@@ -8,12 +8,15 @@
 {-# LANGUAGE TypeFamilies #-}
 module Sql.Transaction (module Sql.Core, module Sql.Transaction) where
 
+import Control.Monad ((>=>))
 import Control.Monad.Catch (MonadThrow)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Logger (MonadLogger)
 import qualified Control.Monad.Logger as Log
-import Control.Monad.Trans.Resource (MonadResource)
-import Data.Conduit (ConduitT, (.|), toProducer, runConduit)
+import Control.Monad.Reader (ask, runReaderT)
+import Control.Monad.Trans.Resource (MonadResource, release)
+import Data.Acquire (allocateAcquire)
+import Data.Conduit (ConduitT, (.|), await, toProducer, runConduit)
 import qualified Data.Conduit.Combinators as C
 import Data.Int (Int64)
 import Data.IntMap (IntMap)
@@ -149,6 +152,28 @@ onlyUnique = Transaction . Sqlite.onlyUnique
 
 rawExecute :: MonadSql m => Text -> [PersistValue] -> Transaction m ()
 rawExecute query args = Transaction $ Sqlite.rawExecute query args
+
+selectSingleMaybe
+    :: (MonadLogger m, MonadSql m, MonadThrow m, SqlRecord rec)
+    => [Filter rec] -> Transaction m (Maybe (Entity rec))
+selectSingleMaybe filters = do
+    allocConduit <- ask >>= runReaderT (Sqlite.selectSourceRes filters [])
+    (key, conduit) <- allocateAcquire allocConduit
+
+    result <- runConduit $ conduit .| do
+        result <- await
+        check <- await
+        case check of
+            Nothing -> return result
+            Just _ -> logThrowM . ExpectedSingleValue $ ""
+    result <$ release key
+
+selectSingle
+    :: (MonadLogger m, MonadSql m, MonadThrow m, SqlRecord rec)
+    => [Filter rec] -> Transaction m (Entity rec)
+selectSingle = selectSingleMaybe >=> \case
+    Nothing -> logThrowM QueryReturnedZeroResults
+    Just v -> return v
 
 selectFirst
     :: (MonadSql m, SqlRecord rec)
