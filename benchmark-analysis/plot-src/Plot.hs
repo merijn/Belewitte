@@ -67,23 +67,26 @@ queryVariants algoId graphs = do
 
     return . S.fromList . map Sql.entityKey . catMaybes $ variants
 
-data PlotType = PlotLevels | PlotTotals | PlotVsOptimal
-
 data PlotConfig = PlotConfig
     { axisName :: String
-    , normalise :: Bool
     , slideFormat :: Bool
     , printStdout :: Bool
+    , normalise :: Bool
     }
+
+data PlotType
+    = PlotLevels
+    | PlotTotals
+    | PlotVsOptimal
 
 data PlotOptions
     = PlotOptions
-      { plotType :: PlotType
-      , getAlgoId :: SqlM (Key Algorithm)
+      { getAlgoId :: SqlM (Key Algorithm)
       , getPlatformId :: SqlM (Key Platform)
       , getGraphs :: SqlM (Set Text)
       , getImplementations :: SqlM (Set Text)
       , plotConfig :: PlotConfig
+      , plotType :: PlotType
       }
     | QueryTest
       { getAlgorithm :: SqlM (Entity Algorithm)
@@ -91,30 +94,10 @@ data PlotOptions
       , outputSuffix :: Maybe FilePath
       }
 
-plotOptions :: PlotType -> Parser PlotOptions
-plotOptions plottype =
-  PlotOptions plottype <$> algorithmIdParser <*> platformIdParser <*> graphs
-                       <*> impls <*> config
+plotOptions :: Parser (PlotConfig -> PlotType -> PlotOptions)
+plotOptions = PlotOptions <$> algorithmIdParser <*> platformIdParser <*> graphs
+                          <*> impls
   where
-    baseConfig = case plottype of
-        PlotLevels -> pure $ PlotConfig "Levels" False
-        PlotTotals -> PlotConfig "Graph" <$> normaliseFlag
-        PlotVsOptimal -> PlotConfig "Graph" <$> normaliseFlag
-
-    config :: Parser PlotConfig
-    config = baseConfig <*> slideFlag <*> printFlag
-
-    slideFlag :: Parser Bool
-    slideFlag = flag False True $ mconcat
-        [ long "slide", help "Render 4:3 slide dimensions" ]
-
-    printFlag :: Parser Bool
-    printFlag = flag False True $ mconcat
-        [ long "print", help "Print results to stdout, rather than plotting" ]
-
-    normaliseFlag :: Parser Bool
-    normaliseFlag = flag False True $ mconcat [long "normalise"]
-
     graphs :: Parser (SqlM (Set Text))
     graphs = readSet "graphs"
 
@@ -148,34 +131,54 @@ commands name = CommandGroup CommandInfo
         { commandName = "levels"
         , commandHeaderDesc = "plot level times for a graph" 
         , commandDesc = ""
-        } (plotOptions PlotLevels)
+        }
+        $ plotOptions <*> (plotConfig "Levels" <*> pure False)
+                      <*> pure PlotLevels
     , SingleCommand CommandInfo
         { commandName = "totals"
         , commandHeaderDesc = "plot total times for a set of graphs"
         , commandDesc = ""
-        } (plotOptions PlotTotals)
+        }
+        $ plotOptions <*> (plotConfig "Graph" <*> normaliseFlag)
+                      <*> pure PlotTotals
     , SingleCommand CommandInfo
         { commandName = "vs-optimal"
         , commandHeaderDesc =
           "plot total times for a set of graphs against the optimal"
         , commandDesc = ""
-        } (plotOptions PlotVsOptimal)
+        }
+        $ plotOptions <*> (plotConfig "Graph" <*> normaliseFlag)
+                      <*> pure PlotVsOptimal
     , HiddenCommand CommandInfo
         { commandName = "query-test"
         , commandHeaderDesc = "check query output"
         , commandDesc = "Dump query output to files to validate results"
         }
         $ QueryTest <$> algorithmParser <*> platformIdParser
-                    <*> (suffixParser <|> pure Nothing)
+                    <*> optional suffixParser
     ]
   where
-    suffixReader :: String -> Maybe (Maybe String)
+    plotConfig :: String -> Parser (Bool -> PlotConfig)
+    plotConfig axis = PlotConfig axis <$> slideFlag <*> printFlag
+
+    slideFlag :: Parser Bool
+    slideFlag = flag False True $ mconcat
+        [ long "slide", help "Render 4:3 slide dimensions" ]
+
+    printFlag :: Parser Bool
+    printFlag = flag False True $ mconcat
+        [ long "print", help "Print results to stdout, rather than plotting" ]
+
+    normaliseFlag :: Parser Bool
+    normaliseFlag = flag False True $ mconcat [long "normalise"]
+
+    suffixReader :: String -> Maybe String
     suffixReader "" = Nothing
     suffixReader s
         | any isSpace s = Nothing
-        | otherwise = Just $ Just s
+        | otherwise = Just s
 
-    suffixParser :: Parser (Maybe String)
+    suffixParser :: Parser String
     suffixParser = argument (maybeReader suffixReader) . mconcat $
         [ metavar "SUFFIX" ]
 
