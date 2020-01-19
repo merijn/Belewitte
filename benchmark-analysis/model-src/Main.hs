@@ -116,10 +116,12 @@ main = runSqlM commands $ \case
         trainConfig <- getModelTrainingConfig modelId
         evaluateModel algo platId defaultImpl evaluateConfig model trainConfig
 
-    Compare{getAlgoId,getPlatformId,compareConfig} -> do
+    Compare{getAlgoId,getPlatformId,getCommit,getDatasetId,compareConfig} -> do
         algoId <- getAlgoId
         platformId <- getPlatformId
-        compareImplementations algoId platformId compareConfig
+        commit <- getCommit
+        datasetId <- sequence getDatasetId
+        compareImplementations algoId platformId commit datasetId compareConfig
 
     Export{getModel,cppFile} -> do
         (algoId, modelId, model) <- getModel
@@ -128,9 +130,10 @@ main = runSqlM commands $ \case
         dumpCppModel cppFile model trainGraphProps trainStepProps
             (implementationName <$> impls)
 
-    QueryTest{getAlgoId,getPlatformId,utcTime,outputSuffix} -> do
+    QueryTest{getAlgoId,getPlatformId,getCommit,utcTime,outputSuffix} -> do
         algoId <- getAlgoId
         platformId <- getPlatformId
+        commit <- getCommit
         timestamp <- maybe (liftIO getCurrentTime) return utcTime
 
         graphPropQuery <- getDistinctFieldQuery GraphPropProperty
@@ -144,7 +147,7 @@ main = runSqlM commands $ \case
                 stepInfoQuery algoId platformId graphprops stepprops timestamp
 
             variantQuery :: Query VariantInfo
-            variantQuery = variantInfoQuery algoId platformId
+            variantQuery = variantInfoQuery algoId platformId commit Nothing
 
         runSqlQueryConduit stepQuery $ querySink outputSuffix "stepInfoQuery-"
         runSqlQueryConduit variantQuery $

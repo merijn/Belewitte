@@ -391,8 +391,14 @@ evaluateModel algo platId defImpl reportCfg@Report{..} model trainConfig =
           $ implTimes
 
 compareImplementations
-    :: Key Algorithm -> Key Platform -> CompareReport -> SqlM ()
-compareImplementations algoId platformId cfg@Report{..} = renderOutput $ do
+    :: Key Algorithm
+    -> Key Platform
+    -> CommitId
+    -> Maybe (Key Dataset)
+    -> CompareReport
+    -> SqlM ()
+compareImplementations algoId platformId commitId datasetId cfg@Report{..} =
+  renderOutput $ do
     impls <- (,) <$> queryImplementations algoId
                  <*> queryExternalImplementations algoId
 
@@ -410,7 +416,7 @@ compareImplementations algoId platformId cfg@Report{..} = renderOutput $ do
         | compareExternal = id
         | otherwise = const mempty
 
-    query = variantInfoQuery algoId platformId
+    query = variantInfoQuery algoId platformId commitId datasetId
     (Any compareExternal, implTypes) = reportImplTypes
 
     addBestNonSwitching :: VariantInfo -> VariantAggregate

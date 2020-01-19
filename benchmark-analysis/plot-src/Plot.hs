@@ -77,7 +77,7 @@ data PlotConfig = PlotConfig
 data PlotType
     = PlotLevels
     | PlotTotals
-    | PlotVsOptimal
+    | PlotVsOptimal (SqlM CommitId)
 
 data PlotOptions
     = PlotOptions
@@ -148,7 +148,7 @@ commands name = CommandGroup CommandInfo
         , commandDesc = ""
         }
         $ plotOptions <*> (plotConfig "Graph" <*> normaliseFlag)
-                      <*> pure PlotVsOptimal
+                      <*> (PlotVsOptimal <$> commitIdParser)
     , HiddenCommand CommandInfo
         { commandName = "query-test"
         , commandHeaderDesc = "check query output"
@@ -315,8 +315,9 @@ main = runSqlM commands $ \case
             plot plotConfig "times-totals" timeQuery $
                 C.map (second $ translatePair . toPair V.convert V.convert)
 
-        PlotVsOptimal -> do
-            let variantQuery = variantInfoQuery algoId platformId
+        PlotVsOptimal getCommit -> do
+            commit <- getCommit
+            let variantQuery = variantInfoQuery algoId platformId commit Nothing
                 variantFilter VariantInfo{variantId} =
                     S.member variantId variants
 

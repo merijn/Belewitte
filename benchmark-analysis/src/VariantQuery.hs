@@ -43,8 +43,13 @@ sortVariantTimings info@VariantInfo{..} = info
         V.sortBy (comparing implTimingImpl) mvec
         VS.unsafeFreeze mvec
 
-variantInfoQuery :: Key Algorithm -> Key Platform -> Query VariantInfo
-variantInfoQuery algoId platformId = Query{..}
+variantInfoQuery
+    :: Key Algorithm
+    -> Key Platform
+    -> CommitId
+    -> Maybe (Key Dataset)
+    -> Query VariantInfo
+variantInfoQuery algoId platformId commitId datasetId = Query{..}
   where
     queryName :: Text
     queryName = "variantInfoQuery"
@@ -76,6 +81,9 @@ variantInfoQuery algoId platformId = Query{..}
       , toPersistValue algoId
       , toPersistValue algoId
       , toPersistValue platformId
+      , toPersistValue commitId
+      , toPersistValue datasetId
+      , toPersistValue datasetId
       , toPersistValue platformId
       ]
 
@@ -126,6 +134,8 @@ VariantTiming(runConfigId, variantId, bestNonSwitching, timings) AS (
     AND Impls.implId = Timings.implId
 
     WHERE RunConfig.algorithmId = ? AND RunConfig.platformId = ?
+    AND RunConfig.algorithmVersion = ?
+    AND (RunConfig.datasetId = ? OR ? IS NULL)
 
     GROUP BY RunConfig.id, Variant.id
 ),

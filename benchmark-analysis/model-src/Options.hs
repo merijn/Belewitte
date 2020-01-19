@@ -8,6 +8,7 @@
 {-# LANGUAGE TypeFamilies #-}
 module Options (ModelCommand(..), commands, runSqlM) where
 
+import Control.Applicative (optional)
 import Control.Monad.Reader (ask)
 import Data.Char (isSpace, toLower)
 import qualified Data.Conduit.Combinators as C
@@ -69,6 +70,8 @@ data ModelCommand
     | Compare
       { getAlgoId :: SqlM (Key Algorithm)
       , getPlatformId :: SqlM (Key Platform)
+      , getCommit :: SqlM CommitId
+      , getDatasetId :: Maybe (SqlM (Key Dataset))
       , compareConfig :: CompareReport
       }
     | Export
@@ -78,6 +81,7 @@ data ModelCommand
     | QueryTest
       { getAlgoId :: SqlM (Key Algorithm)
       , getPlatformId :: SqlM (Key Platform)
+      , getCommit :: SqlM CommitId
       , utcTime :: Maybe UTCTime
       , outputSuffix :: Maybe FilePath
       }
@@ -120,7 +124,8 @@ commands name = CommandGroup CommandInfo
         , commandHeaderDesc = "compare implementation performance"
         , commandDesc = "Compare the performance of different implementations"
         }
-        $ Compare <$> algorithmIdParser <*> platformIdParser <*> compareParser
+        $ Compare <$> algorithmIdParser <*> platformIdParser <*> commitIdParser
+                  <*> optional datasetIdParser <*> compareParser
     , SingleCommand CommandInfo
         { commandName = "export"
         , commandHeaderDesc = "export model to C++"
@@ -132,8 +137,8 @@ commands name = CommandGroup CommandInfo
         , commandDesc = "Dump query output to files to validate results"
         }
         $ QueryTest <$> algorithmIdParser <*> platformIdParser
-                    <*> (Just <$> timeParser <|> pure Nothing)
-                    <*> (suffixParser <|> pure Nothing)
+                    <*> commitIdParser <*> optional timeParser
+                    <*> optional suffixParser
     ]
   where
     cppFile :: Parser FilePath
@@ -150,13 +155,13 @@ commands name = CommandGroup CommandInfo
         [ metavar "TIME", short 't', long "time"
         , help "Timestamp controlling query output." ]
 
-    suffixReader :: String -> Maybe (Maybe String)
+    suffixReader :: String -> Maybe String
     suffixReader "" = Nothing
     suffixReader s
         | any isSpace s = Nothing
-        | otherwise = Just $ Just s
+        | otherwise = Just s
 
-    suffixParser :: Parser (Maybe String)
+    suffixParser :: Parser String
     suffixParser = argument (maybeReader suffixReader) . mconcat $
         [ metavar "SUFFIX" ]
 
