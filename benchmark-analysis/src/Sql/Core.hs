@@ -4,7 +4,30 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 module Sql.Core
-    ( Entity(..)
+    ( DummySql
+    , MonadSql(..)
+    , SqlField
+    , SqlRecord
+    , Transaction(Transaction)
+    , abortTransaction
+    , runTransaction
+    , runTransactionWithoutForeignKeys
+    , tryAbortableTransaction
+    , conduitQuery
+    , executeSql
+    , getMigration
+    , querySingleValue
+    , runMigrationQuiet
+    , runMigrationUnsafeQuiet
+    , setPragma
+    , setPragmaConn
+    , showSqlKey
+
+    -- FIXME
+    , conduitQueryTrans
+
+    -- Re-expors
+    , Entity(..)
     , EntityField
     , Filter
     , Key
@@ -29,7 +52,6 @@ module Sql.Core
     , fromSqlKey
     , persistIdField
     , toSqlKey
-    , module Sql.Core
     ) where
 
 import Control.Monad (join, void)
@@ -104,8 +126,7 @@ instance MonadSql DummySql where
     getConnFromPool = DummySql $ asks Sqlite.acquireSqlConnFromPool
     getConnWithoutForeignKeysFromPool = getConnFromPool
 
-newtype Transaction m r = Transaction
-  { unTransactionT :: ReaderT (RawSqlite SqlBackend) m r }
+newtype Transaction m r = Transaction (ReaderT (RawSqlite SqlBackend) m r)
   deriving
   ( Functor, Applicative, Monad, MonadCatch, MonadFail, MonadIO, MonadLogger
   , MonadReader (RawSqlite SqlBackend), MonadResource, MonadThrow
@@ -118,15 +139,19 @@ type SqlField rec field = (PersistField field, SqlRecord rec)
 abortTransaction :: MonadThrow m => Text -> Transaction m r
 abortTransaction txt = Transaction . throwM $ AbortTransaction txt
 
-runTransaction :: MonadSql m => Transaction m r -> m r
-runTransaction (Transaction transaction) = do
-    (key, conn) <- getConnFromPool >>= allocateAcquire
+runRawTransaction
+    :: MonadSql m
+    => m (Acquire (RawSqlite SqlBackend)) -> Transaction m r -> m r
+runRawTransaction getConn (Transaction transaction) = do
+    (key, conn) <- getConn >>= allocateAcquire
     runReaderT transaction conn <* release key
 
+runTransaction :: MonadSql m => Transaction m r -> m r
+runTransaction = runRawTransaction getConnFromPool
+
 runTransactionWithoutForeignKeys :: MonadSql m => Transaction m r -> m r
-runTransactionWithoutForeignKeys (Transaction transaction) = do
-    (key, conn) <- getConnWithoutForeignKeysFromPool >>= allocateAcquire
-    runReaderT transaction conn <* release key
+runTransactionWithoutForeignKeys =
+    runRawTransaction getConnWithoutForeignKeysFromPool
 
 tryAbortableTransaction
     :: (MonadCatch m, MonadLogger m, MonadSql m) => Transaction m () -> m ()

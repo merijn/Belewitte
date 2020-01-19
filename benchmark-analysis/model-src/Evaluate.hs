@@ -356,8 +356,8 @@ evaluateModel algo platId defImpl reportCfg@Report{..} model trainConfig =
 
     let aggregationConduit = aggregateSteps defaultImpl const model
 
-    stats <- runSqlQuery query
-      .| foldGroup ((==) `on` stepVariantId) aggregationConduit
+    stats <- runSqlQuery query $
+      foldGroup ((==) `on` stepVariantId) aggregationConduit
       .| C.map (addBestNonSwitching impls)
       .| aggregateVariants reportVariants reportRelativeTo implMaps
 
@@ -399,8 +399,8 @@ compareImplementations algoId platformId cfg@Report{..} = renderOutput $ do
     let implMaps :: Pair (IntMap Text)
         implMaps = toImplNames filterImplTypes filterExternalImpls impls
 
-    stats <- runSqlQuery query
-        .| C.map addBestNonSwitching
+    stats <- runSqlQuery query $
+        C.map addBestNonSwitching
         .| aggregateVariants reportVariants reportRelativeTo implMaps
 
     reportTotalStatistics cfg implMaps stats

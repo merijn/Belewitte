@@ -38,7 +38,7 @@ validateModel algoId platformId model config = renderOutput $ do
     computeResults
         :: Text -> Query (Vector Double, Int64) -> ConduitT () Text SqlM ()
     computeResults name query = do
-        result <- runSqlQuery predictions .| C.foldl aggregate (0,0,0)
+        result <- runSqlQuery predictions $ C.foldl aggregate (0,0,0)
         C.yield $ report name result
       where
         predictions = first (predict model) <$> query

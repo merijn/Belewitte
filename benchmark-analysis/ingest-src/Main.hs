@@ -36,7 +36,7 @@ import MissingQuery
 import OptionParsers
 import Parsers
 import ProcessPool
-import Query (getDistinctFieldQuery, runSqlQuery)
+import Query (Query, getDistinctFieldQuery, runSqlQuery, runSqlQueryConduit)
 import qualified RuntimeData
 import Schema
 import Sql (Entity(..), MonadSql, Transaction, (==.), (||.))
@@ -138,8 +138,8 @@ runBenchmarks = lift $ do
 
     platformQuery <- getDistinctFieldQuery RunConfigPlatformId
 
-    runConduit $ runSqlQuery platformQuery
-        .| parMapM_ (pipelineHandler id) 10 processPlatformRunConfigs
+    runSqlQueryConduit platformQuery $
+        parMapM_ (pipelineHandler id) 10 processPlatformRunConfigs
   where
     processPlatformRunConfigs :: Key Platform -> SqlM ()
     processPlatformRunConfigs platformId = do
@@ -156,8 +156,8 @@ runBenchmarks = lift $ do
                         , " returned run config for different platform!"
                         ]
 
-                runSqlQuery (missingBenchmarkQuery runCfgId)
-                    .> missingRunToTimingJob platformId
+                runSqlQuery (missingBenchmarkQuery runCfgId) $
+                    C.awaitForever (missingRunToTimingJob platformId)
                     .| processJobsParallel numNodes platform
                     .| C.mapM_ (processTiming runCfgId commitId)
 
@@ -172,19 +172,21 @@ runBenchmarks = lift $ do
 validate :: Input SqlM ()
 validate = lift $ do
     checkCxxCompiled
-    runConduit $ Sql.selectSource [] []
+    runConduit $
+        Sql.selectSource [] []
         .| parMapM_ (pipelineHandler entityKey) 10 validateForPlatform
   where
     validateForPlatform :: Entity Platform -> SqlM ()
-    validateForPlatform (Entity platformId platform) = runConduit $ do
-        let numNodes = platformAvailable platform
+    validateForPlatform (Entity platformId platform) = do
         withProcessPool numNodes platform $ \procPool -> do
-            runSqlQuery (validationVariantQuery platformId)
-            .| processJobsParallelWithSharedPool numNodes procPool
-            .> validationMissingRuns platformId
-            .| processJobsParallelWithSharedPool numNodes procPool
-            .| validateResults numNodes
-            .| C.mapM_ cleanupValidation
+            runSqlQueryConduit (validationVariantQuery platformId) $
+                processJobsParallelWithSharedPool numNodes procPool
+                .> validationMissingRuns platformId
+                .| processJobsParallelWithSharedPool numNodes procPool
+                .| validateResults numNodes
+                .| C.mapM_ cleanupValidation
+      where
+        numNodes = platformAvailable platform
 
 importResults :: Input SqlM ()
 importResults = do
@@ -239,21 +241,27 @@ importResults = do
 
 queryTest :: Maybe FilePath -> Input SqlM ()
 queryTest outputSuffix = lift $ do
-    runConduit $ Sql.selectKeys [] []
-        .> runSqlQuery . missingBenchmarkQuery
-        .| querySink "missingQuery-"
+    runConduit $
+        Sql.selectKeys [] []
+        .> streamQuery (querySink "missingQuery-") . missingBenchmarkQuery
 
     let querySink1 = ZipConduit $ querySink "validationVariantQuery-"
-        querySink2 = ZipConduit $ C.awaitForever C.yield
-            .> (\validationCfg -> Sql.selectKeys [] []
-            .> \pId -> runSqlQuery (validationRunQuery pId validationCfg))
-            .| querySink "validationRunQuery-"
+        querySink2 = ZipConduit $
+            C.map validationRunQuery
+            .> (\f -> Sql.selectKeys [] [] .| C.map f)
+            .> streamQuery (querySink "validationRunQuery-")
 
-    runConduit $ Sql.selectKeys [] []
-        .> runSqlQuery . validationVariantQuery
-        .| C.map jobValue
-        .| getZipConduit (mappend <$> querySink1 <*> querySink2)
+        finalSink = getZipConduit $ mappend <$> querySink1 <*> querySink2
+
+    runConduit $
+        Sql.selectKeys [] []
+        .> streamQuery (C.map jobValue .| finalSink) . validationVariantQuery
   where
+    streamQuery
+        :: (MonadExplain m, MonadLogger m, MonadSql m, MonadThrow m)
+        => ConduitT r Void m () -> Query r -> ConduitT i Void m ()
+    streamQuery sink query = runSqlQuery query sink
+
     querySink
         :: (MonadResource m, MonadThrow m, Show a)
         => String -> ConduitT a Void m ()

@@ -316,8 +316,8 @@ validationMissingRuns platformId result@Result{..} = do
             (Just (platformId, missingRunImplName))
             missingRunArgs
 
-    runSqlQuery (validationRunQuery platformId resultValue)
-        .| C.map toValidationJob
+    runSqlQuery (validationRunQuery resultValue platformId) $
+        C.map toValidationJob
   where
     ValidationVariant{..} = resultValue
     outputFile = T.unpack resultLabel <> ".output"

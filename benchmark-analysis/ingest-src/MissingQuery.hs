@@ -116,8 +116,8 @@ ON Variant.graphId = Graph.id
 |]
 
 validationRunQuery
-    :: Key Platform -> ValidationVariant -> Query (MissingRun (Key Run))
-validationRunQuery platformId ValidationVariant{..} = Query{..}
+    :: ValidationVariant -> Key Platform -> Query (MissingRun (Key Run))
+validationRunQuery ValidationVariant{..} platformId = Query{..}
   where
     queryName :: Text
     queryName = "validationRunQuery"

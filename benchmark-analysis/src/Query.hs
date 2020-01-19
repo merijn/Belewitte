@@ -86,9 +86,7 @@ renderExplainTree = void $ do
 
 explainSqlQuery :: MonadQuery m => Query r -> m Text
 explainSqlQuery originalQuery = runConduit $
-    void (runRawSqlQuery Explain id explainQuery)
-    .| renderExplainTree
-    .| C.fold
+    runRawSqlQuery Explain explainQuery $ renderExplainTree .| C.fold
   where
     explain
         :: (MonadIO m, MonadLogger m, MonadThrow m)
@@ -122,8 +120,8 @@ randomizeQuery seed trainingSize originalQuery = (training, validation)
       , queryText = randomizedQuery <> [i|LIMIT -1 OFFSET ?|]
       }
 
-runSqlQuery :: MonadQuery m => Query r -> ConduitT a r m ()
-runSqlQuery = toProducer . runLoggingSqlQuery id
+runSqlQuery :: MonadQuery m => Query r -> ConduitT r o m a -> ConduitT i o m a
+runSqlQuery query sink = runLoggingSqlQuery query sink
 
 runSqlQuerySingleMaybe :: MonadQuery m => Query r -> m (Maybe r)
 runSqlQuerySingleMaybe query = runSqlQueryConduit query $ do
@@ -139,20 +137,17 @@ runSqlQuerySingle = runSqlQuerySingleMaybe >=> \case
     Just v -> return v
 
 runSqlQueryConduit :: MonadQuery m => Query r -> ConduitT r Void m a -> m a
-runSqlQueryConduit query sink =
-  runLoggingSqlQuery (\src -> runConduit $ src .| sink) query
+runSqlQueryConduit query sink = runConduit $ runLoggingSqlQuery query sink
 
 runLoggingSqlQuery
-    :: ( MonadLogger m
+    :: ( MonadExplain m
+       , MonadLogger m
        , MonadResource m
+       , MonadSql m
        , MonadThrow m
-       , MonadExplain n
-       , MonadLogger n
-       , MonadSql n
-       , MonadThrow n
        )
-    => (ConduitT () r m () -> n a) -> Query r -> n a
-runLoggingSqlQuery f query = do
+    => Query r -> ConduitT r o m a -> ConduitT i o m a
+runLoggingSqlQuery query sink = do
     shouldExplain <- shouldExplainQuery (queryName query)
 
     when shouldExplain $ do
@@ -163,22 +158,22 @@ runLoggingSqlQuery f query = do
 
         explainSqlQuery query >>= logExplain (queryName query)
 
-    snd <$> runRawSqlQuery NoExplain f query
+    runRawSqlQuery NoExplain query sink
 
 runRawSqlQuery
-    :: ( MonadLogger m, MonadResource m, MonadThrow m
-       , MonadLogger n, MonadResource n, MonadSql n)
-    => Explain -> (ConduitT () r m () -> n a) -> Query r -> n (Text, a)
-runRawSqlQuery isExplain f query@Query{convert,cteParams,params} = do
+    :: (MonadLogger m, MonadResource m, MonadSql m, MonadThrow m)
+    => Explain -> Query r -> ConduitT r o m a -> ConduitT i o m a
+runRawSqlQuery isExplain query@Query{convert,cteParams,params} sink = do
     srcRes <- Sql.conduitQuery queryText queryParams
     (key, src) <- allocateAcquire srcRes
-    (timing, r) <- withTime $ f (src .| C.mapM convert) <* release key
+    (timing, r) <- withTime $ toProducer src .| C.mapM convert .| sink
+    release key
 
     let formattedTime :: Text
         formattedTime = T.pack $ showGFloat (Just 3) timing "s"
 
     logInfoN $ queryName query <> " time: " <> formattedTime
-    return (formattedTime, r)
+    return r
   where
     queryText = explainPrefix <> toQueryText query
     queryParams = cteParams ++ params
@@ -189,7 +184,7 @@ runRawSqlQuery isExplain f query@Query{convert,cteParams,params} = do
 
 runSqlQueryCount :: MonadQuery m => Query r -> m Int
 runSqlQueryCount originalQuery = do
-    result <- runConduit $ runSqlQuery countQuery .| await
+    result <- runSqlQueryConduit countQuery await
     case result of
         Just n -> return n
         Nothing -> logThrowM QueryReturnedZeroResults
