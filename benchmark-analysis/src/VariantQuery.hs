@@ -128,6 +128,8 @@ VariantTiming(runConfigId, variantId, bestNonSwitching, timings) AS (
 
       INNER JOIN TotalTimer
       ON Run.id = TotalTimer.runId AND TotalTimer.name = 'computation'
+
+      WHERE Run.validated
     ) AS Timings
     ON RunConfig.id = Timings.runConfigId
     AND Variant.id = Timings.variantId
@@ -150,7 +152,7 @@ OptimalStep(runConfigId, variantId, optimal) AS (
         FROM StepTimer
 
         INNER JOIN Run
-        ON StepTimer.runId = Run.id
+        ON StepTimer.runId = Run.id AND Run.validated
 
         INNER JOIN Implementation
         ON Run.implId = Implementation.id
