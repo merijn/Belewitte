@@ -135,7 +135,10 @@ Library
   Autogen-Modules:      Paths_benchmark_analysis
   Other-Modules:        Paths_benchmark_analysis
 
-  C-Sources:            cbits/sqlite-functions.c cbits/key_value_vector.c
+  C-Sources:            cbits/sqlite-functions.c
+                        cbits/key_value_vector.c
+                        cbits/check_unique.c
+
   CC-Options:           -Wall -Wextra -pedantic -std=c11 -g -O3
   Include-Dirs:         cbits
   Includes:             sqlite-functions.h

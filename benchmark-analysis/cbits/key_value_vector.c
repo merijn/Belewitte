@@ -45,6 +45,7 @@ key_value_vector_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
         data->size = sqlite3_value_int(args[0]);
         if (data->size < 0) {
             sqlite3_result_error(ctxt, "Vector size can't be negative!", -1);
+            return;
         }
 
         data->vector = sqlite3_malloc(data->size * sizeof *data->vector);
