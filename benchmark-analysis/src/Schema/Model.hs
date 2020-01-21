@@ -19,16 +19,19 @@ import qualified Database.Persist.TH as TH
 import Model (Model)
 import Schema.Utils (EntityDef, Int64, MonadSql, Transaction, (.>))
 import qualified Schema.Utils as Utils
+import Types
 
 import Schema.Algorithm (AlgorithmId)
 import Schema.Platform (PlatformId)
 import qualified Schema.Model.V0 as V0
 import qualified Schema.Model.V1 as V1
+import qualified Schema.Model.V2 as V2
 
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
 PredictionModel
     platformId PlatformId
     algorithmId AlgorithmId
+    algorithmVersion CommitId
     name Text
     prettyName Text Maybe
     description Text Maybe
@@ -52,7 +55,7 @@ ALTER TABLE "PredictionModel" ADD COLUMN "name" VARCHAR
         Utils.executeSql [i|
 UPDATE 'PredictionModel' SET 'name' = "Model-" || id
 |]
-    , 9 .> schema $ do
+    , 9 .> V2.schema $ do
         Utils.executeSql [i|
 ALTER TABLE "PredictionModel"
 ADD COLUMN "algorithmId" INTEGER REFERENCES "Algorithm"
@@ -86,5 +89,47 @@ INNER JOIN
     GROUP BY modelId, algorithmId
 ) AS AlgorithmMapping
 ON PredictionModel.id = AlgorithmMapping.modelId
+|]
+    , 17 .> schema $ do
+        Utils.executeSql [i|
+ALTER TABLE "PredictionModel"
+ADD COLUMN "algorithmVersion" TEXT
+|]
+
+        Utils.executeSql [i|
+REPLACE INTO "PredictionModel"
+SELECT PredictionModel.id
+     , PredictionModel.platformId
+     , PredictionModel.algorithmId
+     , PredictionModel.name
+     , PredictionModel.prettyName
+     , PredictionModel.description
+     , PredictionModel.model
+     , PredictionModel.trainFraction
+     , PredictionModel.trainSeed
+     , PredictionModel.totalUnknownCount
+     , PredictionModel.timestamp
+     , CASE WHEN Derived.version IS NULL THEN 'Unknown'
+            ELSE Derived.version
+       END
+FROM PredictionModel
+
+INNER JOIN (
+    SELECT PredictionModel.id
+         , check_unique(DISTINCT RunConfig.algorithmVersion) AS version
+    FROM PredictionModel
+
+    INNER JOIN RunConfig
+    ON PredictionModel.platformId = RunConfig.platformId
+    AND PredictionModel.algorithmId = RunConfig.algorithmId
+
+    INNER JOIN Run
+    ON RunConfig.id = Run.runConfigId
+    AND Run.timestamp < PredictionModel.timestamp
+    AND Run.validated
+
+    GROUP BY PredictionModel.id
+) AS Derived
+ON Derived.id = PredictionModel.id
 |]
     ]

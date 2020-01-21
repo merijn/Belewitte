@@ -24,9 +24,10 @@ import Utils.Vector (byteStringToVector)
 timePlotQuery
     :: Key Algorithm
     -> Key Platform
+    -> CommitId
     -> Set (Key Variant)
     -> Query (Text, (Vector ImplTiming, Vector ImplTiming))
-timePlotQuery algoId platformId variants = Query{..}
+timePlotQuery algoId platformId commitId variants = Query{..}
   where
     queryName :: Text
     queryName = "timePlotQuery"
@@ -63,6 +64,7 @@ timePlotQuery algoId platformId variants = Query{..}
       , toPersistValue algoId
       , toPersistValue algoId
       , toPersistValue platformId
+      , toPersistValue commitId
       , toPersistValue platformId
       ]
 
@@ -98,6 +100,7 @@ VariantTiming(runConfigId, graphName, variantConfigId, variantId, timings) AS (
 
     INNER JOIN Variant
     ON Graph.id = Variant.graphId
+    AND Variant.id IN #{inExpression variants}
 
     JOIN IndexedImpls AS Impls
 
@@ -119,6 +122,8 @@ VariantTiming(runConfigId, graphName, variantConfigId, variantId, timings) AS (
     AND Impls.implId = Timings.implId
 
     WHERE RunConfig.algorithmId = ? AND RunConfig.platformId = ?
+    AND RunConfig.algorithmVersion = ?
+
     GROUP BY RunConfig.id, Variant.id
     HAVING timings NOT NULL
 ),
@@ -154,8 +159,11 @@ WHERE VariantConfig.isDefault = TRUE
 ORDER BY VariantTiming.variantId ASC|]
 
 levelTimePlotQuery
-    :: Key Platform -> Key Variant -> Query (Int64, Vector ImplTiming)
-levelTimePlotQuery platformId variant = Query{..}
+    :: Key Platform
+    -> CommitId
+    -> Key Variant
+    -> Query (Int64, Vector ImplTiming)
+levelTimePlotQuery platformId commitId variant = Query{..}
   where
     queryName :: Text
     queryName = "levelTimePlotQuery"
@@ -179,6 +187,7 @@ levelTimePlotQuery platformId variant = Query{..}
     params :: [PersistValue]
     params =
       [ toPersistValue variant
+      , toPersistValue commitId
       , toPersistValue platformId
       ]
 
@@ -217,7 +226,7 @@ AND Variant.id = Timings.variantId
 AND Impls.implId = Timings.implId
 AND Step.value = Timings.stepId
 
-WHERE Variant.id = ?
+WHERE Variant.id = ? AND RunConfig.algorithmVersion = ?
 GROUP BY RunConfig.id, Step.value
 HAVING timings NOT NULL AND RunConfig.platformId = ?
 ORDER BY RunConfig.id, Step.value ASC|]

@@ -144,7 +144,7 @@ main = runSqlM commands $ \case
 
         let stepQuery :: Query StepInfo
             stepQuery =
-                stepInfoQuery algoId platformId graphprops stepprops timestamp
+                stepInfoQuery algoId platformId commit graphprops stepprops timestamp
 
             variantQuery :: Query VariantInfo
             variantQuery = variantInfoQuery algoId platformId commit Nothing

@@ -265,7 +265,8 @@ type SqlParser = Compose Parser (ReaderT (Key Algorithm) SqlM)
 
 trainingConfig :: Parser (Key Algorithm -> SqlM TrainingConfig)
 trainingConfig = fmap runReaderT . getCompose $
-    TrainConfig <$> props "graph" gatherGraphProps
+    TrainConfig <$> Compose (lift <$> commitIdParser)
+                <*> props "graph" gatherGraphProps
                 <*> props "step" gatherStepProps
                 <*> trainFract
                 <*> seedOpt

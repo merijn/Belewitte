@@ -29,11 +29,13 @@ data StepInfo =
 stepInfoQuery
     :: Key Algorithm
     -> Key Platform
+    -> CommitId
     -> Set Text
     -> Set Text
     -> UTCTime
     -> Query StepInfo
-stepInfoQuery algoId platformId graphProperties stepProperties ts = Query{..}
+stepInfoQuery algoId platformId commitId graphProperties stepProperties ts =
+    Query{..}
   where
     queryName :: Text
     queryName = "stepInfoQuery"
@@ -72,6 +74,7 @@ stepInfoQuery algoId platformId graphProperties stepProperties ts = Query{..}
       , toPersistValue ts
       , toPersistValue algoId
       , toPersistValue platformId
+      , toPersistValue commitId
       ]
 
     commonTableExpressions :: [Text]
@@ -142,6 +145,8 @@ StepTiming(runConfigId, graphId, variantId, stepId, implId, minTime, timings) AS
     AND Step.value = Timings.stepId
 
     WHERE RunConfig.algorithmId = ? AND RunConfig.platformId = ?
+    AND RunConfig.algorithmVersion = ?
+
     GROUP BY RunConfig.id, Variant.id, Step.value
     HAVING timings NOT NULL
 )

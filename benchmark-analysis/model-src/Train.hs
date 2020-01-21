@@ -65,7 +65,8 @@ data ModelStats = ModelStats
     } deriving (Eq, Show)
 
 data TrainingConfig = TrainConfig
-    { trainGraphProps :: Set Text
+    { trainCommit :: CommitId
+    , trainGraphProps :: Set Text
     , trainStepProps :: Set Text
     , trainFraction :: Double
     , trainSeed :: Int
@@ -108,7 +109,7 @@ getValidationQuery algoId platformId = fmap snd . splitQuery algoId platformId
 getTotalQuery
     :: Key Algorithm -> Key Platform -> TrainingConfig -> Query StepInfo
 getTotalQuery algoId platformId TrainConfig{..} =
-  stepInfoQuery algoId platformId trainGraphProps trainStepProps trainTimestamp
+  stepInfoQuery algoId platformId trainCommit trainGraphProps trainStepProps trainTimestamp
 
 getModelTrainingConfig
     :: MonadSql m => Key PredictionModel -> m TrainingConfig
@@ -126,7 +127,8 @@ getModelTrainingConfig modelId = SqlTrans.runTransaction $ do
         .| C.foldMap S.singleton
 
     return TrainConfig
-        { trainGraphProps = graphProps
+        { trainCommit = predictionModelAlgorithmVersion
+        , trainGraphProps = graphProps
         , trainStepProps = stepProps
         , trainFraction = predictionModelTrainFraction
         , trainSeed = predictionModelTrainSeed
@@ -242,6 +244,7 @@ trainModel algoId platId ModelDesc{..} = do
         modelId <- SqlTrans.insert $ PredictionModel
             { predictionModelPlatformId = platId
             , predictionModelAlgorithmId = algoId
+            , predictionModelAlgorithmVersion = trainCommit
             , predictionModelName = modelName
             , predictionModelPrettyName = modelPrettyName
             , predictionModelDescription = modelDescription

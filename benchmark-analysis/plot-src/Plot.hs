@@ -77,26 +77,29 @@ data PlotConfig = PlotConfig
 data PlotType
     = PlotLevels
     | PlotTotals
-    | PlotVsOptimal (SqlM CommitId)
+    | PlotVsOptimal
 
 data PlotOptions
     = PlotOptions
-      { getAlgoId :: SqlM (Key Algorithm)
+      { plotType :: PlotType
+      , getAlgoId :: SqlM (Key Algorithm)
       , getPlatformId :: SqlM (Key Platform)
+      , getCommit :: SqlM CommitId
       , getGraphs :: SqlM (Set Text)
       , getImplementations :: SqlM (Set Text)
       , plotConfig :: PlotConfig
-      , plotType :: PlotType
       }
     | QueryTest
       { getAlgorithm :: SqlM (Entity Algorithm)
       , getPlatformId :: SqlM (Key Platform)
+      , getCommit :: SqlM CommitId
       , outputSuffix :: Maybe FilePath
       }
 
-plotOptions :: Parser (PlotConfig -> PlotType -> PlotOptions)
-plotOptions = PlotOptions <$> algorithmIdParser <*> platformIdParser <*> graphs
-                          <*> impls
+plotOptions :: PlotType -> Parser (PlotConfig -> PlotOptions)
+plotOptions pType =
+    PlotOptions pType <$> algorithmIdParser <*> platformIdParser
+                      <*> commitIdParser <*> graphs <*> impls
   where
     graphs :: Parser (SqlM (Set Text))
     graphs = readSet "graphs"
@@ -132,30 +135,27 @@ commands name = CommandGroup CommandInfo
         , commandHeaderDesc = "plot level times for a graph" 
         , commandDesc = ""
         }
-        $ plotOptions <*> (plotConfig "Levels" <*> pure False)
-                      <*> pure PlotLevels
+        $ plotOptions PlotLevels <*> (plotConfig "Levels" <*> pure False)
     , SingleCommand CommandInfo
         { commandName = "totals"
         , commandHeaderDesc = "plot total times for a set of graphs"
         , commandDesc = ""
         }
-        $ plotOptions <*> (plotConfig "Graph" <*> normaliseFlag)
-                      <*> pure PlotTotals
+        $ plotOptions PlotTotals <*> (plotConfig "Graph" <*> normaliseFlag)
     , SingleCommand CommandInfo
         { commandName = "vs-optimal"
         , commandHeaderDesc =
           "plot total times for a set of graphs against the optimal"
         , commandDesc = ""
         }
-        $ plotOptions <*> (plotConfig "Graph" <*> normaliseFlag)
-                      <*> (PlotVsOptimal <$> commitIdParser)
+        $ plotOptions PlotVsOptimal <*> (plotConfig "Graph" <*> normaliseFlag)
     , HiddenCommand CommandInfo
         { commandName = "query-test"
         , commandHeaderDesc = "check query output"
         , commandDesc = "Dump query output to files to validate results"
         }
         $ QueryTest <$> algorithmParser <*> platformIdParser
-                    <*> optional suffixParser
+                    <*> commitIdParser <*> optional suffixParser
     ]
   where
     plotConfig :: String -> Parser (Bool -> PlotConfig)
@@ -285,6 +285,7 @@ main = runSqlM commands $ \case
   PlotOptions{..} -> do
     algoId <- getAlgoId
     platformId <- getPlatformId
+    commit <- getCommit
     implNames <- getImplementations
     variants <- getGraphs >>= queryVariants algoId
 
@@ -303,20 +304,19 @@ main = runSqlM commands $ \case
                 graphId <- variantGraphId <$> Sql.getJust variantId
                 name <- graphName <$> Sql.getJust graphId
 
-                let query = levelTimePlotQuery platformId variantId
+                let query = levelTimePlotQuery platformId commit variantId
                     pdfName = name <> "-levels"
 
                 plot plotConfig pdfName query $
                     C.map (bimap showText (nameImplementations regular))
 
         PlotTotals -> do
-            let timeQuery = timePlotQuery algoId platformId variants
+            let timeQuery = timePlotQuery algoId platformId commit variants
 
             plot plotConfig "times-totals" timeQuery $
                 C.map (second $ translatePair . toPair V.convert V.convert)
 
-        PlotVsOptimal getCommit -> do
-            commit <- getCommit
+        PlotVsOptimal -> do
             let variantQuery = variantInfoQuery algoId platformId commit Nothing
                 variantFilter VariantInfo{variantId} =
                     S.member variantId variants
@@ -326,9 +326,10 @@ main = runSqlM commands $ \case
                 .| C.mapM dataFromVariantInfo
                 .| C.map (second $ translatePair . fmap V.convert)
 
-  QueryTest{getAlgorithm,getPlatformId,outputSuffix} -> do
+  QueryTest{getAlgorithm,getPlatformId,getCommit,outputSuffix} -> do
     Entity algoId algorithm <- getAlgorithm
     platformId <- getPlatformId
+    commit <- getCommit
     variantConfigs <- Sql.selectKeysList
         [VariantConfigAlgorithmId ==. algoId]
         [Sql.Asc VariantConfigName]
@@ -341,8 +342,8 @@ main = runSqlM commands $ \case
     let algoName = getAlgoName algorithm
 
         chunkedVariants = map S.fromList $ chunksOf 500 variants
-        timeQuery = timePlotQuery algoId platformId
-        levelTimeQuery = levelTimePlotQuery platformId
+        timeQuery = timePlotQuery algoId platformId commit
+        levelTimeQuery = levelTimePlotQuery platformId commit
 
     runQueryDump algoName outputSuffix "timeQuery-" timeQuery chunkedVariants
     runQueryDump algoName outputSuffix "levelTimeQuery-" levelTimeQuery variants
