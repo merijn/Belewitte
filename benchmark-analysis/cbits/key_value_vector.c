@@ -41,7 +41,9 @@ key_value_vector_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
     if (!data) {
         sqlite3_result_error(ctxt, "Aggregate allocation failed!", -1);
         return;
-    } else if (!data->vector) {
+    }
+
+    if (!data->vector) {
         data->size = sqlite3_value_int(args[0]);
         if (data->size < 0) {
             sqlite3_result_error(ctxt, "Vector size can't be negative!", -1);
@@ -49,7 +51,6 @@ key_value_vector_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
         }
 
         data->vector = sqlite3_malloc(data->size * sizeof *data->vector);
-
         if (!data->vector) {
             sqlite3_result_error(ctxt, "Vector allocation failed!", -1);
             return;
@@ -75,13 +76,16 @@ key_value_vector_finalise(sqlite3_context *ctxt)
 {
     struct aggregate *data = sqlite3_aggregate_context(ctxt, 0);
 
-    if (!data || data->unused) {
+    if (!data) {
         sqlite3_result_null(ctxt);
+        return;
+    } else if (data->unused) {
+        sqlite3_result_null(ctxt);
+        sqlite3_free(data->vector);
         return;
     }
 
     if (!data->vector) {
-        sqlite3_free(data->vector);
         sqlite3_result_error(ctxt, "Vector construction failed!", -1);
         return;
     }

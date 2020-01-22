@@ -18,7 +18,9 @@ void check_unique_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
     if (!data) {
         sqlite3_result_error(ctxt, "Aggregate allocation failed!", -1);
         return;
-    } else if (data->value == NULL) {
+    }
+
+    if (!data->value) {
         data->value = sqlite3_value_dup(args[0]);
         if (data->value == NULL) {
             sqlite3_result_error(ctxt, "Failed to copy SQLite value!", -1);
@@ -26,9 +28,12 @@ void check_unique_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
         }
 
         data->isUnique = true;
-    } else if (!data->isUnique) {
         return;
-    } else if (sqlite3_value_type(args[0]) != sqlite3_value_type(data->value)) {
+    }
+
+    if (!data->isUnique) return;
+
+    if (sqlite3_value_type(args[0]) != sqlite3_value_type(data->value)) {
         data->isUnique = false;
     } else {
         switch (sqlite3_value_type(args[0])) {
@@ -75,6 +80,7 @@ void check_unique_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
             break;
           default:
             sqlite3_result_error(ctxt, "Encountered unexpected data type", -1);
+            sqlite3_value_free(data->value);
             return;
         }
     }
@@ -84,16 +90,8 @@ void check_unique_finalise(sqlite3_context *ctxt)
 {
     struct aggregate *data = sqlite3_aggregate_context(ctxt, 0);
 
-    if (!data) {
-        sqlite3_result_null(ctxt);
-        return;
-    }
+    if (data && data->isUnique) sqlite3_result_value(ctxt, data->value);
+    else sqlite3_result_null(ctxt);
 
-    if (data->isUnique) {
-        sqlite3_result_value(ctxt, data->value);
-    } else {
-        sqlite3_result_null(ctxt);
-    }
-
-    sqlite3_value_free(data->value);
+    if (data) sqlite3_value_free(data->value);
 }

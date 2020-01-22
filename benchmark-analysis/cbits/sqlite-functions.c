@@ -33,56 +33,6 @@ typedef struct
     size_t size;
 } double_vector_t;
 
-typedef struct vector
-{
-    int64_t *data;
-    size_t size;
-} int64_vector_t;
-
-void int64_vector_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
-{
-    (void) nArgs;
-
-    int64_vector_t *vector = sqlite3_aggregate_context(ctxt, sizeof *vector);
-    if (!vector) {
-        sqlite3_result_error(ctxt, "Aggregate allocation failed!", -1);
-        return;
-    } else if (!vector->data) {
-        vector->size = sqlite3_value_int(args[2]);
-        vector->data = sqlite3_malloc(vector->size * sizeof *vector->data);
-
-        if (!vector->data) {
-            sqlite3_result_error(ctxt, "Vector allocation failed!", -1);
-            return;
-        }
-
-        for (size_t i = 0; i < vector->size; i++) {
-            vector->data[i] = 0;
-        }
-    }
-
-    size_t idx = sqlite3_value_int(args[1]) - 1;
-    vector->data[idx] = sqlite3_value_int64(args[0]);
-}
-
-void int64_vector_finalise(sqlite3_context *ctxt)
-{
-    int64_vector_t *vector = sqlite3_aggregate_context(ctxt, 0);
-
-    if (!vector) {
-        sqlite3_result_null(ctxt);
-        return;
-    }
-
-    if (!vector->data) {
-        sqlite3_result_error(ctxt, "Vector construction failed!", -1);
-        return;
-    }
-
-    sqlite3_result_blob(ctxt, vector->data,
-            vector->size * sizeof *vector->data, &sqlite3_free);
-}
-
 void double_vector_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
 {
     (void) nArgs;
