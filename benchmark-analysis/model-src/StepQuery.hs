@@ -111,13 +111,12 @@ IndexedImpls(idx, implId, type, count) AS (
     WHERE algorithmId = ?
 ),
 
-StepTiming(runConfigId, graphId, variantId, stepId, implId, minTime, timings) AS (
+StepTiming(runConfigId, graphId, variantId, stepId, implId, timings) AS (
     SELECT RunConfig.id
-         , Graph.id
+         , Variant.graphId
          , Variant.id
          , Step.value
-         , Impls.implId
-         , MIN(avgTime) FILTER (WHERE Impls.type == 'Core')
+         , min_key(Impls.implId, avgTime)
          , key_value_vector(count, idx, Impls.implId, avgTime) AS timings
     FROM RunConfig
 
@@ -147,7 +146,7 @@ StepTiming(runConfigId, graphId, variantId, stepId, implId, minTime, timings) AS
     WHERE RunConfig.algorithmId = ? AND RunConfig.platformId = ?
     AND RunConfig.algorithmVersion = ?
 
-    GROUP BY RunConfig.id, Variant.id, Step.value
+    GROUP BY RunConfig.id, Variant.id, Variant.graphId, Step.value
     HAVING timings NOT NULL
 )
 |]]

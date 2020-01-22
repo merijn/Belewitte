@@ -50,6 +50,8 @@ registerSqlFunctions sqlitePtr = mapM_ ($sqlitePtr)
         key_value_vector_step key_value_vector_finalise
     , createSqlAggregate 1 "check_unique"
         check_unique_step check_unique_finalise
+    , createSqlAggregate (-1) "min_key"
+        min_key_step min_key_finalise
     ]
 
 wrapSqliteExceptions :: (MonadLogger m, MonadCatch m) => m r -> m r
@@ -85,6 +87,12 @@ foreign import ccall "sqlite-functions.h &check_unique_step"
 
 foreign import ccall "sqlite-functions.h &check_unique_finalise"
     check_unique_finalise :: FunPtr (Ptr () -> IO ())
+
+foreign import ccall "sqlite-functions.h &min_key_step"
+    min_key_step :: FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
+
+foreign import ccall "sqlite-functions.h &min_key_finalise"
+    min_key_finalise :: FunPtr (Ptr () -> IO ())
 
 foreign import capi "sqlite3.h value SQLITE_ANY"
     sqliteAny :: CInt
