@@ -116,7 +116,7 @@ StepTiming(runConfigId, graphId, variantId, stepId, implId, timings) AS (
          , Variant.graphId
          , Variant.id
          , Step.value
-         , min_key(Impls.implId, avgTime)
+         , min_key(Impls.implId, avgTime, maxTime, minTime)
          , key_value_vector(count, idx, Impls.implId, avgTime) AS timings
     FROM RunConfig
 
@@ -130,7 +130,7 @@ StepTiming(runConfigId, graphId, variantId, stepId, implId, timings) AS (
     JOIN IndexedImpls AS Impls
 
     LEFT JOIN
-    ( SELECT Run.runConfigId, Run.implId, Run.variantId, stepId, avgTime
+    ( SELECT Run.runConfigId, Run.implId, Run.variantId, StepTimer.*
       FROM Run
 
       INNER JOIN StepTimer
