@@ -79,6 +79,11 @@ IndexedImpls(idx, implId, type, count) AS (
     WHERE algorithmId = ?
 ),
 
+ImplVector(implTiming) AS (
+    SELECT init_key_value_vector(implId, idx, count)
+    FROM IndexedImpls
+),
+
 IndexedExternalImpls(idx, implId, count) AS (
     SELECT ROW_NUMBER() OVER (ORDER BY id)
             , id
@@ -87,56 +92,56 @@ IndexedExternalImpls(idx, implId, count) AS (
     WHERE algorithmId = ?
 ),
 
-VariantTiming(runConfigId, graphName, variantConfigId, variantId, timings) AS (
-    SELECT RunConfig.id
-         , Graph.name
+ExternalImplVector(implTiming) AS (
+    SELECT init_key_value_vector(implId, idx, count)
+    FROM IndexedExternalImpls
+),
+
+VariantTiming(graphName, variantConfigId, variantId, timings) AS (
+    SELECT Graph.name
          , Variant.variantConfigId
          , Variant.id
-         , key_value_vector(count, idx, Impls.implId, avgTime) AS timings
-    FROM RunConfig
+         , update_key_value_vector(implTiming, idx, Impls.implId, avgTime)
+    FROM RunConfig, ImplVector
 
-    INNER JOIN Graph
-    ON RunConfig.datasetId = Graph.datasetId
+    INNER JOIN Run
+    ON Run.runConfigId = RunConfig.id
+    AND Run.validated
+    AND Run.variantId IN #{inExpression variants}
+
+    INNER JOIN TotalTimer
+    ON Run.id = TotalTimer.runId
+    AND TotalTimer.name = 'computation'
 
     INNER JOIN Variant
+    ON Variant.id = Run.variantId
+
+    INNER JOIN Graph
     ON Graph.id = Variant.graphId
-    AND Variant.id IN #{inExpression variants}
 
-    JOIN IndexedImpls AS Impls
+    INNER JOIN IndexedImpls AS Impls
+    ON Impls.implId = Run.implId
 
-    LEFT JOIN
-    ( SELECT Run.runConfigId
-           , Run.implId
-           , Run.variantId
-           , avgTime
-      FROM Run
-
-      INNER JOIN TotalTimer
-      ON Run.id = TotalTimer.runId
-
-      WHERE TotalTimer.name = 'computation'
-      AND Run.variantId IN #{inExpression variants}
-    ) AS Timings
-    ON RunConfig.id = Timings.runConfigId
-    AND Variant.id = Timings.variantId
-    AND Impls.implId = Timings.implId
-
-    WHERE RunConfig.algorithmId = ? AND RunConfig.platformId = ?
+    WHERE RunConfig.algorithmId = ?
+    AND RunConfig.platformId = ?
     AND RunConfig.algorithmVersion = ?
 
-    GROUP BY RunConfig.id, Variant.id
-    HAVING timings NOT NULL
+    GROUP BY Variant.id
 ),
 
 ExternalTiming(variantId, timings) AS (
    SELECT Variant.id
-        , key_value_vector(count, idx, Impls.implId, avgTime)
-    FROM Variant, IndexedExternalImpls AS Impls
+        , update_key_value_vector(implTiming, idx, Impls.implId, avgTime)
+    FROM Variant, ExternalImplVector
 
-    LEFT JOIN ExternalTimer
+    INNER JOIN ExternalTimer
+    ON ExternalTimer.variantId = Variant.id
+    AND ExternalTimer.name = 'computation'
+    AND ExternalTimer.platformId = ?
+
+    INNER JOIN IndexedExternalImpls AS Impls
     ON Impls.implId = ExternalTimer.implId
 
-    AND ExternalTimer.name = 'computation' AND platformId = ?
     GROUP BY variantId
 )|]]
 
@@ -182,7 +187,21 @@ levelTimePlotQuery platformId commitId variant = Query{..}
     cteParams = []
 
     commonTableExpressions :: [Text]
-    commonTableExpressions = []
+    commonTableExpressions = [[i|
+IndexedImpls(algorithmId, idx, implId, count) AS (
+    SELECT algorithmId
+         , ROW_NUMBER() OVER (algorithm ORDER BY id) AS idx
+         , id AS implId
+         , COUNT() OVER (algorithm) AS count
+    FROM Implementation
+    WINDOW algorithm AS (PARTITION BY algorithmId)
+),
+
+ImplVector(algorithmId, implTiming) AS (
+    SELECT algorithmId, init_key_value_vector(implId, idx, count)
+    FROM IndexedImpls
+    GROUP BY algorithmId
+)|]]
 
     params :: [PersistValue]
     params =
@@ -192,41 +211,31 @@ levelTimePlotQuery platformId commitId variant = Query{..}
       ]
 
     queryText = [i|
-SELECT Step.value
-     , key_value_vector(count, idx, Impls.implId, avgTime) AS timings
-FROM RunConfig
+SELECT StepTimer.stepId
+     , update_key_value_vector(implTiming, idx, Impls.implId, avgTime)
+FROM Variant
 
-INNER JOIN Graph
-ON RunConfig.datasetId = Graph.datasetId
+INNER JOIN ImplVector
+ON ImplVector.algorithmId = Variant.algorithmId
 
-INNER JOIN Variant
-ON Graph.id = Variant.graphId
+INNER JOIN Run
+ON Run.variantId = Variant.id
+AND Run.validated
 
-JOIN generate_series(0, Variant.maxStepId) AS Step
+INNER JOIN StepTimer
+ON StepTimer.runId = Run.id
 
-JOIN
-( SELECT algorithmId
-       , ROW_NUMBER() OVER (algorithm ORDER BY id) AS idx
-       , id AS implId
-       , COUNT() OVER (algorithm) AS count
-  FROM Implementation
-  WINDOW algorithm AS (PARTITION BY algorithmId)
-) AS Impls
-ON Variant.algorithmId = Impls.algorithmId
+INNER JOIN RunConfig
+ON RunConfig.id = Run.runConfigId
+AND RunConfig.algorithmId = Variant.algorithmId
 
-LEFT JOIN
-( SELECT runConfigId, implId, variantId, stepId, avgTime
-  FROM Run
+INNER JOIN IndexedImpls AS Impls
+ON Impls.algorithmId = RunConfig.algorithmId
+AND Impls.implId = Run.implId
 
-  INNER JOIN StepTimer
-  ON Run.id = StepTimer.runId
-) AS Timings
-ON RunConfig.id = Timings.runConfigId
-AND Variant.id = Timings.variantId
-AND Impls.implId = Timings.implId
-AND Step.value = Timings.stepId
+WHERE Variant.id = ?
+AND RunConfig.algorithmVersion = ?
+AND RunConfig.platformId = ?
 
-WHERE Variant.id = ? AND RunConfig.algorithmVersion = ?
-GROUP BY RunConfig.id, Step.value
-HAVING timings NOT NULL AND RunConfig.platformId = ?
-ORDER BY RunConfig.id, Step.value ASC|]
+GROUP BY StepTimer.stepId
+ORDER BY StepTimer.stepId ASC|]

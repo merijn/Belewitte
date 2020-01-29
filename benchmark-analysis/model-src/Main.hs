@@ -29,7 +29,7 @@ import Query
 import Schema
 import Sql ((==.))
 import qualified Sql
-import StepQuery (StepInfo, stepInfoQuery)
+import StepQuery (StepInfo, stepInfoQuery, sortStepTimings)
 import Train
 import Validate
 import VariantQuery
@@ -149,7 +149,10 @@ main = runSqlM commands $ \case
             variantQuery :: Query VariantInfo
             variantQuery = variantInfoQuery algoId platformId commit Nothing
 
-        runSqlQueryConduit stepQuery $ querySink outputSuffix "stepInfoQuery-"
+        runSqlQueryConduit stepQuery $
+            C.map sortStepTimings
+            .| querySink outputSuffix "stepInfoQuery-"
+
         runSqlQueryConduit variantQuery $
             C.map sortVariantTimings
             .| querySink outputSuffix "variantInfoQuery-"

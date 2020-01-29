@@ -3,13 +3,17 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
-module StepQuery (StepInfo(..), stepInfoQuery) where
+module StepQuery (StepInfo(..), stepInfoQuery, sortStepTimings) where
 
+import Control.Monad.ST (runST)
+import Data.Ord (comparing)
 import Data.Set (Set)
 import qualified Data.Set as S
 import Data.String.Interpolate.IsString (i)
 import qualified Data.Text as T
+import qualified Data.Vector.Algorithms.Insertion as V
 import Data.Vector.Storable (Vector)
+import qualified Data.Vector.Storable as VS
 
 import Core
 import Query
@@ -25,6 +29,16 @@ data StepInfo =
     , stepId :: {-# UNPACK #-} !Int64
     , stepTimings :: {-# UNPACK #-} !(Vector ImplTiming)
     } deriving (Show)
+
+sortStepTimings :: StepInfo -> StepInfo
+sortStepTimings info@StepInfo{..} =
+    info { stepTimings = sortVector stepTimings }
+  where
+    sortVector :: Vector ImplTiming -> Vector ImplTiming
+    sortVector vec = runST $ do
+        mvec <- VS.thaw vec
+        V.sortBy (comparing implTimingImpl) mvec
+        VS.unsafeFreeze mvec
 
 stepInfoQuery
     :: Key Algorithm
@@ -103,7 +117,7 @@ IndexedStepProps(variantId, stepId, idx, property, value, count) AS (
 ),
 
 IndexedImpls(idx, implId, type, count) AS (
-    SELECT ROW_NUMBER() OVER (ORDER BY id)
+    SELECT ROW_NUMBER() OVER ()
          , id
          , type
          , COUNT() OVER ()
@@ -111,43 +125,39 @@ IndexedImpls(idx, implId, type, count) AS (
     WHERE algorithmId = ?
 ),
 
-StepTiming(runConfigId, graphId, variantId, stepId, implId, timings) AS (
-    SELECT RunConfig.id
-         , Variant.graphId
+ImplVector(implTiming) AS (
+    SELECT init_key_value_vector(implId, idx, count)
+    FROM IndexedImpls
+),
+
+StepTiming(graphId, variantId, stepId, implId, timings) AS (
+    SELECT Variant.graphId
          , Variant.id
-         , Step.value
+         , StepTimer.stepId
          , min_key(Impls.implId, avgTime, maxTime, minTime)
-         , key_value_vector(count, idx, Impls.implId, avgTime) AS timings
-    FROM RunConfig
+           FILTER (WHERE Impls.type == 'Core')
+         , update_key_value_vector(implTiming, idx, Impls.implId, avgTime)
+           AS timings
+    FROM Variant, ImplVector
 
-    INNER JOIN Graph
-    ON RunConfig.datasetId = Graph.datasetId
+    INNER JOIN Run
+    ON Run.variantId = Variant.id
+    AND Run.validated = 1
+    AND Run.timestamp < ?
 
-    INNER JOIN Variant
-    ON Graph.id = Variant.graphId
-
-    JOIN generate_series(0, Variant.maxStepId) AS Step
-    JOIN IndexedImpls AS Impls
-
-    LEFT JOIN
-    ( SELECT Run.runConfigId, Run.implId, Run.variantId, StepTimer.*
-      FROM Run
-
-      INNER JOIN StepTimer
-      ON Run.id = StepTimer.runId
-
-      WHERE Run.validated = 1 AND Run.timestamp < ?
-    ) AS Timings
-    ON RunConfig.id = Timings.runConfigId
-    AND Variant.id = Timings.variantId
-    AND Impls.implId = Timings.implId
-    AND Step.value = Timings.stepId
-
-    WHERE RunConfig.algorithmId = ? AND RunConfig.platformId = ?
+    INNER JOIN RunConfig
+    ON RunConfig.id = Run.runConfigId
+    AND RunConfig.algorithmId = ?
+    AND RunConfig.platformId = ?
     AND RunConfig.algorithmVersion = ?
 
-    GROUP BY RunConfig.id, Variant.id, Variant.graphId, Step.value
-    HAVING timings NOT NULL
+    INNER JOIN StepTimer
+    ON Run.id = StepTimer.runId
+
+    INNER JOIN IndexedImpls AS Impls
+    ON Impls.implId = Run.implId
+
+    GROUP BY Variant.id, StepTimer.stepId
 )
 |]]
 

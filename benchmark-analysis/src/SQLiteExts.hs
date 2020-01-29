@@ -46,8 +46,10 @@ registerSqlFunctions sqlitePtr = mapM_ ($sqlitePtr)
     [ createSqlFunction 1 "random" randomFun
     , createSqlAggregate 3 "double_vector"
         double_vector_step double_vector_finalise
-    , createSqlAggregate 4 "key_value_vector"
-        key_value_vector_step key_value_vector_finalise
+    , createSqlAggregate 3 "init_key_value_vector"
+        init_key_value_vector_step key_value_vector_finalise
+    , createSqlAggregate 4 "update_key_value_vector"
+        update_key_value_vector_step key_value_vector_finalise
     , createSqlAggregate 1 "check_unique"
         check_unique_step check_unique_finalise
     , createSqlAggregate (-1) "min_key"
@@ -76,8 +78,13 @@ foreign import ccall "sqlite-functions.h &double_vector_step"
 foreign import ccall "sqlite-functions.h &double_vector_finalise"
     double_vector_finalise :: FunPtr (Ptr () -> IO ())
 
-foreign import ccall "sqlite-functions.h &key_value_vector_step"
-    key_value_vector_step :: FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
+foreign import ccall "sqlite-functions.h &init_key_value_vector_step"
+    init_key_value_vector_step
+        :: FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
+
+foreign import ccall "sqlite-functions.h &update_key_value_vector_step"
+    update_key_value_vector_step
+        :: FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
 
 foreign import ccall "sqlite-functions.h &key_value_vector_finalise"
     key_value_vector_finalise :: FunPtr (Ptr () -> IO ())

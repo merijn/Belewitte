@@ -84,6 +84,11 @@ variantInfoQuery algoId platformId commitId datasetId = Query{..}
       , toPersistValue commitId
       , toPersistValue datasetId
       , toPersistValue datasetId
+      , toPersistValue algoId
+      , toPersistValue platformId
+      , toPersistValue commitId
+      , toPersistValue datasetId
+      , toPersistValue datasetId
       , toPersistValue platformId
       ]
 
@@ -98,6 +103,11 @@ IndexedImpls(idx, implId, type, count) AS (
     WHERE algorithmId = ?
 ),
 
+ImplVector(implTiming) AS (
+    SELECT init_key_value_vector(implId, idx, count)
+    FROM IndexedImpls
+),
+
 IndexedExternalImpls(idx, implId, count) AS (
     SELECT ROW_NUMBER() OVER ()
          , id
@@ -106,69 +116,74 @@ IndexedExternalImpls(idx, implId, count) AS (
     WHERE algorithmId = ?
 ),
 
-VariantTiming(runConfigId, variantId, bestNonSwitching, timings) AS (
-    SELECT RunConfig.id
-         , Variant.id
+ExternalImplVector(implTiming) AS (
+    SELECT init_key_value_vector(implId, idx, count)
+    FROM IndexedExternalImpls
+),
+
+VariantTiming(variantId, bestNonSwitching, timings) AS (
+    SELECT Run.variantId
          , MIN(avgTime) FILTER (WHERE type == 'Core') AS bestNonSwitching
-         , key_value_vector(Impls.count, Impls.idx, Impls.implId, avgTime)
+         , update_key_value_vector(implTiming, Impls.idx, Impls.implId, avgTime)
            AS timings
-    FROM RunConfig
+    FROM RunConfig, ImplVector
 
-    INNER JOIN Graph
-    ON Graph.datasetId = RunConfig.datasetId
+    INNER JOIN Run
+    ON Run.runConfigId = RunConfig.id
+    AND Run.validated
 
-    INNER JOIN Variant
-    ON Variant.graphId = Graph.id
+    INNER JOIN IndexedImpls AS Impls
+    ON Impls.implId = Run.implId
 
-    JOIN IndexedImpls AS Impls
+    INNER JOIN TotalTimer
+    ON Run.id = TotalTimer.runId AND TotalTimer.name = 'computation'
 
-    LEFT JOIN
-    ( SELECT Run.runConfigId, Run.implId, Run.variantId, avgTime
-      FROM Run
-
-      INNER JOIN TotalTimer
-      ON Run.id = TotalTimer.runId AND TotalTimer.name = 'computation'
-
-      WHERE Run.validated
-    ) AS Timings
-    ON RunConfig.id = Timings.runConfigId
-    AND Variant.id = Timings.variantId
-    AND Impls.implId = Timings.implId
-
-    WHERE RunConfig.algorithmId = ? AND RunConfig.platformId = ?
+    WHERE RunConfig.algorithmId = ?
+    AND RunConfig.platformId = ?
     AND RunConfig.algorithmVersion = ?
     AND (RunConfig.datasetId = ? OR ? IS NULL)
 
-    GROUP BY RunConfig.id, Variant.id
+    GROUP BY Run.variantId
 ),
 
-OptimalStep(runConfigId, variantId, optimal) AS (
-    SELECT runConfigId, variantId, SUM(Step.minTime) AS optimal
+OptimalStep(variantId, optimal) AS (
+    SELECT variantId, SUM(Step.minTime) AS optimal
     FROM (
-        SELECT Run.runConfigId
-             , Run.variantId
-             , stepId
+        SELECT Run.variantId, stepId
              , MIN(avgTime) FILTER (WHERE type == 'Core') AS minTime
         FROM StepTimer
 
         INNER JOIN Run
         ON StepTimer.runId = Run.id AND Run.validated
 
+        INNER JOIN RunConfig
+        ON Run.runConfigId = RunConfig.id
+        AND RunConfig.algorithmId = ?
+        AND RunConfig.platformId = ?
+        AND RunConfig.algorithmVersion = ?
+        AND (RunConfig.datasetId = ? OR ? IS NULL)
+
         INNER JOIN Implementation
         ON Run.implId = Implementation.id
 
-        GROUP BY Run.runConfigId, Run.variantId, stepId
+        GROUP BY Run.variantId, stepId
     ) AS Step
-    GROUP BY runConfigId, variantId
+    GROUP BY variantId
 ),
 
 ExternalTiming(variantId, timings) AS (
-   SELECT Variant.id, key_value_vector(count, idx, Impls.implId, avgTime)
-   FROM Variant, IndexedExternalImpls AS Impls
+   SELECT Variant.id
+        , update_key_value_vector(implTiming, idx, Impls.implId, avgTime)
+   FROM Variant, ExternalImplVector
 
-   LEFT JOIN ExternalTimer
+   INNER JOIN ExternalTimer
+   ON ExternalTimer.variantId = Variant.id
+   AND ExternalTimer.name = 'computation'
+   AND ExternalTimer.platformId = ?
+
+   INNER JOIN IndexedExternalImpls AS Impls
    ON Impls.implId = ExternalTimer.implId
-   AND ExternalTimer.name = 'computation' AND platformId = ?
+
    GROUP BY variantId
 )|]]
 
@@ -184,10 +199,9 @@ SELECT VariantTiming.variantId
 FROM VariantTiming
 
 INNER JOIN OptimalStep
-ON VariantTiming.runConfigId = OptimalStep.runConfigId
-AND VariantTiming.variantId = OptimalStep.variantId
+ON VariantTiming.variantId = OptimalStep.variantId
 
 LEFT JOIN ExternalTiming
 ON VariantTiming.variantId = ExternalTiming.variantId
 
-ORDER BY VariantTiming.runConfigId, VariantTiming.variantId ASC|]
+ORDER BY VariantTiming.variantId ASC|]

@@ -10,6 +10,7 @@
 module Main (main) where
 
 import Control.Monad (forM, forM_, void)
+import Control.Monad.Catch (handle)
 import Data.Bifunctor (bimap, second)
 import Data.Char (isSpace)
 import Data.Conduit as C
@@ -306,8 +307,11 @@ main = runSqlM commands $ \case
 
                 let query = levelTimePlotQuery platformId commit variantId
                     pdfName = name <> "-levels"
+                    missingResults (PatternFailed _) = logErrorN $ mconcat
+                        [ "Missing results for graph \"", name
+                        , "\", variant #", showSqlKey variantId ]
 
-                plot plotConfig pdfName query $
+                handle missingResults $ plot plotConfig pdfName query $
                     C.map (bimap showText (nameImplementations regular))
 
         PlotTotals -> do

@@ -7,6 +7,7 @@
 #include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "sqlite-functions.h"
 
@@ -19,7 +20,6 @@ typedef struct
 struct aggregate
 {
     int64_t size;
-    bool unused;
     key_value *vector;
 };
 
@@ -33,7 +33,8 @@ static_assert
 (sizeof (key_value) == 2 * sizeof (double), "struct isn't tightly packed!");
 
 void
-key_value_vector_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
+init_key_value_vector_step
+(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
 {
     (void) nArgs;
     struct aggregate *data = sqlite3_aggregate_context(ctxt, sizeof *data);
@@ -44,7 +45,7 @@ key_value_vector_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
     }
 
     if (!data->vector) {
-        data->size = sqlite3_value_int(args[0]);
+        data->size = sqlite3_value_int(args[2]);
         if (data->size < 0) {
             sqlite3_result_error(ctxt, "Vector size can't be negative!", -1);
             return;
@@ -56,7 +57,6 @@ key_value_vector_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
             return;
         }
 
-        data->unused = true;
         for (int64_t i = 0; i < data->size; i++) {
             data->vector[i].key = 0;
             data->vector[i].val = INFINITY;
@@ -64,11 +64,58 @@ key_value_vector_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
     }
 
     int64_t idx = sqlite3_value_int(args[1]) - 1;
-    data->vector[idx].key = sqlite3_value_int64(args[2]);
-    if (sqlite3_value_type(args[3]) != SQLITE_NULL) {
-        data->unused = false;
-        data->vector[idx].val = sqlite3_value_double(args[3]);
+    if (idx > data->size) {
+        sqlite3_result_error(ctxt, "Out of bounds initialisation!", -1);
+        sqlite3_free(data->vector);
+        data->vector = NULL;
     }
+
+    data->vector[idx].key = sqlite3_value_int64(args[0]);
+}
+
+void
+update_key_value_vector_step
+(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
+{
+    (void) nArgs;
+    struct aggregate *data = sqlite3_aggregate_context(ctxt, sizeof *data);
+
+    if (!data) {
+        sqlite3_result_error(ctxt, "Aggregate allocation failed!", -1);
+        return;
+    }
+
+    if (!data->vector) {
+        int vectorSize = sqlite3_value_bytes(args[0]);
+        data->size = vectorSize / sizeof *data->vector;
+        if (data->size < 0) {
+            sqlite3_result_error(ctxt, "Vector size can't be negative!", -1);
+            return;
+        }
+
+        data->vector = sqlite3_malloc(data->size * sizeof *data->vector);
+        if (!data->vector) {
+            sqlite3_result_error(ctxt, "Vector allocation failed!", -1);
+            return;
+        }
+
+        const void *original = sqlite3_value_blob(args[0]);
+        memcpy(data->vector, original, data->size * sizeof *data->vector);
+    }
+
+    int64_t idx = sqlite3_value_int(args[1]) - 1;
+    if (idx > data->size) {
+        sqlite3_result_error(ctxt, "Out of bounds initialisation!", -1);
+        sqlite3_free(data->vector);
+        data->vector = NULL;
+    }
+
+    if (data->vector[idx].key != sqlite3_value_int64(args[2])) {
+        sqlite3_result_error(ctxt, "Key mismatch!", -1);
+        sqlite3_free(data->vector);
+        data->vector = NULL;
+    }
+    data->vector[idx].val = sqlite3_value_double(args[3]);
 }
 
 void
@@ -79,14 +126,21 @@ key_value_vector_finalise(sqlite3_context *ctxt)
     if (!data) {
         sqlite3_result_null(ctxt);
         return;
-    } else if (data->unused) {
-        sqlite3_result_null(ctxt);
-        sqlite3_free(data->vector);
-        return;
     }
 
     if (!data->vector) {
         sqlite3_result_error(ctxt, "Vector construction failed!", -1);
+        return;
+    }
+
+    bool uninitialised = false;
+    for (int i = 0; i < data->size && !uninitialised; i++) {
+        if (data->vector[i].key == 0) uninitialised = true;
+    }
+
+    if (uninitialised) {
+        sqlite3_free(data->vector);
+        sqlite3_result_error(ctxt, "Returning uninitialised key!", -1);
         return;
     }
 
