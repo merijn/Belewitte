@@ -86,10 +86,12 @@ static void cleanup_aggregate(sqlite3_context *ctxt)
     if (!data->values) {
         for (size_t i = 0; i < data->size; i++) {
             sqlite3_value_free(data->values[i]);
+            data->values[i] = NULL;
         }
     }
 
     sqlite3_free(data->values);
+    data->values = NULL;
 }
 
 void min_key_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)

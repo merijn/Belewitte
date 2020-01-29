@@ -36,8 +36,9 @@ void check_unique_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
 
     int result = 0;
     if (!compare_values(&result, args[0], data->value)) {
-        sqlite3_result_error(ctxt, "Failed to copy SQLite value!", -1);
+        sqlite3_result_error(ctxt, "Encountered unknown SQLite type!", -1);
         sqlite3_value_free(data->value);
+        data->value = NULL;
         return;
     }
 
