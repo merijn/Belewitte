@@ -69,7 +69,7 @@ Library SQLiteExts
   Default-Language:     Haskell2010
   C-Sources:            sqlite3exts/series.c
   CC-Options:           -Wall -pedantic -std=c11 -g -O3 -DSQLITE_CORE
-  Build-Depends:        persistent-sqlite ^>= 2.10.7
+  Build-Depends:        persistent-sqlite ^>= 2.10.6.1
 
 Library
   Import:               all, sqlite3exts
@@ -141,7 +141,7 @@ Library
                         cbits/min_key.c
                         cbits/sqlite-functions.c
 
-  CC-Options:           -Wall -Wextra -pedantic -std=c11 -g -O3
+  CC-Options:           -Wall -Wextra -pedantic -std=c11 -g -O3 -DSQLITE_CORE
   Include-Dirs:         cbits
   Includes:             sqlite-functions.h
 
@@ -150,6 +150,7 @@ Library
                         ConstraintKinds
                         DeriveFunctor
                         DeriveGeneric
+                        DerivingStrategies
                         FlexibleContexts
                         FlexibleInstances
                         GADTs
@@ -160,6 +161,7 @@ Library
                         PatternSynonyms
                         RankNTypes
                         ScopedTypeVariables
+                        StandaloneDeriving
                         TemplateHaskell
                         TypeFamilies
                         UndecidableInstances
@@ -177,8 +179,8 @@ Library
                ,        megaparsec ^>= 7.0.0
                ,        microlens ^>= 0.4.8
                ,        persistent ^>= 2.10.5
-               ,        persistent-template ^>= 2.7.2
-               ,        persistent-sqlite ^>= 2.10.7
+               ,        persistent-template ^>= 2.8.2
+               ,        persistent-sqlite ^>= 2.10.6.1
                ,        prettyprinter ^>= 1.2.0
                ,        prettyprinter-ansi-terminal ^>= 1.1.1
                ,        process ^>= 1.6.0
