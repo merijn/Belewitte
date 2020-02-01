@@ -82,15 +82,6 @@ stepInfoQuery algoId platformId commitId graphProperties stepProperties ts =
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
         [ SqlInt64, SqlInt64, SqlInt64, SqlBlob, SqlBlob, SqlBlob ]
 
-    cteParams :: [PersistValue]
-    cteParams =
-      [ toPersistValue algoId
-      , toPersistValue ts
-      , toPersistValue algoId
-      , toPersistValue platformId
-      , toPersistValue commitId
-      ]
-
     commonTableExpressions :: [CTE]
     commonTableExpressions =
       [ [] `inCTE` [i|
