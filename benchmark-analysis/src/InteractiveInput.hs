@@ -60,6 +60,9 @@ data InputQuery m a = InputQuery
 newtype Input m a = Input { unInput :: InputT (ReaderT (Completer m) m) a }
     deriving (Applicative, Functor, Monad, MonadIO)
 
+instance MonadExplain m => MonadExplain (Input m) where
+    shouldExplainQuery = lift . shouldExplainQuery
+
 instance MonadResource m => MonadResource (Input m) where
     liftResourceT = Input . lift . liftResourceT
 
