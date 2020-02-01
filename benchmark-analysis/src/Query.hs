@@ -101,7 +101,7 @@ randomizeQuery :: Int -> Int -> Query r -> (Query r, Query r)
 randomizeQuery seed trainingSize originalQuery = (training, validation)
   where
     randomizedQuery =
-      [i|SELECT * FROM (#{queryText originalQuery}) ORDER BY random(?) |]
+      [i|SELECT * FROM (#{queryText originalQuery}) ORDER BY legacy_random(?)|]
 
     extraParams = [toPersistValue seed, toPersistValue trainingSize]
 
