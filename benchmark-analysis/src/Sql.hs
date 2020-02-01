@@ -28,7 +28,7 @@ import Database.Persist.Sqlite (sqlType)
 import qualified Database.Persist.Sqlite as Sqlite
 
 import Core
-import Query (MonadQuery, Query(..), runSqlQuerySingleMaybe)
+import Query (CTE, MonadQuery, Query(..), runSqlQuerySingleMaybe)
 import Schema
 import Schema.GlobalVars (Unique(UniqGlobal))
 import Sql.Core
@@ -45,10 +45,7 @@ rawGetGlobalVar run var = do
     queryName :: Text
     queryName = "getGlobalVar"
 
-    cteParams :: [PersistValue]
-    cteParams = []
-
-    commonTableExpressions :: [Text]
+    commonTableExpressions :: [CTE]
     commonTableExpressions = []
 
     params :: [PersistValue]

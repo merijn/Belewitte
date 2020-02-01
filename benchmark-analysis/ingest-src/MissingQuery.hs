@@ -78,10 +78,7 @@ validationVariantQuery platformId = Query{..}
         [ SqlInt64, SqlString, SqlInt64, SqlString
         , SqlInt64, SqlString, SqlString ]
 
-    cteParams :: [PersistValue]
-    cteParams = []
-
-    commonTableExpressions :: [Text]
+    commonTableExpressions :: [CTE]
     commonTableExpressions = []
 
     params :: [PersistValue]
@@ -139,10 +136,7 @@ validationRunQuery ValidationVariant{..} platformId = Query{..}
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
         [ SqlInt64, SqlString, SqlString, SqlInt64 ]
 
-    cteParams :: [PersistValue]
-    cteParams = []
-
-    commonTableExpressions :: [Text]
+    commonTableExpressions :: [CTE]
     commonTableExpressions = []
 
     params :: [PersistValue]
@@ -202,10 +196,7 @@ missingBenchmarkQuery runConfigId = Query{..}
         [ SqlInt64, SqlString, SqlInt64, SqlString, SqlInt64, SqlString
         , SqlBlob, SqlInt64, SqlInt64, SqlString, SqlString ]
 
-    cteParams :: [PersistValue]
-    cteParams = []
-
-    commonTableExpressions :: [Text]
+    commonTableExpressions :: [CTE]
     commonTableExpressions = []
 
     params :: [PersistValue]

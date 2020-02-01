@@ -58,18 +58,9 @@ timePlotQuery algoId platformId commitId variants = Query{..}
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
         [ SqlString, SqlBlob, SqlBlob ]
 
-    cteParams :: [PersistValue]
-    cteParams =
-      [ toPersistValue algoId
-      , toPersistValue algoId
-      , toPersistValue algoId
-      , toPersistValue platformId
-      , toPersistValue commitId
-      , toPersistValue platformId
-      ]
-
-    commonTableExpressions :: [Text]
-    commonTableExpressions = [[i|
+    commonTableExpressions :: [CTE]
+    commonTableExpressions =
+      [ [toPersistValue algoId] `inCTE` [i|
 IndexedImpls(idx, implId, type, count) AS (
     SELECT ROW_NUMBER() OVER (ORDER BY id)
             , id
@@ -82,8 +73,9 @@ IndexedImpls(idx, implId, type, count) AS (
 ImplVector(implTiming) AS (
     SELECT init_key_value_vector(implId, idx, count)
     FROM IndexedImpls
-),
+)|]
 
+      , [toPersistValue algoId] `inCTE` [i|
 IndexedExternalImpls(idx, implId, count) AS (
     SELECT ROW_NUMBER() OVER (ORDER BY id)
             , id
@@ -95,8 +87,15 @@ IndexedExternalImpls(idx, implId, count) AS (
 ExternalImplVector(implTiming) AS (
     SELECT init_key_value_vector(implId, idx, count)
     FROM IndexedExternalImpls
-),
+)|]
 
+      , CTE
+        { cteParams =
+            [ toPersistValue algoId
+            , toPersistValue platformId
+            , toPersistValue commitId
+            ]
+        , cteQuery = [i|
 VariantTiming(graphName, variantConfigId, variantId, timings) AS (
     SELECT Graph.name
          , Variant.variantConfigId
@@ -127,8 +126,10 @@ VariantTiming(graphName, variantConfigId, variantId, timings) AS (
     AND RunConfig.algorithmVersion = ?
 
     GROUP BY Variant.id
-),
+)|]
+        }
 
+      , [toPersistValue platformId] `inCTE` [i|
 ExternalTiming(variantId, timings) AS (
    SELECT Variant.id
         , update_key_value_vector(implTiming, idx, Impls.implId, avgTime)
@@ -183,11 +184,8 @@ levelTimePlotQuery platformId commitId variant = Query{..}
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
         [ SqlInt64, SqlBlob ]
 
-    cteParams :: [PersistValue]
-    cteParams = []
-
-    commonTableExpressions :: [Text]
-    commonTableExpressions = [[i|
+    commonTableExpressions :: [CTE]
+    commonTableExpressions = [ [] `inCTE` [i|
 IndexedImpls(algorithmId, idx, implId, count) AS (
     SELECT algorithmId
          , ROW_NUMBER() OVER (algorithm ORDER BY id) AS idx

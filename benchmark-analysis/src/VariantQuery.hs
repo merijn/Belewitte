@@ -75,25 +75,9 @@ variantInfoQuery algoId platformId commitId datasetId = Query{..}
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
         [SqlInt64, SqlReal, SqlReal, SqlBlob, SqlBlob ]
 
-    cteParams :: [PersistValue]
-    cteParams =
-      [ toPersistValue algoId
-      , toPersistValue algoId
-      , toPersistValue algoId
-      , toPersistValue platformId
-      , toPersistValue commitId
-      , toPersistValue datasetId
-      , toPersistValue datasetId
-      , toPersistValue algoId
-      , toPersistValue platformId
-      , toPersistValue commitId
-      , toPersistValue datasetId
-      , toPersistValue datasetId
-      , toPersistValue platformId
-      ]
-
-    commonTableExpressions :: [Text]
-    commonTableExpressions = [[i|
+    commonTableExpressions :: [CTE]
+    commonTableExpressions =
+      [ [toPersistValue algoId] `inCTE` [i|
 IndexedImpls(idx, implId, type, count) AS (
     SELECT ROW_NUMBER() OVER ()
          , id
@@ -106,8 +90,9 @@ IndexedImpls(idx, implId, type, count) AS (
 ImplVector(implTiming) AS (
     SELECT init_key_value_vector(implId, idx, count)
     FROM IndexedImpls
-),
+)|]
 
+      , [toPersistValue algoId] `inCTE` [i|
 IndexedExternalImpls(idx, implId, count) AS (
     SELECT ROW_NUMBER() OVER ()
          , id
@@ -119,8 +104,17 @@ IndexedExternalImpls(idx, implId, count) AS (
 ExternalImplVector(implTiming) AS (
     SELECT init_key_value_vector(implId, idx, count)
     FROM IndexedExternalImpls
-),
+)|]
 
+      , CTE
+        { cteParams =
+            [ toPersistValue algoId
+            , toPersistValue platformId
+            , toPersistValue commitId
+            , toPersistValue datasetId
+            , toPersistValue datasetId
+            ]
+        , cteQuery = [i|
 VariantTiming(variantId, bestNonSwitching, timings) AS (
     SELECT Run.variantId
          , MIN(avgTime) FILTER (WHERE type == 'Core') AS bestNonSwitching
@@ -144,8 +138,18 @@ VariantTiming(variantId, bestNonSwitching, timings) AS (
     AND (RunConfig.datasetId = ? OR ? IS NULL)
 
     GROUP BY Run.variantId
-),
+)|]
+        }
 
+      , CTE
+        { cteParams =
+            [ toPersistValue algoId
+            , toPersistValue platformId
+            , toPersistValue commitId
+            , toPersistValue datasetId
+            , toPersistValue datasetId
+            ]
+        , cteQuery = [i|
 OptimalStep(variantId, optimal) AS (
     SELECT variantId, SUM(Step.minTime) AS optimal
     FROM (
@@ -169,8 +173,10 @@ OptimalStep(variantId, optimal) AS (
         GROUP BY Run.variantId, stepId
     ) AS Step
     GROUP BY variantId
-),
+)|]
+        }
 
+      , [toPersistValue platformId] `inCTE` [i|
 ExternalTiming(variantId, timings) AS (
    SELECT Variant.id
         , update_key_value_vector(implTiming, idx, Impls.implId, avgTime)
@@ -185,7 +191,8 @@ ExternalTiming(variantId, timings) AS (
    ON Impls.implId = ExternalTimer.implId
 
    GROUP BY variantId
-)|]]
+)|]
+      ]
 
     params :: [PersistValue]
     params = []

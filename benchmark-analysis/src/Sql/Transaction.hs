@@ -37,7 +37,7 @@ import qualified Database.Persist.Sqlite as Sqlite
 import Lens.Micro.Extras (view)
 
 import Exceptions
-import Query (MonadQuery, Query(..), runSqlQuerySingle)
+import Query (CTE, MonadQuery, Query(..), runSqlQuerySingle)
 import Schema
 import Sql.Core
 
@@ -284,10 +284,7 @@ FROM #{table}
     queryName :: Text
     queryName = "getMaxFieldQuery"
 
-    cteParams :: [PersistValue]
-    cteParams = []
-
-    commonTableExpressions :: [Text]
+    commonTableExpressions :: [CTE]
     commonTableExpressions = []
 
     params :: [PersistValue]

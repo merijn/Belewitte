@@ -29,10 +29,7 @@ getDistinctFieldQuery entityField = Sql.runTransaction $ do
     queryName :: Text
     queryName = "distinctFieldQuery"
 
-    cteParams :: [PersistValue]
-    cteParams = []
-
-    commonTableExpressions :: [Text]
+    commonTableExpressions :: [CTE]
     commonTableExpressions = []
 
     params :: [PersistValue]
@@ -63,10 +60,7 @@ WHERE #{table}.#{field} LIKE (? || '%')
     queryName :: Text
     queryName = "distinctFieldLikeQuery"
 
-    cteParams :: [PersistValue]
-    cteParams = []
-
-    commonTableExpressions :: [Text]
+    commonTableExpressions :: [CTE]
     commonTableExpressions = []
 
     params :: [PersistValue]

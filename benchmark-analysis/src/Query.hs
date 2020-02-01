@@ -9,9 +9,11 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 module Query
-    ( MonadQuery
+    ( CTE(..)
+    , MonadQuery
     , Query(..)
     , explainSqlQuery
+    , inCTE
     , randomizeQuery
     , runSqlQuery
     , runSqlQuerySingleMaybe
@@ -42,11 +44,16 @@ type MonadQuery m =
 
 data Explain = Explain | NoExplain
 
+data CTE = CTE { cteParams :: [PersistValue] , cteQuery :: Text }
+    deriving Show
+
+inCTE :: [PersistValue] -> Text -> CTE
+inCTE = CTE
+
 data Query r =
   Query
     { queryName :: Text
-    , commonTableExpressions :: [Text]
-    , cteParams :: [PersistValue]
+    , commonTableExpressions :: [CTE]
     , params :: [PersistValue]
     , convert :: forall m . (MonadIO m, MonadLogger m, MonadThrow m)
               => [PersistValue] -> m r
@@ -58,9 +65,13 @@ instance Functor Query where
 
 toQueryText :: Query r -> Text
 toQueryText Query{..} = mconcat $
-    [ mIf hasCTEs "\nWITH" ] <> intersperse ",\n\n" commonTableExpressions <>
+    [ mIf hasCTEs "\nWITH" ] <> intersperse ",\n\n" cteQueries <>
     [ mIf hasCTEs "\n", queryText ]
   where
+    cteQueries :: [Text]
+    cteQueries = map cteQuery commonTableExpressions
+
+    hasCTEs :: Bool
     hasCTEs = not $ null commonTableExpressions
 
 renderExplainTree
@@ -158,7 +169,7 @@ runLoggingSqlQuery query sink = do
 runRawSqlQuery
     :: (MonadLogger m, MonadResource m, MonadSql m, MonadThrow m)
     => Explain -> Query r -> ConduitT r o m a -> ConduitT i o m a
-runRawSqlQuery isExplain query@Query{convert,cteParams,params} sink = do
+runRawSqlQuery isExplain query@Query{convert,params} sink = do
     srcRes <- Sql.conduitQuery queryText queryParams
     (key, src) <- allocateAcquire srcRes
     (timing, r) <- withTime $ toProducer src .| C.mapM convert .| sink
@@ -170,8 +181,9 @@ runRawSqlQuery isExplain query@Query{convert,cteParams,params} sink = do
     logInfoN $ queryName query <> " time: " <> formattedTime
     return r
   where
+    cteParameters = concatMap cteParams $ commonTableExpressions query
     queryText = explainPrefix <> toQueryText query
-    queryParams = cteParams ++ params
+    queryParams = cteParameters ++ params
 
     explainPrefix = case isExplain of
         Explain -> "EXPLAIN QUERY PLAN "

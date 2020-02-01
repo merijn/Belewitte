@@ -91,8 +91,9 @@ stepInfoQuery algoId platformId commitId graphProperties stepProperties ts =
       , toPersistValue commitId
       ]
 
-    commonTableExpressions :: [Text]
-    commonTableExpressions = [[i|
+    commonTableExpressions :: [CTE]
+    commonTableExpressions =
+      [ [] `inCTE` [i|
 IndexedGraphProps(graphId, idx, property, value, count) AS (
     SELECT graphId
          , ROW_NUMBER() OVER (graph ORDER BY property)
@@ -114,8 +115,8 @@ IndexedStepProps(variantId, stepId, idx, property, value, count) AS (
     FROM StepPropValue
     WHERE property IN #{inExpression stepProperties}
     WINDOW variantStep AS (PARTITION BY variantId, stepId)
-),
-
+)|]
+      , [toPersistValue algoId] `inCTE` [i|
 IndexedImpls(idx, implId, type, count) AS (
     SELECT ROW_NUMBER() OVER ()
          , id
@@ -128,8 +129,15 @@ IndexedImpls(idx, implId, type, count) AS (
 ImplVector(implTiming) AS (
     SELECT init_key_value_vector(implId, idx, count)
     FROM IndexedImpls
-),
-
+)|]
+      , CTE
+        { cteParams =
+            [ toPersistValue ts
+            , toPersistValue algoId
+            , toPersistValue platformId
+            , toPersistValue commitId
+            ]
+        , cteQuery = [i|
 StepTiming(graphId, variantId, stepId, implId, timings) AS (
     SELECT Variant.graphId
          , Variant.id
@@ -158,8 +166,8 @@ StepTiming(graphId, variantId, stepId, implId, timings) AS (
     ON Impls.implId = Run.implId
 
     GROUP BY Variant.id, StepTimer.stepId
-)
-|]]
+)|]
+        }]
 
     params :: [PersistValue]
     params = [ toPersistValue $ S.size stepProperties ]
