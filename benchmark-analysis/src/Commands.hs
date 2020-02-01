@@ -7,6 +7,7 @@ module Commands
     ( Command
     , CommandInfo(..)
     , pattern CommandGroup
+    , pattern HiddenGroup
     , pattern HiddenCommand
     , pattern SingleCommand
     , buildCommand
@@ -40,6 +41,9 @@ pattern SingleCommand info parser = Command info (Single parser)
 
 pattern CommandGroup :: CommandInfo -> [Command a] -> Command a
 pattern CommandGroup info cmds = Command info (Group cmds)
+
+pattern HiddenGroup :: CommandInfo -> [Command a] -> Command a
+pattern HiddenGroup info cmds = Hidden (CommandGroup info cmds)
 
 data CommandType a = Single (Parser a) | Group [Command a]
     deriving (Functor)
