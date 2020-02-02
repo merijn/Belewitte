@@ -7,10 +7,12 @@ module Commands
     ( Command
     , CommandInfo(..)
     , pattern CommandGroup
+    , pattern CommandWithSubGroup
     , pattern HiddenGroup
     , pattern HiddenCommand
     , pattern SingleCommand
     , buildCommand
+    , extendCommandWith
     ) where
 
 import Options.Applicative hiding (Completer)
@@ -39,17 +41,34 @@ pattern HiddenCommand info parser = Hidden (Command info (Single parser))
 pattern SingleCommand :: CommandInfo -> Parser a -> Command a
 pattern SingleCommand info parser = Command info (Single parser)
 
+pattern CommandWithSubGroup
+    :: CommandInfo -> Parser a -> [Command a] -> Command a
+pattern CommandWithSubGroup info parser cmds =
+    Command info (WithSubGroup parser cmds)
+
 pattern CommandGroup :: CommandInfo -> [Command a] -> Command a
 pattern CommandGroup info cmds = Command info (Group cmds)
 
 pattern HiddenGroup :: CommandInfo -> [Command a] -> Command a
 pattern HiddenGroup info cmds = Hidden (CommandGroup info cmds)
 
-data CommandType a = Single (Parser a) | Group [Command a]
+data CommandType a
+    = Single (Parser a)
+    | WithSubGroup (Parser a) [Command a]
+    | Group [Command a]
     deriving (Functor)
 
 data Command a = Command CommandInfo (CommandType a) | Hidden (Command a)
     deriving (Functor)
+
+extendCommandWith :: Command a -> Command a -> Command a
+extendCommandWith (Hidden cmd) extra = Hidden $ cmd `extendCommandWith` extra
+extendCommandWith (Command cmdInfo cmdType) extra = Command cmdInfo newCmdType
+  where
+    newCmdType = case cmdType of
+        Single parser -> WithSubGroup parser [extra]
+        WithSubGroup parser cmds -> WithSubGroup parser (cmds <> [extra])
+        Group cmds -> Group $ cmds <> [extra]
 
 buildCommand :: Command a -> (Parser a, InfoMod b)
 buildCommand cmd = (parser, infoMod)
@@ -58,9 +77,12 @@ buildCommand cmd = (parser, infoMod)
 
 unfoldCommand :: String -> Command a -> (String, Parser a, InfoMod b)
 unfoldCommand prefix (Hidden cmd) = unfoldCommand prefix cmd
-unfoldCommand prefix (Command cmdInfo@CommandInfo{..} cmdType) =
+unfoldCommand prefix (Command CommandInfo{..} cmdType) =
     (commandName, parser, infoMod)
   where
+    groupPrefix :: String
+    groupPrefix = prefix ++ commandName ++ " "
+
     justUnless :: Bool -> v -> Maybe v
     justUnless b v
         | not b = Just v
@@ -78,19 +100,12 @@ unfoldCommand prefix (Command cmdInfo@CommandInfo{..} cmdType) =
 
     parser = case cmdType of
         Single p -> p
-        Group cmds -> groupToParser cmdInfo cmds prefix
+        WithSubGroup p cmds -> p <|> groupToParser cmds groupPrefix
+        Group cmds -> groupToParser cmds groupPrefix
 
-groupToParser
-    :: forall a
-     . CommandInfo
-    -> [Command a]
-    -> String
-    -> Parser a
-groupToParser CommandInfo{..} cmds prefix = groupParser
+groupToParser :: forall a . [Command a] -> String -> Parser a
+groupToParser cmds prefix = groupParser
   where
-    groupPrefix :: String
-    groupPrefix = prefix ++ commandName ++ " "
-
     groupParser :: Parser a
     groupParser = hsubparser cmdGroup <|> hsubparser (hiddenCmdGroup <> internal)
 
@@ -98,7 +113,7 @@ groupToParser CommandInfo{..} cmds prefix = groupParser
     (cmdGroup, hiddenCmdGroup) = foldMap unfoldSubCommand cmds
 
     unfoldSubCommand :: Command a -> (Mod CommandFields a, Mod CommandFields a)
-    unfoldSubCommand cmd = select . wrapCommand . unfoldCommand groupPrefix $ cmd
+    unfoldSubCommand cmd = select . wrapCommand . unfoldCommand prefix $ cmd
       where
         select cmdFields = case cmd of
             Hidden _ -> (mempty, cmdFields)
