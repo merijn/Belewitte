@@ -34,7 +34,7 @@ import System.IO (Handle, IOMode(WriteMode), hPutStr, stdout, withFile)
 
 import Commands
 import Core
-import OptionParsers
+import Options
 import PlotQuery (timePlotQuery, levelTimePlotQuery)
 import Utils.Process (withStdin)
 import Query

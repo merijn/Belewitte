@@ -34,7 +34,7 @@ import FieldQuery (getDistinctFieldQuery)
 import InteractiveInput
 import Jobs
 import MissingQuery
-import OptionParsers
+import Options
 import Parsers
 import ProcessPool
 import Query (Query, runSqlQuery, runSqlQueryConduit)

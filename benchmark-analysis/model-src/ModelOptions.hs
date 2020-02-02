@@ -32,7 +32,7 @@ import Evaluate
     (CompareReport, EvaluateReport, Report(..), RelativeTo(..), SortBy(..))
 import FieldQuery (getDistinctFieldQuery)
 import Model (Model)
-import OptionParsers
+import Options
 import Query (runSqlQueryConduit)
 import Schema
 import Sql ((==.))

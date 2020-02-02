@@ -82,6 +82,7 @@ Library
                         InteractiveInput
                         Migration
                         Model
+                        Options
                         OptionParsers
                         Pretty
                         Pretty.Fields
