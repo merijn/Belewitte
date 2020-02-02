@@ -232,7 +232,7 @@ Executable Model
   Hs-Source-Dirs:       model-src
   Main-Is:              Main.hs
   Other-Modules:        Evaluate
-                        Options
+                        ModelOptions
                         Train
                         Validate
                         StepQuery

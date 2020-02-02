@@ -6,7 +6,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
-module Options (ModelCommand(..), commands, runSqlM) where
+module ModelOptions (ModelCommand(..), commands, runSqlM) where
 
 import Control.Applicative (optional)
 import Control.Monad.Reader (ask)

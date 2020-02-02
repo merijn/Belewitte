@@ -24,7 +24,7 @@ import FieldQuery (getDistinctFieldQuery)
 import FormattedOutput (renderOutput)
 import InteractiveInput
 import Model
-import Options
+import ModelOptions
 import Query
 import Schema
 import Sql ((==.))
