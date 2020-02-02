@@ -65,7 +65,7 @@ data Job a = Job
     , jobLabel :: Text
     , jobCommand :: Text
     , jobLogProperties :: Bool
-    } deriving (Functor, Foldable, Traversable)
+    } deriving (Functor, Foldable, Show, Traversable)
 
 makeJob
     :: Bool
