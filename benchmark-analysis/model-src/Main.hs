@@ -16,7 +16,6 @@ import Data.Ord (comparing)
 import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.Text as T
-import Data.Time.Clock (getCurrentTime)
 
 import Core
 import Evaluate (evaluateModel, compareImplementations, percent)
@@ -130,11 +129,11 @@ main = runSqlM commands $ \case
         dumpCppModel cppFile model trainGraphProps trainStepProps
             (implementationName <$> impls)
 
-    QueryTest{getAlgoId,getPlatformId,getCommit,utcTime,outputSuffix} -> do
+    QueryTest{getAlgoId,getPlatformId,getCommit,getUTCTime,outputSuffix} -> do
         algoId <- getAlgoId
         platformId <- getPlatformId
         commit <- getCommit
-        timestamp <- maybe (liftIO getCurrentTime) return utcTime
+        timestamp <- getUTCTime
 
         graphPropQuery <- getDistinctFieldQuery GraphPropProperty
         graphprops <- runSqlQueryConduit graphPropQuery $ C.foldMap S.singleton

@@ -23,8 +23,6 @@ import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import Data.Time.Clock (getCurrentTime)
-import Data.Time.Format (defaultTimeLocale, parseTimeM)
 
 import Core
 import Evaluate
@@ -81,7 +79,7 @@ data ModelCommand
       { getAlgoId :: SqlM (Key Algorithm)
       , getPlatformId :: SqlM (Key Platform)
       , getCommit :: SqlM CommitId
-      , utcTime :: Maybe UTCTime
+      , getUTCTime :: SqlM UTCTime
       , outputSuffix :: Maybe FilePath
       }
 
@@ -136,7 +134,7 @@ commands = CommandRoot
         , commandDesc = "Dump query output to files to validate results"
         }
         $ QueryTest <$> algorithmIdParser <*> platformIdParser
-                    <*> commitIdParser <*> optional timeParser
+                    <*> commitIdParser <*> utcTimeParser
                     <*> optional suffixParser
     ]
   }
@@ -145,15 +143,6 @@ commands = CommandRoot
     cppFile = strOption . mconcat $
         [ metavar "FILE", short 'e', long "export", value "test.cpp"
         , showDefaultWith id, help "C++ file to write predictor to." ]
-
-    utcReader :: ReadM UTCTime
-    utcReader = maybeReader $
-        parseTimeM False defaultTimeLocale "%Y-%-m-%-d %T"
-
-    timeParser :: Parser UTCTime
-    timeParser = option utcReader . mconcat $
-        [ metavar "TIME", short 't', long "time"
-        , help "Timestamp controlling query output." ]
 
     suffixReader :: String -> Maybe String
     suffixReader "" = Nothing
@@ -270,7 +259,7 @@ trainingConfig = fmap runReaderT . getCompose $
                 <*> props "step" gatherStepProps
                 <*> trainFract
                 <*> seedOpt
-                <*> Compose (pure (liftIO getCurrentTime))
+                <*> Compose (lift <$> utcTimeParser)
   where
     seedOpt = Compose . fmap pure . option auto . mconcat $
         [ metavar "N", short 's', long "seed", value 42, showDefault

@@ -12,6 +12,7 @@ module OptionParsers
     , platformParser
     , runconfigIdParser
     , runconfigParser
+    , utcTimeParser
     , variantIdParser
     , variantParser
     , intervalReader
@@ -32,6 +33,8 @@ import qualified Data.IntervalSet as IS
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Text (Text)
+import Data.Time.Clock (getCurrentTime)
+import Data.Time.Format (defaultTimeLocale, parseTimeM)
 import Options.Applicative hiding (Completer)
 import Options.Applicative.Help (Doc, (</>))
 import qualified Options.Applicative.Help as Help
@@ -123,6 +126,18 @@ runconfigParser = queryRunConfig <$> runConfigOpt
 
     queryRunConfig :: Int64 -> SqlM (Entity RunConfig)
     queryRunConfig n = Sql.validateEntity "RunConfig" n
+
+utcTimeParser :: Parser (SqlM UTCTime)
+utcTimeParser = maybe (liftIO getCurrentTime) return <$> optional timeParser
+  where
+    timeParser :: Parser UTCTime
+    timeParser = option utcReader . mconcat $
+        [ metavar "TIME", short 't', long "time"
+        , help "Timestamp controlling query output." ]
+
+    utcReader :: ReadM UTCTime
+    utcReader = maybeReader $
+        parseTimeM False defaultTimeLocale "%Y-%-m-%-d %T"
 
 variantIdParser :: Parser (SqlM (Key Variant))
 variantIdParser = fmap entityKey <$> variantParser
