@@ -26,7 +26,7 @@ instance Show Hash where
         (digestFromByteString bs :: Maybe HashDigest)
 
 newtype CommitId = CommitId { getCommitId :: Text }
-    deriving (Read, Eq, PersistField, PersistFieldSql)
+    deriving (Read, Eq, Ord, PersistField, PersistFieldSql)
 
 instance Show CommitId where
     show (CommitId hash) = unpack hash
