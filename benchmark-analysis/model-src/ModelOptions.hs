@@ -86,14 +86,14 @@ data ModelCommand
       , outputSuffix :: Maybe FilePath
       }
 
-commands :: String -> Command ModelCommand
-commands name = CommandGroup CommandInfo
-  { commandName = name
-  , commandHeaderDesc = "a tool for generating and validating BDT models"
-  , commandDesc =
+commands :: CommandRoot ModelCommand
+commands = CommandRoot
+  { mainHeaderDesc = "a tool for generating and validating BDT models"
+  , mainDesc =
         "Generate, validate, evaluate, and export Binary Decision Tree (BDT) \
         \models for predicting which implementation to use for an algorithm."
-  } [ SingleCommand CommandInfo
+  , mainCommands =
+    [ SingleCommand CommandInfo
         { commandName = "train"
         , commandHeaderDesc = "train a model"
         , commandDesc = "Train a new model"
@@ -140,6 +140,7 @@ commands name = CommandGroup CommandInfo
                     <*> commitIdParser <*> optional timeParser
                     <*> optional suffixParser
     ]
+  }
   where
     cppFile :: Parser FilePath
     cppFile = strOption . mconcat $

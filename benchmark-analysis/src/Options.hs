@@ -1,7 +1,9 @@
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 module Options
-    ( runSqlM
+    ( CommandRoot(..)
+    , runSqlM
     , module OptionParsers
     ) where
 
@@ -21,27 +23,44 @@ import Text.Megaparsec (Parsec, parseMaybe, sepBy1, takeWhile1P)
 import Text.Megaparsec.Char (char)
 
 import Core
-import Commands (Command, buildCommand)
+import Commands
 import OptionParsers
 
-runSqlM :: (String -> Command a) -> (a -> SqlM b) -> IO b
-runSqlM commandFromName work = do
+data CommandRoot a = CommandRoot
+    { mainHeaderDesc :: String
+    , mainDesc :: String
+    , mainCommands :: [Command a]
+    }
+
+runCommandRoot :: CommandRoot a -> (a -> SqlM ()) -> String -> IO ()
+runCommandRoot CommandRoot{..} work progName = do
     System.hFlush System.stdout >> System.hFlush System.stderr
 
-    (parser, helpInfo) <- buildCommand . commandFromName <$> getProgName
     cols <- fromMaybe 80 <$> stderrTerminalWidth
 
-    let topParser = mkOptions parser <**> helper
-        parseInfo = info topParser helpInfo
-        parsePrefs = prefs $ columns cols
+    let parsePrefs = prefs $ columns cols
 
     config <- customExecParser parsePrefs parseInfo
     runSqlMWithOptions config work
   where
-    mkOptions p =
+    mainCommand = CommandGroup CommandInfo
+        { commandName = progName
+        , commandHeaderDesc = mainHeaderDesc
+        , commandDesc = mainDesc
+        }
+        mainCommands
+
+    parseInfo = info (optionParser <**> helper) helpInfo
+
+    (parser, helpInfo) = buildCommand mainCommand
+
+    optionParser =
       Options <$> databaseOption <*> vacuumOption <*> verbosityOption
               <*> debugOption <*> explainOption <*> migrateOption
-              <*> pagerOption <*> p
+              <*> pagerOption <*> parser
+
+runSqlM :: CommandRoot a -> (a -> SqlM ()) -> IO ()
+runSqlM root work = getProgName >>= runCommandRoot root work
 
 databaseOption :: Parser Text
 databaseOption = strOption . mconcat $

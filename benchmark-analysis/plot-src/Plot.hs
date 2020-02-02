@@ -126,12 +126,12 @@ filterImpls textSet = IM.filter $ getAny . mconcat
 filterExternal :: Set Text -> IntMap ExternalImpl -> IntMap ExternalImpl
 filterExternal names = IM.filter ((`S.member` names) . externalImplName)
 
-commands :: String -> Command PlotOptions
-commands name = CommandGroup CommandInfo
-  { commandName = name
-  , commandHeaderDesc = "a tool for plotting benchmark results"
-  , commandDesc = ""
-  } [ SingleCommand CommandInfo
+commands :: CommandRoot PlotOptions
+commands = CommandRoot
+  { mainHeaderDesc = "a tool for plotting benchmark results"
+  , mainDesc = ""
+  , mainCommands =
+    [ SingleCommand CommandInfo
         { commandName = "levels"
         , commandHeaderDesc = "plot level times for a graph" 
         , commandDesc = ""
@@ -150,14 +150,14 @@ commands name = CommandGroup CommandInfo
         , commandDesc = ""
         }
         $ plotOptions PlotVsOptimal <*> (plotConfig "Graph" <*> normaliseFlag)
-    , HiddenCommand CommandInfo
-        { commandName = "query-test"
+    , HiddenCommand CommandInfo { commandName = "query-test"
         , commandHeaderDesc = "check query output"
         , commandDesc = "Dump query output to files to validate results"
         }
         $ QueryTest <$> algorithmParser <*> platformIdParser
                     <*> commitIdParser <*> optional suffixParser
     ]
+  }
   where
     plotConfig :: String -> Parser (Bool -> PlotConfig)
     plotConfig axis = PlotConfig axis <$> slideFlag <*> printFlag

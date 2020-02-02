@@ -12,7 +12,6 @@ module Commands
     , pattern HiddenCommand
     , pattern SingleCommand
     , buildCommand
-    , extendCommandWith
     ) where
 
 import Options.Applicative hiding (Completer)
@@ -60,15 +59,6 @@ data CommandType a
 
 data Command a = Command CommandInfo (CommandType a) | Hidden (Command a)
     deriving (Functor)
-
-extendCommandWith :: Command a -> Command a -> Command a
-extendCommandWith (Hidden cmd) extra = Hidden $ cmd `extendCommandWith` extra
-extendCommandWith (Command cmdInfo cmdType) extra = Command cmdInfo newCmdType
-  where
-    newCmdType = case cmdType of
-        Single parser -> WithSubGroup parser [extra]
-        WithSubGroup parser cmds -> WithSubGroup parser (cmds <> [extra])
-        Group cmds -> Group $ cmds <> [extra]
 
 buildCommand :: Command a -> (Parser a, InfoMod b)
 buildCommand cmd = (parser, infoMod)

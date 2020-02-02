@@ -47,15 +47,15 @@ import qualified Sql.Transaction as SqlTrans
 main :: IO ()
 main = runSqlM commands $ runInput
 
-commands :: String -> Command (Input SqlM ())
-commands name = CommandGroup CommandInfo
-  { commandName = name
-  , commandHeaderDesc = "a tool for registering and running GPU benchmarks"
-  , commandDesc =
+commands :: CommandRoot (Input SqlM ())
+commands = CommandRoot
+  { mainHeaderDesc = "a tool for registering and running GPU benchmarks"
+  , mainDesc =
         "Register GPUs, algorithms, algorithm implementations, and graphs in \
         \an SQLite database of configurations. Automatically run missing \
         \configurations and store all results in the database."
-  } [ Add.commands
+  , mainCommands =
+    [ Add.commands
     , lift <$> Set.commands
     , lift <$> Unset.commands
     , lift <$> Reset.commands
@@ -87,6 +87,7 @@ commands name = CommandGroup CommandInfo
         }
         $ queryTest <$> (suffixParser <|> pure Nothing)
     ]
+  }
   where
     suffixReader :: String -> Maybe (Maybe String)
     suffixReader "" = Nothing
