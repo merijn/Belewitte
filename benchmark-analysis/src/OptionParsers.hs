@@ -12,6 +12,10 @@ module OptionParsers
     , datasetParser
     , platformIdParser
     , platformParser
+    , runconfigIdParser
+    , runconfigParser
+    , variantIdParser
+    , variantParser
     , intervalReader
     , readCI
     , mapOption
@@ -117,6 +121,33 @@ platformParser = queryPlatform <$> platformOpt
     queryPlatform (Right n) = Sql.validateEntity "Platform" n
     queryPlatform (Left name) = Sql.validateUniqEntity "platform" $
         UniqPlatform name
+
+runconfigIdParser :: Parser (SqlM (Key RunConfig))
+runconfigIdParser = fmap entityKey <$> runconfigParser
+
+runconfigParser :: Parser (SqlM (Entity RunConfig))
+runconfigParser = queryRunConfig <$> runConfigOpt
+  where
+    runConfigOpt :: Parser Int64
+    runConfigOpt = option auto $ mconcat
+        [ metavar "ID", short 'r', long "runconfig"
+        , help "Numeric id of runconfig to use" ]
+
+    queryRunConfig :: Int64 -> SqlM (Entity RunConfig)
+    queryRunConfig n = Sql.validateEntity "RunConfig" n
+
+variantIdParser :: Parser (SqlM (Key Variant))
+variantIdParser = fmap entityKey <$> variantParser
+
+variantParser :: Parser (SqlM (Entity Variant))
+variantParser = queryVariant <$> variantOpt
+  where
+    variantOpt :: Parser Int64
+    variantOpt = option auto $ mconcat
+        [ metavar "ID", long "variant", help "Numeric id of variant to use" ]
+
+    queryVariant :: Int64 -> SqlM (Entity Variant)
+    queryVariant n = Sql.validateEntity "Variant" n
 
 intervalReader :: ReadM (IntervalSet Int64)
 intervalReader = maybeReader . parseMaybe $
