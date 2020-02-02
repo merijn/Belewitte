@@ -7,6 +7,7 @@ module Schema
     , CommitId(..)
     , GlobalVars.GlobalVar(..)
     , Hash(..)
+    , HashDigest
     , ImplType(..)
     , Model
     , PersistValue(..)

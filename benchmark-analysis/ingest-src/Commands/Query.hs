@@ -7,10 +7,9 @@ import Data.Proxy (Proxy(..))
 import qualified Data.Text.IO as T
 import System.Exit (exitFailure)
 
-import Commands
 import Core
 import FormattedOutput
-import OptionParsers
+import Options
 import Pretty.Fields (PrettyFields)
 import Schema
 import Sql (SqlBackend, ToBackendKey)

@@ -74,21 +74,31 @@ Library SQLiteExts
 Library
   Import:               all, sqlite3exts
   Hs-Source-Dirs:       src
-  Exposed-Modules:      Commands
-                        Core
-                        Exceptions
+  Exposed-Modules:      Core
                         FieldQuery
                         FormattedOutput
                         InteractiveInput
-                        Migration
                         Model
                         Options
-                        OptionParsers
-                        Pretty
                         Pretty.Fields
                         Query
                         RuntimeData
                         Schema
+                        Sql
+                        Sql.Transaction
+                        Utils.ImplTiming
+                        Utils.Pair
+                        Utils.Process
+                        Utils.Vector
+                        VariantQuery
+
+  Autogen-Modules:      Paths_benchmark_analysis
+  Other-Modules:        Commands
+                        Exceptions
+                        Migration
+                        OptionParsers
+                        Paths_benchmark_analysis
+                        Pretty
                         Schema.Algorithm
                         Schema.Dataset
                         Schema.External
@@ -123,19 +133,9 @@ Library
                         Schema.Variant.V1
                         Schema.Variant.V2
                         Schema.VariantConfig
-                        Sql
                         Sql.Core
-                        Sql.Transaction
                         SQLiteExts
                         Types
-                        Utils.ImplTiming
-                        Utils.Pair
-                        Utils.Process
-                        Utils.Vector
-                        VariantQuery
-
-  Autogen-Modules:      Paths_benchmark_analysis
-  Other-Modules:        Paths_benchmark_analysis
 
   C-Sources:            cbits/check_unique.c
                         cbits/key_value_vector.c

@@ -27,7 +27,6 @@ import Data.Time.Clock (getCurrentTime)
 import Data.Time.Format (defaultTimeLocale, parseTimeM)
 
 import Core
-import Commands
 import Evaluate
     (CompareReport, EvaluateReport, Report(..), RelativeTo(..), SortBy(..))
 import FieldQuery (getDistinctFieldQuery)

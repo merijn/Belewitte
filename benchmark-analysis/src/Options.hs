@@ -1,8 +1,16 @@
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
 module Options
     ( CommandRoot(..)
+    , Command
+    , CommandInfo(..)
+    , pattern CommandGroup
+    , pattern CommandWithSubGroup
+    , pattern HiddenGroup
+    , pattern HiddenCommand
+    , pattern SingleCommand
     , runSqlM
     , module OptionParsers
     ) where

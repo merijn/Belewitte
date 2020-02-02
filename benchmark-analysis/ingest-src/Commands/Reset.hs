@@ -1,8 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 module Commands.Reset (commands) where
 
-import Commands
 import Core
+import Options
 import Schema
 import Sql (MonadSql, Filter, (=.))
 import qualified Sql

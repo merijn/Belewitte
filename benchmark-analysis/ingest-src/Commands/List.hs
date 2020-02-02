@@ -11,10 +11,9 @@ import Data.Map (Map)
 import qualified Data.Map as M
 import Options.Applicative.Help ((</>))
 
-import Commands
 import Core
 import FormattedOutput (renderColumns)
-import OptionParsers
+import Options
 import Pretty.Fields
 import Schema
 import Sql (Filter, PersistEntity, PersistField, SelectOpt(..), (==.), (||.))

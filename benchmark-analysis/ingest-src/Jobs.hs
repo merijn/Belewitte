@@ -42,7 +42,6 @@ import Schema
 import Sql (Entity(..), Key, MonadSql, Transaction, (=.))
 import qualified Sql
 import qualified Sql.Transaction as SqlTrans
-import Types (HashDigest)
 
 computeHash :: MonadIO m => FilePath -> m Hash
 computeHash path = do

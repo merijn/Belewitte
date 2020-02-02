@@ -32,7 +32,6 @@ import qualified Data.Vector as V
 import qualified Data.Vector.Generic as Generic
 import System.IO (Handle, IOMode(WriteMode), hPutStr, stdout, withFile)
 
-import Commands
 import Core
 import Options
 import PlotQuery (timePlotQuery, levelTimePlotQuery)

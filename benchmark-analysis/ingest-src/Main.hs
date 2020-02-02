@@ -22,7 +22,6 @@ import Data.Monoid ((<>))
 import qualified Data.Text as T
 import System.Exit (exitFailure)
 
-import Commands
 import qualified Commands.Add as Add
 import qualified Commands.List as List
 import qualified Commands.Query as Query
