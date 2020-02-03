@@ -219,15 +219,16 @@ FROM RunConfig
 INNER JOIN Algorithm
 ON RunConfig.algorithmId = Algorithm.id
 
-INNER JOIN VariantConfig
-ON RunConfig.algorithmId = VariantConfig.algorithmId
+INNER JOIN Graph
+ON RunConfig.datasetId = Graph.datasetId
 
 INNER JOIN Variant
 ON RunConfig.algorithmId = Variant.algorithmId
-AND VariantConfig.id = Variant.variantConfigId
+AND Graph.id = Variant.graphId
 
-INNER JOIN Graph
-ON RunConfig.datasetId = Graph.datasetId AND Graph.id = Variant.graphId
+INNER JOIN VariantConfig
+ON RunConfig.algorithmId = VariantConfig.algorithmId
+AND Variant.variantConfigId = VariantConfig.id
 
 INNER JOIN Implementation
 ON RunConfig.algorithmId = Implementation.algorithmId
