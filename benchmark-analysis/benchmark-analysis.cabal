@@ -94,6 +94,7 @@ Library
 
   Autogen-Modules:      Paths_benchmark_analysis
   Other-Modules:        Commands
+                        Commands.Debug
                         Exceptions
                         Migration
                         OptionParsers
@@ -236,6 +237,7 @@ Executable Model
                         ModelOptions
                         Train
                         Validate
+                        QueryDump
                         StepQuery
 
   Other-Extensions:     BangPatterns
@@ -265,7 +267,6 @@ Executable Plot
                         FlexibleContexts
 
   Build-Depends:        benchmark-analysis
-               ,        split ^>= 0.2.0
                ,        vector ^>= 0.12.0.1
 
 Source-Repository head

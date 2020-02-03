@@ -5,12 +5,10 @@
 {-# LANGUAGE RecordWildCards #-}
 module Main(main) where
 
-import Control.Monad (void)
 import Data.Bifunctor (first)
-import Data.Conduit (ConduitT, Void, (.|))
+import Data.Conduit ((.|))
 import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
-import qualified Data.Conduit.Text as C
 import Data.List (sortBy)
 import Data.Ord (comparing)
 import qualified Data.Map as M
@@ -19,19 +17,14 @@ import qualified Data.Text as T
 
 import Core
 import Evaluate (evaluateModel, compareImplementations, percent)
-import FieldQuery (getDistinctFieldQuery)
 import FormattedOutput (renderOutput)
 import InteractiveInput
 import Model
 import ModelOptions
-import Query
 import Schema
-import Sql ((==.))
 import qualified Sql
-import StepQuery (StepInfo, stepInfoQuery, sortStepTimings)
 import Train
 import Validate
-import VariantQuery
 
 reportModelStats :: ModelStats -> SqlM ()
 reportModelStats ModelStats{..} = renderOutput $ do
@@ -62,18 +55,6 @@ reportModelStats ModelStats{..} = renderOutput $ do
 
     sortedUnknown :: [UnknownSet]
     sortedUnknown = sortBy (flip (comparing unknownSetOccurence)) modelUnknownPreds
-
-querySink
-    :: (MonadResource m, MonadThrow m, Show a)
-    => Maybe String
-    -> FilePath
-    -> ConduitT a Void m ()
-querySink Nothing _ = void C.await
-querySink (Just suffix) name =
-    C.map showText
-    .| C.map (`T.snoc` '\n')
-    .| C.encode C.utf8
-    .| C.sinkFile (name <> suffix)
 
 main :: IO ()
 main = runSqlM commands $ \case
@@ -128,30 +109,3 @@ main = runSqlM commands $ \case
         TrainConfig{..} <- getModelTrainingConfig modelId
         dumpCppModel cppFile model trainGraphProps trainStepProps
             (implementationName <$> impls)
-
-    QueryTest{getAlgoId,getPlatformId,getCommit,getUTCTime,outputSuffix} -> do
-        algoId <- getAlgoId
-        platformId <- getPlatformId
-        commit <- getCommit
-        timestamp <- getUTCTime
-
-        graphPropQuery <- getDistinctFieldQuery GraphPropProperty
-        graphprops <- runSqlQueryConduit graphPropQuery $ C.foldMap S.singleton
-
-        stepprops <- S.fromList . map (stepPropProperty . entityVal) <$>
-            Sql.selectList [StepPropAlgorithmId ==. algoId] []
-
-        let stepQuery :: Query StepInfo
-            stepQuery =
-                stepInfoQuery algoId platformId commit graphprops stepprops timestamp
-
-            variantQuery :: Query VariantInfo
-            variantQuery = variantInfoQuery algoId platformId commit Nothing
-
-        runSqlQueryConduit stepQuery $
-            C.map sortStepTimings
-            .| querySink outputSuffix "stepInfoQuery-"
-
-        runSqlQueryConduit variantQuery $
-            C.map sortVariantTimings
-            .| querySink outputSuffix "variantInfoQuery-"

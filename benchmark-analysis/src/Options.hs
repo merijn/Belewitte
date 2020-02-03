@@ -6,6 +6,8 @@ module Options
     ( CommandRoot(..)
     , Command
     , CommandInfo(..)
+    , Compose(Compose)
+    , DebugQuery(..)
     , pattern CommandGroup
     , pattern CommandWithSubGroup
     , pattern HiddenGroup
@@ -17,6 +19,7 @@ module Options
 
 import Control.Monad.Logger (LogLevel(..))
 import Data.Char (toLower)
+import Data.Functor.Compose (Compose(..))
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
@@ -32,11 +35,14 @@ import Text.Megaparsec.Char (char)
 
 import Core
 import Commands
+import Commands.Debug (DebugQuery(..))
+import qualified Commands.Debug as Debug
 import OptionParsers
 
 data CommandRoot a = CommandRoot
     { mainHeaderDesc :: String
     , mainDesc :: String
+    , mainQueryDump :: FilePath -> SqlM ()
     , mainCommands :: [Command a]
     }
 
@@ -49,14 +55,16 @@ runCommandRoot CommandRoot{..} work progName = do
     let parsePrefs = prefs $ columns cols
 
     config <- customExecParser parsePrefs parseInfo
-    runSqlMWithOptions config work
+    runSqlMWithOptions config (either id work)
   where
+    debugCommand = Left <$> Debug.commands mainQueryDump mempty
+
     mainCommand = CommandGroup CommandInfo
         { commandName = progName
         , commandHeaderDesc = mainHeaderDesc
         , commandDesc = mainDesc
         }
-        mainCommands
+        $ map (fmap Right) mainCommands <> [debugCommand]
 
     parseInfo = info (optionParser <**> helper) helpInfo
 

@@ -10,7 +10,7 @@ module ModelOptions (ModelCommand(..), commands, runSqlM) where
 
 import Control.Applicative (optional)
 import Control.Monad.Reader (ask)
-import Data.Char (isSpace, toLower)
+import Data.Char (toLower)
 import qualified Data.Conduit.Combinators as C
 import Data.Functor.Compose (Compose(..))
 import Data.Foldable (asum)
@@ -31,6 +31,7 @@ import FieldQuery (getDistinctFieldQuery)
 import Model (Model)
 import Options
 import Query (runSqlQueryConduit)
+import QueryDump (modelQueryDump)
 import Schema
 import Sql ((==.))
 import qualified Sql
@@ -75,13 +76,6 @@ data ModelCommand
       { getModel :: SqlM (Key Algorithm, Key PredictionModel, Model)
       , cppFile :: FilePath
       }
-    | QueryTest
-      { getAlgoId :: SqlM (Key Algorithm)
-      , getPlatformId :: SqlM (Key Platform)
-      , getCommit :: SqlM CommitId
-      , getUTCTime :: SqlM UTCTime
-      , outputSuffix :: Maybe FilePath
-      }
 
 commands :: CommandRoot ModelCommand
 commands = CommandRoot
@@ -89,6 +83,7 @@ commands = CommandRoot
   , mainDesc =
         "Generate, validate, evaluate, and export Binary Decision Tree (BDT) \
         \models for predicting which implementation to use for an algorithm."
+  , mainQueryDump = modelQueryDump
   , mainCommands =
     [ SingleCommand CommandInfo
         { commandName = "train"
@@ -128,14 +123,6 @@ commands = CommandRoot
         , commandHeaderDesc = "export model to C++"
         , commandDesc = "Export BDT model to C++ file"
         } (Export <$> modelParser <*> cppFile)
-    , HiddenCommand CommandInfo
-        { commandName = "query-test"
-        , commandHeaderDesc = "check query output"
-        , commandDesc = "Dump query output to files to validate results"
-        }
-        $ QueryTest <$> algorithmIdParser <*> platformIdParser
-                    <*> commitIdParser <*> utcTimeParser
-                    <*> optional suffixParser
     ]
   }
   where
@@ -143,16 +130,6 @@ commands = CommandRoot
     cppFile = strOption . mconcat $
         [ metavar "FILE", short 'e', long "export", value "test.cpp"
         , showDefaultWith id, help "C++ file to write predictor to." ]
-
-    suffixReader :: String -> Maybe String
-    suffixReader "" = Nothing
-    suffixReader s
-        | any isSpace s = Nothing
-        | otherwise = Just s
-
-    suffixParser :: Parser String
-    suffixParser = argument (maybeReader suffixReader) . mconcat $
-        [ metavar "SUFFIX" ]
 
 defaultImplParser :: Parser (Either Int Text)
 defaultImplParser = implParser <|> pure (Right "edge-list")

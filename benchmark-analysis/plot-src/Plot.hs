@@ -9,18 +9,16 @@
 {-# LANGUAGE ViewPatterns #-}
 module Main (main) where
 
-import Control.Monad (forM, forM_, void)
+import Control.Monad (forM, forM_)
 import Control.Monad.Catch (handle)
 import Data.Bifunctor (bimap, second)
-import Data.Char (isSpace)
 import Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
+import qualified Data.Conduit.List as C (chunksOf)
 import qualified Data.Conduit.Text as C
-import Data.Foldable (toList)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 import Data.List (intersperse)
-import Data.List.Split (chunksOf)
 import Data.Maybe (catMaybes)
 import Data.Monoid (Any(..), (<>))
 import Data.Set (Set)
@@ -30,7 +28,8 @@ import qualified Data.Text.IO as T
 import Data.Vector (Vector)
 import qualified Data.Vector as V
 import qualified Data.Vector.Generic as Generic
-import System.IO (Handle, IOMode(WriteMode), hPutStr, stdout, withFile)
+import qualified Data.Vector.Storable as Storable
+import System.IO (Handle, hPutStr, stdout)
 
 import Core
 import Options
@@ -39,7 +38,7 @@ import Utils.Process (withStdin)
 import Query
 import RuntimeData (getBarPlotScript)
 import Schema
-import Sql ((==.))
+import Sql (MonadSql, SelectOpt(Asc), (==.))
 import qualified Sql
 import Utils.ImplTiming
 import Utils.Pair (Pair(..), toPair, mergePair)
@@ -89,12 +88,6 @@ data PlotOptions
       , getImplementations :: SqlM (Set Text)
       , plotConfig :: PlotConfig
       }
-    | QueryTest
-      { getAlgorithm :: SqlM (Entity Algorithm)
-      , getPlatformId :: SqlM (Key Platform)
-      , getCommit :: SqlM CommitId
-      , outputSuffix :: Maybe FilePath
-      }
 
 plotOptions :: PlotType -> Parser (PlotConfig -> PlotOptions)
 plotOptions pType =
@@ -129,6 +122,7 @@ commands :: CommandRoot PlotOptions
 commands = CommandRoot
   { mainHeaderDesc = "a tool for plotting benchmark results"
   , mainDesc = ""
+  , mainQueryDump = plotQueryDump
   , mainCommands =
     [ SingleCommand CommandInfo
         { commandName = "levels"
@@ -149,12 +143,6 @@ commands = CommandRoot
         , commandDesc = ""
         }
         $ plotOptions PlotVsOptimal <*> (plotConfig "Graph" <*> normaliseFlag)
-    , HiddenCommand CommandInfo { commandName = "query-test"
-        , commandHeaderDesc = "check query output"
-        , commandDesc = "Dump query output to files to validate results"
-        }
-        $ QueryTest <$> algorithmParser <*> platformIdParser
-                    <*> commitIdParser <*> optional suffixParser
     ]
   }
   where
@@ -171,16 +159,6 @@ commands = CommandRoot
 
     normaliseFlag :: Parser Bool
     normaliseFlag = flag False True $ mconcat [long "normalise"]
-
-    suffixReader :: String -> Maybe String
-    suffixReader "" = Nothing
-    suffixReader s
-        | any isSpace s = Nothing
-        | otherwise = Just s
-
-    suffixParser :: Parser String
-    suffixParser = argument (maybeReader suffixReader) . mconcat $
-        [ metavar "SUFFIX" ]
 
 reportData
     :: (MonadIO m, MonadLogger m, MonadThrow m)
@@ -253,23 +231,6 @@ plot PlotConfig{..} plotName query convert
     doWithHandle hnd = runSqlQueryConduit query $
         convert .| reportData hnd normalise
 
-runQueryDump
-    :: (Foldable f, Show r)
-    => Text -> Maybe String -> String -> (a -> Query r) -> f a -> SqlM ()
-runQueryDump algoName Nothing _ mkQuery coll = case toList coll of
-    (val:_) -> void $ runSqlQueryConduit (mkQuery val) await
-    _ -> logThrowM $
-        UnexpectedMissingData "No variants found for algorithm" algoName
-
-runQueryDump _ (Just suffix) name mkQuery vals =
-  withUnliftIO $ \(UnliftIO runInIO) ->
-    withFile (name <> suffix) WriteMode $ \hnd ->
-        forM_ vals $ \val -> runInIO . runSqlQueryConduit (mkQuery val) $
-            C.map showText
-            .| C.map (`T.snoc` '\n')
-            .| C.encode C.utf8
-            .| C.sinkHandle hnd
-
 nameImplementations
     :: Generic.Vector v ImplTiming
     => IntMap Text
@@ -329,24 +290,69 @@ main = runSqlM commands $ \case
                 .| C.mapM dataFromVariantInfo
                 .| C.map (second $ translatePair . fmap V.convert)
 
-  QueryTest{getAlgorithm,getPlatformId,getCommit,outputSuffix} -> do
-    Entity algoId algorithm <- getAlgorithm
-    platformId <- getPlatformId
-    commit <- getCommit
-    variantConfigs <- Sql.selectKeysList
-        [VariantConfigAlgorithmId ==. algoId]
-        [Sql.Asc VariantConfigName]
+getConfigSet :: SqlM (Set (Key Algorithm, Key Platform, CommitId))
+getConfigSet = runConduit $
+    Sql.selectSource [] [] .| C.foldMap (S.singleton . toTuple)
+  where
+    toTuple :: Entity RunConfig -> (Key Algorithm, Key Platform, CommitId)
+    toTuple (Entity _ RunConfig{..}) =
+        (runConfigAlgorithmId, runConfigPlatformId, runConfigAlgorithmVersion)
 
-    variants <- fmap concat . forM variantConfigs $ \cfgId ->
-        Sql.selectKeysList
-            [VariantVariantConfigId ==. cfgId]
-            [Sql.Asc VariantGraphId]
+toTimeQueries
+    :: (Key Algorithm, Key Platform, CommitId)
+    -> ConduitT (Key Algorithm, Key Platform, CommitId)
+                (Query (Text, ( Storable.Vector ImplTiming
+                              , Storable.Vector ImplTiming
+                              )
+                       )
+                )
+                SqlM
+                ()
+toTimeQueries (algoId, platformId, commitId) =
+  Sql.selectKeys [VariantAlgorithmId ==. algoId] [Asc VariantId]
+  .| C.chunksOf 500
+  .| C.map (timePlotQuery algoId platformId commitId . S.fromList)
 
-    let algoName = getAlgoName algorithm
+toLevelTimeQueries
+    :: (Key Platform, CommitId)
+    -> ConduitT (Key Platform, CommitId)
+                (Query (Int64, Storable.Vector ImplTiming))
+                SqlM
+                ()
+toLevelTimeQueries (platformId, commitId) =
+  Sql.selectKeys [] [Asc VariantId]
+  .| C.map (levelTimePlotQuery platformId commitId)
 
-        chunkedVariants = map S.fromList $ chunksOf 500 variants
-        timeQuery = timePlotQuery algoId platformId commit
-        levelTimeQuery = levelTimePlotQuery platformId commit
+plotQueryDump :: FilePath -> SqlM ()
+plotQueryDump outputSuffix = do
+    configSet <- getConfigSet
 
-    runQueryDump algoName outputSuffix "timeQuery-" timeQuery chunkedVariants
-    runQueryDump algoName outputSuffix "levelTimeQuery-" levelTimeQuery variants
+    runConduit $
+        C.yieldMany configSet
+        .| C.awaitForever toTimeQueries
+        .> streamQuery
+        .| querySink "timeQuery-"
+
+    runConduit $
+        C.yieldMany (S.map stripAlgorithm configSet)
+        .| C.awaitForever toLevelTimeQueries
+        .> streamQuery
+        .| querySink "levelTimeQuery-"
+  where
+    stripAlgorithm
+        :: (Key Algorithm, Key Platform, CommitId) -> (Key Platform, CommitId)
+    stripAlgorithm (_, platformId, commitId) = (platformId, commitId)
+
+    streamQuery
+        :: (MonadExplain m, MonadLogger m, MonadSql m, MonadThrow m)
+        => Query r -> ConduitT i r m ()
+    streamQuery query = runSqlQuery query (C.map id)
+
+    querySink
+        :: (MonadResource m, MonadThrow m, Show a)
+        => FilePath -> ConduitT a Void m ()
+    querySink  name =
+        C.map showText
+        .| C.map (`T.snoc` '\n')
+        .| C.encode C.utf8
+        .| C.sinkFile (name <> outputSuffix)

@@ -12,7 +12,6 @@ import BroadcastChan.Conduit
 import Control.Exception (SomeException)
 import Control.Monad (unless, void)
 import Control.Monad.Trans.Maybe (MaybeT(..))
-import Data.Char (isSpace)
 import Data.Conduit (ConduitT, Void, ZipConduit(..), (.|), runConduit)
 import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
@@ -39,7 +38,7 @@ import ProcessPool
 import Query (Query, runSqlQuery, runSqlQueryConduit)
 import qualified RuntimeData
 import Schema
-import Sql (Entity(..), MonadSql, Transaction, (==.), (||.))
+import Sql (Entity(..), MonadSql, SelectOpt(Asc), Transaction, (==.), (||.))
 import qualified Sql
 import qualified Sql.Transaction as SqlTrans
 
@@ -53,6 +52,7 @@ commands = CommandRoot
         "Register GPUs, algorithms, algorithm implementations, and graphs in \
         \an SQLite database of configurations. Automatically run missing \
         \configurations and store all results in the database."
+  , mainQueryDump = ingestQueryDump
   , mainCommands =
     [ Add.commands
     , lift <$> Set.commands
@@ -79,24 +79,8 @@ commands = CommandRoot
         , commandDesc = "Import results of external implementations"
         }
         $ pure importResults
-    , HiddenCommand CommandInfo
-        { commandName = "query-test"
-        , commandHeaderDesc = "check query output"
-        , commandDesc = "Dump query output to files to validate results"
-        }
-        $ queryTest <$> (suffixParser <|> pure Nothing)
     ]
   }
-  where
-    suffixReader :: String -> Maybe (Maybe String)
-    suffixReader "" = Nothing
-    suffixReader s
-        | any isSpace s = Nothing
-        | otherwise = Just $ Just s
-
-    suffixParser :: Parser (Maybe String)
-    suffixParser = argument (maybeReader suffixReader) . mconcat $
-        [ metavar "SUFFIX" ]
 
 -- Error out if C++ code hasn't been compiled
 checkCxxCompiled :: SqlM ()
@@ -240,35 +224,38 @@ importResults = do
         SqlTrans.insert_ $
           ExternalTimer platId varId implId algoId name minTime avgTime maxTime stddev
 
-queryTest :: Maybe FilePath -> Input SqlM ()
-queryTest outputSuffix = lift $ do
+ingestQueryDump :: FilePath -> SqlM ()
+ingestQueryDump outputSuffix = do
     runConduit $
-        Sql.selectKeys [] []
-        .> streamQuery (querySink "missingQuery-") . missingBenchmarkQuery
+        Sql.selectKeys [] [Asc RunConfigId]
+        .> streamQuery . missingBenchmarkQuery
+        .| querySink "missingQuery-"
 
     let querySink1 = ZipConduit $ querySink "validationVariantQuery-"
         querySink2 = ZipConduit $
             C.map validationRunQuery
-            .> (\f -> Sql.selectKeys [] [] .| C.map f)
-            .> streamQuery (querySink "validationRunQuery-")
+            .> C.fuse (Sql.selectKeys [] [Asc PlatformId]) . C.map
+            .> streamQuery
+            .| querySink "validationRunQuery-"
 
         finalSink = getZipConduit $ mappend <$> querySink1 <*> querySink2
 
     runConduit $
-        Sql.selectKeys [] []
-        .> streamQuery (C.map jobValue .| finalSink) . validationVariantQuery
+        Sql.selectKeys [] [Asc PlatformId]
+        .> streamQuery . validationVariantQuery
+        .| C.map jobValue
+        .| finalSink
   where
     streamQuery
         :: (MonadExplain m, MonadLogger m, MonadSql m, MonadThrow m)
-        => ConduitT r Void m () -> Query r -> ConduitT i Void m ()
-    streamQuery sink query = runSqlQuery query sink
+        => Query r -> ConduitT i r m ()
+    streamQuery query = runSqlQuery query (C.map id)
 
     querySink
         :: (MonadResource m, MonadThrow m, Show a)
         => String -> ConduitT a Void m ()
-    querySink name = case outputSuffix of
-        Nothing -> void C.await
-        Just suffix -> C.map showText
-            .| C.map (`T.snoc` '\n')
-            .| C.encode C.utf8
-            .| C.sinkFile (name <> suffix)
+    querySink name =
+        C.map showText
+        .| C.map (`T.snoc` '\n')
+        .| C.encode C.utf8
+        .| C.sinkFile (name <> outputSuffix)
