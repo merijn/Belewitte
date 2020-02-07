@@ -11,6 +11,7 @@ module Sql.Core
     , Transaction(Transaction)
     , abortTransaction
     , runTransaction
+    , runReadOnlyTransaction
     , runTransactionWithoutForeignKeys
     , tryAbortableTransaction
     , conduitQuery
@@ -63,7 +64,7 @@ import Control.Monad.Reader
     (MonadReader, ReaderT, asks, runReaderT, withReaderT)
 import Control.Monad.Trans (MonadTrans, lift)
 import Control.Monad.Trans.Resource (MonadResource, ResourceT, release)
-import Data.Acquire (Acquire, allocateAcquire)
+import Data.Acquire (Acquire, allocateAcquire, mkAcquire)
 import Data.Conduit (ConduitT)
 import Data.Pool (Pool)
 import Data.Text (Text)
@@ -136,6 +137,12 @@ newtype Transaction m r = Transaction (ReaderT (RawSqlite SqlBackend) m r)
 type SqlRecord rec = (PersistRecordBackend rec (RawSqlite SqlBackend))
 type SqlField rec field = (PersistField field, SqlRecord rec)
 
+readOnlyConnection :: RawSqlite SqlBackend -> Acquire (RawSqlite SqlBackend)
+readOnlyConnection conn = mkAcquire mkReadOnly mkReadWrite
+  where
+    mkReadOnly = conn <$ setPragmaConn "query_only" (1 :: Int) conn
+    mkReadWrite _ = setPragmaConn "query_only" (0 :: Int) conn
+
 abortTransaction :: MonadThrow m => Text -> Transaction m r
 abortTransaction txt = Transaction . throwM $ AbortTransaction txt
 
@@ -148,6 +155,11 @@ runRawTransaction getConn (Transaction transaction) = do
 
 runTransaction :: MonadSql m => Transaction m r -> m r
 runTransaction = runRawTransaction getConnFromPool
+
+runReadOnlyTransaction :: MonadSql m => Transaction m r -> m r
+runReadOnlyTransaction = runRawTransaction getReadOnlyConn
+  where
+    getReadOnlyConn = (>>= readOnlyConnection) <$> getConnFromPool
 
 runTransactionWithoutForeignKeys :: MonadSql m => Transaction m r -> m r
 runTransactionWithoutForeignKeys =
@@ -192,7 +204,7 @@ conduitQuery
 conduitQuery query args = do
     acquireConn <- getConnFromPool
     return $ do
-        conn <- acquireConn
+        conn <- acquireConn >>= readOnlyConnection
         join $ runReaderT (Sqlite.rawQueryRes query args) conn
 
 querySingleValue

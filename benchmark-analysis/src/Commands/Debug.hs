@@ -8,13 +8,16 @@ import qualified Data.Conduit.Combinators as C
 import Data.Functor.Compose (Compose(..))
 import Data.Map (Map)
 import qualified Data.Map as M
+import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import Numeric (showGFloat)
 
 import Commands
 import Core
+import InteractiveInput
 import OptionParsers
 import Query (Query(..), explainSqlQuery, runSqlQueryConduit)
+import Schema (PersistValue)
 import VariantQuery (VariantInfo, variantInfoQuery)
 
 data DebugQuery where
@@ -35,6 +38,26 @@ commands dumpCommand queryMap = HiddenGroup CommandInfo
         , commandDesc = "Dump the query results to files"
         }
         $ dumpCommand <$> suffixParser
+    , CommandGroup CommandInfo
+        { commandName = "interactive"
+        , commandHeaderDesc = "interactive queries from commandline"
+        , commandDesc = "Interactively read queries from commandline"
+        }
+        [ SingleCommand CommandInfo
+            { commandName = "explain"
+            , commandHeaderDesc = "print query explanation to stdout"
+            , commandDesc =
+                "Read query from commandline and print explanation to stdout"
+            }
+            $ pure (runInput explainQuery)
+        , SingleCommand CommandInfo
+            { commandName = "query"
+            , commandHeaderDesc = "print query results to stdout"
+            , commandDesc =
+                "Read query from commandline and print results to stdout"
+            }
+            $ pure (runInput testQuery)
+        ]
     , CommandGroup CommandInfo
         { commandName = "explain"
         , commandHeaderDesc = "show the query plan for the named query"
@@ -117,3 +140,33 @@ timeQueryCommand name parser = SingleCommand CommandInfo
         query <- getQuery
         (timing, _) <- withTime $ runSqlQueryConduit query C.await
         liftIO . putStrLn $ "Query took: " ++ showGFloat (Just 3) timing "s"
+
+toQuery :: [Text] -> Maybe (Query [PersistValue])
+toQuery [] = Nothing
+toQuery sqlLines = Just $ Query
+    { queryName = "Interactive"
+    , commonTableExpressions = []
+    , params = []
+    , convert = return
+    , queryText = T.unlines sqlLines
+    }
+
+testQuery :: Input SqlM ()
+testQuery = do
+    mQuery <- toQuery <$> getManyInteractive textInput "SQL Query"
+    case mQuery of
+        Nothing -> return ()
+        Just query -> do
+            lift . runSqlQueryConduit query $ C.mapM_ (liftIO . print)
+            liftIO $ putStrLn ""
+            testQuery
+
+explainQuery :: Input SqlM ()
+explainQuery = do
+    mQuery <- toQuery <$> getManyInteractive textInput "SQL Query"
+    case mQuery of
+        Nothing -> return ()
+        Just query -> do
+            explanation <- lift $ explainSqlQuery query
+            liftIO $ T.putStrLn explanation
+            explainQuery
