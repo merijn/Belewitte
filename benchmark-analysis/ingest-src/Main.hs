@@ -17,6 +17,8 @@ import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.Text as C
 import Data.Foldable (asum)
+import Data.Map (Map)
+import qualified Data.Map as M
 import Data.Monoid ((<>))
 import qualified Data.Text as T
 import System.Exit (exitFailure)
@@ -53,6 +55,7 @@ commands = CommandRoot
         \an SQLite database of configurations. Automatically run missing \
         \configurations and store all results in the database."
   , mainQueryDump = ingestQueryDump
+  , mainQueryMap = ingestQueryMap
   , mainCommands =
     [ Add.commands
     , lift <$> Set.commands
@@ -259,3 +262,18 @@ ingestQueryDump outputSuffix = do
         .| C.map (`T.snoc` '\n')
         .| C.encode C.utf8
         .| C.sinkFile (name <> outputSuffix)
+
+ingestQueryMap :: Map String (Parser DebugQuery)
+ingestQueryMap = M.fromList
+    [ nameDebugQuery "missingBenchmarkQuery" $
+        missingBenchmarkQuery <$> Compose runconfigIdParser
+    , nameDebugQuery "validationVariantQuery" $
+        validationVariantQuery <$> Compose platformIdParser
+    , nameDebugQuery "validationRunQuery" $
+        validationRunQuery <$> validationVariantParser
+                           <*> Compose platformIdParser
+    ]
+  where
+    validationVariantParser = ValidationVariant
+        <$> Compose algorithmIdParser <*> Compose variantIdParser
+        <*> Compose commitIdParser <*> pure 0 <*> pure []

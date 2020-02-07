@@ -123,6 +123,7 @@ commands = CommandRoot
   { mainHeaderDesc = "a tool for plotting benchmark results"
   , mainDesc = ""
   , mainQueryDump = plotQueryDump
+  , mainQueryMap = mempty -- FIXME
   , mainCommands =
     [ SingleCommand CommandInfo
         { commandName = "levels"

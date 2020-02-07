@@ -13,6 +13,7 @@ module Options
     , pattern HiddenGroup
     , pattern HiddenCommand
     , pattern SingleCommand
+    , nameDebugQuery
     , runSqlM
     , module OptionParsers
     ) where
@@ -38,13 +39,22 @@ import Commands
 import Commands.Debug (DebugQuery(..))
 import qualified Commands.Debug as Debug
 import OptionParsers
+import Query (Query)
 
 data CommandRoot a = CommandRoot
     { mainHeaderDesc :: String
     , mainDesc :: String
     , mainQueryDump :: FilePath -> SqlM ()
+    , mainQueryMap :: Map String (Parser DebugQuery)
     , mainCommands :: [Command a]
     }
+
+nameDebugQuery
+    :: Show v
+    => String
+    -> Compose Parser SqlM (Query v)
+    -> (String, Parser DebugQuery)
+nameDebugQuery name (Compose queryParser) = (name, DebugQuery <$> queryParser)
 
 runCommandRoot :: CommandRoot a -> (a -> SqlM ()) -> String -> IO ()
 runCommandRoot CommandRoot{..} work progName = do
@@ -57,7 +67,7 @@ runCommandRoot CommandRoot{..} work progName = do
     config <- customExecParser parsePrefs parseInfo
     runSqlMWithOptions config (either id work)
   where
-    debugCommand = Left <$> Debug.commands mainQueryDump mempty
+    debugCommand = Left <$> Debug.commands mainQueryDump mainQueryMap
 
     mainCommand = CommandGroup CommandInfo
         { commandName = progName

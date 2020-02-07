@@ -84,6 +84,7 @@ commands = CommandRoot
         "Generate, validate, evaluate, and export Binary Decision Tree (BDT) \
         \models for predicting which implementation to use for an algorithm."
   , mainQueryDump = modelQueryDump
+  , mainQueryMap = mempty -- FIXME
   , mainCommands =
     [ SingleCommand CommandInfo
         { commandName = "train"
