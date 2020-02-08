@@ -2,10 +2,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Commands.Debug (DebugQuery(..), commands) where
 
+import Data.ByteString.Base64 (encodeBase64)
 import Data.Char (isSpace)
 import Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
 import Data.Functor.Compose (Compose(..))
+import Data.List (intersperse)
 import Data.Map (Map)
 import qualified Data.Map as M
 import qualified Data.Text as T
@@ -17,7 +19,7 @@ import Core
 import InteractiveInput
 import OptionParsers
 import Query (Query(..), explainSqlQuery, runSqlQueryConduit)
-import Schema (PersistValue)
+import Schema (PersistValue(..))
 import VariantQuery (VariantInfo, variantInfoQuery)
 
 data DebugQuery where
@@ -157,9 +159,37 @@ testQuery = do
     case mQuery of
         Nothing -> return ()
         Just query -> do
-            lift . runSqlQueryConduit query $ C.mapM_ (liftIO . print)
+            lift . runSqlQueryConduit query $ C.mapM_ printRow
             liftIO $ putStrLn ""
             testQuery
+  where
+    printRow :: MonadIO m => [PersistValue] -> m ()
+    printRow = liftIO . putStrLn . renderSeparatedList " | " persistValueToString
+
+    renderSeparatedList :: String -> (a -> String) -> [a] -> String
+    renderSeparatedList sep f =
+        concat . intersperse sep . map f
+
+    renderPair :: (Text, PersistValue) -> String
+    renderPair (name, val) = T.unpack name ++ " = " ++ persistValueToString val
+
+    persistValueToString :: PersistValue -> String
+    persistValueToString v = case v of
+        PersistText txt -> T.unpack txt
+        PersistByteString bs -> T.unpack $ encodeBase64 bs
+        PersistInt64 i -> show i
+        PersistDouble d -> show d
+        PersistRational r -> show r
+        PersistBool b -> show b
+        PersistDay d -> show d
+        PersistTimeOfDay time -> show time
+        PersistUTCTime time -> show time
+        PersistNull -> "NULL"
+        PersistList l -> renderSeparatedList ", " persistValueToString l
+        PersistMap m -> renderSeparatedList ", " renderPair m
+        PersistObjectId bs -> T.unpack $ encodeBase64 bs
+        PersistArray l -> renderSeparatedList ", " persistValueToString l
+        PersistDbSpecific bs -> T.unpack $ encodeBase64 bs
 
 explainQuery :: Input SqlM ()
 explainQuery = do

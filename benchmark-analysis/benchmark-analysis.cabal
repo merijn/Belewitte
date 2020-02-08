@@ -170,6 +170,7 @@ Library
 
   Build-Depends:        SQLiteExts
                ,        bytestring
+               ,        base64 ^>= 0.4.1
                ,        binary ^>= 0.8.7
                ,        clock ^>= 0.8
                ,        cryptonite ^>= 0.26
