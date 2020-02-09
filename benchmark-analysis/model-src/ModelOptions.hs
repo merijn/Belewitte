@@ -255,7 +255,7 @@ compareParser = reportParser defaultRelativeToValues implTypes
 
 type SqlParser = Compose Parser (ReaderT (Key Algorithm) SqlM)
 
-trainSeedParser :: Parser Int
+trainSeedParser :: Parser Int64
 trainSeedParser = option auto . mconcat $
     [ metavar "N", short 's', long "seed", value 42, showDefault
     , help "Seed for training set randomisation" ]

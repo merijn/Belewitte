@@ -69,7 +69,7 @@ data TrainingConfig = TrainConfig
     , trainGraphProps :: Set Text
     , trainStepProps :: Set Text
     , trainFraction :: Double
-    , trainSeed :: Int
+    , trainSeed :: Int64
     , trainTimestamp :: UTCTime
     }
 

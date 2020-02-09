@@ -35,6 +35,7 @@ module Schema
     , getAlgoName
     , getImplName
     , getExternalName
+    , mkPercentage
     , toImplNames
     , schemaVersion
     , currentSchema

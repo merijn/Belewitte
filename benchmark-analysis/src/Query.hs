@@ -108,7 +108,7 @@ explainSqlQuery originalQuery = runConduit $
 
     explainQuery = originalQuery { convert = explain }
 
-randomizeQuery :: Int -> Int -> Query r -> (Query r, Query r)
+randomizeQuery :: Int64 -> Int -> Query r -> (Query r, Query r)
 randomizeQuery seed trainingSize originalQuery = (training, validation)
   where
     randomizedQuery =

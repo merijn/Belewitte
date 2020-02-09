@@ -39,7 +39,7 @@ PredictionModel
     description Text Maybe
     model Model
     trainFraction Double
-    trainSeed Int
+    trainSeed Int64
     totalUnknownCount Int
     timestamp UTCTime
     UniqModel name
