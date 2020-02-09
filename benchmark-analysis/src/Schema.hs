@@ -10,6 +10,7 @@ module Schema
     , HashDigest
     , ImplType(..)
     , Model
+    , Percentage(..)
     , PersistValue(..)
     , toPersistValue
     , Text
