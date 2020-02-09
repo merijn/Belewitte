@@ -120,6 +120,16 @@ foreign import ccall "sqlite3.h sqlite3_create_function"
               -> FunPtr (Ptr () -> IO ())
               -> IO CInt
 
+foreign import ccall "sqlite3.h sqlite3_create_window_function"
+    createWindowFun
+        :: Ptr () -> CString -> CInt -> CInt -> Ptr ()
+        -> FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
+        -> FunPtr (Ptr () -> IO ())
+        -> FunPtr (Ptr () -> IO ())
+        -> FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
+        -> FunPtr (Ptr () -> IO ())
+        -> IO CInt
+
 foreign import ccall "sqlite3.h &sqlite3_series_init"
     sqlite3_series_init
         :: FunPtr (Ptr () -> Ptr CString -> Ptr () -> IO CInt)
@@ -172,3 +182,24 @@ createSqlAggregate
     -> Ptr ()
     -> m ()
 createSqlAggregate nArgs name = createSqliteFun nArgs name nullFunPtr
+
+createSqlWindow
+    :: (MonadIO m, MonadLogger m, MonadThrow m)
+    => CInt
+    -> String
+    -> FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
+    -> FunPtr (Ptr () -> IO ())
+    -> FunPtr (Ptr () -> IO ())
+    -> FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
+    -> Ptr ()
+    -> m ()
+createSqlWindow nArgs strName sqlStep sqlFinal sqlValue sqlInverse sqlPtr = do
+    result <- liftIO . withCString strName $ \name -> do
+        createWindowFun sqlPtr name nArgs sqliteAny nullPtr sqlStep sqlFinal sqlValue sqlInverse nullFunPtr
+    when (result /= sqliteOk) $ do
+        bs <- liftIO $ unpackError sqlPtr
+        case decodeUtf8' bs of
+            Left exc -> logThrowM $ PrettyUnicodeException exc
+            Right txt -> logThrowM $ SqliteErrorCode result txt
+  where
+    unpackError = getExtendedError >=> getErrorString >=> BS.packCString
