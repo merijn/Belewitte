@@ -54,6 +54,8 @@ registerSqlFunctions sqlitePtr = mapM_ ($sqlitePtr)
         check_unique_step check_unique_finalise
     , createSqlAggregate (-1) "min_key"
         min_key_step min_key_finalise
+    , createSqlWindow 4 "random_sample" random_sample_step
+        random_sample_finalise random_sample_value random_sample_inverse
     ]
 
 wrapSqliteExceptions :: (MonadLogger m, MonadCatch m) => m r -> m r
@@ -100,6 +102,18 @@ foreign import ccall "sqlite-functions.h &min_key_step"
 
 foreign import ccall "sqlite-functions.h &min_key_finalise"
     min_key_finalise :: FunPtr (Ptr () -> IO ())
+
+foreign import ccall "sqlite-functions.h &random_sample_step"
+    random_sample_step :: FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
+
+foreign import ccall "sqlite-functions.h &random_sample_finalise"
+    random_sample_finalise :: FunPtr (Ptr () -> IO ())
+
+foreign import ccall "sqlite-functions.h &random_sample_value"
+    random_sample_value :: FunPtr (Ptr () -> IO ())
+
+foreign import ccall "sqlite-functions.h &random_sample_inverse"
+    random_sample_inverse :: FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
 
 foreign import capi "sqlite3.h value SQLITE_ANY"
     sqliteAny :: CInt

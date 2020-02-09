@@ -141,6 +141,8 @@ Library
   C-Sources:            cbits/check_unique.c
                         cbits/key_value_vector.c
                         cbits/min_key.c
+                        cbits/pcg_basic.c
+                        cbits/random_sample.c
                         cbits/sqlite-functions.c
 
   CC-Options:           -Wall -Wextra -pedantic -std=c11 -g -O3 -DSQLITE_CORE

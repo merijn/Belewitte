@@ -16,3 +16,8 @@ bool compare_values(int*, sqlite3_value*, sqlite3_value*);
 
 void min_key_step(sqlite3_context *, int nArgs, sqlite3_value **);
 void min_key_finalise(sqlite3_context *);
+
+void random_sample_step(sqlite3_context *, int nArgs, sqlite3_value **);
+void random_sample_finalise(sqlite3_context *);
+void random_sample_value(sqlite3_context *);
+void random_sample_inverse(sqlite3_context *, int nArgs, sqlite3_value **);
