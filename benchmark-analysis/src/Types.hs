@@ -1,8 +1,12 @@
 {-# OPTIONS_GHC -fno-prof-auto #-}
+{-# LANGUAGE DeriveLift #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MonadFailDesugaring #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 module Types
     ( CommitId(..)
     , HashDigest
@@ -11,16 +15,19 @@ module Types
     , Percentage
     , getPercentage
     , mkPercentage
+    , validRational
     ) where
 
 import Crypto.Hash (Digest, MD5, digestFromByteString)
+import Data.Bifunctor (first)
 import Data.ByteString (ByteString)
 import Data.Maybe (fromJust)
 import Data.Proxy (Proxy(Proxy))
-import Data.Text (Text, unpack)
+import Data.Text (Text, pack, unpack)
 import Database.Persist.Class (PersistField(..))
 import Database.Persist.TH
 import Database.Persist.Sql (PersistFieldSql(..))
+import ValidLiterals
 
 data ImplType = Builtin | Core | Derived
     deriving (Bounded, Enum, Eq, Ord, Read, Show)
@@ -42,22 +49,26 @@ instance Show CommitId where
     show (CommitId hash) = unpack hash
 
 newtype Percentage = Percentage { getPercentage :: Double}
-    deriving (Read, Eq, Ord)
+    deriving (Read, Eq, Ord, Lift)
 
 mkPercentage :: Double -> Maybe Percentage
-mkPercentage d
-    | d >= 0 && d <= 1 = Just $ Percentage d
-    | otherwise = Nothing
+mkPercentage = fromLiteral
+
+instance Validate Double Percentage where
+    fromLiteralWithError d
+        | d < 0 = Left "Percentages can't be smaller than 0"
+        | d > 1 = Left "Percentages can't be larger than 1"
+        | otherwise = Right . Percentage $ d
+
+instance Validate Rational Percentage where
+    fromLiteralWithError d = fromLiteralWithError (fromRational d :: Double)
 
 instance PersistField Percentage where
     toPersistValue = toPersistValue . getPercentage
     fromPersistValue val = fromPersistValue val >>= toPercentage
       where
         toPercentage :: Double -> Either Text Percentage
-        toPercentage d
-            | d < 0 = Left "Percentages can't be smaller than 0"
-            | d > 1 = Left "Percentages can't be larger than 1"
-            | otherwise = Right $ Percentage d
+        toPercentage = first pack . fromLiteralWithError
 
 instance PersistFieldSql Percentage where
     sqlType _ = sqlType (Proxy :: Proxy Double)

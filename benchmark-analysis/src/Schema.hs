@@ -41,6 +41,7 @@ module Schema
     , currentSchema
     , updateSchemaToVersion
     , updateIndicesToVersion
+    , validRational
     ) where
 
 import Data.ByteString (ByteString)
