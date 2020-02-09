@@ -1,4 +1,3 @@
-#include <stdio.h>
 #include "pcg_basic.h"
 #include "sqlite-functions.h"
 
@@ -6,6 +5,7 @@ struct aggregate
 {
     int64_t selectCount;
     int64_t remainingCount;
+    bool invert;
     pcg32_random_t pcg_state;
 };
 
@@ -19,7 +19,7 @@ sample_stream(struct aggregate *data)
 
     data->remainingCount--;
 
-    return keep;
+    return keep != data->invert;
 }
 
 static void
@@ -51,11 +51,27 @@ random_sample_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
     }
 
     if (!data->pcg_state.inc) {
-        int64_t seed = sqlite3_value_int64(args[0]);
-        int64_t sequence = sqlite3_value_int64(args[1]);
+        int64_t sequence = sqlite3_value_int64(args[0]);
+        int64_t seed = sqlite3_value_int64(args[1]);
 
-        data->selectCount = sqlite3_value_int64(args[2]);
+        data->invert = sqlite3_value_int64(args[2]);
         data->remainingCount = sqlite3_value_int64(args[3]);
+        if (sqlite3_value_type(args[4]) == SQLITE_FLOAT) {
+            double percentage = sqlite3_value_double(args[4]);
+            if (percentage > 1.0) {
+                sqlite3_result_error(ctxt,
+                        "Selection percentage can't be more than 100%!", -1);
+                return;
+            } else if (percentage < 0.0) {
+                sqlite3_result_error(ctxt,
+                        "Selection percentage can't be less than 0%!", -1);
+                return;
+            }
+
+            data->selectCount = percentage * data->remainingCount;
+        } else {
+            data->selectCount = sqlite3_value_int64(args[4]);
+        }
 
         pcg32_srandom_r(&data->pcg_state, seed, sequence);
     }
