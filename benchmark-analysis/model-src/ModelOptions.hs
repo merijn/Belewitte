@@ -1,3 +1,4 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -35,6 +36,7 @@ import QueryDump (modelQueryDump)
 import Schema
 import Sql ((==.))
 import qualified Sql
+import StepQuery (stepInfoQuery)
 import Train (TrainingConfig(..))
 
 readProps :: MonadIO m => FilePath -> m (Set Text)
@@ -84,7 +86,7 @@ commands = CommandRoot
         "Generate, validate, evaluate, and export Binary Decision Tree (BDT) \
         \models for predicting which implementation to use for an algorithm."
   , mainQueryDump = modelQueryDump
-  , mainQueryMap = mempty -- FIXME
+  , mainQueryMap = modelQueryMap
   , mainCommands =
     [ SingleCommand CommandInfo
         { commandName = "train"
@@ -131,6 +133,29 @@ commands = CommandRoot
     cppFile = strOption . mconcat $
         [ metavar "FILE", short 'e', long "export", value "test.cpp"
         , showDefaultWith id, help "C++ file to write predictor to." ]
+
+modelQueryMap :: Map String (Parser DebugQuery)
+modelQueryMap = M.fromList
+    [ nameDebugQuery "stepInfoQuery" $ Compose $ do
+        getAlgoId <- algorithmIdParser
+        getPlatformId <- platformIdParser
+        getCommitId <- commitIdParser
+        getUtcTime <- utcTimeParser
+        pure $ do
+            algoId <- getAlgoId
+            stepInfoQuery algoId <$> getPlatformId <*> getCommitId
+                                 <*> graphProps <*> stepProps algoId
+                                 <*> getUtcTime
+    ]
+  where
+    graphProps :: SqlM (Set Text)
+    graphProps = do
+        graphPropQuery <- getDistinctFieldQuery GraphPropProperty
+        runSqlQueryConduit graphPropQuery $ C.foldMap S.singleton
+
+    stepProps :: Key Algorithm -> SqlM (Set Text)
+    stepProps algoId = S.fromList . map (stepPropProperty . entityVal) <$>
+        Sql.selectList [StepPropAlgorithmId ==. algoId] []
 
 defaultImplParser :: Parser (Either Int Text)
 defaultImplParser = implParser <|> pure (Right "edge-list")
@@ -230,23 +255,25 @@ compareParser = reportParser defaultRelativeToValues implTypes
 
 type SqlParser = Compose Parser (ReaderT (Key Algorithm) SqlM)
 
+trainSeedParser :: Parser Int
+trainSeedParser = option auto . mconcat $
+    [ metavar "N", short 's', long "seed", value 42, showDefault
+    , help "Seed for training set randomisation" ]
+
+trainFractionParser :: Parser Double
+trainFractionParser = option auto . mconcat $
+    [ metavar "PERCENT", short 'p', long "percent", value 0.8, showDefault
+    , help "Training set as percentage of data." ]
+
 trainingConfig :: Parser (Key Algorithm -> SqlM TrainingConfig)
 trainingConfig = fmap runReaderT . getCompose $
     TrainConfig <$> Compose (lift <$> commitIdParser)
                 <*> props "graph" gatherGraphProps
                 <*> props "step" gatherStepProps
-                <*> trainFract
-                <*> seedOpt
+                <*> Compose (pure <$> trainFractionParser)
+                <*> Compose (pure <$> trainSeedParser)
                 <*> Compose (lift <$> utcTimeParser)
   where
-    seedOpt = Compose . fmap pure . option auto . mconcat $
-        [ metavar "N", short 's', long "seed", value 42, showDefault
-        , help "Seed for training set randomisation" ]
-
-    trainFract = Compose . fmap pure . option auto . mconcat $
-        [ metavar "PERCENT", short 'p', long "percent", value 0.8, showDefault
-        , help "Training set as percentage of data." ]
-
     props :: String -> SqlParser (Set Text) -> SqlParser (Set Text)
     props name gather = asum
         [keepFilter gather name, dropFilter gather name, gather]
