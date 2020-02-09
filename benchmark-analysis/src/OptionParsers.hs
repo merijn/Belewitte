@@ -8,6 +8,7 @@ module OptionParsers
     , commitIdParser
     , datasetIdParser
     , datasetParser
+    , percentageParser
     , platformIdParser
     , platformParser
     , runconfigIdParser
@@ -41,6 +42,7 @@ import qualified Options.Applicative.Help as Help
 import Text.Megaparsec (Parsec, parseMaybe, sepBy1, try)
 import Text.Megaparsec.Char (char)
 import Text.Megaparsec.Char.Lexer (decimal)
+import Text.Read (readMaybe)
 
 import Core
 import FieldQuery (getDistinctFieldLikeQuery)
@@ -96,6 +98,12 @@ datasetParser = queryDataset <$> datasetOpt
     queryDataset (Right n) = Sql.validateEntity "Dataset" n
     queryDataset (Left name) = Sql.validateUniqEntity "Dataset" $
         UniqDataset name
+
+percentageParser :: [Mod OptionFields Percentage] -> Parser Percentage
+percentageParser = option (maybeReader percentReader) . mconcat
+  where
+    percentReader :: String -> Maybe Percentage
+    percentReader s = readMaybe s >>= mkPercentage
 
 platformIdParser :: Parser (SqlM (Key Platform))
 platformIdParser = fmap entityKey <$> platformParser
