@@ -5,6 +5,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
 module ModelOptions (ModelCommand(..), commands, runSqlM) where
@@ -36,8 +37,8 @@ import QueryDump (modelQueryDump)
 import Schema
 import Sql ((==.))
 import qualified Sql
-import StepQuery (stepInfoQuery)
-import Train (TrainingConfig(..))
+import StepQuery (QueryMode, StepInfoConfig(..), stepInfoQuery)
+import qualified StepQuery
 
 readProps :: MonadIO m => FilePath -> m (Set Text)
 readProps = liftIO . fmap (S.fromList . T.lines) . T.readFile
@@ -54,7 +55,7 @@ dropProps input db
 
 data ModelCommand
     = Train
-      { getConfig :: Key Algorithm -> SqlM TrainingConfig }
+      { getConfig :: Key Algorithm -> SqlM StepInfoConfig }
     | QueryModel
       { getModel :: SqlM (Key Algorithm, Key PredictionModel, Model) }
     | Validate
@@ -141,13 +142,36 @@ modelQueryMap = M.fromList
         getPlatformId <- platformIdParser
         getCommitId <- commitIdParser
         getUtcTime <- utcTimeParser
+        queryMode <- queryModeParser
+        trainSeed <- trainSeedParser
         pure $ do
             algoId <- getAlgoId
-            stepInfoQuery algoId <$> getPlatformId <*> getCommitId
-                                 <*> graphProps <*> stepProps algoId
-                                 <*> getUtcTime
+            cfg <- StepInfoConfig queryMode
+                    <$> getCommitId <*> graphProps <*> stepProps algoId
+                    <*> pure trainSeed <*> pure hundredPercent
+                    <*> pure hundredPercent <*> pure hundredPercent
+                    <*> getUtcTime
+
+            stepInfoQuery algoId <$> getPlatformId <*> pure cfg
     ]
   where
+    hundredPercent :: Percentage
+    hundredPercent = $$(validRational 1)
+
+    queryModeParser :: Parser QueryMode
+    queryModeParser =
+        optionParserFromValues modeMap "QUERY-MODE" helpTxt $ mconcat
+            [ short 'q', long "query-mode", value StepQuery.All
+            , showDefaultWith (map toLower . show)
+            ]
+      where
+        helpTxt = "Query mode."
+        modeMap = M.fromList
+            [ ("train", StepQuery.Train)
+            , ("validate", StepQuery.Validate)
+            , ("all", StepQuery.All)
+            ]
+
     graphProps :: SqlM (Set Text)
     graphProps = do
         graphPropQuery <- getDistinctFieldQuery GraphPropProperty
@@ -265,15 +289,18 @@ trainFractionParser = option auto . mconcat $
     [ metavar "PERCENT", short 'p', long "percent", value 0.8, showDefault
     , help "Training set as percentage of data." ]
 
-trainingConfig :: Parser (Key Algorithm -> SqlM TrainingConfig)
+trainingConfig :: Parser (Key Algorithm -> SqlM StepInfoConfig)
 trainingConfig = fmap runReaderT . getCompose $
-    TrainConfig <$> Compose (lift <$> commitIdParser)
-                <*> props "graph" gatherGraphProps
-                <*> props "step" gatherStepProps
-                <*> Compose (pure <$> trainFractionParser)
-                <*> Compose (pure <$> trainSeedParser)
-                <*> Compose (lift <$> utcTimeParser)
+    StepInfoConfig StepQuery.Train
+        <$> Compose (lift <$> commitIdParser)
+        <*> props "graph" gatherGraphProps <*> props "step" gatherStepProps
+        <*> Compose (pure <$> trainSeedParser)
+        <*> pure hundredPercent <*> pure hundredPercent <*> pure hundredPercent
+        <*> Compose (lift <$> utcTimeParser)
   where
+    hundredPercent :: Percentage
+    hundredPercent = $$(validRational 1)
+
     props :: String -> SqlParser (Set Text) -> SqlParser (Set Text)
     props name gather = asum
         [keepFilter gather name, dropFilter gather name, gather]

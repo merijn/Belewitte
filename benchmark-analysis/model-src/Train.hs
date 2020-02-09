@@ -4,9 +4,12 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Train
-    ( ModelDescription(..)
+    ( LegacyConfig(..)
+    , ModelDescription(..)
     , ModelStats(..)
+    , StepInfoConfig(..)
     , TrainingConfig(..)
     , UnknownSet (..)
     , getTotalQuery
@@ -43,11 +46,13 @@ import Text.Megaparsec.Error (errorBundlePretty)
 
 import Core
 import Model
-import Utils.Process (ReadWrite(..), runProcessCreation_, withPipe, withProcess)
+import Utils.Process
+    (ReadWrite(..), runProcessCreation_, withPipe, withProcess)
 import Query
 import RuntimeData (getModelScript)
 import Schema
-import StepQuery (StepInfo(..), stepInfoQuery)
+import StepQuery
+    (QueryMode(..), StepInfo(..), StepInfoConfig(..), stepInfoQuery)
 import Sql (MonadSql, (==.))
 import qualified Sql.Transaction as SqlTrans
 
@@ -64,20 +69,24 @@ data ModelStats = ModelStats
     , modelUnknownPreds :: [UnknownSet]
     } deriving (Eq, Show)
 
-data TrainingConfig = TrainConfig
-    { trainCommit :: CommitId
-    , trainGraphProps :: Set Text
-    , trainStepProps :: Set Text
-    , trainFraction :: Double
-    , trainSeed :: Int64
-    , trainTimestamp :: UTCTime
+data TrainingConfig
+    = TrainConfig StepInfoConfig
+    | LegacyTrainConfig LegacyConfig
+
+data LegacyConfig = LegacyConfig
+    { legacyCommit :: CommitId
+    , legacyGraphProps :: Set Text
+    , legacyStepProps :: Set Text
+    , legacyFraction :: Double
+    , legacySeed :: Int64
+    , legacyTimestamp :: UTCTime
     }
 
 data ModelDescription = ModelDesc
     { modelName :: Text
     , modelPrettyName :: Maybe Text
     , modelDescription :: Maybe Text
-    , modelTrainConfig :: TrainingConfig
+    , modelTrainConfig :: StepInfoConfig
     }
 
 splitQuery
@@ -86,13 +95,21 @@ splitQuery
     -> Key Platform
     -> TrainingConfig
     -> m (Query StepInfo, Query StepInfo)
-splitQuery algoId platformId cfg@TrainConfig{..} = do
+splitQuery algoId platformId (TrainConfig cfg) = return
+    ( stepInfoQuery algoId platformId trainConfig
+    , stepInfoQuery algoId platformId validateConfig
+    )
+  where
+    trainConfig = cfg { stepInfoQueryMode = Train }
+    validateConfig = cfg { stepInfoQueryMode = Validate }
+
+splitQuery algoId platformId cfg@(LegacyTrainConfig LegacyConfig{..}) = do
     rowCount <- runSqlQueryCount query
 
     let trainingSize :: Int
-        trainingSize = round (fromIntegral rowCount * trainFraction)
+        trainingSize = round (fromIntegral rowCount * legacyFraction)
 
-    return $ randomizeQuery trainSeed trainingSize query
+    return $ randomizeQuery legacySeed trainingSize query
   where
     query = getTotalQuery algoId platformId cfg
 
@@ -108,8 +125,26 @@ getValidationQuery algoId platformId = fmap snd . splitQuery algoId platformId
 
 getTotalQuery
     :: Key Algorithm -> Key Platform -> TrainingConfig -> Query StepInfo
-getTotalQuery algoId platformId TrainConfig{..} =
-  stepInfoQuery algoId platformId trainCommit trainGraphProps trainStepProps trainTimestamp
+getTotalQuery algoId platformId (TrainConfig cfg) =
+  stepInfoQuery algoId platformId cfg{ stepInfoQueryMode = All }
+
+getTotalQuery algoId platformId (LegacyTrainConfig LegacyConfig{..}) =
+    stepInfoQuery algoId platformId trainConfig
+  where
+    stepInfoGraphs, stepInfoVariants, stepInfoSteps :: Percentage
+    stepInfoGraphs = $$(validRational 1)
+    stepInfoVariants = $$(validRational 1)
+    stepInfoSteps = $$(validRational 1)
+
+    trainConfig = StepInfoConfig
+        { stepInfoQueryMode = All
+        , stepInfoCommit = legacyCommit
+        , stepInfoGraphProps = legacyGraphProps
+        , stepInfoStepProps = legacyStepProps
+        , stepInfoSeed = legacySeed
+        , stepInfoTimestamp = legacyTimestamp
+        , ..
+        }
 
 getModelTrainingConfig
     :: MonadSql m => Key PredictionModel -> m TrainingConfig
@@ -126,13 +161,13 @@ getModelTrainingConfig modelId = SqlTrans.runTransaction $ do
         .| C.map (modelStepPropertyProperty . SqlTrans.entityVal)
         .| C.foldMap S.singleton
 
-    return TrainConfig
-        { trainCommit = predictionModelAlgorithmVersion
-        , trainGraphProps = graphProps
-        , trainStepProps = stepProps
-        , trainFraction = predictionModelTrainFraction
-        , trainSeed = predictionModelTrainSeed
-        , trainTimestamp = predictionModelTimestamp
+    return $ LegacyTrainConfig LegacyConfig
+        { legacyCommit = predictionModelAlgorithmVersion
+        , legacyGraphProps = graphProps
+        , legacyStepProps = stepProps
+        , legacyFraction = predictionModelTrainFraction
+        , legacySeed = predictionModelTrainSeed
+        , legacyTimestamp = predictionModelTimestamp
         }
 
 getModelStats :: Key PredictionModel -> SqlM ModelStats
@@ -177,10 +212,6 @@ trainModel
     -> ModelDescription
     -> m (Key PredictionModel, Model)
 trainModel algoId platId ModelDesc{..} = do
-    let TrainConfig{..} = modelTrainConfig
-    trainQuery <- fmap reduceInfo <$>
-        getTrainingQuery algoId platId modelTrainConfig
-
     numEntries <- runSqlQueryCount trainQuery
 
     propCount <- runSqlQueryConduit trainQuery C.head >>= \case
@@ -225,17 +256,17 @@ trainModel algoId platId ModelDesc{..} = do
             unknownTxt <- liftIO $ T.hGetContents unknownsHnd
             (modelUnknownCount, modelUnknownPreds) <- getUnknowns unknownTxt
 
-            let (graphProps, stepProps) = VS.splitAt (S.size trainGraphProps)
-                                                     featureImportance
+            let (graphProps, stepProps) =
+                    VS.splitAt (S.size stepInfoGraphProps) featureImportance
 
                 modelGraphPropImportance :: Map Text Double
                 modelGraphPropImportance = M.fromList $
-                    zip (S.toAscList trainGraphProps)
+                    zip (S.toAscList stepInfoGraphProps)
                         (VS.toList graphProps)
 
                 modelStepPropImportance :: Map Text Double
                 modelStepPropImportance = M.fromList $
-                    zip (S.toAscList trainStepProps)
+                    zip (S.toAscList stepInfoStepProps)
                         (VS.toList stepProps)
 
             return (model, ModelStats{..})
@@ -244,13 +275,13 @@ trainModel algoId platId ModelDesc{..} = do
         modelId <- SqlTrans.insert $ PredictionModel
             { predictionModelPlatformId = platId
             , predictionModelAlgorithmId = algoId
-            , predictionModelAlgorithmVersion = trainCommit
+            , predictionModelAlgorithmVersion = stepInfoCommit
             , predictionModelName = modelName
             , predictionModelPrettyName = modelPrettyName
             , predictionModelDescription = modelDescription
             , predictionModelModel = model
-            , predictionModelTrainFraction = trainFraction
-            , predictionModelTrainSeed = trainSeed
+            , predictionModelTrainFraction = 0
+            , predictionModelTrainSeed = stepInfoSeed
             , predictionModelTotalUnknownCount = modelUnknownCount
             , predictionModelTimestamp = timestamp
             }
@@ -273,6 +304,10 @@ trainModel algoId platId ModelDesc{..} = do
 
     return (modelId, model)
   where
+    StepInfoConfig{..} = modelTrainConfig
+
+    trainQuery = reduceInfo <$> stepInfoQuery algoId platId modelTrainConfig
+
     reduceInfo StepInfo{..} = (stepProps, stepBestImpl)
 
 putProps :: Vector Double -> ByteString

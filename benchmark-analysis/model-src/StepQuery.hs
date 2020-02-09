@@ -1,9 +1,16 @@
 {-# LANGUAGE MonadFailDesugaring #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
-module StepQuery (StepInfo(..), stepInfoQuery, sortStepTimings) where
+module StepQuery
+    ( QueryMode(..)
+    , StepInfo(..)
+    , StepInfoConfig(..)
+    , stepInfoQuery
+    , sortStepTimings
+    ) where
 
 import Control.Monad.ST (runST)
 import Data.Ord (comparing)
@@ -20,6 +27,20 @@ import Query
 import Schema
 import Utils.ImplTiming
 import Utils.Vector (byteStringToVector)
+
+data QueryMode = Train | Validate | All deriving (Show, Eq)
+
+data StepInfoConfig = StepInfoConfig
+    { stepInfoQueryMode :: QueryMode
+    , stepInfoCommit :: CommitId
+    , stepInfoGraphProps :: Set Text
+    , stepInfoStepProps :: Set Text
+    , stepInfoSeed :: Int64
+    , stepInfoGraphs :: Percentage
+    , stepInfoVariants :: Percentage
+    , stepInfoSteps :: Percentage
+    , stepInfoTimestamp :: UTCTime
+    }
 
 data StepInfo =
   StepInfo
@@ -41,15 +62,13 @@ sortStepTimings info@StepInfo{..} =
         VS.unsafeFreeze mvec
 
 stepInfoQuery
-    :: Key Algorithm
-    -> Key Platform
-    -> CommitId
-    -> Set Text
-    -> Set Text
-    -> UTCTime
-    -> Query StepInfo
-stepInfoQuery algoId platformId commitId graphProperties stepProperties ts =
-    Query{..}
+    :: Key Algorithm -> Key Platform -> StepInfoConfig -> Query StepInfo
+stepInfoQuery algoId platformId StepInfoConfig
+  { stepInfoCommit
+  , stepInfoGraphProps
+  , stepInfoStepProps
+  , stepInfoTimestamp
+  } = Query{..}
   where
     queryName :: Text
     queryName = "stepInfoQuery"
@@ -92,7 +111,7 @@ IndexedGraphProps(graphId, idx, property, value, count) AS (
          , value
          , COUNT() OVER graph
     FROM GraphProp
-    WHERE property IN #{inExpression graphProperties}
+    WHERE property IN #{inExpression stepInfoGraphProps}
     WINDOW graph AS (PARTITION BY graphId)
 ),
 
@@ -104,7 +123,7 @@ IndexedStepProps(variantId, stepId, idx, property, value, count) AS (
          , value
          , COUNT() OVER variantStep
     FROM StepPropValue
-    WHERE property IN #{inExpression stepProperties}
+    WHERE property IN #{inExpression stepInfoStepProps}
     WINDOW variantStep AS (PARTITION BY variantId, stepId)
 )|]
       , [toPersistValue algoId] `inCTE` [i|
@@ -123,10 +142,10 @@ ImplVector(implTiming) AS (
 )|]
       , CTE
         { cteParams =
-            [ toPersistValue ts
+            [ toPersistValue stepInfoTimestamp
             , toPersistValue algoId
             , toPersistValue platformId
-            , toPersistValue commitId
+            , toPersistValue stepInfoCommit
             ]
         , cteQuery = [i|
 StepTiming(graphId, variantId, stepId, implId, timings) AS (
@@ -161,7 +180,7 @@ StepTiming(graphId, variantId, stepId, implId, timings) AS (
         }]
 
     params :: [PersistValue]
-    params = [ toPersistValue $ S.size stepProperties ]
+    params = [ toPersistValue $ S.size stepInfoStepProps ]
 
     queryText = [i|
 SELECT StepTiming.variantId

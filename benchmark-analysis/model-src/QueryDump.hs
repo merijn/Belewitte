@@ -1,7 +1,8 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
 module QueryDump (modelQueryDump) where
 
-import Data.Conduit (ConduitT, Void, (.|), runConduit)
+import Data.Conduit (ConduitT, Void, (.|), runConduit, yield)
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.Text as C
 import Data.Set (Set)
@@ -31,18 +32,30 @@ toVariantInfoQuery
 toVariantInfoQuery (algoId, platformId, commitId) =
   variantInfoQuery algoId platformId commitId Nothing
 
-toStepInfoQuery
-    :: (Key Algorithm, Key Platform, CommitId) -> SqlM (Query StepInfo)
-toStepInfoQuery (algoId, platformId, commitId) = do
-    graphPropQuery <- getDistinctFieldQuery GraphPropProperty
-    graphprops <- runSqlQueryConduit graphPropQuery $ C.foldMap S.singleton
+toStepInfoQueries
+    :: (Key Algorithm, Key Platform, CommitId)
+    -> ConduitT (Key Algorithm, Key Platform, CommitId)
+                (Query StepInfo)
+                SqlM
+                ()
+toStepInfoQueries (algoId, platformId, stepInfoCommit) = do
+    query <- getDistinctFieldQuery GraphPropProperty
+    stepInfoGraphProps <- runSqlQueryConduit query $ C.foldMap S.singleton
 
-    stepprops <- S.fromList . map (stepPropProperty . entityVal) <$>
+    stepInfoStepProps <- S.fromList . map (stepPropProperty . entityVal) <$>
         Sql.selectList [StepPropAlgorithmId ==. algoId] []
 
-    ts <- liftIO getCurrentTime
+    stepInfoTimestamp <- liftIO getCurrentTime
 
-    return $ stepInfoQuery algoId platformId commitId graphprops stepprops ts
+    yield $ stepInfoQuery algoId platformId StepInfoConfig
+                {stepInfoQueryMode = All, ..}
+  where
+    stepInfoSeed = 42
+
+    stepInfoGraphs, stepInfoVariants, stepInfoSteps :: Percentage
+    stepInfoGraphs = $$(validRational 1)
+    stepInfoVariants = $$(validRational 1)
+    stepInfoSteps = $$(validRational 1)
 
 modelQueryDump :: FilePath -> SqlM ()
 modelQueryDump outputSuffix = do
@@ -55,7 +68,7 @@ modelQueryDump outputSuffix = do
 
     runConduit $
         C.yieldMany configSet
-        .| C.mapM toStepInfoQuery
+        .> toStepInfoQueries
         .> streamQuery sortStepTimings
         .| querySink "stepInfoQuery-"
   where

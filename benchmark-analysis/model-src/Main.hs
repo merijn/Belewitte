@@ -106,6 +106,13 @@ main = runSqlM commands $ \case
     Export{getModel,cppFile} -> do
         (algoId, modelId, model) <- getModel
         impls <- Sql.queryImplementations algoId
-        TrainConfig{..} <- getModelTrainingConfig modelId
-        dumpCppModel cppFile model trainGraphProps trainStepProps
+        trainConfig <- getModelTrainingConfig modelId
+
+        let (graphProps, stepProps) = case trainConfig of
+                LegacyTrainConfig LegacyConfig{..} ->
+                    (legacyGraphProps, legacyStepProps)
+                TrainConfig StepInfoConfig{..} ->
+                    (stepInfoGraphProps, stepInfoStepProps)
+
+        dumpCppModel cppFile model graphProps stepProps
             (implementationName <$> impls)
