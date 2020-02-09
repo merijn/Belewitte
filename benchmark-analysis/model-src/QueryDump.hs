@@ -51,6 +51,7 @@ toStepInfoQueries (algoId, platformId, stepInfoCommit) = do
                 {stepInfoQueryMode = All, ..}
   where
     stepInfoSeed = 42
+    stepInfoDatasets = mempty
 
     stepInfoGraphs, stepInfoVariants, stepInfoSteps :: Percentage
     stepInfoGraphs = $$(validRational 1)

@@ -143,6 +143,7 @@ getTotalQuery algoId platformId (LegacyTrainConfig LegacyConfig{..}) =
         , stepInfoStepProps = legacyStepProps
         , stepInfoSeed = legacySeed
         , stepInfoTimestamp = legacyTimestamp
+        , stepInfoDatasets = mempty
         , ..
         }
 

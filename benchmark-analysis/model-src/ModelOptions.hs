@@ -135,6 +135,9 @@ commands = CommandRoot
         [ metavar "FILE", short 'e', long "export", value "test.cpp"
         , showDefaultWith id, help "C++ file to write predictor to." ]
 
+datasetsParser :: Parser (SqlM (Set (Key Dataset)))
+datasetsParser = getCompose . fmap S.fromList . many $ Compose datasetIdParser
+
 modelQueryMap :: Map String (Parser DebugQuery)
 modelQueryMap = M.fromList
     [ nameDebugQuery "stepInfoQuery" $ Compose $ do
@@ -144,11 +147,12 @@ modelQueryMap = M.fromList
         getUtcTime <- utcTimeParser
         queryMode <- queryModeParser
         trainSeed <- trainSeedParser
+        getDatasets <- datasetsParser
         pure $ do
             algoId <- getAlgoId
             cfg <- StepInfoConfig queryMode
                     <$> getCommitId <*> graphProps <*> stepProps algoId
-                    <*> pure trainSeed <*> pure hundredPercent
+                    <*> pure trainSeed <*> getDatasets <*> pure hundredPercent
                     <*> pure hundredPercent <*> pure hundredPercent
                     <*> getUtcTime
 
@@ -295,7 +299,8 @@ trainingConfig = fmap runReaderT . getCompose $
         <$> Compose (lift <$> commitIdParser)
         <*> props "graph" gatherGraphProps <*> props "step" gatherStepProps
         <*> Compose (pure <$> trainSeedParser)
-        <*> pure hundredPercent <*> pure hundredPercent <*> pure hundredPercent
+        <*> Compose (lift <$> datasetsParser) <*> pure hundredPercent
+        <*> pure hundredPercent <*> pure hundredPercent
         <*> Compose (lift <$> utcTimeParser)
   where
     hundredPercent :: Percentage

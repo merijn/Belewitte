@@ -36,6 +36,7 @@ data StepInfoConfig = StepInfoConfig
     , stepInfoGraphProps :: Set Text
     , stepInfoStepProps :: Set Text
     , stepInfoSeed :: Int64
+    , stepInfoDatasets :: Set (Key Dataset)
     , stepInfoGraphs :: Percentage
     , stepInfoVariants :: Percentage
     , stepInfoSteps :: Percentage
@@ -67,9 +68,13 @@ stepInfoQuery algoId platformId StepInfoConfig
   { stepInfoCommit
   , stepInfoGraphProps
   , stepInfoStepProps
+  , stepInfoDatasets
   , stepInfoTimestamp
   } = Query{..}
   where
+    datasets :: Set Text
+    datasets = S.map showSqlKey stepInfoDatasets
+
     queryName :: Text
     queryName = "stepInfoQuery"
 
@@ -146,6 +151,7 @@ ImplVector(implTiming) AS (
             , toPersistValue algoId
             , toPersistValue platformId
             , toPersistValue stepInfoCommit
+            , toPersistValue $ S.size stepInfoDatasets == 0
             ]
         , cteQuery = [i|
 StepTiming(graphId, variantId, stepId, implId, timings) AS (
@@ -168,6 +174,7 @@ StepTiming(graphId, variantId, stepId, implId, timings) AS (
     AND RunConfig.algorithmId = ?
     AND RunConfig.platformId = ?
     AND RunConfig.algorithmVersion = ?
+    AND (? OR RunConfig.datasetId IN #{inExpression datasets})
 
     INNER JOIN StepTimer
     ON Run.id = StepTimer.runId
