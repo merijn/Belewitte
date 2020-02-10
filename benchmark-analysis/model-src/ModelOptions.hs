@@ -136,7 +136,7 @@ commands = CommandRoot
         , showDefaultWith id, help "C++ file to write predictor to." ]
 
 datasetsParser :: Parser (SqlM (Set (Key Dataset)))
-datasetsParser = getCompose . fmap S.fromList . many $ Compose datasetIdParser
+datasetsParser = fmap S.fromList . sequence <$> many datasetIdParser
 
 modelQueryMap :: Map String (Parser DebugQuery)
 modelQueryMap = M.fromList
