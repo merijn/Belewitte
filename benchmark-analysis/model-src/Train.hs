@@ -287,6 +287,8 @@ trainModel algoId platId ModelDesc{..} = do
             , predictionModelTimestamp = timestamp
             }
 
+        forM_ stepInfoDatasets $ SqlTrans.insert_ . ModelTrainDataset modelId
+
         forM_ (M.toList modelGraphPropImportance) $
             SqlTrans.insert_ . uncurry (ModelGraphProperty modelId)
 
