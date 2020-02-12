@@ -83,18 +83,38 @@ main = runSqlM commands $ \case
         (_, modelId, _) <- getModel
         getModelStats modelId >>= reportModelStats
 
-    Validate{getPlatformId,getModel} -> do
+    Validate{getPlatformId,getModel,getDatasetIds} -> do
         platformId <- getPlatformId
         (algoId, modelId, model) <- getModel
         trainConfig <- getModelTrainingConfig modelId
-        validateModel algoId platformId model trainConfig
+        datasets <- getDatasetIds
 
-    Evaluate{getPlatformId,getModel,defaultImpl,evaluateConfig} -> do
+        let validationConfig = case trainConfig of
+                TrainConfig cfg
+                    | S.null datasets -> trainConfig
+                    | otherwise -> TrainConfig cfg{stepInfoDatasets = datasets}
+
+                LegacyTrainConfig cfg ->
+                    TrainConfig $ legacyToStepInfoConfig cfg datasets
+
+        validateModel algoId platformId model validationConfig
+
+    Evaluate{getPlatformId,getModel,defaultImpl,evaluateConfig,getDatasetIds} -> do
         platId <- getPlatformId
         (algoId, modelId, model) <- getModel
         algo <- Sql.getJustEntity algoId
         trainConfig <- getModelTrainingConfig modelId
-        evaluateModel algo platId defaultImpl evaluateConfig model trainConfig
+        datasets <- getDatasetIds
+
+        let evalConfig = case trainConfig of
+                TrainConfig cfg
+                    | S.null datasets -> trainConfig
+                    | otherwise -> TrainConfig cfg{stepInfoDatasets = datasets}
+
+                LegacyTrainConfig cfg ->
+                    TrainConfig $ legacyToStepInfoConfig cfg datasets
+
+        evaluateModel algo platId defaultImpl evaluateConfig model evalConfig
 
     Compare{getAlgoId,getPlatformId,getCommit,getDatasetId,compareConfig} -> do
         algoId <- getAlgoId

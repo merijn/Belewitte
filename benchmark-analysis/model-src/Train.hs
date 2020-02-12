@@ -18,6 +18,7 @@ module Train
     , getModelTrainingConfig
     , getModelStats
     , trainModel
+    , legacyToStepInfoConfig
     ) where
 
 import Control.Monad (forM, forM_, replicateM)
@@ -89,6 +90,23 @@ data ModelDescription = ModelDesc
     , modelTrainConfig :: StepInfoConfig
     }
 
+legacyToStepInfoConfig :: LegacyConfig -> Set (Key Dataset) -> StepInfoConfig
+legacyToStepInfoConfig LegacyConfig{..} datasets = StepInfoConfig
+    { stepInfoQueryMode = All
+    , stepInfoCommit = legacyCommit
+    , stepInfoGraphProps = legacyGraphProps
+    , stepInfoStepProps = legacyStepProps
+    , stepInfoSeed = legacySeed
+    , stepInfoTimestamp = legacyTimestamp
+    , stepInfoDatasets = datasets
+    , ..
+    }
+  where
+    stepInfoGraphs, stepInfoVariants, stepInfoSteps :: Percentage
+    stepInfoGraphs = $$(validRational 1)
+    stepInfoVariants = $$(validRational 1)
+    stepInfoSteps = $$(validRational 1)
+
 splitQuery
     :: MonadQuery m
     => Key Algorithm
@@ -128,24 +146,8 @@ getTotalQuery
 getTotalQuery algoId platformId (TrainConfig cfg) =
   stepInfoQuery algoId platformId cfg{ stepInfoQueryMode = All }
 
-getTotalQuery algoId platformId (LegacyTrainConfig LegacyConfig{..}) =
-    stepInfoQuery algoId platformId trainConfig
-  where
-    stepInfoGraphs, stepInfoVariants, stepInfoSteps :: Percentage
-    stepInfoGraphs = $$(validRational 1)
-    stepInfoVariants = $$(validRational 1)
-    stepInfoSteps = $$(validRational 1)
-
-    trainConfig = StepInfoConfig
-        { stepInfoQueryMode = All
-        , stepInfoCommit = legacyCommit
-        , stepInfoGraphProps = legacyGraphProps
-        , stepInfoStepProps = legacyStepProps
-        , stepInfoSeed = legacySeed
-        , stepInfoTimestamp = legacyTimestamp
-        , stepInfoDatasets = mempty
-        , ..
-        }
+getTotalQuery algoId platformId (LegacyTrainConfig cfg) =
+    stepInfoQuery algoId platformId (legacyToStepInfoConfig cfg mempty)
 
 getModelTrainingConfig
     :: MonadSql m => Key PredictionModel -> m TrainingConfig

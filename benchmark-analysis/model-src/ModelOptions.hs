@@ -61,12 +61,14 @@ data ModelCommand
     | Validate
       { getPlatformId :: SqlM (Key Platform)
       , getModel :: SqlM (Key Algorithm, Key PredictionModel, Model)
+      , getDatasetIds :: SqlM (Set (Key Dataset))
       }
     | Evaluate
       { getPlatformId :: SqlM (Key Platform)
       , getModel :: SqlM (Key Algorithm, Key PredictionModel, Model)
       , defaultImpl :: Either Int Text
       , evaluateConfig :: EvaluateReport
+      , getDatasetIds :: SqlM (Set (Key Dataset))
       }
     | Compare
       { getAlgoId :: SqlM (Key Algorithm)
@@ -105,7 +107,7 @@ commands = CommandRoot
         , commandDesc =
             "Compute and report a model's accuracy on validation dataset and \
             \full dataset"
-        } (Validate <$> platformIdParser <*> modelParser)
+        } (Validate <$> platformIdParser <*> modelParser <*> datasetsParser)
     , SingleCommand CommandInfo
         { commandName = "evaluate"
         , commandHeaderDesc = "evaluate model performance"
@@ -114,7 +116,7 @@ commands = CommandRoot
             \against performance of other implementations"
         }
         $ Evaluate <$> platformIdParser <*> modelParser <*> defaultImplParser
-                   <*> evaluateParser
+                   <*> evaluateParser <*> datasetsParser
     , SingleCommand CommandInfo
         { commandName = "compare"
         , commandHeaderDesc = "compare implementation performance"
