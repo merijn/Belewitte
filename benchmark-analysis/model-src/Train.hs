@@ -18,7 +18,6 @@ module Train
     , getModelTrainingConfig
     , getModelStats
     , trainModel
-    , legacyToStepInfoConfig
     ) where
 
 import Control.Monad (forM, forM_, replicateM)
@@ -80,6 +79,7 @@ data LegacyConfig = LegacyConfig
     , legacyStepProps :: Set Text
     , legacyFraction :: Double
     , legacySeed :: Int64
+    , legacyDatasets :: Set (Key Dataset)
     , legacyTimestamp :: UTCTime
     }
 
@@ -89,23 +89,6 @@ data ModelDescription = ModelDesc
     , modelDescription :: Maybe Text
     , modelTrainConfig :: StepInfoConfig
     }
-
-legacyToStepInfoConfig :: LegacyConfig -> Set (Key Dataset) -> StepInfoConfig
-legacyToStepInfoConfig LegacyConfig{..} datasets = StepInfoConfig
-    { stepInfoQueryMode = All
-    , stepInfoCommit = legacyCommit
-    , stepInfoGraphProps = legacyGraphProps
-    , stepInfoStepProps = legacyStepProps
-    , stepInfoSeed = legacySeed
-    , stepInfoTimestamp = legacyTimestamp
-    , stepInfoDatasets = datasets
-    , ..
-    }
-  where
-    stepInfoGraphs, stepInfoVariants, stepInfoSteps :: Percentage
-    stepInfoGraphs = $$(validRational 1)
-    stepInfoVariants = $$(validRational 1)
-    stepInfoSteps = $$(validRational 1)
 
 splitQuery
     :: MonadQuery m
@@ -146,8 +129,22 @@ getTotalQuery
 getTotalQuery algoId platformId (TrainConfig cfg) =
   stepInfoQuery algoId platformId cfg{ stepInfoQueryMode = All }
 
-getTotalQuery algoId platformId (LegacyTrainConfig cfg) =
-    stepInfoQuery algoId platformId (legacyToStepInfoConfig cfg mempty)
+getTotalQuery algoId platformId (LegacyTrainConfig LegacyConfig{..}) =
+    stepInfoQuery algoId platformId StepInfoConfig
+        { stepInfoQueryMode = All
+        , stepInfoCommit = legacyCommit
+        , stepInfoGraphProps = legacyGraphProps
+        , stepInfoStepProps = legacyStepProps
+        , stepInfoSeed = legacySeed
+        , stepInfoTimestamp = legacyTimestamp
+        , stepInfoDatasets = legacyDatasets
+        , ..
+        }
+  where
+    stepInfoGraphs, stepInfoVariants, stepInfoSteps :: Percentage
+    stepInfoGraphs = $$(validRational 1)
+    stepInfoVariants = $$(validRational 1)
+    stepInfoSteps = $$(validRational 1)
 
 getModelTrainingConfig
     :: MonadSql m => Key PredictionModel -> m TrainingConfig
@@ -164,12 +161,18 @@ getModelTrainingConfig modelId = SqlTrans.runTransaction $ do
         .| C.map (modelStepPropertyProperty . SqlTrans.entityVal)
         .| C.foldMap S.singleton
 
+    trainingDatasets <- runConduit $
+        SqlTrans.selectSource [ModelTrainDatasetModelId ==. modelId] []
+        .| C.map (modelTrainDatasetDatasetId . SqlTrans.entityVal)
+        .| C.foldMap S.singleton
+
     return $ LegacyTrainConfig LegacyConfig
         { legacyCommit = predictionModelAlgorithmVersion
         , legacyGraphProps = graphProps
         , legacyStepProps = stepProps
         , legacyFraction = predictionModelTrainFraction
         , legacySeed = predictionModelTrainSeed
+        , legacyDatasets = trainingDatasets
         , legacyTimestamp = predictionModelTimestamp
         }
 

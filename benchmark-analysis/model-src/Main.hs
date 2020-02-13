@@ -94,8 +94,10 @@ main = runSqlM commands $ \case
                     | S.null datasets -> trainConfig
                     | otherwise -> TrainConfig cfg{stepInfoDatasets = datasets}
 
-                LegacyTrainConfig cfg ->
-                    TrainConfig $ legacyToStepInfoConfig cfg datasets
+                LegacyTrainConfig cfg
+                    | S.null datasets -> trainConfig
+                    | otherwise ->
+                        LegacyTrainConfig cfg{legacyDatasets = datasets}
 
         validateModel algoId platformId model validationConfig
 
@@ -111,8 +113,10 @@ main = runSqlM commands $ \case
                     | S.null datasets -> trainConfig
                     | otherwise -> TrainConfig cfg{stepInfoDatasets = datasets}
 
-                LegacyTrainConfig cfg ->
-                    TrainConfig $ legacyToStepInfoConfig cfg datasets
+                LegacyTrainConfig cfg
+                    | S.null datasets -> trainConfig
+                    | otherwise ->
+                        LegacyTrainConfig cfg{legacyDatasets = datasets}
 
         evaluateModel algo platId defaultImpl evaluateConfig model evalConfig
 
