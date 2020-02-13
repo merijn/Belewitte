@@ -11,7 +11,6 @@
 module ModelOptions (ModelCommand(..), commands, runSqlM) where
 
 import Control.Applicative (optional)
-import Control.Monad.Reader (ask)
 import Data.Char (toLower)
 import qualified Data.Conduit.Combinators as C
 import Data.Functor.Compose (Compose(..))
@@ -40,32 +39,19 @@ import qualified Sql
 import StepQuery (QueryMode, StepInfoConfig(..), stepInfoQuery)
 import qualified StepQuery
 
-readProps :: MonadIO m => FilePath -> m (Set Text)
-readProps = liftIO . fmap (S.fromList . T.lines) . T.readFile
-
-keepProps :: Set Text -> Set Text -> Set Text
-keepProps input db
-    | S.null input = db
-    | otherwise = S.intersection input db
-
-dropProps :: Set Text -> Set Text -> Set Text
-dropProps input db
-    | S.null input = db
-    | otherwise = S.difference db input
-
 data ModelCommand
     = Train
-      { getConfig :: Key Algorithm -> SqlM StepInfoConfig }
+      { getConfig :: SqlM StepInfoConfig }
     | QueryModel
-      { getModel :: SqlM (Key Algorithm, Key PredictionModel, Model) }
+      { getModel :: SqlM (Key PredictionModel, Model) }
     | Validate
       { getPlatformId :: SqlM (Key Platform)
-      , getModel :: SqlM (Key Algorithm, Key PredictionModel, Model)
+      , getModel :: SqlM (Key PredictionModel, Model)
       , getDatasetIds :: SqlM (Set (Key Dataset))
       }
     | Evaluate
       { getPlatformId :: SqlM (Key Platform)
-      , getModel :: SqlM (Key Algorithm, Key PredictionModel, Model)
+      , getModel :: SqlM (Key PredictionModel, Model)
       , defaultImpl :: Either Int Text
       , evaluateConfig :: EvaluateReport
       , getDatasetIds :: SqlM (Set (Key Dataset))
@@ -78,7 +64,7 @@ data ModelCommand
       , compareConfig :: CompareReport
       }
     | Export
-      { getModel :: SqlM (Key Algorithm, Key PredictionModel, Model)
+      { getModel :: SqlM (Key PredictionModel, Model)
       , cppFile :: FilePath
       }
 
@@ -95,7 +81,7 @@ commands = CommandRoot
         { commandName = "train"
         , commandHeaderDesc = "train a model"
         , commandDesc = "Train a new model"
-        } (Train <$> trainingConfig)
+        } (Train <$> stepInfoConfig)
     , SingleCommand CommandInfo
         { commandName = "query"
         , commandHeaderDesc = "report model info"
@@ -150,15 +136,16 @@ modelQueryMap = M.fromList
         queryMode <- queryModeParser
         trainSeed <- trainSeedParser
         getDatasets <- datasetsParser
+
         pure $ do
             algoId <- getAlgoId
-            cfg <- StepInfoConfig queryMode
-                    <$> getCommitId <*> graphProps <*> stepProps algoId
-                    <*> pure trainSeed <*> getDatasets <*> pure hundredPercent
+            cfg <- StepInfoConfig queryMode algoId
+                    <$> getPlatformId <*> getCommitId <*> graphProps
+                    <*> stepProps algoId <*> pure trainSeed <*> getDatasets
                     <*> pure hundredPercent <*> pure hundredPercent
-                    <*> getUtcTime
+                    <*> pure hundredPercent <*> getUtcTime
 
-            stepInfoQuery algoId <$> getPlatformId <*> pure cfg
+            pure $ stepInfoQuery cfg
     ]
   where
     hundredPercent :: Percentage
@@ -196,7 +183,7 @@ defaultImplParser = implParser <|> pure (Right "edge-list")
                \Numeric or textual."
         ]
 
-modelParser :: Parser (SqlM (Key Algorithm, Key PredictionModel, Model))
+modelParser :: Parser (SqlM (Key PredictionModel, Model))
 modelParser = queryModel <$> modelOpt
   where
     modelOpt :: Parser Int64
@@ -205,10 +192,10 @@ modelParser = queryModel <$> modelOpt
         , help "Model to use"
         ]
 
-    queryModel :: Int64 -> SqlM (Key Algorithm, Key PredictionModel, Model)
+    queryModel :: Int64 -> SqlM (Key PredictionModel, Model)
     queryModel n = do
         PredictionModel{..} <- Sql.getJust key
-        return $ (predictionModelAlgorithmId, key, predictionModelModel)
+        return $ (key, predictionModelModel)
       where
         key = toSqlKey n
 
@@ -283,8 +270,6 @@ compareParser = reportParser defaultRelativeToValues implTypes
     implTypes = implTypesParser ((mempty,) . S.singleton) extraVals
     extraVals = M.singleton "comparison" (Any True, S.empty)
 
-type SqlParser = Compose Parser (ReaderT (Key Algorithm) SqlM)
-
 trainSeedParser :: Parser Int64
 trainSeedParser = option auto . mconcat $
     [ metavar "N", short 's', long "seed", value 42, showDefault
@@ -295,48 +280,67 @@ trainFractionParser = option auto . mconcat $
     [ metavar "PERCENT", short 'p', long "percent", value 0.8, showDefault
     , help "Training set as percentage of data." ]
 
-trainingConfig :: Parser (Key Algorithm -> SqlM StepInfoConfig)
-trainingConfig = fmap runReaderT . getCompose $
-    StepInfoConfig StepQuery.Train
-        <$> Compose (lift <$> commitIdParser)
-        <*> props "graph" gatherGraphProps <*> props "step" gatherStepProps
-        <*> Compose (pure <$> trainSeedParser)
-        <*> Compose (lift <$> datasetsParser) <*> pure hundredPercent
-        <*> pure hundredPercent <*> pure hundredPercent
-        <*> Compose (lift <$> utcTimeParser)
+stepInfoConfig :: Parser (SqlM StepInfoConfig)
+stepInfoConfig = do
+    getAlgoId <- algorithmIdParser
+    getPlatformId <- platformIdParser
+    getCommitId <- commitIdParser
+    getUtcTime <- utcTimeParser
+    trainSeed <- trainSeedParser
+    getDatasets <- datasetsParser
+    filterGraphProps <- props "graph"
+    filterStepProps <- props "step"
+
+    pure $ do
+        algoId <- getAlgoId
+        StepInfoConfig StepQuery.Train algoId
+                <$> getPlatformId <*> getCommitId
+                <*> (filterGraphProps <*> gatherGraphProps)
+                <*> (filterStepProps <*> gatherStepProps algoId)
+                <*> pure trainSeed <*> getDatasets <*> pure hundredPercent
+                <*> pure hundredPercent <*> pure hundredPercent <*> getUtcTime
   where
     hundredPercent :: Percentage
     hundredPercent = $$(validRational 1)
 
-    props :: String -> SqlParser (Set Text) -> SqlParser (Set Text)
-    props name gather = asum
-        [keepFilter gather name, dropFilter gather name, gather]
+    readProps :: MonadIO m => FilePath -> m (Set Text)
+    readProps = liftIO . fmap (S.fromList . T.lines) . T.readFile
 
-    keepFilter :: SqlParser (Set Text) -> String -> SqlParser (Set Text)
-    keepFilter gather name =
-        keepProps <$> gather <*> Compose (readProps <$> keepOpt)
+    props :: MonadIO m => String -> Parser (m (Set Text -> Set Text))
+    props name = asum [keepFilter name, dropFilter name, pure (return id)]
+
+    keepFilter :: MonadIO m => String -> Parser (m (Set Text -> Set Text))
+    keepFilter name = fmap keepProps <$> (readProps <$> keepOpt)
       where
+        keepProps :: Set Text -> Set Text -> Set Text
+        keepProps input db
+            | S.null input = db
+            | otherwise = S.intersection input db
+
         keepOpt = strOption $ mconcat
             [ metavar "FILE", long ("keep-" <> name <> "-props")
             , help "File listing properties to use for training, one per line."
             ]
 
-    dropFilter :: SqlParser (Set Text) -> String -> SqlParser (Set Text)
-    dropFilter gather name =
-        dropProps <$> gather <*> Compose (readProps <$> dropOpt)
+    dropFilter :: MonadIO m => String -> Parser (m (Set Text -> Set Text))
+    dropFilter name = fmap dropProps <$> (readProps <$> dropOpt)
       where
+        dropProps :: Set Text -> Set Text -> Set Text
+        dropProps input db
+            | S.null input = db
+            | otherwise = S.difference db input
+
         dropOpt = strOption $ mconcat
             [ metavar "FILE", long ("drop-" <> name <> "-props")
             , help "File listing properties not to use for training, \
                    \one per line."]
 
-    gatherGraphProps :: SqlParser (Set Text)
-    gatherGraphProps = Compose . pure . lift $ do
+    gatherGraphProps :: SqlM (Set Text)
+    gatherGraphProps = do
         query <- getDistinctFieldQuery GraphPropProperty
         runSqlQueryConduit query $ C.foldMap S.singleton
 
-    gatherStepProps :: SqlParser (Set Text)
-    gatherStepProps = Compose . pure $ do
-        algoId <- ask
+    gatherStepProps :: Key Algorithm -> SqlM (Set Text)
+    gatherStepProps algoId = do
         stepProps <- Sql.selectList [StepPropAlgorithmId ==. algoId] []
         return . S.fromList $ map (stepPropProperty . entityVal) stepProps

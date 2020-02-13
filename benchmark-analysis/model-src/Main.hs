@@ -12,6 +12,7 @@ import qualified Data.Conduit.Combinators as C
 import Data.List (sortBy)
 import Data.Ord (comparing)
 import qualified Data.Map as M
+import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 
@@ -56,15 +57,25 @@ reportModelStats ModelStats{..} = renderOutput $ do
     sortedUnknown :: [UnknownSet]
     sortedUnknown = sortBy (flip (comparing unknownSetOccurence)) modelUnknownPreds
 
+setPlatformAndDatasets
+    :: Key Platform -> Set (Key Dataset) -> TrainingConfig -> TrainingConfig
+setPlatformAndDatasets platformId datasets trainConfig = case trainConfig of
+    TrainConfig cfg@StepInfoConfig{stepInfoDatasets} -> TrainConfig cfg
+      { stepInfoPlatform = platformId
+      , stepInfoDatasets = updateDatasets stepInfoDatasets
+      }
+    LegacyTrainConfig cfg@LegacyConfig{legacyDatasets} -> LegacyTrainConfig cfg
+      { legacyPlatform = platformId
+      , legacyDatasets = updateDatasets legacyDatasets
+      }
+  where
+    updateDatasets
+        | S.null datasets = id
+        | otherwise = const datasets
+
 main :: IO ()
 main = runSqlM commands $ \case
     Train{getConfig} -> runInput $ do
-        let algoInput = sqlInput AlgorithmName UniqAlgorithm
-            platformInput = sqlInput PlatformName UniqPlatform
-
-        Entity algoId _ <- getInteractive algoInput "Algorithm Name"
-        Entity platformId _ <- getInteractive platformInput "Platform Name"
-
         modelName <- getInteractive textInput "Model Name"
         modelPrettyName <- getInteractive optionalInput "Model Pretty Name"
 
@@ -73,52 +84,35 @@ main = runSqlM commands $ \case
                 | T.null desc = Nothing
                 | otherwise = Just desc
 
-        modelTrainConfig <- lift $ getConfig algoId
+        modelTrainConfig <- lift $ getConfig
 
-        modelId <- lift $ fst <$> trainModel algoId platformId ModelDesc{..}
+        modelId <- lift $ fst <$> trainModel ModelDesc{..}
 
         liftIO $ print (fromSqlKey modelId)
 
     QueryModel{getModel} -> do
-        (_, modelId, _) <- getModel
+        (modelId, _) <- getModel
         getModelStats modelId >>= reportModelStats
 
     Validate{getPlatformId,getModel,getDatasetIds} -> do
         platformId <- getPlatformId
-        (algoId, modelId, model) <- getModel
-        trainConfig <- getModelTrainingConfig modelId
+        (modelId, model) <- getModel
         datasets <- getDatasetIds
 
-        let validationConfig = case trainConfig of
-                TrainConfig cfg
-                    | S.null datasets -> trainConfig
-                    | otherwise -> TrainConfig cfg{stepInfoDatasets = datasets}
+        validationConfig <- setPlatformAndDatasets platformId datasets <$>
+            getModelTrainingConfig modelId
 
-                LegacyTrainConfig cfg
-                    | S.null datasets -> trainConfig
-                    | otherwise ->
-                        LegacyTrainConfig cfg{legacyDatasets = datasets}
-
-        validateModel algoId platformId model validationConfig
+        validateModel model validationConfig
 
     Evaluate{getPlatformId,getModel,defaultImpl,evaluateConfig,getDatasetIds} -> do
-        platId <- getPlatformId
-        (algoId, modelId, model) <- getModel
-        algo <- Sql.getJustEntity algoId
-        trainConfig <- getModelTrainingConfig modelId
+        platformId <- getPlatformId
+        (modelId, model) <- getModel
         datasets <- getDatasetIds
 
-        let evalConfig = case trainConfig of
-                TrainConfig cfg
-                    | S.null datasets -> trainConfig
-                    | otherwise -> TrainConfig cfg{stepInfoDatasets = datasets}
+        evalConfig <- setPlatformAndDatasets platformId datasets <$>
+            getModelTrainingConfig modelId
 
-                LegacyTrainConfig cfg
-                    | S.null datasets -> trainConfig
-                    | otherwise ->
-                        LegacyTrainConfig cfg{legacyDatasets = datasets}
-
-        evaluateModel algo platId defaultImpl evaluateConfig model evalConfig
+        evaluateModel defaultImpl evaluateConfig model evalConfig
 
     Compare{getAlgoId,getPlatformId,getCommit,getDatasetId,compareConfig} -> do
         algoId <- getAlgoId
@@ -128,15 +122,16 @@ main = runSqlM commands $ \case
         compareImplementations algoId platformId commit datasetId compareConfig
 
     Export{getModel,cppFile} -> do
-        (algoId, modelId, model) <- getModel
-        impls <- Sql.queryImplementations algoId
+        (modelId, model) <- getModel
         trainConfig <- getModelTrainingConfig modelId
 
-        let (graphProps, stepProps) = case trainConfig of
+        let (algoId, graphProps, stepProps) = case trainConfig of
                 LegacyTrainConfig LegacyConfig{..} ->
-                    (legacyGraphProps, legacyStepProps)
+                    (legacyAlgorithm, legacyGraphProps, legacyStepProps)
                 TrainConfig StepInfoConfig{..} ->
-                    (stepInfoGraphProps, stepInfoStepProps)
+                    (stepInfoAlgorithm, stepInfoGraphProps, stepInfoStepProps)
+
+        impls <- Sql.queryImplementations algoId
 
         dumpCppModel cppFile model graphProps stepProps
             (implementationName <$> impls)

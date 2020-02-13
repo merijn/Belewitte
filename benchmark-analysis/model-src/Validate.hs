@@ -17,14 +17,12 @@ import Evaluate (percent)
 import FormattedOutput (renderOutput)
 import Model
 import Query
-import Schema
 import StepQuery (StepInfo(..))
 import Train
 
-validateModel
-    :: Key Algorithm -> Key Platform -> Model -> TrainingConfig -> SqlM ()
-validateModel algoId platformId model config = renderOutput $ do
-    validation <- getValidationQuery algoId platformId config
+validateModel :: Model -> TrainingConfig -> SqlM ()
+validateModel model config = renderOutput $ do
+    validation <- getValidationQuery config
     computeResults "validation" $ reduceInfo <$> validation
     C.yield "\n"
     computeResults "total" $ reduceInfo <$> total
@@ -33,7 +31,7 @@ validateModel algoId platformId model config = renderOutput $ do
     reduceInfo StepInfo{..} = (stepProps, stepBestImpl)
 
     total :: Query StepInfo
-    total = getTotalQuery algoId platformId config
+    total = getTotalQuery config
 
     computeResults
         :: Text -> Query (Vector Double, Int64) -> ConduitT () Text SqlM ()

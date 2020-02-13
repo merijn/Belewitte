@@ -45,7 +45,7 @@ import Model
 import Query
 import Schema
 import StepQuery (StepInfo(..))
-import Sql (queryImplementations, queryExternalImplementations)
+import qualified Sql
 import Train
 import Utils.ImplTiming
 import Utils.Pair (Pair(..), mapFirst, mergePair)
@@ -328,16 +328,16 @@ data Report a = Report
      }
 
 evaluateModel
-    :: Entity Algorithm
-    -> Key Platform
-    -> Either Int Text
+    :: Either Int Text
     -> EvaluateReport
     -> Model
     -> TrainingConfig
     -> SqlM ()
-evaluateModel algo platId defImpl reportCfg@Report{..} model trainConfig =
+evaluateModel defImpl reportCfg@Report{..} model trainConfig =
   renderOutput $ do
-    impls <- queryImplementations algoId
+    algorithm <- Sql.getJust algoId
+    impls <- Sql.queryImplementations algoId
+
     let implMaps :: Pair (IntMap Text)
         implMaps = toImplNames (filterImpls reportImplTypes) id (impls, mempty)
 
@@ -363,9 +363,11 @@ evaluateModel algo platId defImpl reportCfg@Report{..} model trainConfig =
 
     reportTotalStatistics reportCfg implMaps stats
   where
-    Entity algoId algorithm = algo
+    algoId = case trainConfig of
+        LegacyTrainConfig LegacyConfig{legacyAlgorithm} -> legacyAlgorithm
+        TrainConfig StepInfoConfig{stepInfoAlgorithm} -> stepInfoAlgorithm
 
-    query = getTotalQuery algoId platId trainConfig
+    query = getTotalQuery trainConfig
 
     addBestNonSwitching
         :: IntMap Implementation -> VariantAggregate -> VariantAggregate
@@ -399,8 +401,8 @@ compareImplementations
     -> SqlM ()
 compareImplementations algoId platformId commitId datasetId cfg@Report{..} =
   renderOutput $ do
-    impls <- (,) <$> queryImplementations algoId
-                 <*> queryExternalImplementations algoId
+    impls <- (,) <$> Sql.queryImplementations algoId
+                 <*> Sql.queryExternalImplementations algoId
 
     let implMaps :: Pair (IntMap Text)
         implMaps = toImplNames filterImplTypes filterExternalImpls impls

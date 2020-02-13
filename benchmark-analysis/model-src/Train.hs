@@ -74,7 +74,9 @@ data TrainingConfig
     | LegacyTrainConfig LegacyConfig
 
 data LegacyConfig = LegacyConfig
-    { legacyCommit :: CommitId
+    { legacyAlgorithm :: Key Algorithm
+    , legacyPlatform :: Key Platform
+    , legacyCommit :: CommitId
     , legacyGraphProps :: Set Text
     , legacyStepProps :: Set Text
     , legacyFraction :: Double
@@ -91,20 +93,14 @@ data ModelDescription = ModelDesc
     }
 
 splitQuery
-    :: MonadQuery m
-    => Key Algorithm
-    -> Key Platform
-    -> TrainingConfig
-    -> m (Query StepInfo, Query StepInfo)
-splitQuery algoId platformId (TrainConfig cfg) = return
-    ( stepInfoQuery algoId platformId trainConfig
-    , stepInfoQuery algoId platformId validateConfig
-    )
+    :: MonadQuery m => TrainingConfig -> m (Query StepInfo, Query StepInfo)
+splitQuery (TrainConfig cfg) =
+    return (stepInfoQuery trainConfig, stepInfoQuery validateConfig)
   where
     trainConfig = cfg { stepInfoQueryMode = Train }
     validateConfig = cfg { stepInfoQueryMode = Validate }
 
-splitQuery algoId platformId cfg@(LegacyTrainConfig LegacyConfig{..}) = do
+splitQuery cfg@(LegacyTrainConfig LegacyConfig{..}) = do
     rowCount <- runSqlQueryCount query
 
     let trainingSize :: Int
@@ -112,26 +108,22 @@ splitQuery algoId platformId cfg@(LegacyTrainConfig LegacyConfig{..}) = do
 
     return $ randomizeQuery legacySeed trainingSize query
   where
-    query = getTotalQuery algoId platformId cfg
+    query = getTotalQuery cfg
 
-getTrainingQuery
-    :: MonadQuery m
-    => Key Algorithm -> Key Platform -> TrainingConfig -> m (Query StepInfo)
-getTrainingQuery algoId platformId = fmap fst . splitQuery algoId platformId
+getTrainingQuery :: MonadQuery m => TrainingConfig -> m (Query StepInfo)
+getTrainingQuery = fmap fst . splitQuery
 
-getValidationQuery
-    :: MonadQuery m
-    => Key Algorithm -> Key Platform -> TrainingConfig -> m (Query StepInfo)
-getValidationQuery algoId platformId = fmap snd . splitQuery algoId platformId
+getValidationQuery :: MonadQuery m => TrainingConfig -> m (Query StepInfo)
+getValidationQuery = fmap snd . splitQuery
 
-getTotalQuery
-    :: Key Algorithm -> Key Platform -> TrainingConfig -> Query StepInfo
-getTotalQuery algoId platformId (TrainConfig cfg) =
-  stepInfoQuery algoId platformId cfg{ stepInfoQueryMode = All }
+getTotalQuery :: TrainingConfig -> Query StepInfo
+getTotalQuery (TrainConfig cfg) = stepInfoQuery cfg{ stepInfoQueryMode = All }
 
-getTotalQuery algoId platformId (LegacyTrainConfig LegacyConfig{..}) =
-    stepInfoQuery algoId platformId StepInfoConfig
-        { stepInfoQueryMode = All
+getTotalQuery (LegacyTrainConfig LegacyConfig{..}) =
+    stepInfoQuery StepInfoConfig
+        { stepInfoAlgorithm = legacyAlgorithm
+        , stepInfoPlatform = legacyPlatform
+        , stepInfoQueryMode = All
         , stepInfoCommit = legacyCommit
         , stepInfoGraphProps = legacyGraphProps
         , stepInfoStepProps = legacyStepProps
@@ -146,8 +138,7 @@ getTotalQuery algoId platformId (LegacyTrainConfig LegacyConfig{..}) =
     stepInfoVariants = $$(validRational 1)
     stepInfoSteps = $$(validRational 1)
 
-getModelTrainingConfig
-    :: MonadSql m => Key PredictionModel -> m TrainingConfig
+getModelTrainingConfig :: MonadSql m => Key PredictionModel -> m TrainingConfig
 getModelTrainingConfig modelId = SqlTrans.runTransaction $ do
     PredictionModel{..} <- SqlTrans.getJust modelId
 
@@ -167,7 +158,9 @@ getModelTrainingConfig modelId = SqlTrans.runTransaction $ do
         .| C.foldMap S.singleton
 
     return $ LegacyTrainConfig LegacyConfig
-        { legacyCommit = predictionModelAlgorithmVersion
+        { legacyAlgorithm = predictionModelAlgorithmId
+        , legacyPlatform = predictionModelPlatformId
+        , legacyCommit = predictionModelAlgorithmVersion
         , legacyGraphProps = graphProps
         , legacyStepProps = stepProps
         , legacyFraction = predictionModelTrainFraction
@@ -213,11 +206,8 @@ getModelStats modelId = SqlTrans.runTransaction $ do
 
 trainModel
     :: (MonadMask m, MonadQuery m)
-    => Key Algorithm
-    -> Key Platform
-    -> ModelDescription
-    -> m (Key PredictionModel, Model)
-trainModel algoId platId ModelDesc{..} = do
+    => ModelDescription -> m (Key PredictionModel, Model)
+trainModel ModelDesc{..} = do
     numEntries <- runSqlQueryCount trainQuery
 
     propCount <- runSqlQueryConduit trainQuery C.head >>= \case
@@ -279,8 +269,8 @@ trainModel algoId platId ModelDesc{..} = do
 
     modelId <- SqlTrans.runTransaction $ do
         modelId <- SqlTrans.insert $ PredictionModel
-            { predictionModelPlatformId = platId
-            , predictionModelAlgorithmId = algoId
+            { predictionModelPlatformId = stepInfoPlatform
+            , predictionModelAlgorithmId = stepInfoAlgorithm
             , predictionModelAlgorithmVersion = stepInfoCommit
             , predictionModelName = modelName
             , predictionModelPrettyName = modelPrettyName
@@ -302,11 +292,12 @@ trainModel algoId platId ModelDesc{..} = do
 
         forM_ modelUnknownPreds $ \UnknownSet{..} -> do
             unknownId <- SqlTrans.insert $
-                UnknownPrediction modelId algoId unknownSetId unknownSetOccurence
+                UnknownPrediction modelId stepInfoAlgorithm unknownSetId unknownSetOccurence
 
             forM_ unknownSetImpls $ \impl -> do
                 implKey <- SqlTrans.validateKey "Implementation" impl
-                SqlTrans.insert_ $ UnknownPredictionSet unknownId implKey algoId
+                SqlTrans.insert_ $
+                    UnknownPredictionSet unknownId implKey stepInfoAlgorithm
 
         return modelId
 
@@ -314,7 +305,7 @@ trainModel algoId platId ModelDesc{..} = do
   where
     StepInfoConfig{..} = modelTrainConfig
 
-    trainQuery = reduceInfo <$> stepInfoQuery algoId platId modelTrainConfig
+    trainQuery = reduceInfo <$> stepInfoQuery modelTrainConfig
 
     reduceInfo StepInfo{..} = (stepProps, stepBestImpl)
 

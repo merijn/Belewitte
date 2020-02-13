@@ -32,6 +32,8 @@ data QueryMode = Train | Validate | All deriving (Show, Eq)
 
 data StepInfoConfig = StepInfoConfig
     { stepInfoQueryMode :: QueryMode
+    , stepInfoAlgorithm :: Key Algorithm
+    , stepInfoPlatform :: Key Platform
     , stepInfoCommit :: CommitId
     , stepInfoGraphProps :: Set Text
     , stepInfoStepProps :: Set Text
@@ -62,10 +64,11 @@ sortStepTimings info@StepInfo{..} =
         V.sortBy (comparing implTimingImpl) mvec
         VS.unsafeFreeze mvec
 
-stepInfoQuery
-    :: Key Algorithm -> Key Platform -> StepInfoConfig -> Query StepInfo
-stepInfoQuery algoId platformId StepInfoConfig
-  { stepInfoCommit
+stepInfoQuery :: StepInfoConfig -> Query StepInfo
+stepInfoQuery StepInfoConfig
+  { stepInfoAlgorithm
+  , stepInfoPlatform
+  , stepInfoCommit
   , stepInfoGraphProps
   , stepInfoStepProps
   , stepInfoDatasets
@@ -131,7 +134,7 @@ IndexedStepProps(variantId, stepId, idx, property, value, count) AS (
     WHERE property IN #{inExpression stepInfoStepProps}
     WINDOW variantStep AS (PARTITION BY variantId, stepId)
 )|]
-      , [toPersistValue algoId] `inCTE` [i|
+      , [toPersistValue stepInfoAlgorithm] `inCTE` [i|
 IndexedImpls(idx, implId, type, count) AS (
     SELECT ROW_NUMBER() OVER ()
          , id
@@ -148,8 +151,8 @@ ImplVector(implTiming) AS (
       , CTE
         { cteParams =
             [ toPersistValue stepInfoTimestamp
-            , toPersistValue algoId
-            , toPersistValue platformId
+            , toPersistValue stepInfoAlgorithm
+            , toPersistValue stepInfoPlatform
             , toPersistValue stepInfoCommit
             , toPersistValue $ S.size stepInfoDatasets == 0
             ]

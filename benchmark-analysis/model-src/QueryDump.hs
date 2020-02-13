@@ -38,17 +38,16 @@ toStepInfoQueries
                 (Query StepInfo)
                 SqlM
                 ()
-toStepInfoQueries (algoId, platformId, stepInfoCommit) = do
+toStepInfoQueries (stepInfoAlgorithm, stepInfoPlatform, stepInfoCommit) = do
     query <- getDistinctFieldQuery GraphPropProperty
     stepInfoGraphProps <- runSqlQueryConduit query $ C.foldMap S.singleton
 
     stepInfoStepProps <- S.fromList . map (stepPropProperty . entityVal) <$>
-        Sql.selectList [StepPropAlgorithmId ==. algoId] []
+        Sql.selectList [StepPropAlgorithmId ==. stepInfoAlgorithm] []
 
     stepInfoTimestamp <- liftIO getCurrentTime
 
-    yield $ stepInfoQuery algoId platformId StepInfoConfig
-                {stepInfoQueryMode = All, ..}
+    yield $ stepInfoQuery StepInfoConfig {stepInfoQueryMode = All, ..}
   where
     stepInfoSeed = 42
     stepInfoDatasets = mempty
