@@ -392,17 +392,11 @@ evaluateModel defImpl reportCfg@Report{..} model trainConfig =
           . regular
           $ implTimes
 
-compareImplementations
-    :: Key Algorithm
-    -> Key Platform
-    -> CommitId
-    -> Maybe (Key Dataset)
-    -> CompareReport
-    -> SqlM ()
-compareImplementations algoId platformId commitId datasetId cfg@Report{..} =
+compareImplementations :: VariantInfoConfig -> CompareReport -> SqlM ()
+compareImplementations variantInfoConfig cfg@Report{..} =
   renderOutput $ do
-    impls <- (,) <$> Sql.queryImplementations algoId
-                 <*> Sql.queryExternalImplementations algoId
+    impls <- (,) <$> Sql.queryImplementations variantInfoAlgorithm
+                 <*> Sql.queryExternalImplementations variantInfoAlgorithm
 
     let implMaps :: Pair (IntMap Text)
         implMaps = toImplNames filterImplTypes filterExternalImpls impls
@@ -413,12 +407,15 @@ compareImplementations algoId platformId commitId datasetId cfg@Report{..} =
 
     reportTotalStatistics cfg implMaps stats
   where
+    VariantInfoConfig{variantInfoAlgorithm} = variantInfoConfig
+
     filterImplTypes = filterImpls implTypes
+
     filterExternalImpls
         | compareExternal = id
         | otherwise = const mempty
 
-    query = variantInfoQuery algoId platformId commitId datasetId
+    query = variantInfoQuery variantInfoConfig
     (Any compareExternal, implTypes) = reportImplTypes
 
     addBestNonSwitching :: VariantInfo -> VariantAggregate

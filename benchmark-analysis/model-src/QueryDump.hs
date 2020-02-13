@@ -29,8 +29,8 @@ getConfigSet = runConduit $
 
 toVariantInfoQuery
     :: (Key Algorithm, Key Platform, CommitId) -> Query VariantInfo
-toVariantInfoQuery (algoId, platformId, commitId) =
-  variantInfoQuery algoId platformId commitId Nothing
+toVariantInfoQuery (algoId, platformId, commitId) = variantInfoQuery $
+    VariantInfoConfig algoId platformId commitId Nothing
 
 toStepInfoQueries
     :: (Key Algorithm, Key Platform, CommitId)

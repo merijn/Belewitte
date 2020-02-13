@@ -114,12 +114,9 @@ main = runSqlM commands $ \case
 
         evaluateModel defaultImpl evaluateConfig model evalConfig
 
-    Compare{getAlgoId,getPlatformId,getCommit,getDatasetId,compareConfig} -> do
-        algoId <- getAlgoId
-        platformId <- getPlatformId
-        commit <- getCommit
-        datasetId <- sequence getDatasetId
-        compareImplementations algoId platformId commit datasetId compareConfig
+    Compare{getVariantInfoConfig,compareConfig} -> do
+        variantInfoConfig <- getVariantInfoConfig
+        compareImplementations variantInfoConfig compareConfig
 
     Export{getModel,cppFile} -> do
         (modelId, model) <- getModel

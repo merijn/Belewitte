@@ -38,6 +38,7 @@ import Sql ((==.))
 import qualified Sql
 import StepQuery (QueryMode, StepInfoConfig(..), stepInfoQuery)
 import qualified StepQuery
+import VariantQuery
 
 data ModelCommand
     = Train
@@ -57,10 +58,7 @@ data ModelCommand
       , getDatasetIds :: SqlM (Set (Key Dataset))
       }
     | Compare
-      { getAlgoId :: SqlM (Key Algorithm)
-      , getPlatformId :: SqlM (Key Platform)
-      , getCommit :: SqlM CommitId
-      , getDatasetId :: Maybe (SqlM (Key Dataset))
+      { getVariantInfoConfig :: SqlM VariantInfoConfig
       , compareConfig :: CompareReport
       }
     | Export
@@ -108,8 +106,7 @@ commands = CommandRoot
         , commandHeaderDesc = "compare implementation performance"
         , commandDesc = "Compare the performance of different implementations"
         }
-        $ Compare <$> algorithmIdParser <*> platformIdParser <*> commitIdParser
-                  <*> optional datasetIdParser <*> compareParser
+        $ Compare <$> variantInfoConfig <*> compareParser
     , SingleCommand CommandInfo
         { commandName = "export"
         , commandHeaderDesc = "export model to C++"
@@ -344,3 +341,11 @@ stepInfoConfig = do
     gatherStepProps algoId = do
         stepProps <- Sql.selectList [StepPropAlgorithmId ==. algoId] []
         return . S.fromList $ map (stepPropProperty . entityVal) stepProps
+
+variantInfoConfig :: Parser (SqlM VariantInfoConfig)
+variantInfoConfig = getCompose $ do
+    VariantInfoConfig
+        <$> Compose algorithmIdParser
+        <*> Compose platformIdParser
+        <*> Compose commitIdParser
+        <*> Compose (sequence <$> optional datasetIdParser)

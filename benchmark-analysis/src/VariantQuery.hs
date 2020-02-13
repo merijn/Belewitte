@@ -1,10 +1,12 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
 module VariantQuery
     ( VariantInfo(..)
+    , VariantInfoConfig(..)
     , variantInfoQuery
     , sortVariantTimings
     ) where
@@ -21,6 +23,13 @@ import Query
 import Schema
 import Utils.ImplTiming
 import Utils.Vector (byteStringToVector)
+
+data VariantInfoConfig = VariantInfoConfig
+    { variantInfoAlgorithm :: Key Algorithm
+    , variantInfoPlatform :: Key Platform
+    , variantInfoCommit :: CommitId
+    , variantInfoDataset :: Maybe (Key Dataset)
+    }
 
 data VariantInfo =
   VariantInfo
@@ -43,13 +52,13 @@ sortVariantTimings info@VariantInfo{..} = info
         V.sortBy (comparing implTimingImpl) mvec
         VS.unsafeFreeze mvec
 
-variantInfoQuery
-    :: Key Algorithm
-    -> Key Platform
-    -> CommitId
-    -> Maybe (Key Dataset)
-    -> Query VariantInfo
-variantInfoQuery algoId platformId commitId datasetId = Query{..}
+variantInfoQuery :: VariantInfoConfig -> Query VariantInfo
+variantInfoQuery VariantInfoConfig
+  { variantInfoAlgorithm
+  , variantInfoPlatform
+  , variantInfoCommit
+  , variantInfoDataset
+  } = Query{..}
   where
     queryName :: Text
     queryName = "variantInfoQuery"
@@ -77,7 +86,7 @@ variantInfoQuery algoId platformId commitId datasetId = Query{..}
 
     commonTableExpressions :: [CTE]
     commonTableExpressions =
-      [ [toPersistValue algoId] `inCTE` [i|
+      [ [toPersistValue variantInfoAlgorithm] `inCTE` [i|
 IndexedImpls(idx, implId, type, count) AS (
     SELECT ROW_NUMBER() OVER ()
          , id
@@ -92,7 +101,7 @@ ImplVector(implTiming) AS (
     FROM IndexedImpls
 )|]
 
-      , [toPersistValue algoId] `inCTE` [i|
+      , [toPersistValue variantInfoAlgorithm] `inCTE` [i|
 IndexedExternalImpls(idx, implId, count) AS (
     SELECT ROW_NUMBER() OVER ()
          , id
@@ -108,11 +117,11 @@ ExternalImplVector(implTiming) AS (
 
       , CTE
         { cteParams =
-            [ toPersistValue algoId
-            , toPersistValue platformId
-            , toPersistValue commitId
-            , toPersistValue datasetId
-            , toPersistValue datasetId
+            [ toPersistValue variantInfoAlgorithm
+            , toPersistValue variantInfoPlatform
+            , toPersistValue variantInfoCommit
+            , toPersistValue variantInfoDataset
+            , toPersistValue variantInfoDataset
             ]
         , cteQuery = [i|
 VariantTiming(variantId, bestNonSwitching, timings) AS (
@@ -143,11 +152,11 @@ VariantTiming(variantId, bestNonSwitching, timings) AS (
 
       , CTE
         { cteParams =
-            [ toPersistValue algoId
-            , toPersistValue platformId
-            , toPersistValue commitId
-            , toPersistValue datasetId
-            , toPersistValue datasetId
+            [ toPersistValue variantInfoAlgorithm
+            , toPersistValue variantInfoPlatform
+            , toPersistValue variantInfoCommit
+            , toPersistValue variantInfoDataset
+            , toPersistValue variantInfoDataset
             ]
         , cteQuery = [i|
 OptimalStep(variantId, optimal) AS (
@@ -176,7 +185,7 @@ OptimalStep(variantId, optimal) AS (
 )|]
         }
 
-      , [toPersistValue platformId] `inCTE` [i|
+      , [toPersistValue variantInfoPlatform] `inCTE` [i|
 ExternalTiming(variantId, timings) AS (
    SELECT Variant.id
         , update_key_value_vector(implTiming, idx, Impls.implId, avgTime)

@@ -20,7 +20,7 @@ import InteractiveInput
 import OptionParsers
 import Query (Query(..), explainSqlQuery, runSqlQueryConduit)
 import Schema (PersistValue(..))
-import VariantQuery (VariantInfo, variantInfoQuery)
+import VariantQuery (VariantInfo, VariantInfoConfig(..), variantInfoQuery)
 
 data DebugQuery where
     DebugQuery :: Show v => SqlM (Query v) -> DebugQuery
@@ -85,7 +85,7 @@ commands dumpCommand queryMap = HiddenGroup CommandInfo
       M.insert "variantInfoQuery" (DebugQuery <$> variantQuery) queryMap
 
     variantQuery :: Parser (SqlM (Query VariantInfo))
-    variantQuery = getCompose $ variantInfoQuery
+    variantQuery = getCompose . fmap variantInfoQuery $ VariantInfoConfig
         <$> Compose algorithmIdParser <*> Compose platformIdParser
         <*> Compose commitIdParser <*> optional (Compose datasetIdParser)
 

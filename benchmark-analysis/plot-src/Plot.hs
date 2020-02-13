@@ -282,7 +282,9 @@ main = runSqlM commands $ \case
                 C.map (second $ translatePair . toPair V.convert V.convert)
 
         PlotVsOptimal -> do
-            let variantQuery = variantInfoQuery algoId platformId commit Nothing
+            let variantQuery = variantInfoQuery $
+                    VariantInfoConfig algoId platformId commit Nothing
+
                 variantFilter VariantInfo{variantId} =
                     S.member variantId variants
 
