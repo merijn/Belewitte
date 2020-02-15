@@ -30,7 +30,7 @@ getConfigSet = runConduit $
 toVariantInfoQuery
     :: (Key Algorithm, Key Platform, CommitId) -> Query VariantInfo
 toVariantInfoQuery (algoId, platformId, commitId) = variantInfoQuery $
-    VariantInfoConfig algoId platformId commitId Nothing
+    VariantInfoConfig algoId platformId commitId Nothing False
 
 toStepInfoQueries
     :: (Key Algorithm, Key Platform, CommitId)
@@ -51,6 +51,7 @@ toStepInfoQueries (stepInfoAlgorithm, stepInfoPlatform, stepInfoCommit) = do
   where
     stepInfoSeed = 42
     stepInfoDatasets = mempty
+    stepInfoFilterIncomplete = False
 
     stepInfoGraphs, stepInfoVariants, stepInfoSteps :: Percentage
     stepInfoGraphs = $$(validRational 1)

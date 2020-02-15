@@ -29,6 +29,7 @@ data VariantInfoConfig = VariantInfoConfig
     , variantInfoPlatform :: Key Platform
     , variantInfoCommit :: CommitId
     , variantInfoDataset :: Maybe (Key Dataset)
+    , variantInfoFilterIncomplete :: Bool
     }
 
 data VariantInfo =
@@ -58,6 +59,7 @@ variantInfoQuery VariantInfoConfig
   , variantInfoPlatform
   , variantInfoCommit
   , variantInfoDataset
+  , variantInfoFilterIncomplete
   } = Query{..}
   where
     queryName :: Text
@@ -122,6 +124,7 @@ ExternalImplVector(implTiming) AS (
             , toPersistValue variantInfoCommit
             , toPersistValue variantInfoDataset
             , toPersistValue variantInfoDataset
+            , toPersistValue $ not variantInfoFilterIncomplete
             ]
         , cteQuery = [i|
 VariantTiming(variantId, bestNonSwitching, timings) AS (
@@ -147,6 +150,7 @@ VariantTiming(variantId, bestNonSwitching, timings) AS (
     AND (RunConfig.datasetId = ? OR ? IS NULL)
 
     GROUP BY Run.variantId
+    HAVING ? OR COUNT(Run.id) = MAX(Impls.count)
 )|]
         }
 

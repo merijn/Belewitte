@@ -130,6 +130,7 @@ getTotalQuery (LegacyTrainConfig LegacyConfig{..}) =
         , stepInfoSeed = legacySeed
         , stepInfoTimestamp = legacyTimestamp
         , stepInfoDatasets = legacyDatasets
+        , stepInfoFilterIncomplete = False
         , ..
         }
   where

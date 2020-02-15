@@ -283,7 +283,7 @@ main = runSqlM commands $ \case
 
         PlotVsOptimal -> do
             let variantQuery = variantInfoQuery $
-                    VariantInfoConfig algoId platformId commit Nothing
+                    VariantInfoConfig algoId platformId commit Nothing False
 
                 variantFilter VariantInfo{variantId} =
                     S.member variantId variants

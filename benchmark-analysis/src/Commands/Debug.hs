@@ -88,6 +88,7 @@ commands dumpCommand queryMap = HiddenGroup CommandInfo
     variantQuery = getCompose . fmap variantInfoQuery $ VariantInfoConfig
         <$> Compose algorithmIdParser <*> Compose platformIdParser
         <*> Compose commitIdParser <*> optional (Compose datasetIdParser)
+        <*> Compose (return <$> filterIncomplete)
 
     buildQueryList :: (String -> Parser DebugQuery -> a) -> [a]
     buildQueryList f = M.foldMapWithKey (\k v -> [f k v]) completeQueryMap

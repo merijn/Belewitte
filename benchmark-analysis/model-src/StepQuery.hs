@@ -39,6 +39,7 @@ data StepInfoConfig = StepInfoConfig
     , stepInfoStepProps :: Set Text
     , stepInfoSeed :: Int64
     , stepInfoDatasets :: Set (Key Dataset)
+    , stepInfoFilterIncomplete :: Bool
     , stepInfoGraphs :: Percentage
     , stepInfoVariants :: Percentage
     , stepInfoSteps :: Percentage
@@ -72,6 +73,7 @@ stepInfoQuery StepInfoConfig
   , stepInfoGraphProps
   , stepInfoStepProps
   , stepInfoDatasets
+  , stepInfoFilterIncomplete
   , stepInfoTimestamp
   } = Query{..}
   where
@@ -155,6 +157,7 @@ ImplVector(implTiming) AS (
             , toPersistValue stepInfoPlatform
             , toPersistValue stepInfoCommit
             , toPersistValue $ S.size stepInfoDatasets == 0
+            , toPersistValue $ not stepInfoFilterIncomplete
             ]
         , cteQuery = [i|
 StepTiming(graphId, variantId, stepId, implId, timings) AS (
@@ -186,6 +189,7 @@ StepTiming(graphId, variantId, stepId, implId, timings) AS (
     ON Impls.implId = Run.implId
 
     GROUP BY Variant.id, StepTimer.stepId
+    HAVING ? OR COUNT(Run.id) = MAX(Impls.count)
 )|]
         }]
 

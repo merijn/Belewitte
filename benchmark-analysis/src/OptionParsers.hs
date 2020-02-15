@@ -8,6 +8,7 @@ module OptionParsers
     , commitIdParser
     , datasetIdParser
     , datasetParser
+    , filterIncomplete
     , percentageParser
     , platformIdParser
     , platformParser
@@ -98,6 +99,12 @@ datasetParser = queryDataset <$> datasetOpt
     queryDataset (Right n) = Sql.validateEntity "Dataset" n
     queryDataset (Left name) = Sql.validateUniqEntity "Dataset" $
         UniqDataset name
+
+filterIncomplete :: Parser Bool
+filterIncomplete = flag True False $ mconcat
+    [ long "show-incomplete"
+    , help "Include results for variants where some results are missing"
+    ]
 
 percentageParser :: [Mod OptionFields Percentage] -> Parser Percentage
 percentageParser = option (maybeReader percentReader) . mconcat

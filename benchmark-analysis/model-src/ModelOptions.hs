@@ -133,14 +133,16 @@ modelQueryMap = M.fromList
         queryMode <- queryModeParser
         trainSeed <- trainSeedParser
         getDatasets <- datasetsParser
+        shouldFilter <- filterIncomplete
 
         pure $ do
             algoId <- getAlgoId
             cfg <- StepInfoConfig queryMode algoId
                     <$> getPlatformId <*> getCommitId <*> graphProps
                     <*> stepProps algoId <*> pure trainSeed <*> getDatasets
+                    <*> pure shouldFilter <*> pure hundredPercent
                     <*> pure hundredPercent <*> pure hundredPercent
-                    <*> pure hundredPercent <*> getUtcTime
+                    <*> getUtcTime
 
             pure $ stepInfoQuery cfg
     ]
@@ -287,6 +289,7 @@ stepInfoConfig = do
     getDatasets <- datasetsParser
     filterGraphProps <- props "graph"
     filterStepProps <- props "step"
+    shouldFilter <- filterIncomplete
 
     pure $ do
         algoId <- getAlgoId
@@ -294,8 +297,9 @@ stepInfoConfig = do
                 <$> getPlatformId <*> getCommitId
                 <*> (filterGraphProps <*> gatherGraphProps)
                 <*> (filterStepProps <*> gatherStepProps algoId)
-                <*> pure trainSeed <*> getDatasets <*> pure hundredPercent
-                <*> pure hundredPercent <*> pure hundredPercent <*> getUtcTime
+                <*> pure trainSeed <*> getDatasets <*> pure shouldFilter
+                <*> pure hundredPercent <*> pure hundredPercent
+                <*> pure hundredPercent <*> getUtcTime
   where
     hundredPercent :: Percentage
     hundredPercent = $$(validRational 1)
@@ -349,3 +353,4 @@ variantInfoConfig = getCompose $ do
         <*> Compose platformIdParser
         <*> Compose commitIdParser
         <*> Compose (sequence <$> optional datasetIdParser)
+        <*> Compose (return <$> filterIncomplete)
