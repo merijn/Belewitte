@@ -81,6 +81,7 @@ Library
                         Model
                         Options
                         Pretty.Fields
+                        Pretty.List
                         Query
                         RuntimeData
                         Schema
@@ -165,6 +166,7 @@ Library
                         MagicHash
                         MultiParamTypeClasses
                         PatternSynonyms
+                        Rank2Types
                         RankNTypes
                         ScopedTypeVariables
                         StandaloneDeriving
