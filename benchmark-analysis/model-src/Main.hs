@@ -6,7 +6,7 @@
 module Main(main) where
 
 import Data.Bifunctor (first)
-import Data.Conduit ((.|))
+import Data.Conduit (ConduitT, (.|))
 import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
 import Data.List (sortBy)
@@ -18,7 +18,7 @@ import qualified Data.Text as T
 
 import Core
 import Evaluate (evaluateModel, compareImplementations, percent)
-import FormattedOutput (renderOutput)
+import FormattedOutput (renderEntity, renderOutput)
 import InteractiveInput
 import Model
 import ModelOptions
@@ -27,19 +27,26 @@ import qualified Sql
 import Train
 import Validate
 
-reportModelStats :: ModelStats -> SqlM ()
-reportModelStats ModelStats{..} = renderOutput $ do
+reportModelStats :: ModelStats -> ConduitT () Text SqlM ()
+reportModelStats ModelStats{..} = do
+    C.yield "Feature importance:\n"
     C.yieldMany sortedFeatures .| C.map renderFeature
     C.yield "\n"
+    C.yield "Unknown predictions:\n"
     C.yieldMany sortedUnknown .| C.mapM renderImplSet
   where
     renderFeature :: (Text, Double) -> Text
-    renderFeature (lbl, val) = lbl <> ": " <> percent val 1 <> "\n"
+    renderFeature (lbl, val) = mconcat
+        [ padName (lbl <> ":"), " ", paddedPercent, "\n" ]
+      where
+        valTxt = percent val 1
+        paddedPercent = T.replicate (6 - T.length valTxt) " " <> valTxt
+        padName t = t <> T.replicate (maxFeatureNameLength - T.length t) " "
 
     renderImplSet :: UnknownSet -> SqlM Text
     renderImplSet UnknownSet{..} = do
         names <- foldMap wrap <$> traverse getName (S.toList unknownSetImpls)
-        return $ percent unknownSetOccurence modelUnknownCount <> " :\n" <> names
+        pure $ percent unknownSetOccurence modelUnknownCount <> " :\n" <> names
       where
         wrap :: Text -> Text
         wrap t = "    " <> t <> "\n"
@@ -47,9 +54,12 @@ reportModelStats ModelStats{..} = renderOutput $ do
         getName :: Int64 -> SqlM Text
         getName i = getImplName <$> Sql.getJust (toSqlKey i)
 
+    maxFeatureNameLength :: Int
+    maxFeatureNameLength = maximum $ map ((1+) . T.length . fst) features
+
     features :: [(Text, Double)]
-    features = map (first ("Graph:" <>)) (M.toList modelGraphPropImportance)
-            ++ map (first ("Step:" <>)) (M.toList modelStepPropImportance)
+    features = map (first ("Graph: " <>)) (M.toList modelGraphPropImportance)
+            ++ map (first ("Step:  " <>)) (M.toList modelStepPropImportance)
 
     sortedFeatures :: [(Text, Double)]
     sortedFeatures = sortBy (flip (comparing snd)) features
@@ -90,9 +100,13 @@ main = runSqlM commands $ \case
 
         liftIO $ print (fromSqlKey modelId)
 
-    QueryModel{getModel} -> do
-        (modelId, _) <- getModel
-        getModelStats modelId >>= reportModelStats
+    QueryModel{getModelEntity} -> do
+        modelEnt@(Entity modelId _) <- getModelEntity
+        modelStats <- getModelStats modelId
+        renderOutput $ do
+            C.yield $ renderEntity modelEnt
+            C.yield "\n"
+            reportModelStats modelStats
 
     ListModels{listModels} -> listModels
 

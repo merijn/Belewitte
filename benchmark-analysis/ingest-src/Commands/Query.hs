@@ -93,7 +93,7 @@ commands = CommandGroup CommandInfo
     renderEntityParser
         :: (PrettyFields v, ToBackendKey SqlBackend v)
         => proxy v -> Parser (SqlM ())
-    renderEntityParser proxy = (>>= renderProxyEntity proxy) <$> entityParser
+    renderEntityParser proxy = (>>= printProxyEntity proxy) <$> entityParser
 
 showRunCommand :: SqlM ()
 showRunCommand = do

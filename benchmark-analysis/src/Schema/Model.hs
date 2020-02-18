@@ -50,9 +50,9 @@ PredictionModel
 instance PrettyFields PredictionModel where
     prettyFieldInfo = ("Id", idField PredictionModelId) :|
         [ ("Name", textField PredictionModelName)
+        , ("Pretty Name", maybeTextField PredictionModelPrettyName)
         , ("Algorithm", idField PredictionModelAlgorithmId)
         , ("Platform", idField PredictionModelPlatformId)
-        , ("Pretty Name", maybeTextField PredictionModelPrettyName)
         , ("Fraction", PredictionModelTrainFraction `fieldVia` prettyDouble)
         , ("Seed", PredictionModelTrainSeed `fieldVia` prettyShow)
         , ("Unknown", PredictionModelTotalUnknownCount `fieldVia` prettyShow)

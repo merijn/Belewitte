@@ -45,7 +45,7 @@ data ModelCommand
     = Train
       { getConfig :: SqlM StepInfoConfig }
     | QueryModel
-      { getModel :: SqlM (Key PredictionModel, Model) }
+      { getModelEntity :: SqlM (Entity PredictionModel) }
     | ListModels
       { listModels :: SqlM () }
     | Validate
@@ -87,7 +87,7 @@ commands = CommandRoot
         { commandName = "query"
         , commandHeaderDesc = "report model info"
         , commandDesc = "Report model info & statistics"
-        } (QueryModel <$> modelParser)
+        } (QueryModel <$> entityParser)
     , SingleCommand CommandInfo
         { commandName = "list"
         , commandHeaderDesc = "list trained models"

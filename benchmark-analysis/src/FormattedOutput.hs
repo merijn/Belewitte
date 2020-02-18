@@ -5,7 +5,7 @@
 {-# LANGUAGE ViewPatterns #-}
 module FormattedOutput
     ( renderEntity
-    , renderProxyEntity
+    , printProxyEntity
     , renderColumns
     , renderOutput
     , outputSink
@@ -56,8 +56,8 @@ queryFieldInfo (name, col@(FieldInfo field _)) =
         | maxVal > Max 0 = (name, col, (avgVal, max fieldSize maxVal))
         | otherwise = (name, col, (avgVal, maxVal))
 
-entityFormatter :: forall a . PrettyFields a => Entity a -> Text
-entityFormatter ent = foldMap formatLine fieldInfos
+renderEntity :: forall a . PrettyFields a => Entity a -> Text
+renderEntity ent = foldMap formatLine fieldInfos
   where
     formatLine :: (Text, FieldInfo a) -> Text
     formatLine (name, field) = mconcat
@@ -71,11 +71,8 @@ entityFormatter ent = foldMap formatLine fieldInfos
     fieldInfos :: NonEmpty (Text, FieldInfo a)
     fieldInfos = prettyFieldInfo
 
-renderEntity :: PrettyFields a => Entity a -> SqlM ()
-renderEntity ent = renderOutput $ C.yield (entityFormatter ent)
-
-renderProxyEntity :: PrettyFields a => proxy a -> Entity a -> SqlM ()
-renderProxyEntity _ ent = renderOutput $ C.yield (entityFormatter ent)
+printProxyEntity :: PrettyFields a => proxy a -> Entity a -> SqlM ()
+printProxyEntity _ ent = renderOutput $ C.yield (renderEntity ent)
 
 columnFormatter
     :: (MonadQuery m, PrettyFields a) => m (Text, Entity a -> Text)
