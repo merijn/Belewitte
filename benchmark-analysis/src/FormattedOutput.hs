@@ -40,7 +40,7 @@ import Sql
 import Utils.Process (unexpectedTermination)
 
 fieldToText :: PersistEntity a => FieldInfo a -> Entity a -> Text
-fieldToText (FieldInfo field toText) = toText . view (Sql.fieldLens field)
+fieldToText (FieldInfo field toText _) = toText . view (Sql.fieldLens field)
 
 padText :: Int -> Text -> Text
 padText n input = input <> T.replicate (n - T.length input) " "
@@ -48,7 +48,10 @@ padText n input = input <> T.replicate (n - T.length input) " "
 queryFieldInfo
     :: (PrettyFields a, MonadQuery m)
     => (Text, FieldInfo a) -> m (Text, FieldInfo a, (Avg, Max))
-queryFieldInfo (name, col@(FieldInfo field _)) =
+queryFieldInfo (name, col@(FieldInfo _ _ True)) =
+    return (name, col, (Avg 0, Max 0))
+
+queryFieldInfo (name, col@(FieldInfo field _ False)) =
     annotateField <$> Sql.getFieldLength field
   where
     fieldSize = Max . T.length $ name
