@@ -18,7 +18,7 @@ import qualified Data.Set as S
 import qualified Data.Text as T
 
 import Core
-import Evaluate (evaluateModel, compareImplementations, percent)
+import Evaluate (evaluateModel, compareImplementations)
 import FormattedOutput (renderEntity, renderOutput)
 import InteractiveInput
 import Model

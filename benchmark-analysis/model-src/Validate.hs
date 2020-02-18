@@ -13,10 +13,10 @@ import qualified Data.Text as T
 import Data.Vector.Storable (Vector)
 
 import Core
-import Evaluate (percent)
 import FormattedOutput (renderOutput)
 import Model
 import Query
+import Schema
 import StepQuery (StepInfo(..))
 import Train
 

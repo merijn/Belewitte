@@ -15,6 +15,8 @@ module Types
     , Percentage
     , getPercentage
     , mkPercentage
+    , percent
+    , renderPercentage
     , validRational
     ) where
 
@@ -27,6 +29,7 @@ import Data.Text (Text, pack, unpack)
 import Database.Persist.Class (PersistField(..))
 import Database.Persist.TH
 import Database.Persist.Sql (PersistFieldSql(..))
+import Numeric (showFFloat)
 import ValidLiterals
 
 data ImplType = Builtin | Core | Derived
@@ -50,6 +53,15 @@ instance Show CommitId where
 
 newtype Percentage = Percentage { getPercentage :: Double}
     deriving (Read, Eq, Ord, Lift)
+
+percent :: Real n => n -> n -> Text
+percent x y = pack $ showFFloat (Just 2) val "%"
+  where
+    val :: Double
+    val = 100 * realToFrac x / realToFrac y
+
+renderPercentage :: Percentage -> Text
+renderPercentage (Percentage d) = percent d 1
 
 mkPercentage :: Double -> Maybe Percentage
 mkPercentage = fromLiteral

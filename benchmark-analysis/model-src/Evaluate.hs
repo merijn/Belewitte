@@ -11,7 +11,6 @@ module Evaluate
     , Report(..)
     , RelativeTo(..)
     , SortBy(..)
-    , percent
     , evaluateModel
     , compareImplementations
     ) where
@@ -50,12 +49,6 @@ import Train
 import Utils.ImplTiming
 import Utils.Pair (Pair(..), mapFirst, mergePair)
 import VariantQuery
-
-percent :: Real n => n -> n -> Text
-percent x y = T.pack $ showFFloat (Just 2) val "%"
-  where
-    val :: Double
-    val = 100 * realToFrac x / realToFrac y
 
 padText :: Word -> Text -> Text
 padText n t = t <> T.replicate (fromIntegral n - T.length t) " "

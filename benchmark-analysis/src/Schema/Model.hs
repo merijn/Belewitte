@@ -54,7 +54,7 @@ instance PrettyFields PredictionModel where
         , ("Description", multilineTextField PredictionModelDescription)
         , ("Algorithm", idField PredictionModelAlgorithmId)
         , ("Platform", idField PredictionModelPlatformId)
-        , ("Fraction", PredictionModelTrainFraction `fieldVia` prettyDouble)
+        , ("Fraction", PredictionModelTrainFraction `fieldVia` flip percent 1)
         , ("Seed", PredictionModelTrainSeed `fieldVia` prettyShow)
         , ("Unknown", PredictionModelTotalUnknownCount `fieldVia` prettyShow)
         , ("Algorithm Commit", PredictionModelAlgorithmVersion `fieldVia` getCommitId)

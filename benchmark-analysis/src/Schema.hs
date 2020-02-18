@@ -36,6 +36,8 @@ module Schema
     , getImplName
     , getExternalName
     , mkPercentage
+    , percent
+    , renderPercentage
     , toImplNames
     , schemaVersion
     , currentSchema
