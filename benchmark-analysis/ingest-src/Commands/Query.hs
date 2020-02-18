@@ -5,7 +5,6 @@ module Commands.Query (commands) where
 
 import Data.Proxy (Proxy(..))
 import qualified Data.Text.IO as T
-import System.Exit (exitFailure)
 
 import Core
 import FormattedOutput
@@ -33,63 +32,68 @@ commands = CommandGroup CommandInfo
         , commandHeaderDesc = "list algorithm information"
         , commandDesc = "Show information about a registered algorithm."
         }
-        $ queryDatabase (Proxy :: Proxy Algorithm)
+        $ renderEntityParser (Proxy :: Proxy Algorithm)
     , SingleCommand CommandInfo
         { commandName = "dataset"
         , commandHeaderDesc = "list dataset information"
         , commandDesc = "Show information about a registered dataset."
         }
-        $ queryDatabase (Proxy :: Proxy Dataset)
+        $ renderEntityParser (Proxy :: Proxy Dataset)
     , SingleCommand CommandInfo
         { commandName = "external-impl"
         , commandHeaderDesc = "list external implementation information"
         , commandDesc =
             "Show information about a registered external implementation."
         }
-        $ queryDatabase (Proxy :: Proxy ExternalImpl)
+        $ renderEntityParser (Proxy :: Proxy ExternalImpl)
     , SingleCommand CommandInfo
         { commandName = "graph"
         , commandHeaderDesc = "list graph information"
         , commandDesc = "Show information about a registered graph."
         }
-        $ queryDatabase (Proxy :: Proxy Graph)
+        $ renderEntityParser (Proxy :: Proxy Graph)
     , SingleCommand CommandInfo
         { commandName = "implementation"
         , commandHeaderDesc = "list implementation information"
         , commandDesc = "Show information about a registered implementation."
         }
-        $ queryDatabase (Proxy :: Proxy Implementation)
+        $ renderEntityParser (Proxy :: Proxy Implementation)
     , SingleCommand CommandInfo
         { commandName = "platform"
         , commandHeaderDesc = "list platform information"
         , commandDesc = "Show information about a registered platform."
         }
-        $ queryDatabase (Proxy :: Proxy Platform)
+        $ renderEntityParser (Proxy :: Proxy Platform)
     , SingleCommand CommandInfo
         { commandName = "run-config"
         , commandHeaderDesc = "list run confg information"
         , commandDesc = "Show information about a registered run config."
         }
-        $ queryDatabase (Proxy :: Proxy RunConfig)
+        $ renderEntityParser (Proxy :: Proxy RunConfig)
     , SingleCommand CommandInfo
         { commandName = "run"
         , commandHeaderDesc = "list run information"
         , commandDesc = "Show information about a registered run."
         }
-        $ queryDatabase (Proxy :: Proxy Run)
+        $ renderEntityParser (Proxy :: Proxy Run)
     , SingleCommand CommandInfo
         { commandName = "variant-config"
         , commandHeaderDesc = "list variant config information"
         , commandDesc = "Show information about a registered variant config."
         }
-        $ queryDatabase (Proxy :: Proxy VariantConfig)
+        $ renderEntityParser (Proxy :: Proxy VariantConfig)
     , SingleCommand CommandInfo
         { commandName = "variant"
         , commandHeaderDesc = "list variant information"
         , commandDesc = "Show information about a registered variant."
         }
-        $ queryDatabase (Proxy :: Proxy Variant)
+        $ renderEntityParser (Proxy :: Proxy Variant)
     ]
+  where
+    renderEntityParser
+        :: (PrettyFields v, ToBackendKey SqlBackend v)
+        => proxy v -> Parser (SqlM ())
+    renderEntityParser proxy = (>>= renderProxyEntity proxy) <$> entityParser
 
 showRunCommand :: SqlM ()
 showRunCommand = do
@@ -97,27 +101,3 @@ showRunCommand = do
     liftIO $ case result of
         Just cmd -> T.putStrLn $ "Run Command: " <> cmd
         Nothing -> putStrLn "Run command not set!"
-
-queryDatabase
-    :: forall a proxy
-     . (PrettyFields a, ToBackendKey SqlBackend a)
-    => proxy a -> Parser (SqlM ())
-queryDatabase _ = outputEntity <$> (keyParser :: Parser (Key a))
-
-keyParser :: ToBackendKey SqlBackend v => Parser (Key v)
-keyParser = argument (toSqlKey <$> auto) $ mconcat
-    [ metavar "ID", help "Id to display." ]
-
-outputEntity
-    :: (PrettyFields a, ToBackendKey SqlBackend a) => Key a -> SqlM ()
-outputEntity key = do
-    result <- Sql.getEntity key
-    case result of
-        Nothing -> exitWithError
-        Just v -> renderEntity v
-  where
-    exitWithError :: SqlM a
-    exitWithError = logErrorN msg >> liftIO exitFailure
-
-    msg :: Text
-    msg = "No entity with id #" <> showSqlKey key

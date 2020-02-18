@@ -5,6 +5,7 @@
 {-# LANGUAGE ViewPatterns #-}
 module FormattedOutput
     ( renderEntity
+    , renderProxyEntity
     , renderColumns
     , renderOutput
     , outputSink
@@ -72,6 +73,9 @@ entityFormatter ent = foldMap formatLine fieldInfos
 
 renderEntity :: PrettyFields a => Entity a -> SqlM ()
 renderEntity ent = renderOutput $ C.yield (entityFormatter ent)
+
+renderProxyEntity :: PrettyFields a => proxy a -> Entity a -> SqlM ()
+renderProxyEntity _ ent = renderOutput $ C.yield (entityFormatter ent)
 
 columnFormatter
     :: (MonadQuery m, PrettyFields a) => m (Text, Entity a -> Text)

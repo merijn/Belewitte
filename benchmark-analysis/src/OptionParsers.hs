@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TupleSections #-}
@@ -8,6 +9,7 @@ module OptionParsers
     , commitIdParser
     , datasetIdParser
     , datasetParser
+    , entityParser
     , filterIncomplete
     , percentageParser
     , platformIdParser
@@ -40,6 +42,7 @@ import Data.Time.Format (defaultTimeLocale, parseTimeM)
 import Options.Applicative hiding (Completer)
 import Options.Applicative.Help (Doc, (</>))
 import qualified Options.Applicative.Help as Help
+import System.Exit (exitFailure)
 import Text.Megaparsec (Parsec, parseMaybe, sepBy1, try)
 import Text.Megaparsec.Char (char)
 import Text.Megaparsec.Char.Lexer (decimal)
@@ -49,7 +52,7 @@ import Core
 import FieldQuery (getDistinctFieldLikeQuery)
 import Query (runSqlQuerySingle)
 import Schema
-import Sql (Key, Entity(..))
+import Sql (Key, Entity(..), ToBackendKey, SqlBackend)
 import qualified Sql
 
 reflow :: String -> Doc
@@ -99,6 +102,23 @@ datasetParser = queryDataset <$> datasetOpt
     queryDataset (Right n) = Sql.validateEntity "Dataset" n
     queryDataset (Left name) = Sql.validateUniqEntity "Dataset" $
         UniqDataset name
+
+entityParser :: ToBackendKey SqlBackend a => Parser (SqlM (Entity a))
+entityParser = checkKey <$> keyParser
+  where
+    keyParser :: ToBackendKey SqlBackend v => Parser (Key v)
+    keyParser = argument (toSqlKey <$> auto) $ mconcat
+        [ metavar "ID", help "Id to display." ]
+
+    checkKey :: ToBackendKey SqlBackend a => Key a -> SqlM (Entity a)
+    checkKey key = do
+        result <- Sql.getEntity key
+        case result of
+            Nothing -> logErrorN msg >> liftIO exitFailure
+            Just v -> return v
+      where
+        msg :: Text
+        msg = "No entity with id #" <> showSqlKey key
 
 filterIncomplete :: Parser Bool
 filterIncomplete = flag True False $ mconcat
