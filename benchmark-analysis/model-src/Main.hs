@@ -5,6 +5,7 @@
 {-# LANGUAGE RecordWildCards #-}
 module Main(main) where
 
+import Control.Monad (unless)
 import Data.Bifunctor (first)
 import Data.Conduit (ConduitT, (.|))
 import qualified Data.Conduit as C
@@ -31,9 +32,10 @@ reportModelStats :: ModelStats -> ConduitT () Text SqlM ()
 reportModelStats ModelStats{..} = do
     C.yield "Feature importance:\n"
     C.yieldMany sortedFeatures .| C.map renderFeature
-    C.yield "\n"
-    C.yield "Unknown predictions:\n"
-    C.yieldMany sortedUnknown .| C.mapM renderImplSet
+    unless (null sortedUnknown) $ do
+        C.yield "\n"
+        C.yield "Unknown predictions:\n"
+        C.yieldMany sortedUnknown .| C.mapM renderImplSet
   where
     renderFeature :: (Text, Double) -> Text
     renderFeature (lbl, val) = mconcat

@@ -51,6 +51,7 @@ instance PrettyFields PredictionModel where
     prettyFieldInfo = ("Id", idField PredictionModelId) :|
         [ ("Name", textField PredictionModelName)
         , ("Pretty Name", maybeTextField PredictionModelPrettyName)
+        , ("Description", multilineTextField PredictionModelDescription)
         , ("Algorithm", idField PredictionModelAlgorithmId)
         , ("Platform", idField PredictionModelPlatformId)
         , ("Fraction", PredictionModelTrainFraction `fieldVia` prettyDouble)
