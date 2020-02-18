@@ -4,6 +4,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -19,6 +20,7 @@ import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
 import Model (Model)
+import Pretty.Fields
 import Schema.Utils (EntityDef, Int64, MonadSql, Transaction, (.>))
 import qualified Schema.Utils as Utils
 import Types
@@ -44,6 +46,18 @@ PredictionModel
     timestamp UTCTime
     UniqModel name
 |]
+
+instance PrettyFields PredictionModel where
+    prettyFieldInfo = ("Id", idField PredictionModelId) :|
+        [ ("Name", textField PredictionModelName)
+        , ("Algorithm", idField PredictionModelAlgorithmId)
+        , ("Platform", idField PredictionModelPlatformId)
+        , ("Pretty Name", maybeTextField PredictionModelPrettyName)
+        , ("Fraction", PredictionModelTrainFraction `fieldVia` prettyDouble)
+        , ("Seed", PredictionModelTrainSeed `fieldVia` prettyShow)
+        , ("Unknown", PredictionModelTotalUnknownCount `fieldVia` prettyShow)
+        , ("Algorithm Commit", PredictionModelAlgorithmVersion `fieldVia` getCommitId)
+        ]
 
 migrations :: MonadSql m => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup

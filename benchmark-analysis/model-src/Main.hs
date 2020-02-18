@@ -94,6 +94,8 @@ main = runSqlM commands $ \case
         (modelId, _) <- getModel
         getModelStats modelId >>= reportModelStats
 
+    ListModels{listModels} -> listModels
+
     Validate{getPlatformId,getModel,getDatasetIds} -> do
         platformId <- getPlatformId
         (modelId, model) <- getModel

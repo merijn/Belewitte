@@ -31,6 +31,7 @@ import Evaluate
 import FieldQuery (getDistinctFieldQuery)
 import Model (Model)
 import Options
+import Pretty.List (Field(..), FieldSpec(..), (=.), buildOptions)
 import Query (runSqlQueryConduit)
 import QueryDump (modelQueryDump)
 import Schema
@@ -45,6 +46,8 @@ data ModelCommand
       { getConfig :: SqlM StepInfoConfig }
     | QueryModel
       { getModel :: SqlM (Key PredictionModel, Model) }
+    | ListModels
+      { listModels :: SqlM () }
     | Validate
       { getPlatformId :: SqlM (Key Platform)
       , getModel :: SqlM (Key PredictionModel, Model)
@@ -85,6 +88,25 @@ commands = CommandRoot
         , commandHeaderDesc = "report model info"
         , commandDesc = "Report model info & statistics"
         } (QueryModel <$> modelParser)
+    , SingleCommand CommandInfo
+        { commandName = "list"
+        , commandHeaderDesc = "list trained models"
+        , commandDesc = "List all trained models."
+        }
+        $ ListModels <$> buildOptions
+            [ "platform" =. IdField 'p' $ Simple PredictionModelPlatformId
+            , "algorithm" =. IdField 'a' $ Simple PredictionModelAlgorithmId
+            , "commit" =. StringField 'c' $
+                Converted PredictionModelAlgorithmVersion CommitId
+            , "name" =. StringField 'n' $ Simple PredictionModelName
+            , "pretty-name" =. StringField 'r' $
+                Optional PredictionModelPrettyName
+            , "train-fraction" =. SortOnlyField $ PredictionModelTrainFraction
+            , "train-seed" =. SortOnlyField $ PredictionModelTrainSeed
+            , "unknown-count" =. SortOnlyField $
+                PredictionModelTotalUnknownCount
+            , "time" =. SortOnlyField $ PredictionModelTimestamp
+            ]
     , SingleCommand CommandInfo
         { commandName = "validate"
         , commandHeaderDesc = "validate model accuracy"
