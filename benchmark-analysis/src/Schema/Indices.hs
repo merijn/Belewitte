@@ -3,54 +3,59 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Schema.Indices (updateIndicesToVersion) where
 
-import Data.Map (Map)
-import qualified Data.Map as M
+import Data.Interval (Extended(Finite), Interval, (<=..<=))
+import Data.IntervalMap.Strict (IntervalMap)
+import qualified Data.IntervalMap.Strict as IM
 import Data.String.Interpolate.IsString (i)
+import Data.Text (Text)
+
 import Schema.Utils (Int64, MonadSql, Transaction)
 import qualified Schema.Utils as Utils
+import Schema.Version (schemaVersion)
 
-(.=) :: MonadSql m => Int64 -> Transaction m () -> (Int64, Transaction m ())
-n .= act = (n, act)
+(.=) :: MonadSql m
+     => Interval Int64
+     -> Text
+     -> (Interval Int64, Transaction m ())
+n .= act = (n, Utils.executeSql act)
+infix 1 .=
+
+currentVersion :: Extended Int64
+currentVersion = Finite schemaVersion
 
 updateIndicesToVersion :: MonadSql m => Int64 -> Transaction m ()
-updateIndicesToVersion n = case M.lookupLE n schemaIndices of
+updateIndicesToVersion n = case IM.lookup n schemaIndices of
     Nothing -> return ()
-    Just (_, act) -> act
+    Just act -> act
   where
-    schemaIndices :: MonadSql m => Map Int64 (Transaction m ())
-    schemaIndices = M.fromList
-        [ 9 .= do
-            Utils.executeSql [i|
+    schemaIndices :: MonadSql m => IntervalMap Int64 (Transaction m ())
+    schemaIndices = IM.fromListWith (>>)
+        [ 9 <=..<= currentVersion .= [i|
 CREATE UNIQUE INDEX IF NOT EXISTS "ForeignUniqueRunConfig"
 ON "RunConfig"("id", "algorithmId")
 |]
-
-            Utils.executeSql [i|
+        , 9 <=..<= currentVersion .= [i|
 CREATE UNIQUE INDEX IF NOT EXISTS "ForeignUniqueVariantConfig"
 ON "VariantConfig"("id", "algorithmId")
 |]
 
-            Utils.executeSql [i|
+        , 9 <=..<= currentVersion .= [i|
 CREATE UNIQUE INDEX IF NOT EXISTS "ForeignUniqueVariant"
 ON "Variant"("id", "algorithmId")
 |]
-
-            Utils.executeSql [i|
+        , 9 <=..<= currentVersion .= [i|
 CREATE UNIQUE INDEX IF NOT EXISTS "ForeignUniqueImplementation"
 ON "Implementation"("id", "algorithmId")
 |]
-
-            Utils.executeSql [i|
+        , 9 <=..<= currentVersion .= [i|
 CREATE UNIQUE INDEX IF NOT EXISTS "ForeignUniqueExternalImpl"
 ON "ExternalImpl"("id", "algorithmId")
 |]
-
-            Utils.executeSql [i|
+        , 9 <=..<= currentVersion .= [i|
 CREATE UNIQUE INDEX IF NOT EXISTS "ForeignUniquePredictionModel"
 ON "PredictionModel"("id", "algorithmId")
 |]
-
-            Utils.executeSql [i|
+        , 9 <=..<= currentVersion .= [i|
 CREATE UNIQUE INDEX IF NOT EXISTS "ForeignUniqueUnknownPrediction"
 ON "UnknownPrediction"("id", "algorithmId")
 |]
