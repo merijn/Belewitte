@@ -136,6 +136,7 @@ Library
                         Schema.Variant.V1
                         Schema.Variant.V2
                         Schema.VariantConfig
+                        Schema.Version
                         Sql.Core
                         SQLiteExts
                         Types

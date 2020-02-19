@@ -92,6 +92,7 @@ import Schema.Variant hiding (migrations, schema, schema')
 import qualified Schema.Variant as Variant
 import Schema.VariantConfig hiding (migrations, schema)
 import qualified Schema.VariantConfig as VariantConfig
+import Schema.Version (schemaVersion)
 
 bestNonSwitchingImplId :: Integral n => n
 bestNonSwitchingImplId = -1
@@ -140,9 +141,6 @@ migrations =
     , (UnknownPredictions.schema, UnknownPredictions.migrations)
     , (GlobalVars.schema, GlobalVars.migrations)
     ]
-
-schemaVersion :: Int64
-schemaVersion = 18
 
 type MigrationAction = Transaction DummySql [EntityDef]
 
