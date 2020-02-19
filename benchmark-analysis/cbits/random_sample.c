@@ -5,7 +5,6 @@ struct aggregate
 {
     int64_t selectCount;
     int64_t remainingCount;
-    bool invert;
     pcg32_random_t pcg_state;
 };
 
@@ -19,7 +18,7 @@ sample_stream(struct aggregate *data)
 
     data->remainingCount--;
 
-    return keep != data->invert;
+    return keep;
 }
 
 static void
@@ -54,10 +53,9 @@ random_sample_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
         int64_t sequence = sqlite3_value_int64(args[0]);
         int64_t seed = sqlite3_value_int64(args[1]);
 
-        data->invert = sqlite3_value_int64(args[2]);
-        data->remainingCount = sqlite3_value_int64(args[3]);
-        if (sqlite3_value_type(args[4]) == SQLITE_FLOAT) {
-            double percentage = sqlite3_value_double(args[4]);
+        data->remainingCount = sqlite3_value_int64(args[2]);
+        if (sqlite3_value_type(args[3]) == SQLITE_FLOAT) {
+            double percentage = sqlite3_value_double(args[3]);
             if (percentage > 1.0) {
                 sqlite3_result_error(ctxt,
                         "Selection percentage can't be more than 100%!", -1);
@@ -70,7 +68,7 @@ random_sample_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args)
 
             data->selectCount = percentage * data->remainingCount;
         } else {
-            data->selectCount = sqlite3_value_int64(args[4]);
+            data->selectCount = sqlite3_value_int64(args[3]);
         }
 
         pcg32_srandom_r(&data->pcg_state, seed, sequence);

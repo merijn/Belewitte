@@ -54,7 +54,7 @@ registerSqlFunctions sqlitePtr = mapM_ ($sqlitePtr)
         check_unique_step check_unique_finalise
     , createSqlAggregate (-1) "min_key"
         min_key_step min_key_finalise
-    , createSqlWindow 5 "random_sample" random_sample_step
+    , createSqlWindow 4 "random_sample" random_sample_step
         random_sample_finalise random_sample_value random_sample_inverse
     ]
 

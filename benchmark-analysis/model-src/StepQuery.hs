@@ -69,10 +69,15 @@ stepInfoQuery :: StepInfoConfig -> Query StepInfo
 stepInfoQuery StepInfoConfig
   { stepInfoAlgorithm
   , stepInfoPlatform
+  , stepInfoQueryMode
   , stepInfoCommit
   , stepInfoGraphProps
   , stepInfoStepProps
+  , stepInfoSeed
   , stepInfoDatasets
+  , stepInfoGraphs
+  , stepInfoVariants
+  , stepInfoSteps
   , stepInfoFilterIncomplete
   , stepInfoTimestamp
   } = Query{..}
@@ -113,7 +118,60 @@ stepInfoQuery StepInfoConfig
 
     commonTableExpressions :: [CTE]
     commonTableExpressions =
-      [ [] `inCTE` [i|
+      [ CTE
+        { cteParams =
+            [ toPersistValue $ S.size stepInfoDatasets == 0
+            , toPersistValue stepInfoSeed
+            , toPersistValue stepInfoGraphs
+            , toPersistValue $ S.size stepInfoDatasets == 0
+            ]
+        , cteQuery = [i|
+GraphCount(graphCount) AS (
+    SELECT COUNT(*)
+    FROM Graph
+    WHERE ? OR datasetId IN #{inExpression datasets}
+),
+
+FilteredGraphs AS (
+    SELECT Graph.*, random_sample(0, ?, graphCount, ?) OVER graphWin AS keepGraph
+    FROM Graph, GraphCount
+    WHERE ? OR datasetId IN #{inExpression datasets}
+    WINDOW graphWin AS (ORDER BY id)
+)|]
+        }
+
+      , CTE
+        { cteParams =
+            [ toPersistValue stepInfoAlgorithm
+            , toPersistValue stepInfoSeed
+            , toPersistValue stepInfoVariants
+            , toPersistValue stepInfoAlgorithm
+            ]
+        , cteQuery = [i|
+VariantCount(variantCount) AS (
+    SELECT COUNT(*)
+    FROM Variant
+
+    INNER JOIN FilteredGraphs
+    ON Variant.graphId = FilteredGraphs.id
+
+    WHERE Variant.algorithmId = ?
+),
+
+FilteredVariants AS (
+    SELECT Variant.*, random_sample(1, ?, variantCount, ?) OVER variantWin AS keepVariant, keepGraph
+    FROM Variant, VariantCount
+
+    INNER JOIN FilteredGraphs
+    ON Variant.graphId = FilteredGraphs.id
+
+    WHERE Variant.algorithmId = ?
+
+    WINDOW variantWin AS (ORDER BY Variant.id)
+)|]
+        }
+
+      , [] `inCTE` [i|
 IndexedGraphProps(graphId, idx, property, value, count) AS (
     SELECT graphId
          , ROW_NUMBER() OVER (graph ORDER BY property)
@@ -136,6 +194,7 @@ IndexedStepProps(variantId, stepId, idx, property, value, count) AS (
     WHERE property IN #{inExpression stepInfoStepProps}
     WINDOW variantStep AS (PARTITION BY variantId, stepId)
 )|]
+
       , [toPersistValue stepInfoAlgorithm] `inCTE` [i|
 IndexedImpls(idx, implId, type, count) AS (
     SELECT ROW_NUMBER() OVER ()
@@ -150,28 +209,41 @@ ImplVector(implTiming) AS (
     SELECT init_key_value_vector(implId, idx, count)
     FROM IndexedImpls
 )|]
+
+      , [] `inCTE` [i|
+StepCount(stepCount) AS (
+    SELECT COUNT(*)
+    FROM FilteredVariants, generate_series(0, FilteredVariants.maxStepId)
+)
+|]
+
       , CTE
         { cteParams =
-            [ toPersistValue stepInfoTimestamp
+            [ toPersistValue stepInfoSeed
+            , toPersistValue stepInfoSteps
+            , toPersistValue stepInfoTimestamp
             , toPersistValue stepInfoAlgorithm
             , toPersistValue stepInfoPlatform
             , toPersistValue stepInfoCommit
-            , toPersistValue $ S.size stepInfoDatasets == 0
             , toPersistValue $ not stepInfoFilterIncomplete
             ]
         , cteQuery = [i|
-StepTiming(graphId, variantId, stepId, implId, timings) AS (
-    SELECT Variant.graphId
-         , Variant.id
+StepTiming(graphId, variantId, stepId, implId, timings, keepGraph, keepVariant, keepStep) AS (
+    SELECT FilteredVariants.graphId
+         , FilteredVariants.id
          , StepTimer.stepId
          , min_key(Impls.implId, avgTime, maxTime, minTime)
            FILTER (WHERE Impls.type == 'Core')
          , update_key_value_vector(implTiming, idx, Impls.implId, avgTime)
            AS timings
-    FROM Variant, ImplVector
+         , keepGraph
+         , keepVariant
+         , random_sample(2, ?, stepCount, ?) OVER (ORDER BY FilteredVariants.id, stepId)
+           AS keepStep
+    FROM FilteredVariants, ImplVector, StepCount
 
     INNER JOIN Run
-    ON Run.variantId = Variant.id
+    ON Run.variantId = FilteredVariants.id
     AND Run.validated = 1
     AND Run.timestamp < ?
 
@@ -180,7 +252,6 @@ StepTiming(graphId, variantId, stepId, implId, timings) AS (
     AND RunConfig.algorithmId = ?
     AND RunConfig.platformId = ?
     AND RunConfig.algorithmVersion = ?
-    AND (? OR RunConfig.datasetId IN #{inExpression datasets})
 
     INNER JOIN StepTimer
     ON Run.id = StepTimer.runId
@@ -188,13 +259,17 @@ StepTiming(graphId, variantId, stepId, implId, timings) AS (
     INNER JOIN IndexedImpls AS Impls
     ON Impls.implId = Run.implId
 
-    GROUP BY Variant.id, StepTimer.stepId
+    GROUP BY FilteredVariants.id, StepTimer.stepId
     HAVING ? OR COUNT(Run.id) = MAX(Impls.count)
 )|]
         }]
 
     params :: [PersistValue]
-    params = [ toPersistValue $ S.size stepInfoStepProps ]
+    params =
+      [ toPersistValue $ S.size stepInfoStepProps
+      , toPersistValue (stepInfoQueryMode == All)
+      , toPersistValue (stepInfoQueryMode == Train)
+      ]
 
     queryText = [i|
 SELECT StepTiming.variantId
@@ -220,5 +295,6 @@ LEFT JOIN
 ON StepTiming.variantId = StepProps.variantId
 AND StepTiming.stepId = StepProps.stepId
 
-WHERE StepProps.props NOT NULL OR ? = 0
+WHERE (StepProps.props NOT NULL OR ? = 0)
+AND ? OR (? = (keepGraph AND keepVariant AND keepStep))
 ORDER BY StepTiming.variantId, StepTiming.stepId ASC|]

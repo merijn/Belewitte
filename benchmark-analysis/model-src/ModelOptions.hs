@@ -149,6 +149,25 @@ commands = CommandRoot
 datasetsParser :: Parser (SqlM (Set (Key Dataset)))
 datasetsParser = fmap S.fromList . sequence <$> many datasetIdParser
 
+graphPercentageParser :: Parser Percentage
+graphPercentageParser = percentageParser
+    [ long "graph-percent"
+    , help "Percentage of graphs to include in training set."
+    ]
+
+variantPercentageParser :: Parser Percentage
+variantPercentageParser = percentageParser
+    [ long "variant-percent"
+    , help "Percentage of variants to include in training set."
+    ]
+
+stepPercentageParser :: Parser Percentage
+stepPercentageParser = percentageParser
+    [ long "step-percent"
+    , help "Percentage of steps to include in training set."
+    , value ($$(validRational 0.8) :: Percentage)
+    ]
+
 modelQueryMap :: Map String (Parser DebugQuery)
 modelQueryMap = M.fromList
     [ nameDebugQuery "stepInfoQuery" $ Compose $ do
@@ -160,22 +179,22 @@ modelQueryMap = M.fromList
         trainSeed <- trainSeedParser
         getDatasets <- datasetsParser
         shouldFilter <- filterIncomplete
+        graphPercent <- graphPercentageParser
+        variantPercent <- variantPercentageParser
+        stepPercent <- stepPercentageParser
 
         pure $ do
             algoId <- getAlgoId
             cfg <- StepInfoConfig queryMode algoId
                     <$> getPlatformId <*> getCommitId <*> graphProps
                     <*> stepProps algoId <*> pure trainSeed <*> getDatasets
-                    <*> pure shouldFilter <*> pure hundredPercent
-                    <*> pure hundredPercent <*> pure hundredPercent
+                    <*> pure shouldFilter <*> pure graphPercent
+                    <*> pure variantPercent <*> pure stepPercent
                     <*> getUtcTime
 
             pure $ stepInfoQuery cfg
     ]
   where
-    hundredPercent :: Percentage
-    hundredPercent = $$(validRational 1)
-
     queryModeParser :: Parser QueryMode
     queryModeParser =
         optionParserFromValues modeMap "QUERY-MODE" helpTxt $ mconcat
@@ -300,11 +319,6 @@ trainSeedParser = option auto . mconcat $
     [ metavar "N", short 's', long "seed", value 42, showDefault
     , help "Seed for training set randomisation" ]
 
-trainFractionParser :: Parser Double
-trainFractionParser = option auto . mconcat $
-    [ metavar "PERCENT", short 'p', long "percent", value 0.8, showDefault
-    , help "Training set as percentage of data." ]
-
 stepInfoConfig :: Parser (SqlM StepInfoConfig)
 stepInfoConfig = do
     getAlgoId <- algorithmIdParser
@@ -316,6 +330,9 @@ stepInfoConfig = do
     filterGraphProps <- props "graph"
     filterStepProps <- props "step"
     shouldFilter <- filterIncomplete
+    graphPercent <- graphPercentageParser
+    variantPercent <- variantPercentageParser
+    stepPercent <- stepPercentageParser
 
     pure $ do
         algoId <- getAlgoId
@@ -324,12 +341,9 @@ stepInfoConfig = do
                 <*> (filterGraphProps <*> gatherGraphProps)
                 <*> (filterStepProps <*> gatherStepProps algoId)
                 <*> pure trainSeed <*> getDatasets <*> pure shouldFilter
-                <*> pure hundredPercent <*> pure hundredPercent
-                <*> pure hundredPercent <*> getUtcTime
+                <*> pure graphPercent <*> pure variantPercent
+                <*> pure stepPercent <*> getUtcTime
   where
-    hundredPercent :: Percentage
-    hundredPercent = $$(validRational 1)
-
     readProps :: MonadIO m => FilePath -> m (Set Text)
     readProps = liftIO . fmap (S.fromList . T.lines) . T.readFile
 

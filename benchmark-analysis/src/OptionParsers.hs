@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 module OptionParsers
     ( reflow
@@ -127,7 +128,10 @@ filterIncomplete = flag True False $ mconcat
     ]
 
 percentageParser :: [Mod OptionFields Percentage] -> Parser Percentage
-percentageParser = option (maybeReader percentReader) . mconcat
+percentageParser opts = option (maybeReader percentReader) . mconcat $
+    [ value ($$(validRational 1) :: Percentage)
+    , showDefaultWith (show . getPercentage)
+    ] ++ opts
   where
     percentReader :: String -> Maybe Percentage
     percentReader s = readMaybe s >>= mkPercentage
