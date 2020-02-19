@@ -114,6 +114,7 @@ Library
                         Schema.Model.V0
                         Schema.Model.V1
                         Schema.Model.V2
+                        Schema.Model.V3
                         Schema.ModelMetadata
                         Schema.ModelMetadata.V0
                         Schema.Platform

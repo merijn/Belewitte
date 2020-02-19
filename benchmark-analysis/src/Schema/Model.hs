@@ -30,6 +30,7 @@ import Schema.Platform (PlatformId)
 import qualified Schema.Model.V0 as V0
 import qualified Schema.Model.V1 as V1
 import qualified Schema.Model.V2 as V2
+import qualified Schema.Model.V3 as V3
 
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
 PredictionModel
@@ -40,7 +41,10 @@ PredictionModel
     prettyName Text Maybe
     description Text Maybe
     model Model
-    trainFraction Double
+    legacyTrainFraction Double
+    trainGraphs Percentage
+    trainVariants Percentage
+    trainSteps Percentage
     trainSeed Int64
     totalUnknownCount Int
     timestamp UTCTime
@@ -54,8 +58,11 @@ instance PrettyFields PredictionModel where
         , ("Description", multilineTextField PredictionModelDescription)
         , ("Algorithm", idField PredictionModelAlgorithmId)
         , ("Platform", idField PredictionModelPlatformId)
-        , ("Fraction", PredictionModelTrainFraction `fieldVia` flip percent 1)
         , ("Seed", PredictionModelTrainSeed `fieldVia` prettyShow)
+        , ("Legacy", PredictionModelLegacyTrainFraction `fieldVia` flip percent 1)
+        , ("Graphs", PredictionModelTrainGraphs `fieldVia` renderPercentage)
+        , ("Variants", PredictionModelTrainVariants `fieldVia` renderPercentage)
+        , ("Steps", PredictionModelTrainSteps `fieldVia` renderPercentage)
         , ("Unknown", PredictionModelTotalUnknownCount `fieldVia` prettyShow)
         , ("Algorithm Commit", PredictionModelAlgorithmVersion `fieldVia` getCommitId)
         ]
@@ -107,7 +114,7 @@ INNER JOIN
 ) AS AlgorithmMapping
 ON PredictionModel.id = AlgorithmMapping.modelId
 |]
-    , 17 .> schema $ do
+    , 17 .> V3.schema $ do
         Utils.executeSql [i|
 ALTER TABLE "PredictionModel"
 ADD COLUMN "algorithmVersion" TEXT
@@ -148,5 +155,54 @@ INNER JOIN (
     GROUP BY PredictionModel.id
 ) AS Derived
 ON Derived.id = PredictionModel.id
+|]
+    , 19 .> schema $ do
+        Utils.executeSql [i|
+ALTER TABLE "PredictionModel"
+RENAME COLUMN "trainFraction" TO "legacyTrainFraction"
+|]
+
+        Utils.executeSql [i|
+ALTER TABLE "PredictionModel"
+ADD COLUMN "trainGraphs" REAL
+|]
+
+        Utils.executeSql [i|
+ALTER TABLE "PredictionModel"
+ADD COLUMN "trainVariants" REAL
+|]
+
+        Utils.executeSql [i|
+ALTER TABLE "PredictionModel"
+ADD COLUMN "trainSteps" REAL
+|]
+
+        Utils.executeSql [i|
+REPLACE INTO "PredictionModel"
+SELECT PredictionModel.id
+     , PredictionModel.platformId
+     , PredictionModel.algorithmId
+     , PredictionModel.algorithmVersion
+     , PredictionModel.name
+     , PredictionModel.prettyName
+     , PredictionModel.description
+     , PredictionModel.model
+     , PredictionModel.legacyTrainFraction
+     , PredictionModel.trainSeed
+     , PredictionModel.totalUnknownCount
+     , PredictionModel.timestamp
+     , CASE PredictionModel.legacyTrainFraction
+         WHEN 0 THEN 1.0
+         ELSE 0.0
+       END
+     , CASE PredictionModel.legacyTrainFraction
+         WHEN 0 THEN 1.0
+         ELSE 0.0
+       END
+     , CASE PredictionModel.legacyTrainFraction
+         WHEN 0 THEN 1.0
+         ELSE 0.0
+       END
+FROM PredictionModel
 |]
     ]

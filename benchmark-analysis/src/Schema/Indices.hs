@@ -59,4 +59,17 @@ ON "PredictionModel"("id", "algorithmId")
 CREATE UNIQUE INDEX IF NOT EXISTS "ForeignUniqueUnknownPrediction"
 ON "UnknownPrediction"("id", "algorithmId")
 |]
+        , 19 <=..<= currentVersion .= [i|
+CREATE TRIGGER IF NOT EXISTS "PredictionModelTrainingTypeInsert"
+BEFORE INSERT ON "PredictionModel"
+FOR EACH ROW
+BEGIN
+SELECT RAISE(ROLLBACK, "Models should be trained with only one training mode.")
+WHERE ("NEW"."legacyTrainFraction" = 0) =
+    ( "NEW"."trainGraphs" = 0
+    AND "NEW"."trainVariants" = 0
+    AND "NEW"."trainSteps" = 0
+    );
+END
+|]
         ]

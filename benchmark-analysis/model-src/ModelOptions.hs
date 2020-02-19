@@ -101,8 +101,12 @@ commands = CommandRoot
             , "name" =. StringField 'n' $ Simple PredictionModelName
             , "pretty-name" =. StringField 'r' $
                 Optional PredictionModelPrettyName
-            , "train-fraction" =. SortOnlyField $ PredictionModelTrainFraction
             , "train-seed" =. SortOnlyField $ PredictionModelTrainSeed
+            , "train-legacy" =. SortOnlyField $
+                PredictionModelLegacyTrainFraction
+            , "train-graphs" =. SortOnlyField $ PredictionModelTrainGraphs
+            , "train-variants" =. SortOnlyField $ PredictionModelTrainVariants
+            , "train-steps" =. SortOnlyField $ PredictionModelTrainSteps
             , "unknown-count" =. SortOnlyField $
                 PredictionModelTotalUnknownCount
             , "time" =. SortOnlyField $ PredictionModelTimestamp
