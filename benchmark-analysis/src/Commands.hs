@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -7,6 +8,7 @@ module Commands
     ( Command
     , CommandInfo(..)
     , pattern CommandGroup
+    , pattern CommandGroupWithFlags
     , pattern CommandWithSubGroup
     , pattern HiddenGroup
     , pattern HiddenCommand
@@ -48,14 +50,27 @@ pattern CommandWithSubGroup info parser cmds =
 pattern CommandGroup :: CommandInfo -> [Command a] -> Command a
 pattern CommandGroup info cmds = Command info (Group cmds)
 
+pattern CommandGroupWithFlags
+    :: CommandInfo -> Parser b -> [Command (b -> a)] -> Command a
+pattern CommandGroupWithFlags info flags cmds =
+  Command info (WithFlags flags cmds)
+
 pattern HiddenGroup :: CommandInfo -> [Command a] -> Command a
 pattern HiddenGroup info cmds = Hidden (CommandGroup info cmds)
 
-data CommandType a
-    = Single (Parser a)
-    | WithSubGroup (Parser a) [Command a]
-    | Group [Command a]
-    deriving (Functor)
+data CommandType a where
+    Single :: Parser a -> CommandType a
+    WithSubGroup :: Parser a -> [Command a] -> CommandType a
+    WithFlags :: Parser b -> [Command (b -> a)] -> CommandType a
+    Group :: [Command a] -> CommandType a
+
+instance Functor CommandType where
+    fmap f cmd = case cmd of
+        Single parser -> Single (f <$> parser)
+        WithSubGroup parser cmds ->
+            WithSubGroup (f <$> parser) $ map (fmap f) cmds
+        WithFlags parser cmds -> WithFlags parser $ map (fmap (fmap f)) cmds
+        Group cmds -> Group $ map (fmap f) cmds
 
 data Command a = Command CommandInfo (CommandType a) | Hidden (Command a)
     deriving (Functor)
@@ -91,6 +106,7 @@ unfoldCommand prefix (Command CommandInfo{..} cmdType) =
     parser = case cmdType of
         Single p -> p
         WithSubGroup p cmds -> p <|> groupToParser cmds groupPrefix
+        WithFlags p cmds -> groupToParser cmds groupPrefix <*> p
         Group cmds -> groupToParser cmds groupPrefix
 
 groupToParser :: forall a . [Command a] -> String -> Parser a
