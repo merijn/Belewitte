@@ -33,53 +33,37 @@ commands dumpCommand queryMap = HiddenGroup CommandInfo
     { commandName = "debug"
     , commandHeaderDesc = "debug and testing commands"
     , commandDesc = "Various subcommands for testing and debugging issues."
-    }
-    [ SingleCommand CommandInfo
-        { commandName = "dump"
-        , commandHeaderDesc = "dump query results to file"
-        , commandDesc = "Dump the query results to files"
-        }
-        $ dumpCommand <$> suffixParser
-    , CommandGroup CommandInfo
-        { commandName = "interactive"
-        , commandHeaderDesc = "interactive queries from commandline"
-        , commandDesc = "Interactively read queries from commandline"
-        }
-        [ SingleCommand CommandInfo
-            { commandName = "explain"
-            , commandHeaderDesc = "print query explanation to stdout"
-            , commandDesc =
-                "Read query from commandline and print explanation to stdout"
-            }
-            $ pure (runInput explainQuery)
-        , SingleCommand CommandInfo
-            { commandName = "query"
-            , commandHeaderDesc = "print query results to stdout"
-            , commandDesc =
-                "Read query from commandline and print results to stdout"
-            }
-            $ pure (runInput testQuery)
-        ]
-    , CommandGroup CommandInfo
-        { commandName = "explain"
-        , commandHeaderDesc = "show the query plan for the named query"
-        , commandDesc = "Shows the query plan for the chosen query"
-        }
-        $ buildQueryList explainQueryCommand
-    , CommandGroup CommandInfo
-        { commandName = "query"
-        , commandHeaderDesc = "show the result for the named query"
-        , commandDesc = "Shows the result set for the chosen query"
-        }
-        $ buildQueryList queryCommand
-    , CommandGroup CommandInfo
-        { commandName = "time"
-        , commandHeaderDesc = "time how long the named query takes to run"
-        , commandDesc = "Times how long the chosen query takes to run"
-        }
-        $ buildQueryList timeQueryCommand
-    ]
+    } subcommands
   where
+    subcommands =
+        [ SingleCommand CommandInfo
+            { commandName = "dump"
+            , commandHeaderDesc = "dump query results to file"
+            , commandDesc = "Dump the query results to files"
+            }
+            $ dumpCommand <$> suffixParser
+        , CommandGroup CommandInfo
+            { commandName = "interactive"
+            , commandHeaderDesc = "interactive queries from commandline"
+            , commandDesc = "Interactively read queries from commandline"
+            }
+            [ SingleCommand CommandInfo
+                { commandName = "explain"
+                , commandHeaderDesc = "print query explanation to stdout"
+                , commandDesc =
+                  "Read query from commandline and print explanation to stdout"
+                }
+                $ pure (runInput explainQuery)
+            , SingleCommand CommandInfo
+                { commandName = "query"
+                , commandHeaderDesc = "print query results to stdout"
+                , commandDesc =
+                  "Read query from commandline and print results to stdout"
+                }
+                $ pure (runInput testQuery)
+            ]
+        ] ++ buildQueryList debugQueryCommand
+
     completeQueryMap :: Map String (Parser DebugQuery)
     completeQueryMap =
       M.insert "variantInfoQuery" (DebugQuery <$> variantQuery) queryMap
@@ -103,13 +87,22 @@ commands dumpCommand queryMap = HiddenGroup CommandInfo
     suffixParser = argument (maybeReader suffixReader) . mconcat $
         [ metavar "SUFFIX" ]
 
-explainQueryCommand :: String -> Parser DebugQuery -> Command (SqlM ())
-explainQueryCommand name parser = SingleCommand CommandInfo
+debugQueryCommand :: String -> Parser (DebugQuery) -> Command (SqlM ())
+debugQueryCommand name flags = CommandGroupWithFlags CommandInfo
     { commandName = name
-    , commandHeaderDesc = "query plan for: " ++ name
-    , commandDesc = "Show the query plan for: " ++ name
+    , commandHeaderDesc = "debug commands for: " ++ name
+    , commandDesc = "Debug commands for: " ++ name
     }
-    $ explainDebugQuery <$> parser
+    flags
+    [explainQueryCommand, queryCommand, timeQueryCommand]
+
+explainQueryCommand :: Command (DebugQuery -> SqlM ())
+explainQueryCommand = SingleCommand CommandInfo
+    { commandName = "explain"
+    , commandHeaderDesc = "query plan"
+    , commandDesc = "Show the query plan"
+    }
+    $ pure explainDebugQuery
   where
     explainDebugQuery :: DebugQuery -> SqlM ()
     explainDebugQuery (DebugQuery getQuery) = do
@@ -117,26 +110,26 @@ explainQueryCommand name parser = SingleCommand CommandInfo
         explanation <- explainSqlQuery query
         liftIO $ T.putStrLn explanation
 
-queryCommand :: String -> Parser DebugQuery -> Command (SqlM ())
-queryCommand name parser = SingleCommand CommandInfo
-    { commandName = name
-    , commandHeaderDesc = "query results for: " ++ name
-    , commandDesc = "Show the query results for: " ++ name
+queryCommand :: Command (DebugQuery -> SqlM ())
+queryCommand = SingleCommand CommandInfo
+    { commandName = "query"
+    , commandHeaderDesc = "query results"
+    , commandDesc = "Show the query results."
     }
-    $ debugQuery <$> parser
+    $ pure debugQuery
   where
     debugQuery :: DebugQuery -> SqlM ()
     debugQuery (DebugQuery getQuery) = do
         query <- getQuery
         runSqlQueryConduit query $ C.mapM_ (liftIO . print)
 
-timeQueryCommand :: String -> Parser DebugQuery -> Command (SqlM ())
-timeQueryCommand name parser = SingleCommand CommandInfo
-    { commandName = name
-    , commandHeaderDesc = "time query for: " ++ name
-    , commandDesc = "Time how long it takes to run query: " ++ name
+timeQueryCommand :: Command (DebugQuery -> SqlM ())
+timeQueryCommand = SingleCommand CommandInfo
+    { commandName = "time"
+    , commandHeaderDesc = "time query"
+    , commandDesc = "Time how long it takes to run query."
     }
-    $ timeQuery <$> parser
+    $ pure timeQuery
   where
     timeQuery :: DebugQuery -> SqlM ()
     timeQuery (DebugQuery getQuery) = do
