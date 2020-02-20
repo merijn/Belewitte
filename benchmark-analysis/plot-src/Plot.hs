@@ -19,6 +19,8 @@ import qualified Data.Conduit.Text as C
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 import Data.List (intersperse)
+import Data.Map (Map)
+import qualified Data.Map as M
 import Data.Maybe (catMaybes)
 import Data.Monoid (Any(..), (<>))
 import Data.Set (Set)
@@ -123,7 +125,7 @@ commands = CommandRoot
   { mainHeaderDesc = "a tool for plotting benchmark results"
   , mainDesc = ""
   , mainQueryDump = plotQueryDump
-  , mainQueryMap = mempty -- FIXME
+  , mainQueryMap = plotQueryMap
   , mainCommands =
     [ SingleCommand CommandInfo
         { commandName = "levels"
@@ -160,6 +162,22 @@ commands = CommandRoot
 
     normaliseFlag :: Parser Bool
     normaliseFlag = flag False True $ mconcat [long "normalise"]
+
+plotQueryMap :: Map String (Parser DebugQuery)
+plotQueryMap = M.fromList
+    [ nameDebugQuery "timePlotQuery" $
+        timePlotQuery <$> Compose algorithmIdParser
+                      <*> Compose platformIdParser
+                      <*> Compose commitIdParser
+                      <*> Compose variantsParser
+    , nameDebugQuery "levelTimePlotQuery" $
+        levelTimePlotQuery <$> Compose platformIdParser
+                           <*> Compose commitIdParser
+                           <*> Compose variantIdParser
+    ]
+  where
+    variantsParser :: Parser (SqlM (Set (Key Variant)))
+    variantsParser = fmap S.fromList . sequence <$> some variantIdParser
 
 reportData
     :: (MonadIO m, MonadLogger m, MonadThrow m)
