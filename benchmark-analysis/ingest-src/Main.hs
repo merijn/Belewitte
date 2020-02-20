@@ -120,7 +120,7 @@ runBenchmarks = lift $ do
 
     runConduit $
         Sql.selectSource variantFilters []
-        .> variantToPropertyJob
+        .| C.concatMapM variantToPropertyJob
         .| processJobsParallel numDefaultNodes defaultPlatform
         .| C.mapM_ processProperty
 

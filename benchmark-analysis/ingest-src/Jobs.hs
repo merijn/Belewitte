@@ -8,7 +8,6 @@
 {-# LANGUAGE TupleSections #-}
 module Jobs
     ( Validation(..)
-    , (.>)
     , variantToPropertyJob
     , processProperty
     , missingRunToTimingJob
@@ -50,28 +49,25 @@ computeHash path = do
 
 variantToPropertyJob
     :: Entity Variant
-    -> ConduitT (Entity Variant)
-                (Job (Key Algorithm, Key Graph, Maybe Hash, Maybe Int))
-                SqlM
-                ()
+    -> SqlM (Maybe (Job (Key Algorithm, Key Graph, Maybe Hash, Maybe Int)))
 variantToPropertyJob
     (Entity varId (Variant graphId variantCfgId _ hash step hasProps retries)) =
         case hash of
             Nothing
                 | retries < 5 && not hasProps && step == 0 -> yieldJob
-                | hasProps -> logErrorN $
+                | hasProps -> jobError $
                     "Properties stored, but not result hash for variant #"
                     <> showSqlKey varId
 
-                | not hasProps && step /= 0 -> logErrorN $
+                | not hasProps && step /= 0 -> jobError $
                     "No properties, but did find max steps for variant #"
                     <> showSqlKey varId
 
-                | retries >= 5 -> logWarnN $
+                | retries >= 5 -> jobWarn $
                     "Hash missing, but too many retries for variant #"
                     <> showSqlKey varId
 
-                | otherwise -> logErrorN $
+                | otherwise -> jobError $
                     "Variant information for #" <> showSqlKey varId
                     <> " is in an inconsistent state!"
 
@@ -83,20 +79,23 @@ variantToPropertyJob
                       ]
                     yieldJob
 
-                | hasProps -> return ()
+                | hasProps -> return Nothing
 
-                | not hasProps && step /= 0 -> logErrorN $
+                | not hasProps && step /= 0 -> jobError $
                     "No properties, but did find max steps for variant #"
                     <> showSqlKey varId
 
-                | retries >= 5 -> logWarnN $
+                | retries >= 5 -> jobWarn $
                     "No properties, but too many retries for variant #"
                     <> showSqlKey varId
 
-                | otherwise -> logErrorN $
+                | otherwise -> jobError $
                     "Variant information for #" <> showSqlKey varId
                     <> " is in an inconsistent state!"
   where
+    jobWarn msg = Nothing <$ logWarnN msg
+    jobError msg = Nothing <$ logErrorN msg
+
     maxStep | not hasProps && step == 0 = Nothing
             | otherwise = Just step
 
@@ -104,8 +103,9 @@ variantToPropertyJob
         Graph _ path _ _ <- Sql.getJust graphId
         VariantConfig algoId _ flags _ <- Sql.getJust variantCfgId
         Algorithm algo _ <- Sql.getJust algoId
-        yield . makePropertyJob (algoId,graphId,hash,maxStep) varId Nothing $
-            [ "-a", algo, fromMaybe "" flags, path ]
+        let job = makePropertyJob (algoId,graphId,hash,maxStep) varId Nothing $
+                    [ "-a", algo, fromMaybe "" flags, path ]
+        return $ Just job
 
 processProperty
     :: Result (Key Algorithm, Key Graph, Maybe Hash, Maybe Int) -> SqlM ()
