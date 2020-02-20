@@ -143,20 +143,20 @@ getModelTrainingConfig :: MonadSql m => Key PredictionModel -> m TrainingConfig
 getModelTrainingConfig modelId = SqlTrans.runTransaction $ do
     PredictionModel{..} <- SqlTrans.getJust modelId
 
-    graphProps <- runConduit $
-        SqlTrans.selectSource [ModelGraphPropertyModelId ==. modelId] []
-        .| C.map (modelGraphPropertyProperty . SqlTrans.entityVal)
-        .| C.foldMap S.singleton
+    graphProps <-
+        SqlTrans.selectSource [ModelGraphPropertyModelId ==. modelId] [] $
+            C.map (modelGraphPropertyProperty . SqlTrans.entityVal)
+            .| C.foldMap S.singleton
 
-    stepProps <- runConduit $
-        SqlTrans.selectSource [ModelStepPropertyModelId ==. modelId] []
-        .| C.map (modelStepPropertyProperty . SqlTrans.entityVal)
-        .| C.foldMap S.singleton
+    stepProps <-
+        SqlTrans.selectSource [ModelStepPropertyModelId ==. modelId] [] $
+            C.map (modelStepPropertyProperty . SqlTrans.entityVal)
+            .| C.foldMap S.singleton
 
-    trainingDatasets <- runConduit $
-        SqlTrans.selectSource [ModelTrainDatasetModelId ==. modelId] []
-        .| C.map (modelTrainDatasetDatasetId . SqlTrans.entityVal)
-        .| C.foldMap S.singleton
+    trainingDatasets <-
+        SqlTrans.selectSource [ModelTrainDatasetModelId ==. modelId] [] $
+            C.map (modelTrainDatasetDatasetId . SqlTrans.entityVal)
+            .| C.foldMap S.singleton
 
     return $ LegacyTrainConfig LegacyConfig
         { legacyAlgorithm = predictionModelAlgorithmId
@@ -175,22 +175,21 @@ getModelStats modelId = SqlTrans.runTransaction $ do
     modelUnknownCount <-
         predictionModelTotalUnknownCount <$> SqlTrans.getJust modelId
 
-    modelGraphPropImportance <- runConduit $
-        SqlTrans.selectSource [ModelGraphPropertyModelId ==. modelId] []
-        .| C.foldMap (graphPropMap . SqlTrans.entityVal)
+    modelGraphPropImportance <-
+        SqlTrans.selectSource [ModelGraphPropertyModelId ==. modelId] [] $
+            C.foldMap (graphPropMap . SqlTrans.entityVal)
 
-    modelStepPropImportance <- runConduit $
-        SqlTrans.selectSource [ModelStepPropertyModelId ==. modelId] []
-        .| C.foldMap (stepPropMap . SqlTrans.entityVal)
+    modelStepPropImportance <-
+        SqlTrans.selectSource [ModelStepPropertyModelId ==. modelId] [] $
+            C.foldMap (stepPropMap . SqlTrans.entityVal)
 
     unknowns <- SqlTrans.selectList [UnknownPredictionModelId ==. modelId] []
     modelUnknownPreds <- forM unknowns $ \SqlTrans.Entity{..} -> do
         let UnknownPrediction{..} = entityVal
             filters = [UnknownPredictionSetUnknownPredId ==. entityKey]
 
-        implSet <- runConduit $
-            SqlTrans.selectSource filters []
-            .| C.foldMap (toImplSet . SqlTrans.entityVal)
+        implSet <- SqlTrans.selectSource filters [] $
+            C.foldMap (toImplSet . SqlTrans.entityVal)
 
         return $ UnknownSet unknownPredictionUnknownSetId unknownPredictionCount implSet
 

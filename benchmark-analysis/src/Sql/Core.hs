@@ -20,14 +20,14 @@ module Sql.Core
     , querySingleValue
     , runMigrationQuiet
     , runMigrationUnsafeQuiet
+    , selectKeys
+    , selectSource
     , setPragma
     , setPragmaConn
     , showSqlKey
+    , sinkQuery
 
-    -- FIXME
-    , conduitQueryTrans
-
-    -- Re-expors
+    -- Re-exports
     , Entity(..)
     , EntityField
     , Filter
@@ -60,12 +60,11 @@ import Control.Monad.Catch (MonadThrow, MonadCatch, handle, throwM)
 import Control.Monad.Fail (MonadFail)
 import Control.Monad.IO.Unlift (MonadIO)
 import Control.Monad.Logger (MonadLogger, logErrorN)
-import Control.Monad.Reader
-    (MonadReader, ReaderT, asks, runReaderT, withReaderT)
+import Control.Monad.Reader (ReaderT, asks, runReaderT, withReaderT)
 import Control.Monad.Trans (MonadTrans, lift)
 import Control.Monad.Trans.Resource (MonadResource, ResourceT, release)
 import Data.Acquire (Acquire, allocateAcquire, mkAcquire)
-import Data.Conduit (ConduitT)
+import Data.Conduit (ConduitT, Void, (.|), runConduit)
 import Data.Pool (Pool)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -130,8 +129,7 @@ instance MonadSql DummySql where
 newtype Transaction m r = Transaction (ReaderT (RawSqlite SqlBackend) m r)
   deriving
   ( Functor, Applicative, Monad, MonadCatch, MonadFail, MonadIO, MonadLogger
-  , MonadReader (RawSqlite SqlBackend), MonadResource, MonadThrow
-  , MonadTrans
+  , MonadResource, MonadThrow, MonadTrans
   )
 
 type SqlRecord rec = (PersistRecordBackend rec (RawSqlite SqlBackend))
@@ -193,10 +191,44 @@ setPragmaConn pragma val = runReaderT (Sqlite.rawExecute query [])
 executeSql :: MonadSql m => Text -> Transaction m ()
 executeSql query = Transaction $ Sqlite.rawExecute query []
 
-conduitQueryTrans
-    :: MonadSql m
-    => Text -> [PersistValue] -> ConduitT () [PersistValue] (Transaction m) ()
-conduitQueryTrans query args = Sqlite.rawQuery query args
+sinkQuery
+    :: MonadResource m
+    => Text
+    -> [PersistValue]
+    -> ConduitT [PersistValue] Void (Transaction m) r
+    -> Transaction m r
+sinkQuery query args sink = do
+    (key, source) <- Transaction $ do
+        acquireQuery <- Sqlite.rawQueryRes query args
+        allocateAcquire acquireQuery
+
+    runConduit (source .| sink) <* release key
+
+selectKeys
+    :: (MonadResource m, SqlRecord record)
+    => [Filter record]
+    -> [SelectOpt record]
+    -> ConduitT (Key record) Void (Transaction m) r
+    -> Transaction m r
+selectKeys filts order sink = do
+    (key, source) <- Transaction $ do
+        acquireQuery <- Sqlite.selectKeysRes filts order
+        allocateAcquire acquireQuery
+
+    runConduit (source .| sink) <* release key
+
+selectSource
+    :: (MonadResource m, SqlRecord record)
+    => [Filter record]
+    -> [SelectOpt record]
+    -> ConduitT (Entity record) Void (Transaction m) r
+    -> Transaction m r
+selectSource filts order sink = do
+    (key, source) <- Transaction $ do
+        acquireQuery <- Sqlite.selectSourceRes filts order
+        allocateAcquire acquireQuery
+
+    runConduit (source .| sink) <* release key
 
 conduitQuery
     :: (MonadIO m, MonadSql n)

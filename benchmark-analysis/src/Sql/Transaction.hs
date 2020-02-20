@@ -6,17 +6,15 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
-module Sql.Transaction (module Sql.Core, module Sql.Transaction) where
+module Sql.Transaction (module Sql, module Sql.Transaction) where
 
 import Control.Monad ((>=>))
 import Control.Monad.Catch (MonadThrow)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Logger (MonadLogger)
 import qualified Control.Monad.Logger as Log
-import Control.Monad.Reader (ask, runReaderT)
-import Control.Monad.Trans.Resource (MonadResource, release)
-import Data.Acquire (allocateAcquire)
-import Data.Conduit (ConduitT, (.|), await, toProducer, runConduit)
+import Control.Monad.Trans.Resource (MonadResource)
+import Data.Conduit (await)
 import qualified Data.Conduit.Combinators as C
 import Data.Int (Int64)
 import Data.IntMap (IntMap)
@@ -39,7 +37,7 @@ import Lens.Micro.Extras (view)
 import Exceptions
 import Query (CTE, MonadQuery, Query(..), runSqlQuerySingle)
 import Schema
-import Sql.Core
+import Sql.Core as Sql
 
 validateEntity
     :: ( MonadLogger m
@@ -156,17 +154,12 @@ rawExecute query args = Transaction $ Sqlite.rawExecute query args
 selectSingleMaybe
     :: (MonadLogger m, MonadSql m, MonadThrow m, SqlRecord rec)
     => [Filter rec] -> Transaction m (Maybe (Entity rec))
-selectSingleMaybe filters = do
-    allocConduit <- ask >>= runReaderT (Sqlite.selectSourceRes filters [])
-    (key, conduit) <- allocateAcquire allocConduit
-
-    result <- runConduit $ conduit .| do
-        result <- await
-        check <- await
-        case check of
-            Nothing -> return result
-            Just _ -> logThrowM . ExpectedSingleValue $ ""
-    result <$ release key
+selectSingleMaybe filters = Sql.selectSource filters [] $ do
+    result <- await
+    check <- await
+    case check of
+        Nothing -> return result
+        Just _ -> logThrowM . ExpectedSingleValue $ ""
 
 selectSingle
     :: (MonadLogger m, MonadSql m, MonadThrow m, SqlRecord rec)
@@ -185,24 +178,10 @@ selectKeysList
     => [Filter rec] -> [SelectOpt rec] -> Transaction m [Key rec]
 selectKeysList filters = Transaction . Sqlite.selectKeysList filters
 
-selectKeys
-    :: (MonadResource m, MonadSql m, SqlRecord rec)
-    => [Filter rec]
-    -> [SelectOpt rec]
-    -> ConduitT a (Key rec) (Transaction m) ()
-selectKeys filters select = toProducer $ Sqlite.selectKeys filters select
-
 selectList
     :: (MonadResource m, MonadSql m, SqlRecord rec)
     => [Filter rec] -> [SelectOpt rec] -> Transaction m [Entity rec]
 selectList filters select = Transaction $ Sqlite.selectList filters select
-
-selectSource
-    :: (MonadResource m, MonadSql m, SqlRecord rec)
-    => [Filter rec]
-    -> [SelectOpt rec]
-    -> ConduitT a (Entity rec) (Transaction m) ()
-selectSource filters select = toProducer $ Sqlite.selectSource filters select
 
 count :: (MonadSql m, SqlRecord rec) => [Filter rec] -> Transaction m Int
 count = Transaction . Sqlite.count
@@ -223,21 +202,12 @@ likeFilter field val = Filter field filterVal backendFilter
     filterVal = UnsafeValue $ T.concat ["%", val, "%"]
     backendFilter = BackendSpecificFilter "like"
 
-whenNotExists
-    :: (MonadResource m, MonadSql m, SqlRecord record)
-    => [Filter record] -> ConduitT i a m () -> ConduitT i a m ()
-whenNotExists filters act =
-    runTransaction (selectFirst filters []) >>= \case
-        Just _ -> return ()
-        Nothing -> act
-
 queryExternalImplementations
     :: (MonadResource m, MonadSql m)
     => Key Algorithm -> Transaction m (IntMap ExternalImpl)
-queryExternalImplementations algoId = runConduit $
-    selectImpls algoId .| C.foldMap toIntMap
+queryExternalImplementations algoId = selectImpls algoId $ C.foldMap toIntMap
   where
-    selectImpls aId = selectSource [ ExternalImplAlgorithmId ==. aId ] []
+    selectImpls aId = Sql.selectSource [ ExternalImplAlgorithmId ==. aId ] []
 
     toIntMap :: Entity ExternalImpl -> IntMap ExternalImpl
     toIntMap (Entity k val) = IM.singleton (fromIntegral $ fromSqlKey k) val
@@ -245,10 +215,10 @@ queryExternalImplementations algoId = runConduit $
 queryImplementations
     :: (MonadResource m, MonadSql m)
     => Key Algorithm -> Transaction m (IntMap Implementation)
-queryImplementations algoId = fmap (IM.union builtinImpls) . runConduit $
-    selectImpls algoId .| C.foldMap toIntMap
+queryImplementations algoId = IM.union builtinImpls <$>
+    selectImpls algoId (C.foldMap toIntMap)
   where
-    selectImpls aId = selectSource [ ImplementationAlgorithmId ==. aId ] []
+    selectImpls aId = Sql.selectSource [ ImplementationAlgorithmId ==. aId ] []
 
     toIntMap :: Entity Implementation -> IntMap Implementation
     toIntMap (Entity k val) = IM.singleton (fromIntegral $ fromSqlKey k) val

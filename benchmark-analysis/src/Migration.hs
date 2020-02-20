@@ -9,7 +9,6 @@ import Control.Monad (forM_, unless, when)
 import Control.Monad.Catch (MonadMask, MonadThrow, catch, onError)
 import Control.Monad.Logger (MonadLogger, logWarnN)
 import qualified Control.Monad.Logger as Log
-import Data.Conduit ((.|), runConduit)
 import qualified Data.Conduit.Combinators as C
 import Data.Monoid (Any(..))
 import Data.Int (Int64)
@@ -29,8 +28,8 @@ showText = T.pack . show
 
 checkForeignKeys
     :: (MonadLogger m, MonadSql m, MonadThrow m) => Transaction m ()
-checkForeignKeys = runConduit $ do
-    result <- Sql.conduitQueryTrans query [] .| C.foldMapM logViolation
+checkForeignKeys = do
+    result <- Sql.sinkQuery query [] $ C.foldMapM logViolation
     when (getAny result) $ logThrowM ForeignKeyViolation
   where
     logViolation l = Any True <$ logWarnN errorMsg

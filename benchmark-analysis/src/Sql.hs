@@ -10,7 +10,7 @@ module Sql
     , SqlTrans.Max(..)
     , SqlTrans.getFieldLength
     , SqlTrans.likeFilter
-    , module Sql.Core
+    , module SqlCore
     , module Sql
     ) where
 
@@ -31,7 +31,7 @@ import Core
 import Query (CTE, MonadQuery, Query(..), runSqlQuerySingleMaybe)
 import Schema
 import Schema.GlobalVars (Unique(UniqGlobal))
-import Sql.Core
+import Sql.Core as SqlCore hiding (selectKeys, selectSource)
 import qualified Sql.Transaction as SqlTrans
 
 rawGetGlobalVar

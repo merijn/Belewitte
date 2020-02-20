@@ -6,7 +6,7 @@ module Commands.Add (commands) where
 
 import Control.Monad (mzero, unless, when)
 import Control.Monad.Trans.Maybe (runMaybeT)
-import Data.Conduit (ConduitT, Void, (.|), runConduit)
+import Data.Conduit ((.|), runConduit)
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Text as T
 import System.Directory (doesFileExist)
@@ -106,7 +106,7 @@ addGraphs paths = do
             C.yieldMany paths
             .| C.concatMapM (lift . lift . filterGraphPaths)
             .| C.mapM (insertGraph datasetId)
-            .> insertVariants
+            .| C.mapM_ insertVariants
   where
     filterGraphPaths
         :: (MonadIO m, MonadLogger m) => String -> m (Maybe (String, String))
@@ -131,10 +131,9 @@ addGraphs paths = do
         Graph (T.pack graphName) (T.pack path) Nothing datasetId
 
     insertVariants
-        :: (MonadResource m, MonadSql m)
-        => Key Graph -> ConduitT (Key Graph) Void (Transaction m) ()
+        :: (MonadResource m, MonadSql m) => Key Graph -> Transaction m ()
     insertVariants graphId =
-        SqlTrans.selectSource [] [] .| C.mapM_ insertVariant
+        SqlTrans.selectSource [] [] $ C.mapM_ insertVariant
       where
         insertVariant :: MonadSql m => Entity VariantConfig -> Transaction m ()
         insertVariant (Entity variantCfgId (VariantConfig algoId _ _ _)) =
@@ -181,8 +180,7 @@ addVariant = do
 
         let mkVariant gId = Variant gId varCfgId algoId Nothing 0 False 0
 
-        runConduit $
-            SqlTrans.selectKeys [] [] .| C.mapM_ (SqlTrans.insert_ . mkVariant)
+        SqlTrans.selectKeys [] [] $ C.mapM_ (SqlTrans.insert_ . mkVariant)
   where
     algoInput = sqlInput AlgorithmName UniqAlgorithm
     defaultPrompt = "Default Variant (for plotting)"
