@@ -2,7 +2,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 module QueryDump (modelQueryDump) where
 
-import Data.Conduit (ConduitT, Void, (.|), runConduit, yield)
+import Data.Conduit (ConduitT, Void, (.|), yield)
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.Text as C
 import Data.Set (Set)
@@ -20,8 +20,7 @@ import StepQuery
 import VariantQuery
 
 getConfigSet :: SqlM (Set (Key Algorithm, Key Platform, CommitId))
-getConfigSet = runConduit $
-    Sql.selectSource [] [] .| C.foldMap (S.singleton . toTuple)
+getConfigSet = Sql.selectSource [] [] $ C.foldMap (S.singleton . toTuple)
   where
     toTuple :: Entity RunConfig -> (Key Algorithm, Key Platform, CommitId)
     toTuple (Entity _ RunConfig{..}) =

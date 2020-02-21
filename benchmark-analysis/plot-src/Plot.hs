@@ -40,7 +40,7 @@ import Utils.Process (withStdin)
 import Query
 import RuntimeData (getBarPlotScript)
 import Schema
-import Sql (MonadSql, SelectOpt(Asc), (==.))
+import Sql (SelectOpt(Asc), (==.))
 import qualified Sql
 import Utils.ImplTiming
 import Utils.Pair (Pair(..), toPair, mergePair)
@@ -48,8 +48,8 @@ import VariantQuery
 
 queryVariants :: Key Algorithm -> Set Text -> SqlM (Set (Key Variant))
 queryVariants algoId graphs = do
-    gids <- runConduit $ Sql.selectSource [] []
-        .| C.filter (\i -> S.member (graphName (Sql.entityVal i)) graphs)
+    gids <- Sql.selectSource [] [] $
+        C.filter (\i -> S.member (graphName (Sql.entityVal i)) graphs)
         .| C.map Sql.entityKey
         .| C.foldMap S.singleton
 
@@ -312,38 +312,35 @@ main = runSqlM commands $ \case
                 .| C.map (second $ translatePair . fmap V.convert)
 
 getConfigSet :: SqlM (Set (Key Algorithm, Key Platform, CommitId))
-getConfigSet = runConduit $
-    Sql.selectSource [] [] .| C.foldMap (S.singleton . toTuple)
+getConfigSet = Sql.selectSource [] [] $ C.foldMap (S.singleton . toTuple)
   where
     toTuple :: Entity RunConfig -> (Key Algorithm, Key Platform, CommitId)
     toTuple (Entity _ RunConfig{..}) =
         (runConfigAlgorithmId, runConfigPlatformId, runConfigAlgorithmVersion)
 
 toTimeQueries
-    :: MonadSql m
-    => (Key Algorithm, Key Platform, CommitId)
+    :: (Key Algorithm, Key Platform, CommitId)
     -> ConduitT (Key Algorithm, Key Platform, CommitId)
                 (Query (Text, ( Storable.Vector ImplTiming
                               , Storable.Vector ImplTiming
                               )
                        )
                 )
-                m
+                (Region SqlM)
                 ()
 toTimeQueries (algoId, platformId, commitId) =
-  Sql.selectKeys [VariantAlgorithmId ==. algoId] [Asc VariantId]
+  Sql.selectKeysRegion [VariantAlgorithmId ==. algoId] [Asc VariantId]
   .| C.chunksOf 500
   .| C.map (timePlotQuery algoId platformId commitId . S.fromList)
 
 toLevelTimeQueries
-    :: MonadSql m
-    => (Key Platform, CommitId)
+    :: (Key Platform, CommitId)
     -> ConduitT (Key Platform, CommitId)
                 (Query (Int64, Storable.Vector ImplTiming))
-                m
+                (Region SqlM)
                 ()
 toLevelTimeQueries (platformId, commitId) =
-  Sql.selectKeys [] [Asc VariantId]
+  Sql.selectKeysRegion [] [Asc VariantId]
   .| C.map (levelTimePlotQuery platformId commitId)
 
 plotQueryDump :: FilePath -> SqlM ()

@@ -113,8 +113,8 @@ renderColumns filts order = do
     (header, f) <- columnFormatter
     let columnSource = do
             yield header
-            Sql.selectSource filts order .| C.map f
-    res <- try . runConduit $ columnSource .| C.unlines .| outputSink
+            Sql.selectSourceRegion filts order .| C.map f
+    res <- try $ Sql.runRegionSource columnSource (C.unlines .| outputSink)
     case res of
         Right _ -> return ()
         Left (ioeGetErrorType -> ResourceVanished) -> return ()

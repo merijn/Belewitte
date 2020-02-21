@@ -118,9 +118,8 @@ runBenchmarks = lift $ do
         variantFilters = [VariantPropsStored ==. False] ||.
                          [VariantResult ==. Nothing]
 
-    runConduit $
-        Sql.selectSource variantFilters []
-        .| C.concatMapM variantToPropertyJob
+    Sql.selectSource variantFilters [] $
+        C.concatMapM variantToPropertyJob
         .| processJobsParallel numDefaultNodes defaultPlatform
         .| C.mapM_ processProperty
 
@@ -133,9 +132,8 @@ runBenchmarks = lift $ do
     processPlatformRunConfigs platformId = do
         platform <- Sql.getJust platformId
 
-        runConduit $
-            Sql.selectSource [RunConfigPlatformId ==. platformId] []
-            .| C.mapM_ (runRunConfigs platform)
+        Sql.selectSource [RunConfigPlatformId ==. platformId] [] $
+            C.mapM_ (runRunConfigs platform)
       where
         runRunConfigs :: Platform -> Entity RunConfig -> SqlM ()
         runRunConfigs platform (Entity runCfgId cfg) = do
@@ -164,8 +162,8 @@ runBenchmarks = lift $ do
 validate :: Input SqlM ()
 validate = lift $ do
     checkCxxCompiled
-    runConduit $ Sql.selectSource [] []
-        .| parMapM_ (pipelineHandler entityKey) 10 validateForPlatform
+    Sql.selectSource [] [] $
+        parMapM_ (pipelineHandler entityKey) 10 validateForPlatform
   where
     validateForPlatform :: Entity Platform -> SqlM ()
     validateForPlatform (Entity platformId platform) =
@@ -236,7 +234,7 @@ importResults = do
 ingestQueryDump :: FilePath -> SqlM ()
 ingestQueryDump outputSuffix = do
     Sql.runRegionConduit $
-        Sql.selectKeys [] [Asc RunConfigId]
+        Sql.selectKeysRegion [] [Asc RunConfigId]
         .| C.map missingBenchmarkQuery
         .> streamQuery
         .| querySink "missingQuery-"
@@ -244,14 +242,14 @@ ingestQueryDump outputSuffix = do
     let querySink1 = ZipConduit $ querySink "validationVariantQuery-"
         querySink2 = ZipConduit $
             C.map validationRunQuery
-            .> C.fuse (Sql.selectKeys [] [Asc PlatformId]) . C.map
+            .> C.fuse (Sql.selectKeysRegion [] [Asc PlatformId]) . C.map
             .> streamQuery
             .| querySink "validationRunQuery-"
 
         finalSink = getZipConduit $ mappend <$> querySink1 <*> querySink2
 
     Sql.runRegionConduit $
-        Sql.selectKeys [] [Asc PlatformId]
+        Sql.selectKeysRegion [] [Asc PlatformId]
         .| C.map validationVariantQuery
         .> streamQuery
         .| C.map jobValue

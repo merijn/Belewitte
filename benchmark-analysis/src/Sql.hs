@@ -14,18 +14,14 @@ module Sql
     , module Sql
     ) where
 
-import Control.Monad (join)
 import Control.Monad.Catch (MonadThrow)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Logger (MonadLogger)
-import Control.Monad.Trans.Resource (release)
-import Data.Acquire (allocateAcquire)
-import Data.Conduit (ConduitT, toProducer)
+import Data.Conduit (ConduitT, Void, transPipe)
 import Data.IntMap (IntMap)
 import Data.Proxy (Proxy(Proxy))
 import Data.String.Interpolate.IsString (i)
 import Database.Persist.Sqlite (sqlType)
-import qualified Database.Persist.Sqlite as Sqlite
 
 import Core
 import Query (CTE, MonadQuery, Query(..), runSqlQuerySingleMaybe)
@@ -163,14 +159,10 @@ selectKeys
     :: (MonadSql m, SqlRecord rec)
     => [Filter rec]
     -> [SelectOpt rec]
-    -> ConduitT a (Key rec) m ()
-selectKeys filters select = do
-    acquireConn <- getConnFromPool
-    (key, conduit) <- allocateAcquire $ do
-        conn <- acquireConn
-        join $ runReaderT (Sqlite.selectKeysRes filters select) conn
-    toProducer conduit
-    release key
+    -> ConduitT (Key rec) Void m r
+    -> m r
+selectKeys filters select sink = runTransaction $
+    SqlTrans.selectKeys filters select (transPipe lift sink)
 
 selectKeysList
     :: (MonadSql m, SqlRecord rec)
@@ -186,14 +178,10 @@ selectSource
     :: (MonadSql m, SqlRecord rec)
     => [Filter rec]
     -> [SelectOpt rec]
-    -> ConduitT a (Entity rec) m ()
-selectSource filters select = do
-    acquireConn <- getConnFromPool
-    (key, conduit) <- allocateAcquire $ do
-        conn <- acquireConn
-        join $ runReaderT (Sqlite.selectSourceRes filters select) conn
-    toProducer conduit
-    release key
+    -> ConduitT (Entity rec) Void m r
+    -> m r
+selectSource filters select sink = runTransaction $
+    SqlTrans.selectSource filters select (transPipe lift sink)
 
 update :: (MonadSql m, SqlRecord rec) => Key rec -> [Update rec] -> m ()
 update key = runTransaction . SqlTrans.update key

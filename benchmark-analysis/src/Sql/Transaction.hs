@@ -37,7 +37,7 @@ import Lens.Micro.Extras (view)
 import Exceptions
 import Query (CTE, MonadQuery, Query(..), runSqlQuerySingle)
 import Schema
-import Sql.Core as Sql
+import Sql.Core as Sql hiding (selectKeysRegion, selectSourceRegion)
 
 validateEntity
     :: ( MonadLogger m

@@ -26,7 +26,9 @@ module Sql.Core
     , runMigrationQuiet
     , runMigrationUnsafeQuiet
     , selectKeys
+    , selectKeysRegion
     , selectSource
+    , selectSourceRegion
     , setPragma
     , setPragmaConn
     , showSqlKey
@@ -259,6 +261,19 @@ selectKeys filts order sink = do
 
     runConduit (source .| sink) <* release key
 
+selectKeysRegion
+    :: (MonadSql m, SqlRecord record)
+    => [Filter record]
+    -> [SelectOpt record]
+    -> ConduitT a (Key record) (Region m) ()
+selectKeysRegion filts order = do
+    acquireConn <- getConnFromPool
+    (key, source) <- allocRegion $ do
+        conn <- acquireConn >>= readOnlyConnection
+        join $ runReaderT (Sqlite.selectKeysRes filts order) conn
+
+    toProducer source <* release key
+
 selectSource
     :: (MonadResource m, SqlRecord record)
     => [Filter record]
@@ -271,6 +286,19 @@ selectSource filts order sink = do
         allocateAcquire acquireQuery
 
     runConduit (source .| sink) <* release key
+
+selectSourceRegion
+    :: (MonadSql m, SqlRecord record)
+    => [Filter record]
+    -> [SelectOpt record]
+    -> ConduitT a (Entity record) (Region m) ()
+selectSourceRegion filts order = do
+    acquireConn <- getConnFromPool
+    (key, source) <- allocRegion $ do
+        conn <- acquireConn >>= readOnlyConnection
+        join $ runReaderT (Sqlite.selectSourceRes filts order) conn
+
+    toProducer source <* release key
 
 conduitQuery
     :: MonadSql m
