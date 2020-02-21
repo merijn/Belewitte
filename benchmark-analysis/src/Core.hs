@@ -210,6 +210,9 @@ instance MonadExplain CoreM where
             Just names | S.member (T.toLower name) names -> return True
             _ -> return False
 
+instance MonadExplain m => MonadExplain (Region m) where
+    shouldExplainQuery = lift . shouldExplainQuery
+
 instance MonadExplain SqlM where
     shouldExplainQuery = SqlM . lift . shouldExplainQuery
 

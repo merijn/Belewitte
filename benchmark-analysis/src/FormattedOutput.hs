@@ -8,7 +8,7 @@ module FormattedOutput
     , printProxyEntity
     , renderColumns
     , renderOutput
-    , outputSink
+    , renderRegionOutput
     ) where
 
 import Control.Monad (unless)
@@ -123,6 +123,14 @@ renderColumns filts order = do
 renderOutput :: ConduitT () Text SqlM () -> SqlM ()
 renderOutput producer = do
     res <- try . runConduit $ producer .| outputSink
+    case res of
+        Right _ -> return ()
+        Left (ioeGetErrorType -> ResourceVanished) -> return ()
+        Left e -> throwM e
+
+renderRegionOutput :: ConduitT () Text (Region SqlM) () -> SqlM ()
+renderRegionOutput producer = do
+    res <- try $ runRegionSource producer outputSink
     case res of
         Right _ -> return ()
         Left (ioeGetErrorType -> ResourceVanished) -> return ()

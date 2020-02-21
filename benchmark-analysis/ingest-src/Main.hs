@@ -37,7 +37,7 @@ import MissingQuery
 import Options
 import Parsers
 import ProcessPool
-import Query (Query, runSqlQuery, runSqlQueryConduit)
+import Query (Region, streamQuery, runSqlQueryConduit)
 import qualified RuntimeData
 import Schema
 import Sql (Entity(..), MonadSql, SelectOpt(Asc), Transaction, (==.), (||.))
@@ -132,22 +132,26 @@ runBenchmarks = lift $ do
     processPlatformRunConfigs :: Key Platform -> SqlM ()
     processPlatformRunConfigs platformId = do
         platform <- Sql.getJust platformId
-        let numNodes = platformAvailable platform
-            filts = [RunConfigPlatformId ==. platformId]
 
-        runConduit $ Sql.selectSource filts [] .> \(Entity runCfgId cfg) -> do
-                let commitId = runConfigAlgorithmVersion cfg
+        runConduit $
+            Sql.selectSource [RunConfigPlatformId ==. platformId] []
+            .| C.mapM_ (runRunConfigs platform)
+      where
+        runRunConfigs :: Platform -> Entity RunConfig -> SqlM ()
+        runRunConfigs platform (Entity runCfgId cfg) = do
+            unless (runConfigPlatformId cfg == platformId) $ do
+                logThrowM . GenericInvariantViolation $ mconcat
+                    [ "Query for platform #", showSqlKey platformId
+                    , " returned run config for different platform!"
+                    ]
 
-                unless (runConfigPlatformId cfg == platformId) $ do
-                    logThrowM . GenericInvariantViolation $ mconcat
-                        [ "Query for platform #", showSqlKey platformId
-                        , " returned run config for different platform!"
-                        ]
-
-                runSqlQuery (missingBenchmarkQuery runCfgId) $
-                    C.awaitForever (missingRunToTimingJob platformId)
-                    .| processJobsParallel numNodes platform
-                    .| C.mapM_ (processTiming runCfgId commitId)
+            runSqlQueryConduit (missingBenchmarkQuery runCfgId) $
+                C.concatMapM (missingRunToTimingJob platformId)
+                .| processJobsParallel numNodes platform
+                .| C.mapM_ (processTiming runCfgId commitId)
+          where
+            commitId = runConfigAlgorithmVersion cfg
+            numNodes = platformAvailable platform
 
     tryAlternatives :: (MonadIO m, MonadLogger m) => [MaybeT m a] -> m a
     tryAlternatives alts = runMaybeT (asum alts) >>= maybe exitOnNothing return
@@ -160,21 +164,23 @@ runBenchmarks = lift $ do
 validate :: Input SqlM ()
 validate = lift $ do
     checkCxxCompiled
-    runConduit $
-        Sql.selectSource [] []
+    runConduit $ Sql.selectSource [] []
         .| parMapM_ (pipelineHandler entityKey) 10 validateForPlatform
   where
     validateForPlatform :: Entity Platform -> SqlM ()
-    validateForPlatform (Entity platformId platform) = do
-        withProcessPool numNodes platform $ \procPool -> do
-            runSqlQueryConduit (validationVariantQuery platformId) $
-                processJobsParallelWithSharedPool numNodes procPool
-                .> validationMissingRuns platformId
-                .| processJobsParallelWithSharedPool numNodes procPool
-                .| validateResults numNodes
-                .| C.mapM_ cleanupValidation
+    validateForPlatform (Entity platformId platform) =
+        withProcessPool numNodes platform $ \procPool -> Sql.runRegionConduit $
+            streamQuery (validationVariantQuery platformId)
+            .| toRegion (processJobsParallelWithSharedPool numNodes procPool)
+            .> validationMissingRuns platformId
+            .| toRegion (processJobsParallelWithSharedPool numNodes procPool)
+            .| toRegion (validateResults numNodes)
+            .| toRegion (C.mapM_ cleanupValidation)
       where
         numNodes = platformAvailable platform
+
+        toRegion :: Monad m => ConduitT a b m r -> ConduitT a b (Region m) r
+        toRegion = C.transPipe lift
 
 importResults :: Input SqlM ()
 importResults = do
@@ -229,9 +235,10 @@ importResults = do
 
 ingestQueryDump :: FilePath -> SqlM ()
 ingestQueryDump outputSuffix = do
-    runConduit $
+    Sql.runRegionConduit $
         Sql.selectKeys [] [Asc RunConfigId]
-        .> streamQuery . missingBenchmarkQuery
+        .| C.map missingBenchmarkQuery
+        .> streamQuery
         .| querySink "missingQuery-"
 
     let querySink1 = ZipConduit $ querySink "validationVariantQuery-"
@@ -243,17 +250,13 @@ ingestQueryDump outputSuffix = do
 
         finalSink = getZipConduit $ mappend <$> querySink1 <*> querySink2
 
-    runConduit $
+    Sql.runRegionConduit $
         Sql.selectKeys [] [Asc PlatformId]
-        .> streamQuery . validationVariantQuery
+        .| C.map validationVariantQuery
+        .> streamQuery
         .| C.map jobValue
         .| finalSink
   where
-    streamQuery
-        :: (MonadExplain m, MonadLogger m, MonadSql m, MonadThrow m)
-        => Query r -> ConduitT i r m ()
-    streamQuery query = runSqlQuery query (C.map id)
-
     querySink
         :: (MonadResource m, MonadThrow m, Show a)
         => String -> ConduitT a Void m ()

@@ -39,7 +39,7 @@ import qualified Data.Vector.Storable as VS
 import Numeric (showFFloat)
 
 import Core
-import FormattedOutput (renderOutput)
+import FormattedOutput (renderRegionOutput)
 import Model
 import Query
 import Schema
@@ -327,7 +327,7 @@ evaluateModel
     -> TrainingConfig
     -> SqlM ()
 evaluateModel defImpl reportCfg@Report{..} model trainConfig =
-  renderOutput $ do
+  renderRegionOutput $ do
     algorithm <- Sql.getJust algoId
     impls <- Sql.queryImplementations algoId
 
@@ -349,8 +349,8 @@ evaluateModel defImpl reportCfg@Report{..} model trainConfig =
 
     let aggregationConduit = aggregateSteps defaultImpl const model
 
-    stats <- runSqlQuery query $
-      foldGroup ((==) `on` stepVariantId) aggregationConduit
+    stats <- streamQuery query
+      .| foldGroup ((==) `on` stepVariantId) aggregationConduit
       .| C.map (addBestNonSwitching impls)
       .| aggregateVariants reportVariants reportRelativeTo implMaps
 
@@ -387,15 +387,15 @@ evaluateModel defImpl reportCfg@Report{..} model trainConfig =
 
 compareImplementations :: VariantInfoConfig -> CompareReport -> SqlM ()
 compareImplementations variantInfoConfig cfg@Report{..} =
-  renderOutput $ do
+  renderRegionOutput $ do
     impls <- (,) <$> Sql.queryImplementations variantInfoAlgorithm
                  <*> Sql.queryExternalImplementations variantInfoAlgorithm
 
     let implMaps :: Pair (IntMap Text)
         implMaps = toImplNames filterImplTypes filterExternalImpls impls
 
-    stats <- runSqlQuery query $
-        C.map addBestNonSwitching
+    stats <- streamQuery query
+        .| C.map addBestNonSwitching
         .| aggregateVariants reportVariants reportRelativeTo implMaps
 
     reportTotalStatistics cfg implMaps stats

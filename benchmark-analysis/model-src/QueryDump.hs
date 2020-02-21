@@ -12,9 +12,9 @@ import Data.Time.Clock (getCurrentTime)
 
 import Core
 import FieldQuery (getDistinctFieldQuery)
-import Query (Query, runSqlQuery, runSqlQueryConduit)
+import Query (Query, streamQuery, runSqlQueryConduit)
 import Schema
-import Sql (MonadSql, (==.))
+import Sql (Region, (==.))
 import qualified Sql
 import StepQuery
 import VariantQuery
@@ -36,7 +36,7 @@ toStepInfoQueries
     :: (Key Algorithm, Key Platform, CommitId)
     -> ConduitT (Key Algorithm, Key Platform, CommitId)
                 (Query StepInfo)
-                SqlM
+                (Region SqlM)
                 ()
 toStepInfoQueries (stepInfoAlgorithm, stepInfoPlatform, stepInfoCommit) = do
     query <- getDistinctFieldQuery GraphPropProperty
@@ -62,22 +62,20 @@ modelQueryDump :: FilePath -> SqlM ()
 modelQueryDump outputSuffix = do
     configSet <- getConfigSet
 
-    runConduit $
+    Sql.runRegionConduit $
         C.yieldMany configSet
-        .> streamQuery sortVariantTimings . toVariantInfoQuery
+        .| C.map toVariantInfoQuery
+        .> streamQuery
+        .| C.map sortVariantTimings
         .| querySink "variantInfoQuery-"
 
-    runConduit $
+    Sql.runRegionConduit $
         C.yieldMany configSet
         .> toStepInfoQueries
-        .> streamQuery sortStepTimings
+        .> streamQuery
+        .| C.map sortStepTimings
         .| querySink "stepInfoQuery-"
   where
-    streamQuery
-        :: (MonadExplain m, MonadLogger m, MonadSql m, MonadThrow m)
-        => (r -> o) -> Query r -> ConduitT i o m ()
-    streamQuery f query = runSqlQuery query (C.map f)
-
     querySink
         :: (MonadResource m, MonadThrow m, Show a)
         => FilePath -> ConduitT a Void m ()

@@ -22,7 +22,7 @@ import qualified Control.Concurrent.STM as STM
 import Control.Monad (unless, when)
 import Crypto.Hash.Conduit (hashFile)
 import qualified Data.ByteArray (convert)
-import Data.Conduit (ConduitT, (.|), runConduit, yield)
+import Data.Conduit (ConduitT, (.|), runConduit)
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.Text as C
 import Data.Maybe (fromMaybe)
@@ -35,10 +35,10 @@ import MissingQuery
 import Parsers
 import ProcessPool (Job, Result(..), makePropertyJob, makeTimingJob)
 import qualified ProcessPool
-import Query (runSqlQuery)
+import Query (streamQuery)
 import qualified RuntimeData
 import Schema
-import Sql (Entity(..), Key, MonadSql, Transaction, (=.))
+import Sql (Entity(..), Key, MonadSql, Region, Transaction, (=.))
 import qualified Sql
 import qualified Sql.Transaction as SqlTrans
 
@@ -201,17 +201,16 @@ missingRunToTimingJob
     :: (MonadLogger m, MonadResource m, MonadSql m)
     => Key Platform
     -> MissingRun ExtraVariantInfo
-    -> ConduitT (MissingRun ExtraVariantInfo)
-                (Job (Key Algorithm, Key Implementation, Hash, Int))
-                m
-                ()
+    -> m (Maybe (Job (Key Algorithm, Key Implementation, Hash, Int)))
 missingRunToTimingJob platformId MissingRun{..} = case missingRunExtraInfo of
-    ExtraVariantInfo Nothing _ -> logErrorN . mconcat $
-        [ "Algorithm #", showSqlKey missingRunAlgorithmId
-        , " results missing for variant #", showSqlKey missingRunVariantId
-        ]
+    ExtraVariantInfo Nothing _ -> Nothing <$ logErrorN msg
+      where
+        msg = mconcat
+            [ "Algorithm #", showSqlKey missingRunAlgorithmId
+            , " results missing for variant #", showSqlKey missingRunVariantId
+            ]
 
-    ExtraVariantInfo (Just hash) steps -> yield $ makeTimingJob
+    ExtraVariantInfo (Just hash) steps -> return . Just $ makeTimingJob
             (missingRunAlgorithmId, missingRunImplId, hash, steps)
             missingRunVariantId
             (Just (platformId, missingRunImplName))
@@ -291,7 +290,7 @@ data Validation = Validation
 validationMissingRuns
     :: Key Platform
     -> Result ValidationVariant
-    -> ConduitT (Result ValidationVariant) (Job Validation) SqlM ()
+    -> ConduitT (Result ValidationVariant) (Job Validation) (Region SqlM) ()
 validationMissingRuns platformId result@Result{..} = do
     ProcessPool.cleanupTimings result
     ProcessPool.cleanupProperties result
@@ -315,8 +314,8 @@ validationMissingRuns platformId result@Result{..} = do
             (Just (platformId, missingRunImplName))
             missingRunArgs
 
-    runSqlQuery (validationRunQuery resultValue platformId) $
-        C.map toValidationJob
+    streamQuery (validationRunQuery resultValue platformId)
+        .| C.map toValidationJob
   where
     ValidationVariant{..} = resultValue
     outputFile = T.unpack resultLabel <> ".output"

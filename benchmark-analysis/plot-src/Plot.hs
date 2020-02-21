@@ -320,14 +320,15 @@ getConfigSet = runConduit $
         (runConfigAlgorithmId, runConfigPlatformId, runConfigAlgorithmVersion)
 
 toTimeQueries
-    :: (Key Algorithm, Key Platform, CommitId)
+    :: MonadSql m
+    => (Key Algorithm, Key Platform, CommitId)
     -> ConduitT (Key Algorithm, Key Platform, CommitId)
                 (Query (Text, ( Storable.Vector ImplTiming
                               , Storable.Vector ImplTiming
                               )
                        )
                 )
-                SqlM
+                m
                 ()
 toTimeQueries (algoId, platformId, commitId) =
   Sql.selectKeys [VariantAlgorithmId ==. algoId] [Asc VariantId]
@@ -335,10 +336,11 @@ toTimeQueries (algoId, platformId, commitId) =
   .| C.map (timePlotQuery algoId platformId commitId . S.fromList)
 
 toLevelTimeQueries
-    :: (Key Platform, CommitId)
+    :: MonadSql m
+    => (Key Platform, CommitId)
     -> ConduitT (Key Platform, CommitId)
                 (Query (Int64, Storable.Vector ImplTiming))
-                SqlM
+                m
                 ()
 toLevelTimeQueries (platformId, commitId) =
   Sql.selectKeys [] [Asc VariantId]
@@ -348,26 +350,21 @@ plotQueryDump :: FilePath -> SqlM ()
 plotQueryDump outputSuffix = do
     configSet <- getConfigSet
 
-    runConduit $
+    Sql.runRegionConduit $
         C.yieldMany configSet
-        .| C.awaitForever toTimeQueries
+        .> toTimeQueries
         .> streamQuery
         .| querySink "timeQuery-"
 
-    runConduit $
+    Sql.runRegionConduit $
         C.yieldMany (S.map stripAlgorithm configSet)
-        .| C.awaitForever toLevelTimeQueries
+        .> toLevelTimeQueries
         .> streamQuery
         .| querySink "levelTimeQuery-"
   where
     stripAlgorithm
         :: (Key Algorithm, Key Platform, CommitId) -> (Key Platform, CommitId)
     stripAlgorithm (_, platformId, commitId) = (platformId, commitId)
-
-    streamQuery
-        :: (MonadExplain m, MonadLogger m, MonadSql m, MonadThrow m)
-        => Query r -> ConduitT i r m ()
-    streamQuery query = runSqlQuery query (C.map id)
 
     querySink
         :: (MonadResource m, MonadThrow m, Show a)

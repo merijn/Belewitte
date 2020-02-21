@@ -11,21 +11,21 @@
 module Query
     ( CTE(..)
     , MonadQuery
+    , Region
     , Query(..)
     , explainSqlQuery
     , inCTE
     , randomizeQuery
-    , runSqlQuery
+    , runRegionConduit
     , runSqlQuerySingleMaybe
     , runSqlQuerySingle
     , runSqlQueryConduit
     , runSqlQueryCount
+    , streamQuery
     ) where
 
 import Control.Monad ((>=>), void, when)
-import Data.Acquire (allocateAcquire)
-import Control.Monad.Trans.Resource (release)
-import Data.Conduit (ConduitT, Void, (.|), await, runConduit, toProducer, yield)
+import Data.Conduit (ConduitT, Void, (.|), await, yield)
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.List as C hiding (fold, mapM)
 import Data.List (intersperse)
@@ -36,7 +36,7 @@ import Numeric (showGFloat)
 
 import Core
 import Schema
-import Sql.Core (MonadSql)
+import Sql.Core (MonadSql, Region, runRegionConduit)
 import qualified Sql.Core as Sql
 
 type MonadQuery m =
@@ -91,8 +91,8 @@ renderExplainTree = void $ do
         branches = mconcat $ intersperse "  " $ replicate (length stack) "|"
 
 explainSqlQuery :: MonadQuery m => Query r -> m Text
-explainSqlQuery originalQuery = runConduit $
-    runRawSqlQuery Explain explainQuery $ renderExplainTree .| C.fold
+explainSqlQuery originalQuery = Sql.runRegionConduit $
+    runRawSqlQuery Explain explainQuery .| renderExplainTree .| C.fold
   where
     explain
         :: (MonadIO m, MonadLogger m, MonadThrow m)
@@ -126,8 +126,8 @@ randomizeQuery seed trainingSize originalQuery = (training, validation)
       , queryText = randomizedQuery <> [i|LIMIT -1 OFFSET ?|]
       }
 
-runSqlQuery :: MonadQuery m => Query r -> ConduitT r o m a -> ConduitT i o m a
-runSqlQuery query sink = runLoggingSqlQuery query sink
+streamQuery :: MonadQuery m => Query r -> ConduitT i r (Region m) ()
+streamQuery query = runLoggingSqlQuery query
 
 runSqlQuerySingleMaybe :: MonadQuery m => Query r -> m (Maybe r)
 runSqlQuerySingleMaybe query = runSqlQueryConduit query $ do
@@ -143,7 +143,8 @@ runSqlQuerySingle = runSqlQuerySingleMaybe >=> \case
     Just v -> return v
 
 runSqlQueryConduit :: MonadQuery m => Query r -> ConduitT r Void m a -> m a
-runSqlQueryConduit query sink = runConduit $ runLoggingSqlQuery query sink
+runSqlQueryConduit query sink =
+   Sql.runRegionSource (runLoggingSqlQuery query) sink
 
 runLoggingSqlQuery
     :: ( MonadExplain m
@@ -152,8 +153,8 @@ runLoggingSqlQuery
        , MonadSql m
        , MonadThrow m
        )
-    => Query r -> ConduitT r o m a -> ConduitT i o m a
-runLoggingSqlQuery query sink = do
+    => Query r -> ConduitT i r (Region m) ()
+runLoggingSqlQuery query = do
     shouldExplain <- shouldExplainQuery (queryName query)
 
     when shouldExplain $ do
@@ -164,16 +165,14 @@ runLoggingSqlQuery query sink = do
 
         explainSqlQuery query >>= logExplain (queryName query)
 
-    runRawSqlQuery NoExplain query sink
+    runRawSqlQuery NoExplain query
 
 runRawSqlQuery
     :: (MonadLogger m, MonadResource m, MonadSql m, MonadThrow m)
-    => Explain -> Query r -> ConduitT r o m a -> ConduitT i o m a
-runRawSqlQuery isExplain query@Query{convert,params} sink = do
-    srcRes <- Sql.conduitQuery queryText queryParams
-    (key, src) <- allocateAcquire srcRes
-    (timing, r) <- withTime $ toProducer src .| C.mapM convert .| sink
-    release key
+    => Explain -> Query r -> ConduitT i r (Region m) ()
+runRawSqlQuery isExplain query@Query{convert,params} = do
+    (timing, r) <- withTime $
+        Sql.conduitQuery queryText queryParams .| C.mapM convert
 
     let formattedTime :: Text
         formattedTime = T.pack $ showGFloat (Just 3) timing "s"

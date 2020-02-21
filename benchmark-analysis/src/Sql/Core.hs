@@ -1,11 +1,14 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 module Sql.Core
     ( DummySql
+    , MonadRegion(..)
     , MonadSql(..)
+    , Region
     , SqlField
     , SqlRecord
     , Transaction(Transaction)
@@ -14,6 +17,8 @@ module Sql.Core
     , runReadOnlyTransaction
     , runTransactionWithoutForeignKeys
     , tryAbortableTransaction
+    , runRegionSource
+    , runRegionConduit
     , conduitQuery
     , executeSql
     , getMigration
@@ -56,15 +61,17 @@ module Sql.Core
     ) where
 
 import Control.Monad (join, void)
-import Control.Monad.Catch (MonadThrow, MonadCatch, handle, throwM)
+import Control.Monad.Catch (MonadThrow, MonadCatch, MonadMask, handle, throwM)
 import Control.Monad.Fail (MonadFail)
-import Control.Monad.IO.Unlift (MonadIO)
-import Control.Monad.Logger (MonadLogger, logErrorN)
+import Control.Monad.IO.Unlift (MonadIO(liftIO))
+import Control.Monad.Logger (MonadLogger, MonadLoggerIO, logErrorN)
 import Control.Monad.Reader (ReaderT, asks, runReaderT, withReaderT)
+import Control.Monad.State.Strict (StateT, modify', runStateT)
 import Control.Monad.Trans (MonadTrans, lift)
-import Control.Monad.Trans.Resource (MonadResource, ResourceT, release)
+import Control.Monad.Trans.Resource
+    (MonadResource, ReleaseKey, ResourceT, release)
 import Data.Acquire (Acquire, allocateAcquire, mkAcquire)
-import Data.Conduit (ConduitT, Void, (.|), runConduit)
+import Data.Conduit (ConduitT, Void, (.|), runConduit, toProducer, transPipe)
 import Data.Pool (Pool)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -171,6 +178,41 @@ tryAbortableTransaction = handle abortException . runTransaction
     abortException (AbortTransaction msg) =
       logErrorN $ "Transaction aborted: " <> msg
 
+newtype Region m r = Region (StateT (IO ()) m r)
+  deriving
+  ( Functor, Applicative, Monad, MonadCatch, MonadFail, MonadMask, MonadIO
+  , MonadLogger, MonadLoggerIO, MonadResource, MonadThrow, MonadTrans)
+
+class Monad m => MonadRegion m where
+    allocRegion :: Acquire a -> m (ReleaseKey, a)
+
+    allocRegion_ :: Acquire a -> m a
+    allocRegion_ alloc = snd <$> allocRegion alloc
+
+instance MonadResource m => MonadRegion (Region m) where
+    allocRegion alloc = Region $ do
+        result@(key, _) <- allocateAcquire alloc
+        result <$ modify' (release key >>)
+
+instance MonadResource m => MonadRegion (ConduitT a b (Region m)) where
+    allocRegion alloc = lift $ allocRegion alloc
+
+instance MonadSql m => MonadSql (Region m) where
+    getConnFromPool = lift getConnFromPool
+    getConnWithoutForeignKeysFromPool = lift getConnWithoutForeignKeysFromPool
+
+runRegion :: MonadIO m => Region m r -> m r
+runRegion (Region act) = do
+    (result, cleanup) <- runStateT act (return ())
+    result <$ liftIO cleanup
+
+runRegionSource
+    :: MonadIO m => ConduitT () o (Region m) () -> ConduitT o Void m r -> m r
+runRegionSource src sink = runRegion . runConduit $ src .| transPipe lift sink
+
+runRegionConduit :: MonadIO m => ConduitT () Void (Region m) r -> m r
+runRegionConduit conduit = runRegion $ runConduit conduit
+
 liftProjectPersist
     :: (BackendCompatible sup (RawSqlite SqlBackend), MonadSql m)
     => ReaderT sup IO a -> Transaction m a
@@ -231,13 +273,17 @@ selectSource filts order sink = do
     runConduit (source .| sink) <* release key
 
 conduitQuery
-    :: (MonadIO m, MonadSql n)
-    => Text -> [PersistValue] -> n (Acquire (ConduitT () [PersistValue] m ()))
+    :: MonadSql m
+    => Text
+    -> [PersistValue]
+    -> ConduitT a [PersistValue] (Region m) ()
 conduitQuery query args = do
     acquireConn <- getConnFromPool
-    return $ do
+    (key, querySource) <- allocRegion $ do
         conn <- acquireConn >>= readOnlyConnection
         join $ runReaderT (Sqlite.rawQueryRes query args) conn
+
+    toProducer querySource <* release key
 
 querySingleValue
     :: (MonadLogger m, MonadSql m, MonadThrow m, PersistField a)
