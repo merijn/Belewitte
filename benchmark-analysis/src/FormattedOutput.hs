@@ -11,7 +11,7 @@ module FormattedOutput
     , renderRegionOutput
     ) where
 
-import Control.Monad (unless)
+import Control.Monad (forever, unless)
 import Control.Monad.Catch (catch, throwM, try)
 import Control.Monad.Trans.Maybe (MaybeT(..))
 import Control.Monad.Trans.Resource (release)
@@ -111,14 +111,16 @@ columnFormatter = do
 renderColumns :: PrettyFields a => [Filter a] -> [SelectOpt a] -> SqlM ()
 renderColumns filts order = do
     (header, f) <- columnFormatter
-    let columnSource = do
-            yield header
-            Sql.selectSourceRegion filts order .| C.map f
-    res <- try $ Sql.runRegionSource columnSource (C.unlines .| outputSink)
-    case res of
-        Right _ -> return ()
-        Left (ioeGetErrorType -> ResourceVanished) -> return ()
-        Left e -> throwM e
+    maybeHeight <- liftIO $ fmap height <$> hSize stdout
+
+    let annotateHeaders = case maybeHeight of
+            Nothing -> yield header >> C.map f
+            Just n -> forever $ do
+                yield header
+                C.isolate (n-2) .| C.map f
+
+    renderRegionOutput $
+        Sql.selectSourceRegion filts order .| annotateHeaders .| C.unlines
 
 renderOutput :: ConduitT () Text SqlM () -> SqlM ()
 renderOutput producer = do
