@@ -46,16 +46,17 @@ toStepInfoQueries (stepInfoAlgorithm, stepInfoPlatform, stepInfoCommit) = do
 
     stepInfoTimestamp <- liftIO getCurrentTime
 
-    yield $ stepInfoQuery StepInfoConfig {stepInfoQueryMode = All, ..}
+    yield $ stepInfoQuery StepInfoConfig {stepInfoQueryMode = Train, ..}
+    yield $ stepInfoQuery StepInfoConfig {stepInfoQueryMode = Validate, ..}
   where
     stepInfoSeed = 42
     stepInfoDatasets = mempty
     stepInfoFilterIncomplete = False
 
     stepInfoGraphs, stepInfoVariants, stepInfoSteps :: Percentage
-    stepInfoGraphs = $$(validRational 1)
-    stepInfoVariants = $$(validRational 1)
-    stepInfoSteps = $$(validRational 1)
+    stepInfoGraphs = $$(validRational 0.5)
+    stepInfoVariants = $$(validRational 0.5)
+    stepInfoSteps = $$(validRational 0.5)
 
 modelQueryDump :: FilePath -> SqlM ()
 modelQueryDump outputSuffix = do
