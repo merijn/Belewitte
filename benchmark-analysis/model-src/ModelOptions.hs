@@ -29,7 +29,6 @@ import Core
 import Evaluate
     (CompareReport, EvaluateReport, Report(..), RelativeTo(..), SortBy(..))
 import FieldQuery (getDistinctFieldQuery)
-import Model (Model)
 import Options
 import Pretty.List (Field(..), FieldSpec(..), (=.), buildOptions)
 import Query (runSqlQueryConduit)
@@ -48,14 +47,14 @@ data ModelCommand
       { getModelEntity :: SqlM (Entity PredictionModel) }
     | ListModels
       { listModels :: SqlM () }
-    | Validate
+    | ValidateModel
       { getPlatformId :: SqlM (Key Platform)
-      , getModel :: SqlM (Key PredictionModel, Model)
+      , getModel :: SqlM (Entity PredictionModel)
       , getDatasetIds :: SqlM (Set (Key Dataset))
       }
-    | Evaluate
+    | EvaluatePredictor
       { getPlatformId :: SqlM (Key Platform)
-      , getModel :: SqlM (Key PredictionModel, Model)
+      , getModelId :: SqlM (Key PredictionModel)
       , defaultImpl :: Either Int Text
       , evaluateConfig :: EvaluateReport
       , getDatasetIds :: SqlM (Set (Key Dataset))
@@ -64,8 +63,8 @@ data ModelCommand
       { getVariantInfoConfig :: SqlM VariantInfoConfig
       , compareConfig :: CompareReport
       }
-    | Export
-      { getModel :: SqlM (Key PredictionModel, Model)
+    | ExportModel
+      { getModel :: SqlM (Entity PredictionModel)
       , cppFile :: FilePath
       }
 
@@ -117,7 +116,8 @@ commands = CommandRoot
         , commandDesc =
             "Compute and report a model's accuracy on validation dataset and \
             \full dataset"
-        } (Validate <$> platformIdParser <*> modelTupleParser <*> datasetsParser)
+        }
+        $ ValidateModel <$> platformIdParser <*> modelParser <*> datasetsParser
     , SingleCommand CommandInfo
         { commandName = "evaluate"
         , commandHeaderDesc = "evaluate model performance"
@@ -125,8 +125,9 @@ commands = CommandRoot
             "Evaluate BDT model performance on full dataset and compare \
             \against performance of other implementations"
         }
-        $ Evaluate <$> platformIdParser <*> modelTupleParser <*> defaultImplParser
-                   <*> evaluateParser <*> datasetsParser
+        $ EvaluatePredictor
+            <$> platformIdParser <*> modelIdParser <*> defaultImplParser
+            <*> evaluateParser <*> datasetsParser
     , SingleCommand CommandInfo
         { commandName = "compare"
         , commandHeaderDesc = "compare implementation performance"
@@ -137,7 +138,7 @@ commands = CommandRoot
         { commandName = "export"
         , commandHeaderDesc = "export model to C++"
         , commandDesc = "Export BDT model to C++ file"
-        } (Export <$> modelTupleParser <*> cppFile)
+        } (ExportModel <$> modelParser <*> cppFile)
     ]
   }
   where
@@ -226,22 +227,6 @@ defaultImplParser = implParser <|> pure (Right "edge-list")
         , help "Default implementation in case of no valid prediction. \
                \Numeric or textual."
         ]
-
-modelTupleParser :: Parser (SqlM (Key PredictionModel, Model))
-modelTupleParser = queryModel <$> modelOpt
-  where
-    modelOpt :: Parser Int64
-    modelOpt = option auto $ mconcat
-        [ metavar "ID", short 'm', long "model"
-        , help "Model to use"
-        ]
-
-    queryModel :: Int64 -> SqlM (Key PredictionModel, Model)
-    queryModel n = do
-        PredictionModel{..} <- Sql.getJust key
-        return $ (key, predictionModelModel)
-      where
-        key = toSqlKey n
 
 reportParser
     :: forall a . Monoid a

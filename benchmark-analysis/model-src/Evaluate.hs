@@ -40,7 +40,7 @@ import Numeric (showFFloat)
 
 import Core
 import FormattedOutput (renderRegionOutput)
-import Model
+import Predictor
 import Query
 import Schema
 import StepQuery (StepInfo(..))
@@ -122,11 +122,8 @@ data StepVariantAggregate =
 
 aggregateSteps
     :: (MonadLogger m, MonadThrow m)
-    => Int
-    -> (Int -> Int -> Int)
-    -> Model
-    -> ConduitT StepInfo Void m VariantAggregate
-aggregateSteps defaultImpl mispredictionStrategy model = do
+    => Predictor -> ConduitT StepInfo Void m VariantAggregate
+aggregateSteps predictor = do
     StepInfo{stepVariantId,stepTimings} <- C.peek >>= \case
         Just info -> return info
         Nothing -> logThrowM . PatternFailed $
@@ -139,8 +136,8 @@ aggregateSteps defaultImpl mispredictionStrategy model = do
         zeroTimeVec = VS.map zerooutTiming stepTimings `VS.snoc`
             ImplTiming predictedImplId 0
 
-        initial :: (Int, StepVariantAggregate)
-        initial = (defaultImpl, StepVariantAgg
+        initial :: (Maybe Int, StepVariantAggregate)
+        initial = (Nothing, StepVariantAgg
             { stepVariantid = stepVariantId
             , stepOptimalTime = 0
             , stepImplTimes = zeroTimeVec
@@ -164,11 +161,11 @@ aggregateSteps defaultImpl mispredictionStrategy model = do
 
     aggregate
         :: IntMap Int
-        -> (Int, StepVariantAggregate)
+        -> (Maybe Int, StepVariantAggregate)
         -> StepInfo
-        -> (Int, StepVariantAggregate)
+        -> (Maybe Int, StepVariantAggregate)
     aggregate translateMap (!lastImpl, !StepVariantAgg{..}) !StepInfo{..} =
-      (predictedImpl, StepVariantAgg
+      (Just predictedImpl, StepVariantAgg
             { stepVariantid = stepVariantId
             , stepOptimalTime = stepOptimalTime + getTime stepBestImpl
             , stepImplTimes = VS.zipWith (liftImplTiming (+)) stepImplTimes
@@ -179,12 +176,7 @@ aggregateSteps defaultImpl mispredictionStrategy model = do
         newPrediction = ImplTiming predictedImplId (getTime predictedImpl)
 
         predictedImpl :: Int
-        predictedImpl
-          | prediction == -1 = lastImpl
-          | prediction < 0 = mispredictionStrategy lastImpl prediction
-          | otherwise = prediction
-          where
-            prediction = predict model stepProps
+        predictedImpl = predict predictor stepProps lastImpl
 
         getTime :: Integral n => n -> Double
         getTime ix = implTimingTiming $
@@ -320,13 +312,8 @@ data Report a = Report
      , reportDetailed :: Bool
      }
 
-evaluateModel
-    :: Either Int Text
-    -> EvaluateReport
-    -> Model
-    -> TrainingConfig
-    -> SqlM ()
-evaluateModel defImpl reportCfg@Report{..} model trainConfig =
+evaluateModel :: Predictor -> EvaluateReport -> TrainingConfig -> SqlM ()
+evaluateModel predictor reportCfg@Report{..} trainConfig =
   renderRegionOutput $ do
     algorithm <- Sql.getJust algoId
     impls <- Sql.queryImplementations algoId
@@ -334,23 +321,8 @@ evaluateModel defImpl reportCfg@Report{..} model trainConfig =
     let implMaps :: Pair (IntMap Text)
         implMaps = toImplNames (filterImpls reportImplTypes) id (impls, mempty)
 
-        lookupByName :: Text -> Maybe Int
-        lookupByName t = fmap fst
-                       . listToMaybe
-                       . filter ((t==) . implementationName . snd)
-                       $ IM.toList impls
-
-    defaultImpl <- case defImpl of
-        Left i | IM.member i impls -> return i
-        Right t | Just i <- lookupByName t -> return i
-        _ -> logThrowM $ UnexpectedMissingData
-                "Default implementation not found for algorithm"
-                (getAlgoName algorithm)
-
-    let aggregationConduit = aggregateSteps defaultImpl const model
-
     stats <- streamQuery query
-      .| foldGroup ((==) `on` stepVariantId) aggregationConduit
+      .| foldGroup ((==) `on` stepVariantId) (aggregateSteps predictor)
       .| C.map (addBestNonSwitching impls)
       .| aggregateVariants reportVariants reportRelativeTo implMaps
 

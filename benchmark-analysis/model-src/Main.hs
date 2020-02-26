@@ -23,6 +23,7 @@ import FormattedOutput (renderEntity, renderOutput)
 import InteractiveInput
 import Model
 import ModelOptions
+import Predictor
 import Schema
 import qualified Sql
 import Train
@@ -112,32 +113,35 @@ main = runSqlM commands $ \case
 
     ListModels{listModels} -> listModels
 
-    Validate{getPlatformId,getModel,getDatasetIds} -> do
+    ValidateModel{getPlatformId,getModel,getDatasetIds} -> do
         platformId <- getPlatformId
-        (modelId, model) <- getModel
+        Entity modelId PredictionModel{..} <- getModel
         datasets <- getDatasetIds
 
         validationConfig <- setPlatformAndDatasets platformId datasets <$>
             getModelTrainingConfig modelId
 
-        validateModel model validationConfig
+        validateModel predictionModelModel validationConfig
 
-    Evaluate{getPlatformId,getModel,defaultImpl,evaluateConfig,getDatasetIds} -> do
+    EvaluatePredictor
+        {getPlatformId,getModelId,defaultImpl,evaluateConfig,getDatasetIds} -> do
+        modelId <- getModelId
+        predictor <- loadPredictor defaultImpl modelId
+
         platformId <- getPlatformId
-        (modelId, model) <- getModel
         datasets <- getDatasetIds
 
         evalConfig <- setPlatformAndDatasets platformId datasets <$>
             getModelTrainingConfig modelId
 
-        evaluateModel defaultImpl evaluateConfig model evalConfig
+        evaluateModel predictor evaluateConfig evalConfig
 
     Compare{getVariantInfoConfig,compareConfig} -> do
         variantInfoConfig <- getVariantInfoConfig
         compareImplementations variantInfoConfig compareConfig
 
-    Export{getModel,cppFile} -> do
-        (modelId, model) <- getModel
+    ExportModel{getModel,cppFile} -> do
+        Entity modelId PredictionModel{..} <- getModel
         trainConfig <- getModelTrainingConfig modelId
 
         let (algoId, graphProps, stepProps) = case trainConfig of
@@ -148,5 +152,5 @@ main = runSqlM commands $ \case
 
         impls <- Sql.queryImplementations algoId
 
-        dumpCppModel cppFile model graphProps stepProps
+        dumpCppModel cppFile predictionModelModel graphProps stepProps
             (implementationName <$> impls)

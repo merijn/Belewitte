@@ -80,6 +80,7 @@ Library
                         InteractiveInput
                         Model
                         Options
+                        Predictor
                         Pretty.Fields
                         Pretty.List
                         Query
