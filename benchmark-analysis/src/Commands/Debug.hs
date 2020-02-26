@@ -7,18 +7,17 @@ import Data.Char (isSpace)
 import Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
 import Data.Functor.Compose (Compose(..))
-import Data.List (intersperse)
 import Data.Map (Map)
 import qualified Data.Map as M
 import qualified Data.Text as T
-import qualified Data.Text.IO as T
 import Numeric (showGFloat)
 
 import Commands
 import Core
+import FormattedOutput (renderOutput, renderRegionOutput)
 import InteractiveInput
 import OptionParsers
-import Query (Query(..), explainSqlQuery, runSqlQueryConduit)
+import Query (Query(..), explainSqlQuery, runSqlQueryConduit, streamQuery)
 import Schema (PersistValue(..))
 import VariantQuery (VariantInfo, VariantInfoConfig(..), variantInfoQuery)
 
@@ -108,7 +107,7 @@ explainQueryCommand = SingleCommand CommandInfo
     explainDebugQuery (DebugQuery getQuery) = do
         query <- getQuery
         explanation <- explainSqlQuery query
-        liftIO $ T.putStrLn explanation
+        renderOutput $ C.yield explanation
 
 queryCommand :: Command (DebugQuery -> SqlM ())
 queryCommand = SingleCommand CommandInfo
@@ -121,7 +120,8 @@ queryCommand = SingleCommand CommandInfo
     debugQuery :: DebugQuery -> SqlM ()
     debugQuery (DebugQuery getQuery) = do
         query <- getQuery
-        runSqlQueryConduit query $ C.mapM_ (liftIO . print)
+        renderRegionOutput $
+            streamQuery query .| C.map showText .| C.unlines
 
 timeQueryCommand :: Command (DebugQuery -> SqlM ())
 timeQueryCommand = SingleCommand CommandInfo
@@ -153,37 +153,37 @@ testQuery = do
     case mQuery of
         Nothing -> return ()
         Just query -> do
-            lift . runSqlQueryConduit query $ C.mapM_ printRow
+            lift . renderRegionOutput $
+                streamQuery query .| C.map renderRow .| C.unlines
             liftIO $ putStrLn ""
             testQuery
   where
-    printRow :: MonadIO m => [PersistValue] -> m ()
-    printRow = liftIO . putStrLn . renderSeparatedList " | " persistValueToString
+    renderRow :: [PersistValue] -> Text
+    renderRow = renderSeparatedList " | " persistValueToText
 
-    renderSeparatedList :: String -> (a -> String) -> [a] -> String
-    renderSeparatedList sep f =
-        concat . intersperse sep . map f
+    renderSeparatedList :: Text -> (a -> Text) -> [a] -> Text
+    renderSeparatedList sep f = T.intercalate sep . map f
 
-    renderPair :: (Text, PersistValue) -> String
-    renderPair (name, val) = T.unpack name ++ " = " ++ persistValueToString val
+    renderPair :: (Text, PersistValue) -> Text
+    renderPair (name, val) = name <> " = " <> persistValueToText val
 
-    persistValueToString :: PersistValue -> String
-    persistValueToString v = case v of
-        PersistText txt -> T.unpack txt
-        PersistByteString bs -> T.unpack $ encodeBase64 bs
-        PersistInt64 i -> show i
-        PersistDouble d -> show d
-        PersistRational r -> show r
-        PersistBool b -> show b
-        PersistDay d -> show d
-        PersistTimeOfDay time -> show time
-        PersistUTCTime time -> show time
+    persistValueToText :: PersistValue -> Text
+    persistValueToText v = case v of
+        PersistText txt -> txt
+        PersistByteString bs -> encodeBase64 bs
+        PersistInt64 i -> showText i
+        PersistDouble d -> showText d
+        PersistRational r -> showText r
+        PersistBool b -> showText b
+        PersistDay d -> showText d
+        PersistTimeOfDay time -> showText time
+        PersistUTCTime time -> showText time
         PersistNull -> "NULL"
-        PersistList l -> renderSeparatedList ", " persistValueToString l
+        PersistList l -> renderSeparatedList ", " persistValueToText l
         PersistMap m -> renderSeparatedList ", " renderPair m
-        PersistObjectId bs -> T.unpack $ encodeBase64 bs
-        PersistArray l -> renderSeparatedList ", " persistValueToString l
-        PersistDbSpecific bs -> T.unpack $ encodeBase64 bs
+        PersistObjectId bs -> encodeBase64 bs
+        PersistArray l -> renderSeparatedList ", " persistValueToText l
+        PersistDbSpecific bs -> encodeBase64 bs
 
 explainQuery :: Input SqlM ()
 explainQuery = do
@@ -191,6 +191,7 @@ explainQuery = do
     case mQuery of
         Nothing -> return ()
         Just query -> do
-            explanation <- lift $ explainSqlQuery query
-            liftIO $ T.putStrLn explanation
+            lift $ do
+                explanation <- explainSqlQuery query
+                renderOutput $ C.yield explanation
             explainQuery
