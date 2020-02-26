@@ -12,6 +12,8 @@ module OptionParsers
     , datasetParser
     , entityParser
     , filterIncomplete
+    , modelIdParser
+    , modelParser
     , percentageParser
     , platformIdParser
     , platformParser
@@ -126,6 +128,21 @@ filterIncomplete = flag True False $ mconcat
     [ long "show-incomplete"
     , help "Include results for variants where some results are missing"
     ]
+
+modelIdParser :: Parser (SqlM (Key PredictionModel))
+modelIdParser = fmap entityKey <$> modelParser
+
+modelParser :: Parser (SqlM (Entity PredictionModel))
+modelParser = queryModel <$> modelOpt
+  where
+    modelOpt :: Parser Int64
+    modelOpt = option auto $ mconcat
+        [ metavar "ID", short 'm', long "model"
+        , help "Model to use"
+        ]
+
+    queryModel :: Int64 -> SqlM (Entity PredictionModel)
+    queryModel n = Sql.validateEntity "PredictionModel" n
 
 percentageParser :: [Mod OptionFields Percentage] -> Parser Percentage
 percentageParser opts = option (maybeReader percentReader) . mconcat $

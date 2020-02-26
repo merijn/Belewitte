@@ -87,7 +87,7 @@ commands = CommandRoot
         { commandName = "query"
         , commandHeaderDesc = "report model info"
         , commandDesc = "Report model info & statistics"
-        } (QueryModel <$> entityParser)
+        } (QueryModel <$> modelParser)
     , SingleCommand CommandInfo
         { commandName = "list"
         , commandHeaderDesc = "list trained models"
@@ -117,7 +117,7 @@ commands = CommandRoot
         , commandDesc =
             "Compute and report a model's accuracy on validation dataset and \
             \full dataset"
-        } (Validate <$> platformIdParser <*> modelParser <*> datasetsParser)
+        } (Validate <$> platformIdParser <*> modelTupleParser <*> datasetsParser)
     , SingleCommand CommandInfo
         { commandName = "evaluate"
         , commandHeaderDesc = "evaluate model performance"
@@ -125,7 +125,7 @@ commands = CommandRoot
             "Evaluate BDT model performance on full dataset and compare \
             \against performance of other implementations"
         }
-        $ Evaluate <$> platformIdParser <*> modelParser <*> defaultImplParser
+        $ Evaluate <$> platformIdParser <*> modelTupleParser <*> defaultImplParser
                    <*> evaluateParser <*> datasetsParser
     , SingleCommand CommandInfo
         { commandName = "compare"
@@ -137,7 +137,7 @@ commands = CommandRoot
         { commandName = "export"
         , commandHeaderDesc = "export model to C++"
         , commandDesc = "Export BDT model to C++ file"
-        } (Export <$> modelParser <*> cppFile)
+        } (Export <$> modelTupleParser <*> cppFile)
     ]
   }
   where
@@ -227,8 +227,8 @@ defaultImplParser = implParser <|> pure (Right "edge-list")
                \Numeric or textual."
         ]
 
-modelParser :: Parser (SqlM (Key PredictionModel, Model))
-modelParser = queryModel <$> modelOpt
+modelTupleParser :: Parser (SqlM (Key PredictionModel, Model))
+modelTupleParser = queryModel <$> modelOpt
   where
     modelOpt :: Parser Int64
     modelOpt = option auto $ mconcat
