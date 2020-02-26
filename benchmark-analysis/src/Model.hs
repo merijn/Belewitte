@@ -4,11 +4,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
-module Model (Model, predict, dumpCppModel, dumpModel, byteStringToModel) where
+module Model (Model, predict, dumpCppModel, byteStringToModel) where
 
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Data.ByteString (ByteString)
-import qualified Data.ByteString as BS
 import Data.Int (Int32)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
@@ -217,9 +216,6 @@ instance Storable TreeNode where
           where
             doubleSize = sizeOf (0.0 :: Double)
             int32Size = sizeOf (0 :: Int32)
-
-dumpModel :: MonadIO m => Model -> FilePath -> m ()
-dumpModel (Model vec) fp = liftIO . BS.writeFile fp $ vectorToByteString vec
 
 byteStringToModel :: ByteString -> Model
 byteStringToModel = Model . byteStringToVector
