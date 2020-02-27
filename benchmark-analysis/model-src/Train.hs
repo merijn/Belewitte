@@ -158,17 +158,33 @@ getModelTrainingConfig modelId = SqlTrans.runTransaction $ do
             C.map (modelTrainDatasetDatasetId . SqlTrans.entityVal)
             .| C.foldMap S.singleton
 
-    return $ LegacyTrainConfig LegacyConfig
-        { legacyAlgorithm = predictionModelAlgorithmId
-        , legacyPlatform = predictionModelPlatformId
-        , legacyCommit = predictionModelAlgorithmVersion
-        , legacyGraphProps = graphProps
-        , legacyStepProps = stepProps
-        , legacyFraction = predictionModelLegacyTrainFraction
-        , legacySeed = predictionModelTrainSeed
-        , legacyDatasets = trainingDatasets
-        , legacyTimestamp = predictionModelTimestamp
-        }
+    if predictionModelLegacyTrainFraction /= 0.0
+       then return $ LegacyTrainConfig LegacyConfig
+            { legacyAlgorithm = predictionModelAlgorithmId
+            , legacyPlatform = predictionModelPlatformId
+            , legacyCommit = predictionModelAlgorithmVersion
+            , legacyGraphProps = graphProps
+            , legacyStepProps = stepProps
+            , legacyFraction = predictionModelLegacyTrainFraction
+            , legacySeed = predictionModelTrainSeed
+            , legacyDatasets = trainingDatasets
+            , legacyTimestamp = predictionModelTimestamp
+            }
+       else return $ TrainConfig StepInfoConfig
+            { stepInfoQueryMode = All
+            , stepInfoAlgorithm = predictionModelAlgorithmId
+            , stepInfoPlatform = predictionModelPlatformId
+            , stepInfoCommit = predictionModelAlgorithmVersion
+            , stepInfoGraphProps = graphProps
+            , stepInfoStepProps = stepProps
+            , stepInfoSeed = predictionModelTrainSeed
+            , stepInfoDatasets = trainingDatasets
+            , stepInfoFilterIncomplete = False
+            , stepInfoGraphs = predictionModelTrainGraphs
+            , stepInfoVariants = predictionModelTrainVariants
+            , stepInfoSteps = predictionModelTrainSteps
+            , stepInfoTimestamp = predictionModelTimestamp
+            }
 
 getModelStats :: Key PredictionModel -> SqlM ModelStats
 getModelStats modelId = SqlTrans.runTransaction $ do
