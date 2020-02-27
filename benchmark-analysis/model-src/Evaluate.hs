@@ -27,7 +27,7 @@ import qualified Data.IntervalSet as IS
 import Data.IntMap (IntMap, (!?))
 import qualified Data.IntMap.Strict as IM
 import Data.List (sortBy)
-import Data.Maybe (fromMaybe, listToMaybe, mapMaybe)
+import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Monoid (Any(..), (<>))
 import Data.Ord (comparing)
 import Data.Semigroup (Max, getMax)
@@ -315,7 +315,6 @@ data Report a = Report
 evaluateModel :: Predictor -> EvaluateReport -> TrainingConfig -> SqlM ()
 evaluateModel predictor reportCfg@Report{..} trainConfig =
   renderRegionOutput $ do
-    algorithm <- Sql.getJust algoId
     impls <- Sql.queryImplementations algoId
 
     let implMaps :: Pair (IntMap Text)
