@@ -11,7 +11,7 @@ module Train
     , ModelStats(..)
     , StepInfoConfig(..)
     , TrainingConfig(..)
-    , UnknownSet (..)
+    , UnknownSet(..)
     , getTotalQuery
     , getTrainingQuery
     , getValidationQuery
@@ -57,16 +57,15 @@ import Sql (MonadSql, (==.))
 import qualified Sql.Transaction as SqlTrans
 
 data UnknownSet = UnknownSet
-    { unknownSetId :: Int64
-    , unknownSetOccurence :: Int
-    , unknownSetImpls :: Set Int64
+    { unknownSetOccurence :: Int
+    , unknownSetImpls :: Set (Key Implementation)
     } deriving (Eq, Show)
 
 data ModelStats = ModelStats
     { modelGraphPropImportance :: Map Text Double
     , modelStepPropImportance :: Map Text Double
     , modelUnknownCount :: Int
-    , modelUnknownPreds :: [UnknownSet]
+    , modelUnknownPreds :: Map Int64 UnknownSet
     } deriving (Eq, Show)
 
 data TrainingConfig
@@ -200,16 +199,17 @@ getModelStats modelId = SqlTrans.runTransaction $ do
             C.foldMap (stepPropMap . SqlTrans.entityVal)
 
     unknowns <- SqlTrans.selectList [UnknownPredictionModelId ==. modelId] []
-    modelUnknownPreds <- forM unknowns $ \SqlTrans.Entity{..} -> do
+    unknownPreds <- forM unknowns $ \SqlTrans.Entity{..} -> do
         let UnknownPrediction{..} = entityVal
             filters = [UnknownPredictionSetUnknownPredId ==. entityKey]
 
         implSet <- SqlTrans.selectSource filters [] $
             C.foldMap (toImplSet . SqlTrans.entityVal)
 
-        return $ UnknownSet unknownPredictionUnknownSetId unknownPredictionCount implSet
+        return $ M.singleton unknownPredictionUnknownSetId
+                             (UnknownSet unknownPredictionCount implSet)
 
-    return ModelStats{..}
+    return ModelStats{modelUnknownPreds = mconcat unknownPreds, ..}
   where
     graphPropMap ModelGraphProperty{..} =
       M.singleton modelGraphPropertyProperty modelGraphPropertyImportance
@@ -217,8 +217,7 @@ getModelStats modelId = SqlTrans.runTransaction $ do
     stepPropMap ModelStepProperty{..} =
       M.singleton modelStepPropertyProperty modelStepPropertyImportance
 
-    toImplSet UnknownPredictionSet{..} =
-      S.singleton $ fromSqlKey unknownPredictionSetImplId
+    toImplSet UnknownPredictionSet{..} = S.singleton unknownPredictionSetImplId
 
 trainModel
     :: (MonadMask m, MonadQuery m)
@@ -309,12 +308,12 @@ trainModel ModelDesc{..} = do
         forM_ (M.toList modelStepPropImportance) $
             SqlTrans.insert_ . uncurry (ModelStepProperty modelId)
 
-        forM_ modelUnknownPreds $ \UnknownSet{..} -> do
+        forM_ (M.toList modelUnknownPreds) $ \(setId, UnknownSet{..}) -> do
             unknownId <- SqlTrans.insert $
-                UnknownPrediction modelId stepInfoAlgorithm unknownSetId unknownSetOccurence
+                UnknownPrediction modelId stepInfoAlgorithm setId unknownSetOccurence
 
-            forM_ unknownSetImpls $ \impl -> do
-                implKey <- SqlTrans.validateKey "Implementation" impl
+            forM_ (S.toList unknownSetImpls) $ \i -> do
+                implKey <- SqlTrans.validateKey "Implementation" (fromSqlKey i)
                 SqlTrans.insert_ $
                     UnknownPredictionSet unknownId implKey stepInfoAlgorithm
 
@@ -343,24 +342,27 @@ getResult columnCount = runGet parseBlock . LBS.fromStrict
         return (dbls, byteStringToModel bs)
 
 getUnknowns
-    :: (MonadLogger m, MonadThrow m) => Text -> m (Int, [UnknownSet])
+    :: (MonadLogger m, MonadThrow m)
+    => Text -> m (Int, Map Int64 UnknownSet)
 getUnknowns txt = case parse parseUnknowns "getUnknowns" txt of
     Left e -> logThrowM . ModelInfoParseFailed . T.pack $ errorBundlePretty e
     Right r -> return r
 
-parseUnknowns :: Parsec Void Text (Int, [UnknownSet])
+parseUnknowns :: Parsec Void Text (Int, Map Int64 UnknownSet)
 parseUnknowns = do
     unknownCount <- decimal <* eol
     uniqUnknownSets <- decimal <* eol
-    unknowns <- replicateM uniqUnknownSets parseUnknownSet
+    unknowns <- M.unions <$> replicateM uniqUnknownSets parseUnknownSet
     return (unknownCount, unknowns)
 
-parseUnknownSet :: Parsec Void Text UnknownSet
+parseUnknownSet :: Parsec Void Text (Map Int64 UnknownSet)
 parseUnknownSet = do
     setId <- decimal <* string " : "
     impls <- between (char '(') (char ')') $
-        S.fromList <$> sepBy1 decimal (string ", ")
+        S.fromList <$> sepBy1 implParser (string ", ")
     string " : "
     count <- decimal
     eol
-    return $ UnknownSet setId count impls
+    return $ M.singleton setId (UnknownSet count impls)
+  where
+    implParser = toSqlKey <$> decimal

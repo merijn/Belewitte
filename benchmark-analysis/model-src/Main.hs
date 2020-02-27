@@ -54,8 +54,8 @@ reportModelStats ModelStats{..} = do
         wrap :: Text -> Text
         wrap t = "    " <> t <> "\n"
 
-        getName :: Int64 -> SqlM Text
-        getName i = getImplName <$> Sql.getJust (toSqlKey i)
+        getName :: Key Implementation -> SqlM Text
+        getName i = getImplName <$> Sql.getJust i
 
     maxFeatureNameLength :: Int
     maxFeatureNameLength = maximum $ map ((1+) . T.length . fst) features
@@ -68,7 +68,8 @@ reportModelStats ModelStats{..} = do
     sortedFeatures = sortBy (flip (comparing snd)) features
 
     sortedUnknown :: [UnknownSet]
-    sortedUnknown = sortBy (flip (comparing unknownSetOccurence)) modelUnknownPreds
+    sortedUnknown = sortBy (flip (comparing unknownSetOccurence))
+                  $ M.elems modelUnknownPreds
 
 setPlatformAndDatasets
     :: Key Platform -> Set (Key Dataset) -> TrainingConfig -> TrainingConfig
