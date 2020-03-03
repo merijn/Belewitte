@@ -27,7 +27,7 @@ import qualified Data.ByteString.Lazy as LBS
 import Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
 import Data.Map (Map)
-import qualified Data.Map as M
+import qualified Data.Map.Strict as M
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
@@ -42,7 +42,7 @@ import Text.Megaparsec.Char.Lexer (decimal)
 import Text.Megaparsec.Error (errorBundlePretty)
 
 import Core
-import Model
+import Model (byteStringToModel)
 import Model.Stats (UnknownSet(..), ModelStats(..))
 import Utils.Process
     (ReadWrite(..), runProcessCreation_, withPipe, withProcess)
