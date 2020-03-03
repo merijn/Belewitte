@@ -115,20 +115,22 @@ main = runSqlM commands $ \case
 
     ListModels{listModels} -> listModels
 
-    ValidateModel{getPlatformId,getModel,getDatasetIds} -> do
+    ValidateModel{getPlatformId,getModelId,getDatasetIds} -> do
         platformId <- getPlatformId
-        Entity modelId PredictionModel{..} <- getModel
+        modelId <- getModelId
         datasets <- getDatasetIds
+        predictor <- loadPredictor modelId None
 
         validationConfig <- setPlatformAndDatasets platformId datasets <$>
             getModelTrainingConfig modelId
 
-        validateModel predictionModelModel validationConfig
+        validateModel predictor validationConfig
 
     EvaluatePredictor
         {getPlatformId,getModelId,defaultImpl,evaluateConfig,getDatasetIds} -> do
+
         modelId <- getModelId
-        predictor <- loadPredictor defaultImpl modelId
+        predictor <- loadPredictor modelId (DefImpl defaultImpl)
 
         platformId <- getPlatformId
         datasets <- getDatasetIds

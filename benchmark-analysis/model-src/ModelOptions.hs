@@ -49,7 +49,7 @@ data ModelCommand
       { listModels :: SqlM () }
     | ValidateModel
       { getPlatformId :: SqlM (Key Platform)
-      , getModel :: SqlM (Entity PredictionModel)
+      , getModelId :: SqlM (Key PredictionModel)
       , getDatasetIds :: SqlM (Set (Key Dataset))
       }
     | EvaluatePredictor
@@ -117,7 +117,8 @@ commands = CommandRoot
             "Compute and report a model's accuracy on validation dataset and \
             \full dataset"
         }
-        $ ValidateModel <$> platformIdParser <*> modelParser <*> datasetsParser
+        $ ValidateModel <$> platformIdParser <*> modelIdParser
+                        <*> datasetsParser
     , SingleCommand CommandInfo
         { commandName = "evaluate"
         , commandHeaderDesc = "evaluate model performance"

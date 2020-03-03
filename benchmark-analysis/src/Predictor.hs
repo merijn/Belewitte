@@ -2,14 +2,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 module Predictor
-    ( Predictor
+    ( MispredictionStrategy(..)
+    , Predictor
+    , RawPrediction(..)
     , loadPredictor
     , predict
     , rawPredict
     ) where
 
-import Data.Maybe (listToMaybe)
 import qualified Data.IntMap.Strict as IM
+import Data.Maybe (listToMaybe)
 import Data.Map.Strict (Map, (!?))
 import Data.Vector.Storable (Vector)
 
@@ -19,6 +21,10 @@ import qualified Model
 import Model.Stats (ModelStats(..), UnknownSet, getModelStats)
 import Schema
 import qualified Sql
+
+data MispredictionStrategy
+    = None
+    | DefImpl (Either Int Text)
 
 data Predictor = Predictor
     { predictorModelId :: Key PredictionModel
@@ -36,11 +42,12 @@ data RawPrediction
 rawPredict :: Predictor -> Vector Double -> RawPrediction
 rawPredict Predictor{..} props
     | modelPrediction >= 0 = ImplPrediction modelPrediction
-    | otherwise = case predictorUnknownSets !? fromIntegral modelPrediction of
+    | otherwise = case predictorUnknownSets !? unknownSetId of
         Just s -> MisPredictionSet s
         Nothing -> Unknown
   where
     modelPrediction = Model.predict predictorModel props
+    unknownSetId = negate $ fromIntegral modelPrediction
 
 predict :: Predictor -> Vector Double -> Maybe Int -> Int
 predict Predictor{..} props lastImpl
@@ -53,9 +60,23 @@ predict Predictor{..} props lastImpl
     modelPrediction = Model.predict predictorModel props
     disambiguatedPrediction = mispredictionStrategy modelPrediction
 
-loadPredictor :: Either Int Text -> Key PredictionModel -> SqlM Predictor
-loadPredictor defImpl predictorModelId = do
+rawLoad
+    :: Int -> (Int -> Int) -> Key PredictionModel -> SqlM Predictor
+rawLoad defaultImplementation mispredictionStrategy predictorModelId = do
     PredictionModel{..} <- Sql.getJust predictorModelId
+    ModelStats{modelUnknownPreds} <- getModelStats predictorModelId
+
+    return Predictor
+      { predictorModel = predictionModelModel
+      , predictorUnknownSets = modelUnknownPreds
+      , ..
+      }
+
+loadPredictor :: Key PredictionModel -> MispredictionStrategy -> SqlM Predictor
+loadPredictor modelId None = rawLoad (-1) (const (-1)) modelId
+
+loadPredictor modelId (DefImpl defImpl) = do
+    PredictionModel{..} <- Sql.getJust modelId
     algorithm <- Sql.getJust predictionModelAlgorithmId
     impls <- Sql.queryImplementations predictionModelAlgorithmId
 
@@ -72,12 +93,4 @@ loadPredictor defImpl predictorModelId = do
                 "Default implementation not found for algorithm"
                 (getAlgoName algorithm)
 
-    ModelStats{modelUnknownPreds} <- getModelStats predictorModelId
-
-    return Predictor
-      { predictorModel = predictionModelModel
-      , predictorUnknownSets = modelUnknownPreds
-      , ..
-      }
-  where
-    mispredictionStrategy = const (-1)
+    rawLoad defaultImplementation (const (-1)) modelId

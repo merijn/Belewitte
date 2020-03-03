@@ -3,6 +3,7 @@
 {-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ViewPatterns #-}
 module Validate (validateModel) where
 
 import Data.Bifunctor (first)
@@ -14,14 +15,22 @@ import Data.Vector.Storable (Vector)
 
 import Core
 import FormattedOutput (renderOutput)
-import Model
+import Model.Stats (implInUnknownSet)
+import Predictor
 import Query
 import Schema
 import StepQuery (StepInfo(..))
 import Train
 
-validateModel :: Model -> TrainingConfig -> SqlM ()
-validateModel model config = renderOutput $ do
+data ValidateStats = ValidateStats
+    { rightPreds :: !Int
+    , partialPreds :: !Int
+    , wrongPreds :: !Int
+    , unknownPreds :: !Int
+    } deriving (Show)
+
+validateModel :: Predictor -> TrainingConfig -> SqlM ()
+validateModel predictor config = renderOutput $ do
     validation <- getValidationQuery config
     computeResults "validation" $ reduceInfo <$> validation
     C.yield "\n"
@@ -36,21 +45,34 @@ validateModel model config = renderOutput $ do
     computeResults
         :: Text -> Query (Vector Double, Int64) -> ConduitT () Text SqlM ()
     computeResults name query = do
-        result <- runSqlQueryConduit predictions $ C.foldl aggregate (0,0,0)
+        result <- runSqlQueryConduit predictions $ C.foldl aggregate initial
         C.yield $ report name result
       where
-        predictions = first (predict model) <$> query
+        initial = ValidateStats 0 0 0 0
+        predictions = first (rawPredict predictor) <$> query
 
-    aggregate :: (Int, Int, Int) -> (Int, Int64) -> (Int, Int, Int)
-    aggregate (!right,!wrong,!unknown) (prediction,actual)
-        | fromIntegral prediction == actual = (right + 1, wrong, unknown)
-        | prediction == -1 = (right, wrong, unknown + 1)
-        | otherwise = (right, wrong + 1, unknown)
+    aggregate :: ValidateStats -> (RawPrediction, Int64) -> ValidateStats
+    aggregate stats@ValidateStats{..} (prediction,actual) = case prediction of
+        ImplPrediction (fromIntegral -> impl)
+            | impl == actual -> stats{ rightPreds = 1 + rightPreds }
+            | otherwise -> stats{ wrongPreds = 1 + wrongPreds }
 
-report :: Text -> (Int, Int, Int) -> Text
-report name (right, wrong, unknown) = T.unlines $
-    [ "Right predictions (" <> name <> "): " <> showText right
-    , "Wrong predictions (" <> name <> "): " <> showText wrong
-    , "Unknown predictions (" <> name <> "): " <> showText unknown
-    , "Error rate (" <> name <> "): " <> percent wrong (right+wrong+unknown)
+        MisPredictionSet unknowns
+            | actual `implInUnknownSet` unknowns ->
+                    stats{ partialPreds = 1 + partialPreds }
+            | otherwise -> stats{ wrongPreds = 1 + wrongPreds }
+
+        Unknown -> stats{ unknownPreds = 1 + unknownPreds }
+
+report :: Text -> ValidateStats -> Text
+report name ValidateStats{..} = T.unlines $
+    [ "Right predictions (" <> name <> "): " <> showText rightPreds
+    , "Partial predictions (" <> name <> "): " <> showText partialPreds
+    , "Wrong predictions (" <> name <> "): " <> showText wrongPreds
+    , "Unknown predictions (" <> name <> "): " <> showText unknownPreds
+    , "Soft error rate (" <> name <> "): " <> percent wrongPreds totalPreds
+    , "Hard error rate (" <> name <> "): "
+        <> percent (wrongPreds + partialPreds) totalPreds
     ]
+  where
+    totalPreds = rightPreds + partialPreds + wrongPreds + unknownPreds

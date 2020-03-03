@@ -1,5 +1,10 @@
 {-# LANGUAGE RecordWildCards #-}
-module Model.Stats (ModelStats(..), UnknownSet(..), getModelStats) where
+module Model.Stats
+    ( ModelStats(..)
+    , UnknownSet(..)
+    , getModelStats
+    , implInUnknownSet
+    ) where
 
 import Control.Monad (forM)
 import qualified Data.Conduit.Combinators as C
@@ -17,6 +22,11 @@ data UnknownSet = UnknownSet
     { unknownSetOccurence :: Int
     , unknownSetImpls :: Set (Key Implementation)
     } deriving (Eq, Show)
+
+implInUnknownSet :: Integral n => n -> UnknownSet -> Bool
+implInUnknownSet n = S.member implKey . unknownSetImpls
+  where
+    implKey = toSqlKey $ fromIntegral n
 
 data ModelStats = ModelStats
     { modelGraphPropImportance :: Map Text Double
