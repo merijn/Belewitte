@@ -71,6 +71,7 @@ data ModelStats = ModelStats
 data TrainingConfig
     = TrainConfig StepInfoConfig
     | LegacyTrainConfig LegacyConfig
+    deriving (Show)
 
 data LegacyConfig = LegacyConfig
     { legacyAlgorithm :: Key Algorithm
@@ -82,7 +83,7 @@ data LegacyConfig = LegacyConfig
     , legacySeed :: Int64
     , legacyDatasets :: Set (Key Dataset)
     , legacyTimestamp :: UTCTime
-    }
+    } deriving (Show)
 
 data ModelDescription = ModelDesc
     { modelName :: Text

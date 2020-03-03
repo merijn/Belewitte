@@ -52,7 +52,7 @@ instance Show CommitId where
     show (CommitId hash) = unpack hash
 
 newtype Percentage = Percentage { getPercentage :: Double}
-    deriving (Read, Eq, Ord, Lift)
+    deriving (Show, Eq, Ord, Lift)
 
 percent :: Real n => n -> n -> Text
 percent x y = pack $ showFFloat (Just 2) val "%"

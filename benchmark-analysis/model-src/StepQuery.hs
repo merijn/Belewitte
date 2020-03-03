@@ -44,7 +44,7 @@ data StepInfoConfig = StepInfoConfig
     , stepInfoVariants :: Percentage
     , stepInfoSteps :: Percentage
     , stepInfoTimestamp :: UTCTime
-    }
+    } deriving (Show)
 
 data StepInfo =
   StepInfo

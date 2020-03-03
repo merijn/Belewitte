@@ -52,6 +52,7 @@ Common all
                ,        monad-logger ^>= 0.3.28
                ,        mtl ^>= 2.2.1
                ,        optparse-applicative ^>= 0.15
+               ,        pretty-show ^>= 1.10
                ,        resourcet ^>= 1.2.0
                ,        text
                ,        time ^>= 1.9
