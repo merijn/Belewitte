@@ -8,19 +8,16 @@
 module Train
     ( LegacyConfig(..)
     , ModelDescription(..)
-    , ModelStats(..)
     , StepInfoConfig(..)
     , TrainingConfig(..)
-    , UnknownSet(..)
     , getTotalQuery
     , getTrainingQuery
     , getValidationQuery
     , getModelTrainingConfig
-    , getModelStats
     , trainModel
     ) where
 
-import Control.Monad (forM, forM_, replicateM)
+import Control.Monad (forM_, replicateM)
 import Control.Monad.Trans.Resource (register, release)
 import Data.Binary.Get (getDoublehost, getRemainingLazyByteString, runGet)
 import Data.Binary.Put (putDoublehost, putInt64host, runPut)
@@ -46,6 +43,7 @@ import Text.Megaparsec.Error (errorBundlePretty)
 
 import Core
 import Model
+import Model.Stats (UnknownSet(..), ModelStats(..))
 import Utils.Process
     (ReadWrite(..), runProcessCreation_, withPipe, withProcess)
 import Query
@@ -55,18 +53,6 @@ import StepQuery
     (QueryMode(..), StepInfo(..), StepInfoConfig(..), stepInfoQuery)
 import Sql (MonadSql, (==.))
 import qualified Sql.Transaction as SqlTrans
-
-data UnknownSet = UnknownSet
-    { unknownSetOccurence :: Int
-    , unknownSetImpls :: Set (Key Implementation)
-    } deriving (Eq, Show)
-
-data ModelStats = ModelStats
-    { modelGraphPropImportance :: Map Text Double
-    , modelStepPropImportance :: Map Text Double
-    , modelUnknownCount :: Int
-    , modelUnknownPreds :: Map Int64 UnknownSet
-    } deriving (Eq, Show)
 
 data TrainingConfig
     = TrainConfig StepInfoConfig
@@ -185,40 +171,6 @@ getModelTrainingConfig modelId = SqlTrans.runTransaction $ do
             , stepInfoSteps = predictionModelTrainSteps
             , stepInfoTimestamp = predictionModelTimestamp
             }
-
-getModelStats :: Key PredictionModel -> SqlM ModelStats
-getModelStats modelId = SqlTrans.runTransaction $ do
-    modelUnknownCount <-
-        predictionModelTotalUnknownCount <$> SqlTrans.getJust modelId
-
-    modelGraphPropImportance <-
-        SqlTrans.selectSource [ModelGraphPropertyModelId ==. modelId] [] $
-            C.foldMap (graphPropMap . SqlTrans.entityVal)
-
-    modelStepPropImportance <-
-        SqlTrans.selectSource [ModelStepPropertyModelId ==. modelId] [] $
-            C.foldMap (stepPropMap . SqlTrans.entityVal)
-
-    unknowns <- SqlTrans.selectList [UnknownPredictionModelId ==. modelId] []
-    unknownPreds <- forM unknowns $ \SqlTrans.Entity{..} -> do
-        let UnknownPrediction{..} = entityVal
-            filters = [UnknownPredictionSetUnknownPredId ==. entityKey]
-
-        implSet <- SqlTrans.selectSource filters [] $
-            C.foldMap (toImplSet . SqlTrans.entityVal)
-
-        return $ M.singleton unknownPredictionUnknownSetId
-                             (UnknownSet unknownPredictionCount implSet)
-
-    return ModelStats{modelUnknownPreds = mconcat unknownPreds, ..}
-  where
-    graphPropMap ModelGraphProperty{..} =
-      M.singleton modelGraphPropertyProperty modelGraphPropertyImportance
-
-    stepPropMap ModelStepProperty{..} =
-      M.singleton modelStepPropertyProperty modelStepPropertyImportance
-
-    toImplSet UnknownPredictionSet{..} = S.singleton unknownPredictionSetImplId
 
 trainModel
     :: (MonadMask m, MonadQuery m)

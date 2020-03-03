@@ -80,6 +80,7 @@ Library
                         FormattedOutput
                         InteractiveInput
                         Model
+                        Model.Stats
                         Options
                         Predictor
                         Pretty.Fields

@@ -22,6 +22,7 @@ import Evaluate (evaluateModel, compareImplementations)
 import FormattedOutput (renderEntity, renderOutput)
 import InteractiveInput
 import Model
+import Model.Stats (ModelStats(..), UnknownSet(..), getModelStats)
 import ModelOptions
 import Predictor
 import Schema
