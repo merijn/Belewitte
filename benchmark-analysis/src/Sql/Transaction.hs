@@ -20,7 +20,6 @@ import Data.Int (Int64)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 import Data.String.Interpolate.IsString (i)
-import Data.Text (Text)
 import qualified Data.Text as T
 import Database.Persist.Sqlite
     ( AtLeastOneUniqueKey

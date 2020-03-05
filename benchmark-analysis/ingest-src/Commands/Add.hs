@@ -16,7 +16,7 @@ import Core
 import InteractiveInput
 import Options
 import Schema
-import Sql (Entity(..), Filter, MonadSql, SqlRecord, Transaction, (=.), (==.))
+import Sql (Filter, MonadSql, SqlRecord, Transaction, (=.), (==.))
 import qualified Sql
 import qualified Sql.Transaction as SqlTrans
 

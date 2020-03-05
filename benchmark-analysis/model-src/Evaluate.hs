@@ -27,7 +27,7 @@ import Data.IntMap (IntMap, (!?))
 import qualified Data.IntMap.Strict as IM
 import Data.List (sortBy)
 import Data.Maybe (fromMaybe, mapMaybe)
-import Data.Monoid (Any(..), (<>))
+import Data.Monoid (Any(..))
 import Data.Ord (comparing)
 import Data.Semigroup (Max, getMax)
 import qualified Data.Semigroup as Semigroup

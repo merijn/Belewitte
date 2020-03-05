@@ -28,7 +28,6 @@ import Data.Conduit (ConduitT, Void, (.|), await, yield)
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.List as C hiding (fold, mapM)
 import Data.List (intersperse)
-import Data.Monoid ((<>))
 import Data.String.Interpolate.IsString (i)
 import qualified Data.Text as T
 import Numeric (showGFloat)

@@ -12,7 +12,6 @@ module Schema.Timers.V0 where
 
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
-import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 

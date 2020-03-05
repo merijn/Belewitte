@@ -17,7 +17,7 @@ import qualified Database.Persist.TH as TH
 import Database.Persist.Types
 
 import Pretty.Fields
-import Schema.Utils (EntityDef, Int64, MonadSql, Transaction, (.>), (.=))
+import Schema.Utils (Int64, MonadSql, Transaction, (.>), (.=))
 import qualified Schema.Utils as Utils
 import Types
 

@@ -26,7 +26,7 @@ module InteractiveInput
 
 import qualified Control.Monad.Catch as Except
 import Control.Monad.Reader (ask, local, mapReaderT)
-import Control.Monad.Trans (MonadTrans(lift))
+import Control.Monad.Trans (MonadTrans)
 import Control.Monad.Trans.Resource (MonadResource(..))
 import Data.Bool (bool)
 import Data.Char (toLower)
@@ -41,7 +41,7 @@ import System.Directory (doesFileExist)
 import Text.Read (readMaybe)
 
 import Core
-import Sql (Entity(..), EntityField, MonadSql(..), SqlRecord, Unique)
+import Sql (EntityField, MonadSql(..), SqlRecord, Unique)
 import qualified Sql
 import Utils.Process (CreateProcess, UnexpectedTermination(..))
 import qualified Utils.Process as Process

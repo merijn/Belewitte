@@ -24,7 +24,6 @@ import Data.Conduit.Process (CreateProcess, Inherited(..))
 import qualified Data.Conduit.Process as Process
 import Data.Foldable (asum)
 import Data.Function (fix)
-import Data.Text (Text)
 import qualified Data.Text as T
 import GHC.IO.Exception (IOException, IOErrorType(ResourceVanished))
 import Lens.Micro.Extras (view)

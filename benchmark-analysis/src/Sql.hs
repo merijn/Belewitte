@@ -14,9 +14,6 @@ module Sql
     , module Sql
     ) where
 
-import Control.Monad.Catch (MonadThrow)
-import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.Logger (MonadLogger)
 import Data.Conduit (ConduitT, Void, transPipe)
 import Data.IntMap (IntMap)
 import Data.Proxy (Proxy(Proxy))

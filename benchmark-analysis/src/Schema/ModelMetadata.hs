@@ -13,7 +13,6 @@
 module Schema.ModelMetadata where
 
 import Data.Text (Text)
-import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 

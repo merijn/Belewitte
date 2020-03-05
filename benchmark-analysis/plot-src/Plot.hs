@@ -21,7 +21,7 @@ import Data.List (intersperse)
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe (catMaybes)
-import Data.Monoid (Any(..), (<>))
+import Data.Monoid (Any(..))
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T

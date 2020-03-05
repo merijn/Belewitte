@@ -16,7 +16,6 @@ import Data.Map.Strict (Map, (!?))
 import Data.Vector.Storable (Vector)
 
 import Core
-import Model (Model)
 import qualified Model
 import Model.Stats (ModelStats(..), UnknownSet, getModelStats)
 import Schema

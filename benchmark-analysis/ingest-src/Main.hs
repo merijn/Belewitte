@@ -18,7 +18,6 @@ import qualified Data.Conduit.Text as C
 import Data.Foldable (asum)
 import Data.Map (Map)
 import qualified Data.Map as M
-import Data.Monoid ((<>))
 import qualified Data.Text as T
 import System.Exit (exitFailure)
 
@@ -39,7 +38,7 @@ import ProcessPool
 import Query (Region, streamQuery, runSqlQueryConduit)
 import qualified RuntimeData
 import Schema
-import Sql (Entity(..), MonadSql, SelectOpt(Asc), Transaction, (==.), (||.))
+import Sql (MonadSql, SelectOpt(Asc), Transaction, (==.), (||.))
 import qualified Sql
 import qualified Sql.Transaction as SqlTrans
 

@@ -20,7 +20,6 @@ import Control.Monad (forM_, replicateM)
 import Control.Monad.Trans.Resource (register, release)
 import Data.Binary.Get (getDoublehost, getRemainingLazyByteString, runGet)
 import Data.Binary.Put (putDoublehost, putInt64host, runPut)
-import Data.ByteString (ByteString)
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Lazy as LBS
 import Data.Conduit as C

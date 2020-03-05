@@ -14,12 +14,10 @@ import qualified Data.ByteString as BS
 import Data.Text (Text)
 import Data.Text.Encoding (decodeUtf8')
 import Data.Typeable (Typeable)
-import Database.Sqlite (SqliteException(..))
 import Foreign (Ptr, FunPtr, castFunPtr, nullPtr, nullFunPtr)
 import Foreign.C (CInt(..), CString, withCString)
 
 import Exceptions
-import Pretty (Pretty(pretty))
 import qualified Pretty
 
 data SqliteErrorCode = SqliteErrorCode CInt Text

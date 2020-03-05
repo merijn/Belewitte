@@ -17,7 +17,7 @@ module Pretty.Fields
     ) where
 
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Maybe (fromMaybe, maybe)
+import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Database.Persist.Class (EntityField, PersistEntity)

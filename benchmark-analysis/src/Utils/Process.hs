@@ -45,7 +45,7 @@ import System.Posix.IO (createPipe, closeFd, fdToHandle)
 import System.Process (CreateProcess, cmdspec, cwd, env)
 
 import Exceptions
-import Pretty (Pretty(pretty), (<+>))
+import Pretty ((<+>))
 import qualified Pretty
 
 data ReadWrite = Read | Write deriving (Eq, Show)

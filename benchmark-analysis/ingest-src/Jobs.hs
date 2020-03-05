@@ -37,7 +37,7 @@ import qualified ProcessPool
 import Query (streamQuery)
 import qualified RuntimeData
 import Schema
-import Sql (Entity(..), Key, MonadSql, Region, Transaction, (=.))
+import Sql (MonadSql, Region, Transaction, (=.))
 import qualified Sql
 import qualified Sql.Transaction as SqlTrans
 

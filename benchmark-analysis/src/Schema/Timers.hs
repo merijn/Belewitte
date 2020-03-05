@@ -14,7 +14,6 @@ module Schema.Timers where
 
 import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
-import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 

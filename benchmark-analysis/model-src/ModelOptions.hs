@@ -9,7 +9,6 @@
 {-# LANGUAGE TypeFamilies #-}
 module ModelOptions (ModelCommand(..), commands, runSqlM) where
 
-import Control.Applicative (optional)
 import Data.Char (toLower)
 import qualified Data.Conduit.Combinators as C
 import Data.Functor.Compose (Compose(..))

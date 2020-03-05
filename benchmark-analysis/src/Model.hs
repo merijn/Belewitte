@@ -11,7 +11,6 @@ import Data.Int (Int32)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 import Data.List (sortBy)
-import Data.Monoid ((<>))
 import Data.Ord (comparing)
 import Data.String.Interpolate.IsString (i)
 import Data.Set (Set)

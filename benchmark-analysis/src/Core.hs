@@ -73,7 +73,6 @@ import Data.IORef (IORef, atomicModifyIORef', newIORef, readIORef, writeIORef)
 import Data.Pool (Pool)
 import Data.Set (Set)
 import qualified Data.Set as S
-import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Time.Clock (UTCTime)
 import Foreign (Ptr)

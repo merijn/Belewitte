@@ -31,14 +31,12 @@ module OptionParsers
 
 import Data.Char (toLower)
 import Data.Function (on)
-import Data.Int (Int64)
 import Data.Interval (Extended(Finite), Interval)
 import qualified Data.Interval as I
 import Data.IntervalSet (IntervalSet)
 import qualified Data.IntervalSet as IS
 import Data.Map (Map)
 import qualified Data.Map as M
-import Data.Text (Text)
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.Format (defaultTimeLocale, parseTimeM)
 import Options.Applicative hiding (Completer)
@@ -54,7 +52,7 @@ import Core
 import FieldQuery (getDistinctFieldLikeQuery)
 import Query (runSqlQuerySingle)
 import Schema
-import Sql (Key, Entity(..), ToBackendKey, SqlBackend)
+import Sql (ToBackendKey, SqlBackend)
 import qualified Sql
 
 reflow :: String -> Doc
