@@ -1,5 +1,4 @@
 {-# LANGUAGE CApiFFI #-}
-{-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE OverloadedStrings #-}
 module SQLiteExts
     ( initialiseSqlite

@@ -1,4 +1,3 @@
-{-# LANGUAGE MonadFailDesugaring #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Commands.List (commands) where
 

@@ -35,7 +35,6 @@ Common all
   GHC-Options:          -O2 -Wall -fno-warn-unused-do-bind
   GHC-Prof-Options:     -fprof-auto
   Other-Extensions:     LambdaCase
-                        MonadFailDesugaring
                         NamedFieldPuns
                         OverloadedStrings
                         QuasiQuotes
