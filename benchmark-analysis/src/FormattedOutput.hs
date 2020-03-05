@@ -11,7 +11,7 @@ module FormattedOutput
     , renderRegionOutput
     ) where
 
-import Control.Monad (forever, unless)
+import Control.Monad (unless)
 import Control.Monad.Catch (catch, throwM, try)
 import Control.Monad.Trans.Maybe (MaybeT(..))
 import Control.Monad.Trans.Resource (release)
@@ -23,6 +23,7 @@ import qualified Data.Conduit.List as C (isolate)
 import Data.Conduit.Process (CreateProcess, Inherited(..))
 import qualified Data.Conduit.Process as Process
 import Data.Foldable (asum)
+import Data.Function (fix)
 import Data.Text (Text)
 import qualified Data.Text as T
 import GHC.IO.Exception (IOException, IOErrorType(ResourceVanished))
@@ -115,9 +116,11 @@ renderColumns filts order = do
 
     let annotateHeaders = case maybeHeight of
             Nothing -> yield header >> C.map f
-            Just n -> forever $ do
+            Just n -> do
                 yield header
                 C.isolate (n-2) .| C.map f
+                empty <- C.null
+                unless empty $ annotateHeaders
 
     renderRegionOutput $
         Sql.selectSourceRegion filts order .| annotateHeaders .| C.unlines
