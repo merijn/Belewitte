@@ -11,3 +11,5 @@ evolve/evolve
 plotting/graph-edges
 .build/
 cabal.project.local
+cabal.project
+cabal.project.freeze

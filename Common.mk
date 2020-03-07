@@ -18,6 +18,9 @@ endif
 ifndef ICC
 ICC:=$(shell command -v icc 2> /dev/null)
 endif
+ifndef PROJECTFILE
+PROJECTFILE:=cabal.project.ghc-8.6
+endif
 
 all:
 debug: asan msan ssan tsan
@@ -149,10 +152,13 @@ PKG_CONFIG_PATH:=$(patsubst :%,%,$(patsubst %:,%,$(PKG_CONFIG_PATH)))
 
 ifdef CABAL
 CABALCONFIG:=$(BASE)/cabal.project.local
+ifeq ($(BASE)/$(PROJECTFILE).freeze, $(wildcard $(BASE)/$(PROJECTFILE).freeze))
+CABALFREEZE:=$(BASE)/cabal.project.freeze
+endif
 endif
 
 .PHONY: haskell-dependencies
-haskell-dependencies: $(CABALCONFIG)
+haskell-dependencies: $(CABALCONFIG) $(CABALFREEZE)
 ifndef CABAL
 	$(PRINTF) "cabal-install not found, skipping Haskell parts\n"
 else
@@ -160,10 +166,21 @@ else
 	$(AT)$(CABAL) --builddir="$(abspath $(BUILD)/haskell/)" \
 	    v2-build all $(if $(AT),2>/dev/null >/dev/null,)
 
-$(CABALCONFIG): $(BASE)/Config.mk $(wildcard $(BASE)/cabal.project.freeze)
+$(BASE)/cabal.project: $(BASE)/$(PROJECTFILE) $(BASE)/Config.mk
+	$(PRINTF) " CP\t$(@F)\n"
+	$(AT)cp $< $@
+
+$(BASE)/cabal.project.freeze: $(BASE)/$(PROJECTFILE).freeze $(BASE)/Config.mk
+	$(PRINTF) " CP\t$(@F)\n"
+	$(AT)cp $< $@
+
+$(CABALCONFIG): $(BASE)/cabal.project
 	$(PRINTF) " CABAL\tconfigure\n"
 	$(AT)$(CABAL) --builddir="$(abspath $(BUILD)/haskell/)" v2-update \
 	    $(if $(AT),2>/dev/null >/dev/null,)
+ifneq ($(BASE)/$(PROJECTFILE).freeze, $(wildcard $(BASE)/$(PROJECTFILE).freeze))
+	$(AT)rm -f $(BASE)/cabal.project.freeze
+endif
 	$(AT)$(CABAL) --builddir="$(abspath $(BUILD)/haskell/)" \
 	    --with-compiler="$(GHC)" -j24 v2-configure \
 	    $(if $(AT),2>/dev/null >/dev/null,)
@@ -178,9 +195,10 @@ freeze:
 	$(PRINTF) "Generating frozen config.\n"
 	$(AT)$(CABAL) --builddir="$(abspath $(BUILD)/haskell/)" \
 	    v2-freeze $(if $(AT),2>/dev/null >/dev/null,)
+	$(AT)cp "$(BASE)/cabal.project.freeze" "$(BASE)/$(PROJECTFILE).freeze"
 
 .PHONY: haskell-%
-haskell-%: $(CABALCONFIG)
+haskell-%: $(CABALCONFIG) $(CABALFREEZE)
 	$(PRINTF) " CABAL\t$@\n"
 	$(AT)$(CABAL) --builddir="$(abspath $(BUILD)/haskell/)" \
 	    v2-build $* $(if $(AT),2>/dev/null >/dev/null,)
