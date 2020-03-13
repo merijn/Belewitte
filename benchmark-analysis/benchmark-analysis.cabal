@@ -198,6 +198,7 @@ Library
                ,        persistent-sqlite ^>= 2.10.6.1
                ,        prettyprinter ^>= 1.6.0
                ,        prettyprinter-ansi-terminal ^>= 1.1.1
+               ,        primitive ^>= 0.7.0.0
                ,        process ^>= 1.6.0
                ,        resource-pool ^>= 0.2.3.2
                ,        streaming-commons ^>= 0.2.1

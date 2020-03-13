@@ -67,6 +67,7 @@ import Control.Monad.Catch (MonadThrow, MonadCatch, MonadMask, handle, throwM)
 import Control.Monad.Fail (MonadFail)
 import Control.Monad.IO.Unlift (MonadIO(liftIO))
 import Control.Monad.Logger (MonadLogger, MonadLoggerIO, logErrorN)
+import Control.Monad.Primitive (PrimMonad(primitive), PrimState)
 import Control.Monad.Reader (ReaderT, asks, runReaderT, withReaderT)
 import Control.Monad.State.Strict (StateT, modify', runStateT)
 import Control.Monad.Trans (MonadTrans, lift)
@@ -202,6 +203,10 @@ instance MonadResource m => MonadRegion (ConduitT a b (Region m)) where
 instance MonadSql m => MonadSql (Region m) where
     getConnFromPool = lift getConnFromPool
     getConnWithoutForeignKeysFromPool = lift getConnWithoutForeignKeysFromPool
+
+instance PrimMonad m => PrimMonad (Region m) where
+    type PrimState (Region m) = PrimState m
+    primitive = Region . primitive
 
 runRegion :: MonadIO m => Region m r -> m r
 runRegion (Region act) = do

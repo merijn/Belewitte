@@ -9,6 +9,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
 module Core
     ( Int64
     , Key
@@ -59,6 +60,7 @@ import Control.Monad.IO.Unlift
 import Control.Monad.Logger
     (LogLevel(..), LogSource, MonadLogger, MonadLoggerIO)
 import qualified Control.Monad.Logger as Log
+import Control.Monad.Primitive (PrimMonad(primitive), PrimState)
 import Control.Monad.Reader (MonadReader(..), ReaderT(..), asks)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Maybe (MaybeT(..))
@@ -125,6 +127,11 @@ instance MonadUnliftIO CoreM where
   askUnliftIO = CoreM $ withUnliftIO $ \u ->
                             return (UnliftIO (\(CoreM m) -> unliftIO u m))
 
+instance PrimMonad CoreM where
+    type PrimState CoreM = PrimState (ReaderT Config (ResourceT IO))
+    primitive = CoreM . primitive
+    {-# INLINE primitive #-}
+
 newtype SqlM a = SqlM { unSqlM :: ReaderT SqlPool CoreM a }
   deriving
   ( Applicative, Functor, Monad, MonadCatch, MonadIO, MonadLogger
@@ -135,6 +142,11 @@ instance MonadException SqlM where
       where
         unliftToRunIO :: Monad m => UnliftIO m -> RunIO m
         unliftToRunIO (UnliftIO g) = RunIO (fmap return . g)
+
+instance PrimMonad SqlM where
+    type PrimState SqlM = PrimState (ReaderT SqlPool CoreM)
+    primitive = SqlM . primitive
+    {-# INLINE primitive #-}
 
 instance MonadSql SqlM where
     getConnFromPool = SqlM $ asks Sqlite.acquireSqlConnFromPool
