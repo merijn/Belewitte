@@ -3,6 +3,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 module Evaluate
     ( CompareReport
@@ -15,7 +16,9 @@ module Evaluate
     ) where
 
 import Control.Applicative (ZipList(..))
+import Control.Monad (when)
 import Control.Monad.Fix (fix)
+import Control.Monad.Primitive (PrimMonad, PrimState)
 import Data.Conduit as C
 import Data.Conduit.List as C (mapAccum)
 import qualified Data.Conduit.Combinators as C
@@ -33,8 +36,11 @@ import Data.Semigroup (Max, getMax)
 import qualified Data.Semigroup as Semigroup
 import Data.Set (Set)
 import qualified Data.Text as T
+import qualified Data.Vector.Generic as VG
 import Data.Vector.Storable (Storable, Vector)
 import qualified Data.Vector.Storable as VS
+import Data.Vector.Storable.Mutable (MVector)
+import qualified Data.Vector.Storable.Mutable as VSM
 import Numeric (showFFloat)
 
 import Core
@@ -51,6 +57,24 @@ import VariantQuery
 
 padText :: Word -> Text -> Text
 padText n t = t <> T.replicate (fromIntegral n - T.length t) " "
+
+zipImplTiming
+    :: forall m
+     . (MonadLogger m, MonadThrow m, PrimMonad m)
+    => (Double -> Double -> Double)
+    -> MVector (PrimState m) ImplTiming
+    -> Vector ImplTiming
+    -> m ()
+zipImplTiming f mvec newVec = VG.imapM_ checkedApply newVec
+  where
+    checkedApply :: Int -> ImplTiming -> m ()
+    checkedApply idx (ImplTiming impl1 val1) = do
+        ImplTiming impl2 val2 <- VSM.unsafeRead mvec idx
+        when (impl1 /= impl2) $ do
+            logThrowM . GenericInvariantViolation $
+                "Mismatched index! " <> showText impl1 <> " " <> showText impl2
+        VSM.unsafeWrite mvec idx (ImplTiming impl1 (f val1 val2))
+{-# INLINE zipImplTiming #-}
 
 liftImplTiming
     :: (Double -> Double -> Double) -> ImplTiming -> ImplTiming -> ImplTiming
@@ -112,15 +136,16 @@ data VariantAggregate =
   , implTimes :: {-# UNPACK #-} !(Pair (Vector ImplTiming))
   }
 
-data StepVariantAggregate =
+data StepVariantAggregate m =
   StepVariantAgg
   { stepVariantid :: {-# UNPACK #-} !(Key Variant)
   , stepOptimalTime :: {-# UNPACK #-} !Double
-  , stepImplTimes :: {-# UNPACK #-} !(Vector ImplTiming)
+  , stepImplTimes :: {-# UNPACK #-} !(MVector (PrimState m) ImplTiming)
   }
 
 aggregateSteps
-    :: (MonadLogger m, MonadThrow m)
+    :: forall m
+     . (MonadLogger m, MonadThrow m, PrimMonad m)
     => Predictor -> ConduitT StepInfo Void m VariantAggregate
 aggregateSteps predictor = do
     StepInfo{stepVariantId,stepTimings} <- C.peek >>= \case
@@ -128,14 +153,15 @@ aggregateSteps predictor = do
         Nothing -> logThrowM . PatternFailed $
             "Expected at least one step input"
 
-    let zerooutTiming :: ImplTiming -> ImplTiming
-        zerooutTiming implTime = implTime { implTimingTiming = 0 }
+    let len = VS.length stepTimings
+    zeroTimeVec <- VSM.unsafeNew $ len + 1
 
-        zeroTimeVec :: Vector ImplTiming
-        zeroTimeVec = VS.map zerooutTiming stepTimings `VS.snoc`
-            ImplTiming predictedImplId 0
+    let initialise i implTimes =
+            VSM.unsafeWrite zeroTimeVec i implTimes{implTimingTiming = 0}
 
-        initial :: (Maybe Int, StepVariantAggregate)
+    VG.imapM_ initialise (stepTimings `VS.snoc` ImplTiming predictedImplId 0)
+
+    let initial :: (Maybe Int, StepVariantAggregate m)
         initial = (Nothing, StepVariantAgg
             { stepVariantid = stepVariantId
             , stepOptimalTime = 0
@@ -143,33 +169,36 @@ aggregateSteps predictor = do
             })
 
         translateMap :: IntMap Int
-        translateMap = VS.ifoldl' build IM.empty zeroTimeVec
+        translateMap = VS.ifoldl' build IM.empty stepTimings
           where
             build :: IntMap Int -> Int -> ImplTiming -> IntMap Int
             build implMap idx (ImplTiming impl _) =
                 IM.insert (fromIntegral impl) idx implMap
 
-    toVariantAggregate . snd <$> C.foldl (aggregate translateMap) initial
+    aggResult <- snd <$> C.foldM (aggregate translateMap) initial
+    lift $ toVariantAggregate aggResult
   where
-    toVariantAggregate :: StepVariantAggregate -> VariantAggregate
-    toVariantAggregate StepVariantAgg{..} = VariantAgg
-        { variantid = stepVariantid
-        , optimalTime = stepOptimalTime
-        , implTimes = Pair stepImplTimes VS.empty
-        }
+    toVariantAggregate :: StepVariantAggregate m -> m VariantAggregate
+    toVariantAggregate StepVariantAgg{..} = do
+        outVec <- VS.freeze stepImplTimes
+        return VariantAgg
+            { variantid = stepVariantid
+            , optimalTime = stepOptimalTime
+            , implTimes = Pair outVec VS.empty
+            }
 
     aggregate
         :: IntMap Int
-        -> (Maybe Int, StepVariantAggregate)
+        -> (Maybe Int, StepVariantAggregate m)
         -> StepInfo
-        -> (Maybe Int, StepVariantAggregate)
-    aggregate translateMap (!lastImpl, !StepVariantAgg{..}) !StepInfo{..} =
-      (Just predictedImpl, StepVariantAgg
-            { stepVariantid = stepVariantId
-            , stepOptimalTime = stepOptimalTime + getTime stepBestImpl
-            , stepImplTimes = VS.zipWith (liftImplTiming (+)) stepImplTimes
-                    (stepTimings `VS.snoc` newPrediction)
-            })
+        -> m (Maybe Int, StepVariantAggregate m)
+    aggregate translateMap (!lastImpl, !StepVariantAgg{..}) !StepInfo{..} = do
+        zipImplTiming (+) stepImplTimes (stepTimings `VS.snoc` newPrediction)
+        return $ (Just predictedImpl, StepVariantAgg
+                { stepVariantid = stepVariantId
+                , stepOptimalTime = stepOptimalTime + getTime stepBestImpl
+                , stepImplTimes = stepImplTimes
+                })
       where
         newPrediction :: ImplTiming
         newPrediction = ImplTiming predictedImplId (getTime predictedImpl)

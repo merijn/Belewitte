@@ -267,6 +267,7 @@ Executable Model
                ,        bytestring
                ,        data-interval ^>= 1.3.0
                ,        megaparsec ^>= 7.0.0
+               ,        primitive ^>= 0.7.0.0
                ,        validated-literals ^>= 0.3.0
                ,        vector ^>= 0.12.0.1
                ,        vector-algorithms ^>= 0.8.0.3
