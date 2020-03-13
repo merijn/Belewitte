@@ -201,6 +201,12 @@ likeFilter field val = Filter field filterVal backendFilter
     filterVal = UnsafeValue $ T.concat ["%", val, "%"]
     backendFilter = BackendSpecificFilter "like"
 
+prefixFilter :: PersistField v => EntityField record v -> Text -> Filter record
+prefixFilter field val = Filter field filterVal backendFilter
+  where
+    filterVal = UnsafeValue $ T.concat [val, "%"]
+    backendFilter = BackendSpecificFilter "like"
+
 queryExternalImplementations
     :: (MonadResource m, MonadSql m)
     => Key Algorithm -> Transaction m (IntMap ExternalImpl)

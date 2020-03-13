@@ -210,7 +210,7 @@ sqlInput field uniq = InputQuery
     getFieldValue = view (Sql.fieldLens field)
     toCompletions = map $ simpleCompletion . T.unpack . getFieldValue
     fromQuery s =
-      toCompletions <$> Sql.selectList [field `Sql.likeFilter` T.pack s] []
+      toCompletions <$> Sql.selectList [field `Sql.prefixFilter` T.pack s] []
 
 optionalInput
     :: (Applicative m)

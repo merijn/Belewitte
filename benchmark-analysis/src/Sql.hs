@@ -10,6 +10,7 @@ module Sql
     , SqlTrans.Max(..)
     , SqlTrans.getFieldLength
     , SqlTrans.likeFilter
+    , SqlTrans.prefixFilter
     , module SqlCore
     , module Sql
     ) where
