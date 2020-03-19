@@ -3,7 +3,11 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
-module FieldQuery (getDistinctFieldQuery, getDistinctFieldLikeQuery) where
+module FieldQuery
+    ( getDistinctFieldQuery
+    , getDistinctFieldLikeQuery
+    , getDistinctAlgorithmVersionQuery
+    ) where
 
 import Data.Proxy (Proxy(Proxy))
 import Data.String.Interpolate.IsString (i)
@@ -71,3 +75,24 @@ WHERE #{table}.#{field} LIKE (? || '%')
     convert [v] | Right val <- Sqlite.fromPersistValue v = return val
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
         [Sqlite.sqlType (Proxy :: Proxy a)]
+
+getDistinctAlgorithmVersionQuery
+    :: Key Algorithm -> Maybe Text -> Query CommitId
+getDistinctAlgorithmVersionQuery algoId prefix = Query
+  { queryName = "distinctAlgorithmVersionQuery"
+  , commonTableExpressions = []
+  , params = [ toPersistValue algoId, toPersistValue prefix ]
+  , queryText = [i|
+SELECT DISTINCT algorithmVersion
+FROM RunConfig
+WHERE algorithmId = ? AND algorithmVersion LIKE (? || '%')
+|]
+  , ..
+  }
+  where
+    convert
+        :: (MonadIO n, MonadLogger n, MonadThrow n)
+        => [PersistValue] -> n CommitId
+    convert [v] | Right val <- Sqlite.fromPersistValue v = return val
+    convert actualValues = logThrowM $ QueryResultUnparseable actualValues
+        [Sqlite.sqlType (Proxy :: Proxy CommitId)]
