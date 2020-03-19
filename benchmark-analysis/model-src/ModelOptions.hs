@@ -132,7 +132,7 @@ commands = CommandRoot
         , commandHeaderDesc = "compare implementation performance"
         , commandDesc = "Compare the performance of different implementations"
         }
-        $ Compare <$> variantInfoConfig <*> compareParser
+        $ Compare <$> variantInfoConfigParser <*> compareParser
     , SingleCommand CommandInfo
         { commandName = "export"
         , commandHeaderDesc = "export model to C++"
@@ -186,7 +186,7 @@ modelQueryMap = M.fromList
         pure $ do
             algoId <- getAlgoId
             cfg <- StepInfoConfig queryMode algoId
-                    <$> getPlatformId <*> getCommitId <*> graphProps
+                    <$> getPlatformId <*> getCommitId algoId <*> graphProps
                     <*> stepProps algoId <*> pure trainSeed <*> getDatasets
                     <*> pure shouldFilter <*> pure graphPercent
                     <*> pure variantPercent <*> pure stepPercent
@@ -321,7 +321,7 @@ stepInfoConfig = do
     pure $ do
         algoId <- getAlgoId
         StepInfoConfig StepQuery.Train algoId
-                <$> getPlatformId <*> getCommitId
+                <$> getPlatformId <*> getCommitId algoId
                 <*> (filterGraphProps <*> gatherGraphProps)
                 <*> (filterStepProps <*> gatherStepProps algoId)
                 <*> pure trainSeed <*> getDatasets <*> pure shouldFilter
@@ -369,12 +369,3 @@ stepInfoConfig = do
     gatherStepProps algoId = do
         stepProps <- Sql.selectList [StepPropAlgorithmId ==. algoId] []
         return . S.fromList $ map (stepPropProperty . entityVal) stepProps
-
-variantInfoConfig :: Parser (SqlM VariantInfoConfig)
-variantInfoConfig = getCompose $ do
-    VariantInfoConfig
-        <$> Compose algorithmIdParser
-        <*> Compose platformIdParser
-        <*> Compose commitIdParser
-        <*> Compose (sequence <$> optional datasetIdParser)
-        <*> Compose (return <$> filterIncomplete)

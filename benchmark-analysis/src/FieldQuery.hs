@@ -81,11 +81,15 @@ getDistinctAlgorithmVersionQuery
 getDistinctAlgorithmVersionQuery algoId prefix = Query
   { queryName = "distinctAlgorithmVersionQuery"
   , commonTableExpressions = []
-  , params = [ toPersistValue algoId, toPersistValue prefix ]
+  , params =
+        [ toPersistValue algoId
+        , toPersistValue prefix
+        , toPersistValue prefix
+        ]
   , queryText = [i|
 SELECT DISTINCT algorithmVersion
 FROM RunConfig
-WHERE algorithmId = ? AND algorithmVersion LIKE (? || '%')
+WHERE algorithmId = ? AND (algorithmVersion LIKE (? || '%') OR ? IS NULL)
 |]
   , ..
   }

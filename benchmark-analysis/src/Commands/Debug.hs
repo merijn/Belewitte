@@ -1,3 +1,4 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Commands.Debug (DebugQuery(..), commands) where
@@ -6,7 +7,6 @@ import Data.ByteString.Base64 (encodeBase64)
 import Data.Char (isSpace)
 import Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
-import Data.Functor.Compose (Compose(..))
 import Data.Map (Map)
 import qualified Data.Map as M
 import qualified Data.Text as T
@@ -19,7 +19,7 @@ import InteractiveInput
 import OptionParsers
 import Query (Query(..), explainSqlQuery, runSqlQueryConduit, streamQuery)
 import Schema (PersistValue(..))
-import VariantQuery (VariantInfo, VariantInfoConfig(..), variantInfoQuery)
+import VariantQuery (VariantInfo, variantInfoQuery)
 
 data DebugQuery where
     DebugQuery :: Show v => SqlM (Query v) -> DebugQuery
@@ -68,10 +68,7 @@ commands dumpCommand queryMap = HiddenGroup CommandInfo
       M.insert "variantInfoQuery" (DebugQuery <$> variantQuery) queryMap
 
     variantQuery :: Parser (SqlM (Query VariantInfo))
-    variantQuery = getCompose . fmap variantInfoQuery $ VariantInfoConfig
-        <$> Compose algorithmIdParser <*> Compose platformIdParser
-        <*> Compose commitIdParser <*> optional (Compose datasetIdParser)
-        <*> Compose (return <$> filterIncomplete)
+    variantQuery = fmap variantInfoQuery <$> variantInfoConfigParser
 
     buildQueryList :: (String -> Parser DebugQuery -> a) -> [a]
     buildQueryList f = M.foldMapWithKey (\k v -> [f k v]) completeQueryMap

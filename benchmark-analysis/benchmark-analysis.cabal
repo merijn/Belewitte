@@ -34,7 +34,8 @@ Common all
   Default-Language:     Haskell2010
   GHC-Options:          -O2 -Wall -fno-warn-unused-do-bind
   GHC-Prof-Options:     -fprof-auto
-  Other-Extensions:     LambdaCase
+  Other-Extensions:     ApplicativeDo
+                        LambdaCase
                         NamedFieldPuns
                         OverloadedStrings
                         QuasiQuotes
@@ -276,8 +277,7 @@ Executable Plot
   Main-Is:              Plot.hs
   Other-Modules:        PlotQuery
 
-  Other-Extensions:     ApplicativeDo
-                        BangPatterns
+  Other-Extensions:     BangPatterns
                         FlexibleContexts
 
   Build-Depends:        benchmark-analysis

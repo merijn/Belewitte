@@ -1,3 +1,4 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -269,10 +270,15 @@ ingestQueryMap = M.fromList
     , nameDebugQuery "validationVariantQuery" $
         validationVariantQuery <$> Compose platformIdParser
     , nameDebugQuery "validationRunQuery" $
-        validationRunQuery <$> validationVariantParser
+        validationRunQuery <$> Compose validationVariantParser
                            <*> Compose platformIdParser
     ]
   where
-    validationVariantParser = ValidationVariant
-        <$> Compose algorithmIdParser <*> Compose variantIdParser
-        <*> Compose commitIdParser <*> pure 0 <*> pure []
+    validationVariantParser = do
+        getAlgoId <- algorithmIdParser
+        getVariantId <- variantIdParser
+        getCommitId <- commitIdParser
+        pure $ do
+            algoId <- getAlgoId
+            ValidationVariant algoId
+                <$> getVariantId <*> getCommitId algoId <*> pure 0 <*> pure []

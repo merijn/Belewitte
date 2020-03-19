@@ -1,3 +1,4 @@
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
@@ -21,6 +22,7 @@ module OptionParsers
     , utcTimeParser
     , variantIdParser
     , variantParser
+    , variantInfoConfigParser
     , intervalReader
     , readCI
     , mapOption
@@ -49,11 +51,12 @@ import Text.Megaparsec.Char.Lexer (decimal)
 import Text.Read (readMaybe)
 
 import Core
-import FieldQuery (getDistinctFieldLikeQuery)
+import FieldQuery (getDistinctAlgorithmVersionQuery)
 import Query (runSqlQuerySingle)
 import Schema
 import Sql (ToBackendKey, SqlBackend)
 import qualified Sql
+import VariantQuery (VariantInfoConfig(..))
 
 reflow :: String -> Doc
 reflow = Help.fillSep . map Help.text . words
@@ -74,18 +77,17 @@ algorithmParser = queryAlgorithm <$> algorithmOpt
     queryAlgorithm (Left name) = Sql.validateUniqEntity "Algorithm" $
         UniqAlgorithm name
 
-commitIdParser :: Parser (SqlM CommitId)
+commitIdParser :: Parser (Key Algorithm -> SqlM CommitId)
 commitIdParser = checkUniqueCommitId <$> commitIdOpt
   where
-    commitIdOpt :: Parser Text
-    commitIdOpt = option str $ mconcat
+    commitIdOpt :: Parser (Maybe Text)
+    commitIdOpt = optional . option str $ mconcat
         [ metavar "COMMIT", short 'c', long "commit"
         , help "Algorithm version to use" ]
 
-    checkUniqueCommitId :: Text -> SqlM CommitId
-    checkUniqueCommitId txt = do
-        query <- getDistinctFieldLikeQuery RunConfigAlgorithmVersion txt
-        runSqlQuerySingle query
+    checkUniqueCommitId :: Maybe Text -> Key Algorithm -> SqlM CommitId
+    checkUniqueCommitId txt algoId = do
+        runSqlQuerySingle $ getDistinctAlgorithmVersionQuery algoId txt
 
 datasetIdParser :: Parser (SqlM (Key Dataset))
 datasetIdParser = fmap entityKey <$> datasetParser
@@ -204,6 +206,20 @@ variantParser = queryVariant <$> variantOpt
 
     queryVariant :: Int64 -> SqlM (Entity Variant)
     queryVariant n = Sql.validateEntity "Variant" n
+
+variantInfoConfigParser :: Parser (SqlM VariantInfoConfig)
+variantInfoConfigParser = do
+    getAlgoId <- algorithmIdParser
+    getCommit <- commitIdParser
+    getPlatformId <- platformIdParser
+    getDatasetId <- optional datasetIdParser
+    filterFlag <- filterIncomplete
+
+    pure $ do
+        algoId <- getAlgoId
+        VariantInfoConfig algoId
+            <$> getPlatformId <*> getCommit algoId <*> sequence getDatasetId
+            <*> pure filterFlag
 
 intervalReader :: ReadM (IntervalSet Int64)
 intervalReader = maybeReader . parseMaybe $

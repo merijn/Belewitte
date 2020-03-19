@@ -82,18 +82,26 @@ data PlotType
 data PlotOptions
     = PlotOptions
       { plotType :: PlotType
-      , getAlgoId :: SqlM (Key Algorithm)
-      , getPlatformId :: SqlM (Key Platform)
-      , getCommit :: SqlM CommitId
-      , getGraphs :: SqlM (Set Text)
-      , getImplementations :: SqlM (Set Text)
       , plotConfig :: PlotConfig
+      , algoId :: Key Algorithm
+      , platformId :: Key Platform
+      , commitId :: CommitId
+      , graphSet :: Set Text
+      , implementationNames :: Set Text
       }
 
-plotOptions :: PlotType -> Parser (PlotConfig -> PlotOptions)
-plotOptions pType =
-    PlotOptions pType <$> algorithmIdParser <*> platformIdParser
-                      <*> commitIdParser <*> graphs <*> impls
+plotOptions :: PlotType -> Parser (PlotConfig -> SqlM PlotOptions)
+plotOptions pType = do
+    getAlgoId <- algorithmIdParser
+    getPlatformId <- platformIdParser
+    getCommitId <- commitIdParser
+    getGraphs <- graphs
+    getImpls <- impls
+
+    pure $ \plotConfig -> do
+        algoId <- getAlgoId
+        PlotOptions pType plotConfig algoId
+            <$> getPlatformId <*> getCommitId algoId <*> getGraphs <*> getImpls
   where
     graphs :: Parser (SqlM (Set Text))
     graphs = readSet "graphs"
@@ -119,7 +127,7 @@ filterImpls textSet = IM.filter $ getAny . mconcat
 filterExternal :: Set Text -> IntMap ExternalImpl -> IntMap ExternalImpl
 filterExternal names = IM.filter ((`S.member` names) . externalImplName)
 
-commands :: CommandRoot PlotOptions
+commands :: CommandRoot (SqlM PlotOptions)
 commands = CommandRoot
   { mainHeaderDesc = "a tool for plotting benchmark results"
   , mainDesc = ""
@@ -164,15 +172,26 @@ commands = CommandRoot
 
 plotQueryMap :: Map String (Parser DebugQuery)
 plotQueryMap = M.fromList
-    [ nameDebugQuery "timePlotQuery" $
-        timePlotQuery <$> Compose algorithmIdParser
-                      <*> Compose platformIdParser
-                      <*> Compose commitIdParser
-                      <*> Compose variantsParser
-    , nameDebugQuery "levelTimePlotQuery" $
-        levelTimePlotQuery <$> Compose platformIdParser
-                           <*> Compose commitIdParser
-                           <*> Compose variantIdParser
+    [ nameDebugQuery "timePlotQuery" . Compose $ do
+        getAlgorithmId <- algorithmIdParser
+        getPlatformId <- platformIdParser
+        getCommit <- commitIdParser
+        getVariants <- variantsParser
+
+        pure $ do
+            algoId <- getAlgorithmId
+            timePlotQuery algoId
+                <$> getPlatformId <*> getCommit algoId <*> getVariants
+    , nameDebugQuery "levelTimePlotQuery" . Compose $ do
+        getAlgorithmId <- algorithmIdParser
+        getPlatformId <- platformIdParser
+        getCommit <- commitIdParser
+        getVariantId <- variantIdParser
+
+        pure $ do
+            algoId <- getAlgorithmId
+            levelTimePlotQuery
+                <$> getPlatformId <*> getCommit algoId <*> getVariantId
     ]
   where
     variantsParser :: Parser (SqlM (Set (Key Variant)))
@@ -260,19 +279,16 @@ nameImplementations impls = V.mapMaybe translate . V.convert
     translate (ImplTiming impl val) = (,val) <$> impls IM.!? fromIntegral impl
 
 main :: IO ()
-main = runSqlM commands $ \case
-  PlotOptions{..} -> do
-    algoId <- getAlgoId
-    platformId <- getPlatformId
-    commit <- getCommit
-    implNames <- getImplementations
-    variants <- getGraphs >>= queryVariants algoId
+main = runSqlM commands $ \getPlotOptions -> do
+    PlotOptions{..} <- getPlotOptions
+    variants <- queryVariants algoId graphSet
 
     impls <- (,) <$> Sql.queryImplementations algoId
                  <*> Sql.queryExternalImplementations algoId
 
-    let implMaps@Pair{regular} =
-          toImplNames (filterImpls implNames) (filterExternal implNames) impls
+    let filteredImpls = filterImpls implementationNames
+        filteredExt = filterExternal implementationNames
+        implMaps@Pair{regular} = toImplNames filteredImpls filteredExt impls
 
         translatePair :: Pair (Vector ImplTiming) -> Vector (Text, Double)
         translatePair x = mergePair $ nameImplementations <$> implMaps <*> x
@@ -283,7 +299,7 @@ main = runSqlM commands $ \case
                 graphId <- variantGraphId <$> Sql.getJust variantId
                 name <- graphName <$> Sql.getJust graphId
 
-                let query = levelTimePlotQuery platformId commit variantId
+                let query = levelTimePlotQuery platformId commitId variantId
                     pdfName = name <> "-levels"
                     missingResults (PatternFailed _) = logErrorN $ mconcat
                         [ "Missing results for graph \"", name
@@ -293,14 +309,14 @@ main = runSqlM commands $ \case
                     C.map (bimap showText (nameImplementations regular))
 
         PlotTotals -> do
-            let timeQuery = timePlotQuery algoId platformId commit variants
+            let timeQuery = timePlotQuery algoId platformId commitId variants
 
             plot plotConfig "times-totals" timeQuery $
                 C.map (second $ translatePair . toPair V.convert V.convert)
 
         PlotVsOptimal -> do
             let variantQuery = variantInfoQuery $
-                    VariantInfoConfig algoId platformId commit Nothing False
+                    VariantInfoConfig algoId platformId commitId Nothing False
 
                 variantFilter VariantInfo{variantId} =
                     S.member variantId variants
