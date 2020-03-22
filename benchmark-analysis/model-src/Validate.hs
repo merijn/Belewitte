@@ -9,6 +9,7 @@ import Data.Bifunctor (first)
 import Data.Conduit (ConduitT)
 import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
+import Data.Set (Set)
 import qualified Data.Text as T
 import Data.Vector.Storable (Vector)
 
@@ -28,12 +29,27 @@ data ValidateStats = ValidateStats
     , unknownPreds :: !Int
     } deriving (Show)
 
-validateModel :: Predictor -> TrainingConfig -> SqlM ()
-validateModel predictor config = renderOutput $ do
-    validation <- getValidationQuery config
-    computeResults "validation" $ reduceInfo <$> validation
-    C.yield "\n"
-    computeResults "total" $ reduceInfo <$> total
+validateModel
+    :: Predictor
+    -> TrainingConfig
+    -> Maybe (Key Platform)
+    -> Maybe (Set (Key Dataset))
+    -> SqlM ()
+validateModel predictor config mPlatform mDatasets = renderOutput $
+    case (mPlatform, mDatasets) of
+        (Nothing, Nothing) -> do
+            validation <- getValidationQuery config
+            computeResults "validation" $ reduceInfo <$> validation
+            C.yield "\n"
+            computeResults "total" $ reduceInfo <$> total
+        _ -> do
+            let setPlatform = maybe id setTrainingConfigPlatform mPlatform
+                setDatasets = maybe id setTrainingConfigDatasets mDatasets
+
+                newConfig = setPlatform . setDatasets $ config
+                comparisonQuery = getTotalQuery newConfig
+
+            computeResults "comparison" $ reduceInfo <$> comparisonQuery
   where
     reduceInfo :: StepInfo -> (Vector Double, Int64)
     reduceInfo StepInfo{..} = (stepProps, stepBestImpl)

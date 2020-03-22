@@ -13,6 +13,8 @@ module Train
     , getTrainingQuery
     , getValidationQuery
     , getModelTrainingConfig
+    , setTrainingConfigDatasets
+    , setTrainingConfigPlatform
     , trainModel
     ) where
 
@@ -68,6 +70,25 @@ data LegacyConfig = LegacyConfig
     , legacyDatasets :: Set (Key Dataset)
     , legacyTimestamp :: UTCTime
     } deriving (Show)
+
+setTrainingConfigDatasets
+    :: Set (Key Dataset) -> TrainingConfig -> TrainingConfig
+setTrainingConfigDatasets datasets trainConfig = case trainConfig of
+    TrainConfig cfg@StepInfoConfig{stepInfoDatasets} -> TrainConfig cfg
+      { stepInfoDatasets = updateDatasets stepInfoDatasets }
+    LegacyTrainConfig cfg@LegacyConfig{legacyDatasets} -> LegacyTrainConfig cfg
+      { legacyDatasets = updateDatasets legacyDatasets }
+  where
+    updateDatasets
+        | S.null datasets = id
+        | otherwise = const datasets
+
+setTrainingConfigPlatform :: Key Platform -> TrainingConfig -> TrainingConfig
+setTrainingConfigPlatform platformId trainConfig = case trainConfig of
+    TrainConfig cfg@StepInfoConfig{} -> TrainConfig cfg
+      { stepInfoPlatform = platformId }
+    LegacyTrainConfig cfg@LegacyConfig{} -> LegacyTrainConfig cfg
+      { legacyPlatform = platformId }
 
 data ModelDescription = ModelDesc
     { modelName :: Text

@@ -12,7 +12,6 @@ import qualified Data.Conduit.Combinators as C
 import Data.List (sortBy)
 import Data.Ord (comparing)
 import qualified Data.Map as M
-import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 
@@ -71,22 +70,6 @@ reportModelStats ModelStats{..} = do
     sortedUnknown = sortBy (flip (comparing unknownSetOccurence))
                   $ M.elems modelUnknownPreds
 
-setPlatformAndDatasets
-    :: Key Platform -> Set (Key Dataset) -> TrainingConfig -> TrainingConfig
-setPlatformAndDatasets platformId datasets trainConfig = case trainConfig of
-    TrainConfig cfg@StepInfoConfig{stepInfoDatasets} -> TrainConfig cfg
-      { stepInfoPlatform = platformId
-      , stepInfoDatasets = updateDatasets stepInfoDatasets
-      }
-    LegacyTrainConfig cfg@LegacyConfig{legacyDatasets} -> LegacyTrainConfig cfg
-      { legacyPlatform = platformId
-      , legacyDatasets = updateDatasets legacyDatasets
-      }
-  where
-    updateDatasets
-        | S.null datasets = id
-        | otherwise = const datasets
-
 main :: IO ()
 main = runSqlM commands $ \case
     Train{getConfig} -> runInput $ do
@@ -114,16 +97,15 @@ main = runSqlM commands $ \case
 
     ListModels{listModels} -> listModels
 
-    ValidateModel{getPlatformId,getModelId,getDatasetIds} -> do
-        platformId <- getPlatformId
+    ValidateModel{getModelId,getOptionalPlatformId,getOptionalDatasetIds} -> do
         modelId <- getModelId
-        datasets <- getDatasetIds
+        platformId <- getOptionalPlatformId
+        datasets <- getOptionalDatasetIds
         predictor <- loadPredictor modelId None
 
-        validationConfig <- setPlatformAndDatasets platformId datasets <$>
-            getModelTrainingConfig modelId
+        validationConfig <- getModelTrainingConfig modelId
 
-        validateModel predictor validationConfig
+        validateModel predictor validationConfig platformId datasets
 
     EvaluatePredictor
         {getPlatformId,getModelId,defaultImpl,evaluateConfig,getDatasetIds} -> do
@@ -131,10 +113,10 @@ main = runSqlM commands $ \case
         modelId <- getModelId
         predictor <- loadPredictor modelId (DefImpl defaultImpl)
 
-        platformId <- getPlatformId
-        datasets <- getDatasetIds
+        setPlatformId <- setTrainingConfigPlatform <$> getPlatformId
+        setDatasets <- setTrainingConfigDatasets <$> getDatasetIds
 
-        evalConfig <- setPlatformAndDatasets platformId datasets <$>
+        evalConfig <- setPlatformId . setDatasets <$>
             getModelTrainingConfig modelId
 
         evaluateModel predictor evaluateConfig evalConfig
