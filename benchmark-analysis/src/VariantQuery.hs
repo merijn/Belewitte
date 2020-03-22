@@ -30,7 +30,7 @@ data VariantInfoConfig = VariantInfoConfig
     , variantInfoCommit :: CommitId
     , variantInfoDataset :: Maybe (Key Dataset)
     , variantInfoFilterIncomplete :: Bool
-    }
+    } deriving (Show)
 
 data VariantInfo =
   VariantInfo
