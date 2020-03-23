@@ -28,6 +28,7 @@ import Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
 import Data.Map (Map)
 import qualified Data.Map.Strict as M
+import Data.Maybe (fromMaybe)
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
@@ -67,12 +68,12 @@ data LegacyConfig = LegacyConfig
     , legacyStepProps :: Set Text
     , legacyFraction :: Double
     , legacySeed :: Int64
-    , legacyDatasets :: Set (Key Dataset)
+    , legacyDatasets :: Maybe (Set (Key Dataset))
     , legacyTimestamp :: UTCTime
     } deriving (Show)
 
 setTrainingConfigDatasets
-    :: Set (Key Dataset) -> TrainingConfig -> TrainingConfig
+    :: Maybe (Set (Key Dataset)) -> TrainingConfig -> TrainingConfig
 setTrainingConfigDatasets datasets trainConfig = case trainConfig of
     TrainConfig cfg@StepInfoConfig{stepInfoDatasets} -> TrainConfig cfg
       { stepInfoDatasets = updateDatasets stepInfoDatasets }
@@ -80,7 +81,7 @@ setTrainingConfigDatasets datasets trainConfig = case trainConfig of
       { legacyDatasets = updateDatasets legacyDatasets }
   where
     updateDatasets
-        | S.null datasets = id
+        | maybe True S.null datasets = id
         | otherwise = const datasets
 
 setTrainingConfigPlatform :: Key Platform -> TrainingConfig -> TrainingConfig
@@ -172,7 +173,7 @@ getModelTrainingConfig modelId = SqlTrans.runTransaction $ do
             , legacyStepProps = stepProps
             , legacyFraction = predictionModelLegacyTrainFraction
             , legacySeed = predictionModelTrainSeed
-            , legacyDatasets = trainingDatasets
+            , legacyDatasets = Just trainingDatasets
             , legacyTimestamp = predictionModelTimestamp
             }
        else return $ TrainConfig StepInfoConfig
@@ -183,7 +184,7 @@ getModelTrainingConfig modelId = SqlTrans.runTransaction $ do
             , stepInfoGraphProps = graphProps
             , stepInfoStepProps = stepProps
             , stepInfoSeed = predictionModelTrainSeed
-            , stepInfoDatasets = trainingDatasets
+            , stepInfoDatasets = Just trainingDatasets
             , stepInfoFilterIncomplete = False
             , stepInfoGraphs = predictionModelTrainGraphs
             , stepInfoVariants = predictionModelTrainVariants
@@ -272,7 +273,8 @@ trainModel ModelDesc{..} = do
             , predictionModelTimestamp = timestamp
             }
 
-        forM_ stepInfoDatasets $ SqlTrans.insert_ . ModelTrainDataset modelId
+        forM_ (fromMaybe mempty stepInfoDatasets) $
+            SqlTrans.insert_ . ModelTrainDataset modelId
 
         forM_ (M.toList modelGraphPropImportance) $
             SqlTrans.insert_ . uncurry (ModelGraphProperty modelId)

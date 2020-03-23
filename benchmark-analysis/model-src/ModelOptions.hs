@@ -55,7 +55,7 @@ data ModelCommand
       , getModelId :: SqlM (Key PredictionModel)
       , defaultImpl :: Either Int Text
       , evaluateConfig :: EvaluateReport
-      , getDatasetIds :: SqlM (Set (Key Dataset))
+      , getDatasetIds :: SqlM (Maybe (Set (Key Dataset)))
       }
     | Compare
       { getVariantInfoConfig :: SqlM VariantInfoConfig
@@ -117,7 +117,7 @@ commands = CommandRoot
         }
         $ ValidateModel
             <$> modelIdParser <*> (sequence <$> optional platformIdParser)
-            <*> (sequence <$> optional datasetsParser)
+            <*> datasetsParser
     , SingleCommand CommandInfo
         { commandName = "evaluate"
         , commandHeaderDesc = "evaluate model performance"
@@ -147,8 +147,11 @@ commands = CommandRoot
         [ metavar "FILE", short 'e', long "export", value "test.cpp"
         , showDefaultWith id, help "C++ file to write predictor to." ]
 
-datasetsParser :: Parser (SqlM (Set (Key Dataset)))
-datasetsParser = fmap S.fromList . sequence <$> many datasetIdParser
+datasetsParser :: Parser (SqlM (Maybe (Set (Key Dataset))))
+datasetsParser = sequence <$> optional rawDatasetsParser
+  where
+    rawDatasetsParser :: Parser (SqlM (Set (Key Dataset)))
+    rawDatasetsParser = fmap S.fromList . sequence <$> some datasetIdParser
 
 graphPercentageParser :: Parser Percentage
 graphPercentageParser = percentageParser

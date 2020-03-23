@@ -37,7 +37,7 @@ data StepInfoConfig = StepInfoConfig
     , stepInfoGraphProps :: Set Text
     , stepInfoStepProps :: Set Text
     , stepInfoSeed :: Int64
-    , stepInfoDatasets :: Set (Key Dataset)
+    , stepInfoDatasets :: Maybe (Set (Key Dataset))
     , stepInfoFilterIncomplete :: Bool
     , stepInfoGraphs :: Percentage
     , stepInfoVariants :: Percentage
@@ -82,7 +82,7 @@ stepInfoQuery StepInfoConfig
   } = Query{..}
   where
     datasets :: Set Text
-    datasets = S.map showSqlKey stepInfoDatasets
+    datasets = maybe mempty (S.map showSqlKey) stepInfoDatasets
 
     queryName :: Text
     queryName = "stepInfoQuery"
@@ -119,10 +119,10 @@ stepInfoQuery StepInfoConfig
     commonTableExpressions =
       [ CTE
         { cteParams =
-            [ toPersistValue $ S.size stepInfoDatasets == 0
+            [ toPersistValue $ maybe True S.null stepInfoDatasets
             , toPersistValue stepInfoSeed
             , toPersistValue stepInfoGraphs
-            , toPersistValue $ S.size stepInfoDatasets == 0
+            , toPersistValue $ maybe True S.null stepInfoDatasets
             ]
         , cteQuery = [i|
 GraphCount(graphCount) AS (

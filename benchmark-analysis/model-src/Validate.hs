@@ -44,7 +44,7 @@ validateModel predictor config mPlatform mDatasets = renderOutput $
             computeResults "total" $ reduceInfo <$> total
         _ -> do
             let setPlatform = maybe id setTrainingConfigPlatform mPlatform
-                setDatasets = maybe id setTrainingConfigDatasets mDatasets
+                setDatasets = setTrainingConfigDatasets mDatasets
 
                 newConfig = setPlatform . setDatasets $ config
                 comparisonQuery = getTotalQuery newConfig
