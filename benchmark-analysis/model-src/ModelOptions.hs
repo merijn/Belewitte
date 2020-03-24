@@ -11,7 +11,6 @@ module ModelOptions (ModelCommand(..), commands, runSqlM) where
 
 import Data.Char (toLower)
 import qualified Data.Conduit.Combinators as C
-import Data.Functor.Compose (Compose(..))
 import Data.Foldable (asum)
 import Data.IntervalSet (IntervalSet)
 import qualified Data.IntervalSet as IS
