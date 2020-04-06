@@ -158,16 +158,16 @@ outputSink = do
       unpagedOutput
 
     outputPager :: ConduitT Text Void SqlM ()
-    outputPager = do
+    outputPager = C.linesUnbounded .| do
         maybeHeight <- liftIO $ fmap height <$> hSize stdout
-        initialText <- case maybeHeight of
-            Nothing -> return ""
-            Just n -> C.linesUnbounded .| C.isolate (n-1) .| C.unlines .| C.fold
+        initialLines <- case maybeHeight of
+            Nothing -> return []
+            Just n -> C.isolate (n-1) .| C.foldl (flip (:)) []
 
         hasMoreText <- C.peek
-        C.leftover initialText
+        mapM_ C.leftover initialLines
 
-        case hasMoreText of
+        C.unlines .| case hasMoreText of
             Nothing -> unpagedOutput
             Just _ -> findPager >>= maybe fallback pagerConduit
 
