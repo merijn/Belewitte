@@ -17,7 +17,8 @@ import Core
 import FormattedOutput (renderOutput, renderRegionOutput)
 import InteractiveInput
 import OptionParsers
-import Query (Query(..), explainSqlQuery, runSqlQueryConduit, streamQuery)
+import Query (Query(..))
+import qualified Query
 import Schema (PersistValue(..))
 import VariantQuery (VariantInfo, variantInfoQuery)
 
@@ -90,7 +91,7 @@ debugQueryCommand name flags = CommandGroupWithFlags CommandInfo
     , commandDesc = "Debug commands for: " ++ name
     }
     flags
-    [explainQueryCommand, queryCommand, timeQueryCommand]
+    [explainQueryCommand, countQueryCommand, queryCommand, timeQueryCommand]
 
 explainQueryCommand :: Command (DebugQuery -> SqlM ())
 explainQueryCommand = SingleCommand CommandInfo
@@ -103,8 +104,21 @@ explainQueryCommand = SingleCommand CommandInfo
     explainDebugQuery :: DebugQuery -> SqlM ()
     explainDebugQuery (DebugQuery getQuery) = do
         query <- getQuery
-        explanation <- explainSqlQuery query
+        explanation <- Query.explainSqlQuery query
         renderOutput $ C.yield explanation
+
+countQueryCommand :: Command (DebugQuery -> SqlM ())
+countQueryCommand = SingleCommand CommandInfo
+    { commandName = "count"
+    , commandHeaderDesc = "count results"
+    , commandDesc = "Show the query result count."
+    }
+    $ pure debugQuery
+  where
+    debugQuery :: DebugQuery -> SqlM ()
+    debugQuery (DebugQuery getQuery) = do
+        query <- getQuery
+        Query.runSqlQueryCount query >>= liftIO . print
 
 queryCommand :: Command (DebugQuery -> SqlM ())
 queryCommand = SingleCommand CommandInfo
@@ -118,7 +132,7 @@ queryCommand = SingleCommand CommandInfo
     debugQuery (DebugQuery getQuery) = do
         query <- getQuery
         renderRegionOutput $
-            streamQuery query .| C.map showText .| C.unlines
+            Query.streamQuery query .| C.map showText .| C.unlines
 
 timeQueryCommand :: Command (DebugQuery -> SqlM ())
 timeQueryCommand = SingleCommand CommandInfo
@@ -131,7 +145,7 @@ timeQueryCommand = SingleCommand CommandInfo
     timeQuery :: DebugQuery -> SqlM ()
     timeQuery (DebugQuery getQuery) = do
         query <- getQuery
-        (timing, _) <- withTime $ runSqlQueryConduit query C.await
+        (timing, _) <- withTime $ Query.runSqlQueryConduit query C.await
         liftIO . putStrLn $ "Query took: " ++ showGFloat (Just 3) timing "s"
 
 toQuery :: [Text] -> Maybe (Query [PersistValue])
@@ -151,7 +165,7 @@ testQuery = do
         Nothing -> return ()
         Just query -> do
             lift . renderRegionOutput $
-                streamQuery query .| C.map renderRow .| C.unlines
+                Query.streamQuery query .| C.map renderRow .| C.unlines
             liftIO $ putStrLn ""
             testQuery
   where
@@ -189,6 +203,6 @@ explainQuery = do
         Nothing -> return ()
         Just query -> do
             lift $ do
-                explanation <- explainSqlQuery query
+                explanation <- Query.explainSqlQuery query
                 renderOutput $ C.yield explanation
             explainQuery
