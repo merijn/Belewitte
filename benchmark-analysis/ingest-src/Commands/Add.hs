@@ -9,6 +9,7 @@ import Control.Monad.Trans.Maybe (runMaybeT)
 import Data.Conduit ((.|), runConduit)
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Text as T
+import Data.Time.Clock (getCurrentTime)
 import System.Directory (doesFileExist)
 import System.FilePath (splitExtension, takeFileName)
 
@@ -99,13 +100,15 @@ addGraphs paths = do
     datasetTag <- withInteractiveLogging $
         getInteractive textInput "Dataset Tag"
 
+    ts <- liftIO getCurrentTime
+
     SqlTrans.runTransaction $ do
         datasetId <- SqlTrans.insert $ Dataset datasetTag
 
         runConduit $
             C.yieldMany paths
             .| C.concatMapM (lift . lift . filterGraphPaths)
-            .| C.mapM (insertGraph datasetId)
+            .| C.mapM (insertGraph ts datasetId)
             .| C.mapM_ insertVariants
   where
     filterGraphPaths
@@ -126,9 +129,9 @@ addGraphs paths = do
 
     insertGraph
         :: MonadSql m
-        => Key Dataset -> (String, String) -> Transaction m (Key Graph)
-    insertGraph datasetId (graphName, path) = SqlTrans.insert $
-        Graph (T.pack graphName) (T.pack path) Nothing datasetId
+        => UTCTime -> Key Dataset -> (String, String) -> Transaction m (Key Graph)
+    insertGraph ts datasetId (graphName, path) = SqlTrans.insert $
+        Graph (T.pack graphName) (T.pack path) Nothing datasetId ts
 
     insertVariants
         :: (MonadResource m, MonadSql m) => Key Graph -> Transaction m ()
@@ -136,7 +139,7 @@ addGraphs paths = do
         SqlTrans.selectSource [] [] $ C.mapM_ insertVariant
       where
         insertVariant :: MonadSql m => Entity VariantConfig -> Transaction m ()
-        insertVariant (Entity variantCfgId (VariantConfig algoId _ _ _)) =
+        insertVariant (Entity variantCfgId (VariantConfig algoId _ _ _ _)) =
             SqlTrans.insert_ $
                 Variant graphId variantCfgId algoId Nothing 0 False 0
 
@@ -166,11 +169,13 @@ addImplementation = withInteractiveLogging $ do
 
 addVariant :: Input SqlM ()
 addVariant = do
+    ts <- liftIO getCurrentTime
+
     (algoId, variantConfig) <- withInteractiveLogging $ do
         Entity algoId _ <- getInteractive algoInput "Algorithm Name"
         variantName <- getInteractive textInput "Variant Name"
         flags <- getInteractive optionalInput "Flags"
-        return $ (algoId, VariantConfig algoId variantName flags False)
+        return $ (algoId, VariantConfig algoId variantName flags False ts)
 
     SqlTrans.runTransaction $ do
         varCfgId <- SqlTrans.insert $ variantConfig

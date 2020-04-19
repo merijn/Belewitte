@@ -111,6 +111,7 @@ Library
                         Schema.GlobalVars
                         Schema.Graph
                         Schema.Graph.V0
+                        Schema.Graph.V1
                         Schema.Implementation
                         Schema.Indices
                         Schema.Model
@@ -140,6 +141,7 @@ Library
                         Schema.Variant.V1
                         Schema.Variant.V2
                         Schema.VariantConfig
+                        Schema.VariantConfig.V0
                         Schema.Version
                         Sql.Core
                         SQLiteExts

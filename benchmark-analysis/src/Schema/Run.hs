@@ -87,8 +87,8 @@ FROM (
          , Variant.id AS variantId
          , TotalTimer.implId
          , MAX(MAX
-            ( IFNULL(TotalTimer.timestamp, datetime("now"))
-            , IFNULL(StepTimer.timestamp, datetime("now"))
+            ( IFNULL(TotalTimer.timestamp, strftime('%Y-%m-%dT%H:%M:%f', "now"))
+            , IFNULL(StepTimer.timestamp, strftime('%Y-%m-%dT%H:%M:%f', "now"))
             )) AS timestamp
          , MIN(TotalTimer.wrongResult ISNULL AND StepTimer.wrongResult ISNULL)
            AS validated

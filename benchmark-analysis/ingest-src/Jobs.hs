@@ -99,8 +99,8 @@ variantToPropertyJob
             | otherwise = Just step
 
     yieldJob = do
-        Graph _ path _ _ <- Sql.getJust graphId
-        VariantConfig algoId _ flags _ <- Sql.getJust variantCfgId
+        Graph _ path _ _ _ <- Sql.getJust graphId
+        VariantConfig algoId _ flags _ _ <- Sql.getJust variantCfgId
         Algorithm algo _ <- Sql.getJust algoId
         let job = makePropertyJob (algoId,graphId,hash,maxStep) varId Nothing $
                     [ "-a", algo, fromMaybe "" flags, path ]
