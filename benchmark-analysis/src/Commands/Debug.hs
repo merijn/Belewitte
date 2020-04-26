@@ -48,6 +48,13 @@ commands dumpCommand queryMap = HiddenGroup CommandInfo
             , commandDesc = "Interactively read queries from commandline"
             }
             [ SingleCommand CommandInfo
+                { commandName = "count"
+                , commandHeaderDesc = "print query result count to stdout"
+                , commandDesc =
+                  "Read query from commandline and print result count to stdout"
+                }
+                $ pure (runInput countQuery)
+            , SingleCommand CommandInfo
                 { commandName = "explain"
                 , commandHeaderDesc = "print query explanation to stdout"
                 , commandDesc =
@@ -61,6 +68,14 @@ commands dumpCommand queryMap = HiddenGroup CommandInfo
                   "Read query from commandline and print results to stdout"
                 }
                 $ pure (runInput testQuery)
+            , SingleCommand CommandInfo
+                { commandName = "time"
+                , commandHeaderDesc = "print query time to stdout"
+                , commandDesc =
+                  "Read query from commandline and print the time it takes \
+                  \to stdout"
+                }
+                $ pure (runInput timeQuery)
             ]
         ] ++ buildQueryList debugQueryCommand
 
@@ -140,10 +155,10 @@ timeQueryCommand = SingleCommand CommandInfo
     , commandHeaderDesc = "time query"
     , commandDesc = "Time how long it takes to run query."
     }
-    $ pure timeQuery
+    $ pure debugQuery
   where
-    timeQuery :: DebugQuery -> SqlM ()
-    timeQuery (DebugQuery getQuery) = do
+    debugQuery :: DebugQuery -> SqlM ()
+    debugQuery (DebugQuery getQuery) = do
         query <- getQuery
         (timing, _) <- withTime $ Query.runSqlQueryConduit query C.await
         liftIO . putStrLn $ "Query took: " ++ showGFloat (Just 3) timing "s"
@@ -196,6 +211,16 @@ testQuery = do
         PersistArray l -> renderSeparatedList ", " persistValueToText l
         PersistDbSpecific bs -> encodeBase64 bs
 
+countQuery :: Input SqlM ()
+countQuery = do
+    mQuery <- toQuery <$> getManyInteractive textInput "SQL Query"
+    case mQuery of
+        Nothing -> return ()
+        Just query -> do
+            lift $ Query.runSqlQueryCount query >>= liftIO . print
+            liftIO $ putStrLn ""
+            countQuery
+
 explainQuery :: Input SqlM ()
 explainQuery = do
     mQuery <- toQuery <$> getManyInteractive textInput "SQL Query"
@@ -204,5 +229,19 @@ explainQuery = do
         Just query -> do
             lift $ do
                 explanation <- Query.explainSqlQuery query
-                renderOutput $ C.yield explanation
+                renderOutput $ do
+                    C.yield explanation
+                    C.yield "\n"
             explainQuery
+
+timeQuery :: Input SqlM ()
+timeQuery = do
+    mQuery <- toQuery <$> getManyInteractive textInput "SQL Query"
+    case mQuery of
+        Nothing -> return ()
+        Just query -> do
+            (timing, _) <- lift . withTime $
+                Query.runSqlQueryConduit query C.await
+            liftIO . putStrLn $
+                "Query took: " ++ showGFloat (Just 3) timing "s\n"
+            timeQuery
