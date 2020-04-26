@@ -53,7 +53,7 @@ validationVariantQuery platformId = Query{..}
 
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
-        => [PersistValue] -> m (Job ValidationVariant)
+        => [PersistValue] -> m (Maybe (Job ValidationVariant))
     convert [ PersistInt64 (toSqlKey -> validationAlgorithmId)
             , PersistText algoName
             , PersistInt64 (toSqlKey -> validationVariantId)
@@ -61,7 +61,7 @@ validationVariantQuery platformId = Query{..}
             , PersistInt64 validationMissingCount
             , (fromPersistValue -> Right variantFlags)
             , PersistText graphPath
-            ] = return $ makeTimingJob ValidationVariant{..}
+            ] = return . Just $ makeTimingJob ValidationVariant{..}
                                  validationVariantId
                                  Nothing
                                  ("-k switch" : validationArgs)
@@ -120,12 +120,12 @@ validationRunQuery ValidationVariant{..} platformId = Query{..}
 
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
-        => [PersistValue] -> m (MissingRun (Key Run))
+        => [PersistValue] -> m (Maybe (MissingRun (Key Run)))
     convert [ PersistInt64 (toSqlKey -> missingRunImplId)
             , PersistText missingRunImplName
             , (fromPersistValue -> Right implFlags)
             , PersistInt64 (toSqlKey -> missingRunExtraInfo)
-            ] = return $ MissingRun{..}
+            ] = return $ Just MissingRun{..}
       where
         implArgs = fromMaybe ("-k " <> missingRunImplName) implFlags
         missingRunAlgorithmId = validationAlgorithmId
@@ -168,7 +168,7 @@ missingBenchmarkQuery runConfigId = Query{..}
 
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
-        => [PersistValue] -> m (MissingRun ExtraVariantInfo)
+        => [PersistValue] -> m (Maybe (MissingRun ExtraVariantInfo))
     convert [ PersistInt64 numRepeats
             , PersistText graphPath
             , PersistInt64 (toSqlKey -> missingRunAlgorithmId)
@@ -180,7 +180,7 @@ missingBenchmarkQuery runConfigId = Query{..}
             , PersistInt64 (toSqlKey -> missingRunImplId)
             , PersistText missingRunImplName
             , (fromPersistValue -> Right implFlags)
-            ] = return $ MissingRun{..}
+            ] = return $ Just MissingRun{..}
       where
         missingRunExtraInfo = ExtraVariantInfo{..}
         missingRunArgs =

@@ -267,10 +267,10 @@ FROM #{table}
 
     convert
         :: (MonadIO n, MonadLogger n, MonadThrow n)
-        => [PersistValue] -> n (Avg, Max)
+        => [PersistValue] -> n (Maybe (Avg, Max))
     convert [avgPersistVal, maxPersistVal]
         | Right avgVal <- fromPersistValue avgPersistVal
         , Right maxVal <- fromPersistValue maxPersistVal
-        = return (Avg avgVal, Max maxVal)
+        = return $ Just (Avg avgVal, Max maxVal)
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
         [SqlInt64, SqlInt64]

@@ -40,13 +40,13 @@ timePlotQuery algoId platformId commitId variants = Query{..}
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
         => [PersistValue]
-        -> m (Text, (Vector ImplTiming, Vector ImplTiming))
+        -> m (Maybe (Text, (Vector ImplTiming, Vector ImplTiming)))
     convert [ PersistText graph
             , PersistByteString (byteStringToVector -> implTimings)
             , externalTimings
             ]
             | Just extImplTimings <- maybeExternalTimings
-            = return $ (graph, (implTimings, extImplTimings))
+            = return $ Just (graph, (implTimings, extImplTimings))
       where
         maybeExternalTimings :: Maybe (Vector ImplTiming)
         maybeExternalTimings = case externalTimings of
@@ -175,10 +175,10 @@ levelTimePlotQuery platformId commitId variant = Query{..}
 
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
-        => [PersistValue] -> m (Int64, Vector ImplTiming)
+        => [PersistValue] -> m (Maybe (Int64, Vector ImplTiming))
     convert [ PersistInt64 stepId
             , PersistByteString (byteStringToVector -> timings)
-            ] = return $ (stepId, timings)
+            ] = return $ Just (stepId, timings)
 
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
         [ SqlInt64, SqlBlob ]

@@ -40,8 +40,9 @@ getDistinctFieldQuery entityField = Sql.runTransaction $ do
     params = []
 
     convert
-        :: (MonadIO n, MonadLogger n, MonadThrow n) => [PersistValue] -> n a
-    convert [v] | Right val <- Sqlite.fromPersistValue v = return val
+        :: (MonadIO n, MonadLogger n, MonadThrow n)
+        => [PersistValue] -> n (Maybe a)
+    convert [v] | Right val <- Sqlite.fromPersistValue v = return $ Just val
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
         [Sqlite.sqlType (Proxy :: Proxy a)]
 
@@ -71,8 +72,9 @@ WHERE #{table}.#{field} LIKE (? || '%')
     params = [ toPersistValue txt]
 
     convert
-        :: (MonadIO n, MonadLogger n, MonadThrow n) => [PersistValue] -> n a
-    convert [v] | Right val <- Sqlite.fromPersistValue v = return val
+        :: (MonadIO n, MonadLogger n, MonadThrow n)
+        => [PersistValue] -> n (Maybe a)
+    convert [v] | Right val <- Sqlite.fromPersistValue v = return $ Just val
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
         [Sqlite.sqlType (Proxy :: Proxy a)]
 
@@ -96,7 +98,7 @@ WHERE algorithmId = ? AND (algorithmVersion LIKE (? || '%') OR ? IS NULL)
   where
     convert
         :: (MonadIO n, MonadLogger n, MonadThrow n)
-        => [PersistValue] -> n CommitId
-    convert [v] | Right val <- Sqlite.fromPersistValue v = return val
+        => [PersistValue] -> n (Maybe CommitId)
+    convert [v] | Right val <- Sqlite.fromPersistValue v = return $ Just val
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
         [Sqlite.sqlType (Proxy :: Proxy CommitId)]

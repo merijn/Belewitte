@@ -95,7 +95,7 @@ stepInfoQuery StepInfoConfig
 
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
-        => [PersistValue] -> m StepInfo
+        => [PersistValue] -> m (Maybe StepInfo)
     convert [ PersistInt64 (toSqlKey -> stepVariantId)
             , PersistInt64 stepId
             , PersistInt64 stepBestImpl
@@ -104,7 +104,7 @@ stepInfoQuery StepInfoConfig
             , rawStepProps
             ]
             | Just stepProps <- maybeStepProps
-            = return $ StepInfo{..}
+            = return $ Just StepInfo{..}
       where
         maybeStepProps = case rawStepProps of
             PersistNull -> Just graphProps

@@ -67,7 +67,7 @@ variantInfoQuery VariantInfoConfig
 
     convert
         :: (MonadIO m, MonadLogger m, MonadThrow m)
-        => [PersistValue] -> m VariantInfo
+        => [PersistValue] -> m (Maybe VariantInfo)
     convert [ PersistInt64 (toSqlKey -> variantId)
             , PersistDouble variantOptimal
             , PersistDouble variantBestNonSwitching
@@ -75,7 +75,7 @@ variantInfoQuery VariantInfoConfig
             , externalTimings
             ]
             | Just variantExternalTimings <- maybeExternalTimings
-            = return VariantInfo{..}
+            = return $ Just VariantInfo{..}
       where
         maybeExternalTimings :: Maybe (Vector ImplTiming)
         maybeExternalTimings = case externalTimings of

@@ -47,10 +47,10 @@ rawGetGlobalVar run var = do
 
     convert
         :: (MonadIO n, MonadLogger n, MonadThrow n)
-        => [PersistValue] -> n a
+        => [PersistValue] -> n (Maybe a)
     convert [sqlResult]
         | Right result <- fromPersistValue sqlResult
-        = return result
+        = return $ Just result
 
     convert actualValues = logThrowM $ QueryResultUnparseable actualValues
         [ sqlType (Proxy :: Proxy a) ]

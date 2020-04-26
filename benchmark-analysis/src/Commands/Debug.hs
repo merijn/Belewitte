@@ -169,7 +169,7 @@ toQuery sqlLines = Just $ Query
     { queryName = "Interactive"
     , commonTableExpressions = []
     , params = []
-    , convert = return
+    , convert = return . Just
     , queryText = T.unlines sqlLines
     }
 

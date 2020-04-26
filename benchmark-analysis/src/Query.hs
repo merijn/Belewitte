@@ -54,12 +54,12 @@ data Query r =
     , commonTableExpressions :: [CTE]
     , params :: [PersistValue]
     , convert :: forall m . (MonadIO m, MonadLogger m, MonadThrow m)
-              => [PersistValue] -> m r
+              => [PersistValue] -> m (Maybe r)
     , queryText :: Text
     }
 
 instance Functor Query where
-    fmap f query@Query{convert} = query { convert = fmap f . convert }
+    fmap f query@Query{convert} = query { convert = fmap (fmap f) . convert }
 
 toQueryText :: Query r -> Text
 toQueryText Query{..} = mconcat $
@@ -94,13 +94,13 @@ explainSqlQuery originalQuery = Sql.runRegionConduit $
   where
     explain
         :: (MonadIO m, MonadLogger m, MonadThrow m)
-        => [PersistValue] -> m (Int64, Int64, Text)
+        => [PersistValue] -> m (Maybe (Int64, Int64, Text))
     explain
         [ PersistInt64 nodeId
         , PersistInt64 parentId
         , PersistInt64 _
         , PersistText t
-        ] = return (parentId, nodeId, t)
+        ] = return $ Just (parentId, nodeId, t)
     explain actualValues = logThrowM $ QueryResultUnparseable actualValues
         [SqlInt64, SqlInt64, SqlInt64, SqlString]
 
@@ -170,7 +170,7 @@ runRawSqlQuery
     => Explain -> Query r -> ConduitT i r (Region m) ()
 runRawSqlQuery isExplain query@Query{convert,params} = do
     (timing, r) <- withTime $
-        Sql.conduitQuery queryText queryParams .| C.mapM convert
+        Sql.conduitQuery queryText queryParams .| C.mapMaybeM convert
 
     let formattedTime :: Text
         formattedTime = T.pack $ showGFloat (Just 3) timing "s"
@@ -197,7 +197,7 @@ runSqlQueryCount originalQuery = do
         { queryText =
             "SELECT COUNT(*) FROM (" <> queryText originalQuery <> ")"
         , convert = \case
-            [PersistInt64 n] -> return $ fromIntegral n
+            [PersistInt64 n] -> return . Just $ fromIntegral n
             actualValues -> logThrowM $ QueryResultUnparseable actualValues
                 [SqlInt64]
         }
