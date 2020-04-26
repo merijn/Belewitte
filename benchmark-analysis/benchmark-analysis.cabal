@@ -149,6 +149,7 @@ Library
                         Types
 
   C-Sources:            cbits/check_unique.c
+                        cbits/count_transitions.c
                         cbits/key_value_vector.c
                         cbits/min_key.c
                         cbits/pcg_basic.c

@@ -14,6 +14,11 @@ void check_unqique_finalise(sqlite3_context *);
 
 bool compare_values(int*, sqlite3_value*, sqlite3_value*);
 
+void count_transitions_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **);
+void count_transitions_finalise(sqlite3_context *ctxt);
+void count_transitions_value(sqlite3_context *ctxt);
+void count_transitions_inverse(sqlite3_context *ctxt, int nArgs, sqlite3_value **);
+
 void min_key_step(sqlite3_context *, int nArgs, sqlite3_value **);
 void min_key_finalise(sqlite3_context *);
 
