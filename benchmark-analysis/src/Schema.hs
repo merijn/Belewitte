@@ -83,7 +83,7 @@ import Schema.Run hiding (migrations, schema, schema')
 import qualified Schema.Run as Run
 import Schema.RunConfig hiding (migrations, schema)
 import qualified Schema.RunConfig as RunConfig
-import Schema.Timers hiding (migrations, schema)
+import Schema.Timers hiding (migrations, schema, schema')
 import qualified Schema.Timers as Timers
 import Schema.UnknownPredictions hiding (migrations, schema, schema')
 import qualified Schema.UnknownPredictions as UnknownPredictions

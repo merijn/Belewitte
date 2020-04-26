@@ -277,7 +277,7 @@ processTiming runConfigId commit result@Result{..} = do
             ]
 
     insertTiming runId (StepTiming n Timing{..}) = SqlTrans.insert_ $
-        StepTimer runId n name minTime avgTime maxTime stddev
+        StepTimer runId resultVariant n name minTime avgTime maxTime stddev
 
 data Validation = Validation
     { cleanData :: SqlM ()

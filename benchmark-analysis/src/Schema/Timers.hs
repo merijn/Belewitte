@@ -18,13 +18,15 @@ import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
 import Pretty.Fields
-import Schema.Utils (EntityDef, Int64, MonadSql, Transaction, (.>))
+import Schema.Utils (EntityDef, ForeignDef, Int64, MonadSql, Transaction, (.>))
 import qualified Schema.Utils as Utils
 import qualified Schema.Timers.V0 as V0
+import qualified Schema.Timers.V1 as V1
 
 import Schema.Run (RunId)
+import Schema.Variant (VariantId)
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
+TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema'"] [persistUpperCase|
 TotalTimer
     runId RunId
     name Text
@@ -37,6 +39,7 @@ TotalTimer
 
 StepTimer
     runId RunId
+    variantId VariantId
     stepId Int
     name Text
     minTime Double
@@ -58,7 +61,8 @@ instance PrettyFields TotalTimer where
 
 instance PrettyFields StepTimer where
     prettyFieldInfo = ("Run", idField StepTimerRunId) :|
-        [ ("Step", StepTimerStepId `fieldVia` prettyShow)
+        [ ("Variant", idField StepTimerVariantId)
+        , ("Step", StepTimerStepId `fieldVia` prettyShow)
         , ("Name", textField StepTimerName)
         , ("Min. Time", StepTimerMinTime `fieldVia` prettyDouble)
         , ("Avg. Time", StepTimerAvgTime `fieldVia` prettyDouble)
@@ -66,28 +70,35 @@ instance PrettyFields StepTimer where
         , ("Std. Dev.", StepTimerStdDev `fieldVia` prettyDouble)
         ]
 
+schema :: [EntityDef]
+schema = Utils.addForeignRef "StepTimer" run $ schema'
+  where
+    run :: ForeignDef
+    run = Utils.mkForeignRef "Run"
+        [ ("runId", "id"), ("variantId", "variantId") ]
+
 migrations :: MonadSql m => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup
     [ 1 .> V0.schema $ do
         Utils.executeSql [i|
-ALTER TABLE 'TotalTimer' RENAME COLUMN 'gpuId' TO 'platformId'
+ALTER TABLE "TotalTimer" RENAME COLUMN "gpuId" TO "platformId"
 |]
         Utils.executeSql [i|
-ALTER TABLE 'StepTimer' RENAME COLUMN 'gpuId' TO 'platformId'
+ALTER TABLE "StepTimer" RENAME COLUMN "gpuId" TO "platformId"
 |]
-    , 6 .> schema $ do
+    , 6 .> V1.schema $ do
         Utils.executeSql [i|
-ALTER TABLE 'TotalTimer'
-ADD COLUMN 'runId' INTEGER REFERENCES 'Run'
-|]
-
-        Utils.executeSql [i|
-ALTER TABLE 'StepTimer'
-ADD COLUMN 'runId' INTEGER REFERENCES 'Run'
+ALTER TABLE "TotalTimer"
+ADD COLUMN "runId" INTEGER REFERENCES "Run"
 |]
 
         Utils.executeSql [i|
-REPLACE INTO 'TotalTimer'
+ALTER TABLE "StepTimer"
+ADD COLUMN "runId" INTEGER REFERENCES "Run"
+|]
+
+        Utils.executeSql [i|
+REPLACE INTO "TotalTimer"
 SELECT TotalTimer.platformId
      , TotalTimer.variantId
      , TotalTimer.implId
@@ -119,7 +130,7 @@ AND RunConfig.datasetId = Graph.datasetId
 |]
 
         Utils.executeSql [i|
-REPLACE INTO 'StepTimer'
+REPLACE INTO "StepTimer"
 SELECT StepTimer.platformId
      , StepTimer.variantId
      , StepTimer.stepId
@@ -149,5 +160,25 @@ ON  RunConfig.id = Run.runConfigId
 AND RunConfig.platformId = StepTimer.platformId
 AND RunConfig.algorithmId = Variant.algorithmId
 AND RunConfig.datasetId = Graph.datasetId
+|]
+    , 22 .> schema $ do
+        Utils.executeSql [i|
+ALTER TABLE "StepTimer"
+ADD COLUMN "variantId" INTEGER REFERENCES "Variant"
+|]
+
+        Utils.executeSql [i|
+REPLACE INTO "StepTimer"
+SELECT StepTimer.runId
+     , StepTimer.stepId
+     , StepTimer.name
+     , StepTimer.minTime
+     , StepTimer.avgTime
+     , StepTimer.maxTime
+     , StepTimer.stdDev
+     , Run.variantId
+FROM StepTimer
+INNER JOIN Run
+ON Run.id = StepTimer.runId
 |]
     ]

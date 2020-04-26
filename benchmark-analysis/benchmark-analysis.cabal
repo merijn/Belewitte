@@ -131,6 +131,7 @@ Library
                         Schema.RunConfig.V0
                         Schema.Timers
                         Schema.Timers.V0
+                        Schema.Timers.V1
                         Schema.UnknownPredictions
                         Schema.UnknownPredictions.V0
                         Schema.UnknownPredictions.V1

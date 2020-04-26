@@ -72,4 +72,13 @@ WHERE ("NEW"."legacyTrainFraction" = 0) =
     );
 END
 |]
+        , 21 <=..<= currentVersion .= [i|
+CREATE UNIQUE INDEX IF NOT EXISTS "ForeignUniqueRun"
+ON "Run"("id", "variantId")
+|]
+
+        , 21 <=..<= currentVersion .= [i|
+CREATE INDEX IF NOT EXISTS "StepInfoQueryIndex"
+ON "StepTimer"("variantId", "stepId")
+|]
         ]
