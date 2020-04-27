@@ -160,8 +160,17 @@ timeQueryCommand = SingleCommand CommandInfo
     debugQuery :: DebugQuery -> SqlM ()
     debugQuery (DebugQuery getQuery) = do
         query <- getQuery
-        (timing, _) <- withTime $ Query.runSqlQueryConduit query C.await
-        liftIO . putStrLn $ "Query took: " ++ showGFloat (Just 3) timing "s"
+        (startTiming, _) <- withTime $
+            Query.runSqlQueryConduit query C.await
+
+        liftIO . putStrLn $
+            "First row took: " ++ showGFloat (Just 3) startTiming "s\n"
+
+        (totalTiming, _) <- withTime $
+            Query.runSqlQueryConduit query C.sinkNull
+
+        liftIO . putStrLn $
+            "Query took: " ++ showGFloat (Just 3) totalTiming "s\n"
 
 toQuery :: [Text] -> Maybe (Query [PersistValue])
 toQuery [] = Nothing
@@ -229,9 +238,8 @@ explainQuery = do
         Just query -> do
             lift $ do
                 explanation <- Query.explainSqlQuery query
-                renderOutput $ do
-                    C.yield explanation
-                    C.yield "\n"
+                renderOutput $ C.yield explanation
+            liftIO $ putStrLn ""
             explainQuery
 
 timeQuery :: Input SqlM ()
@@ -240,8 +248,16 @@ timeQuery = do
     case mQuery of
         Nothing -> return ()
         Just query -> do
-            (timing, _) <- lift . withTime $
+            (startTiming, _) <- lift . withTime $
                 Query.runSqlQueryConduit query C.await
+
             liftIO . putStrLn $
-                "Query took: " ++ showGFloat (Just 3) timing "s\n"
+                "First row took: " ++ showGFloat (Just 3) startTiming "s\n"
+
+            (totalTiming, _) <- lift . withTime $
+                Query.runSqlQueryConduit query C.sinkNull
+
+            liftIO . putStrLn $
+                "Query took: " ++ showGFloat (Just 3) totalTiming "s\n"
+
             timeQuery
