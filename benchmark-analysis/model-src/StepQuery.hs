@@ -138,8 +138,7 @@ GraphVariants AS (
          , COUNT() OVER graphTransitions AS variantCount
     FROM Graph
 
-    -- CROSS JOIN to enforce JOIN ordering
-    CROSS JOIN Variant
+    INNER JOIN Variant
     ON Variant.graphId = Graph.id
 
     INNER JOIN VariantConfig
@@ -171,7 +170,7 @@ Variants AS (
             OVER (ORDER BY graphId)
             AS keepGraph
           , random_sample(1, ?, variantCount, ?)
-            OVER (ORDER BY graphId, variantId)
+            OVER (ORDER BY variantId)
             AS keepVariant
     FROM GraphVariants
     ORDER BY variantId
