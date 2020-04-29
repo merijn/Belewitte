@@ -106,7 +106,22 @@ debugQueryCommand name flags = CommandGroupWithFlags CommandInfo
     , commandDesc = "Debug commands for: " ++ name
     }
     flags
-    [explainQueryCommand, countQueryCommand, queryCommand, timeQueryCommand]
+    [ logQueryCommand, explainQueryCommand, countQueryCommand, queryCommand
+    , timeQueryCommand
+    ]
+
+logQueryCommand :: Command (DebugQuery -> SqlM ())
+logQueryCommand = SingleCommand CommandInfo
+    { commandName = "log"
+    , commandHeaderDesc = "show query"
+    , commandDesc = "Show the query"
+    }
+    $ pure logDebugQuery
+  where
+    logDebugQuery :: DebugQuery -> SqlM ()
+    logDebugQuery (DebugQuery getQuery) = do
+        query <- getQuery
+        renderOutput . C.yield $ Query.toQueryText query
 
 explainQueryCommand :: Command (DebugQuery -> SqlM ())
 explainQueryCommand = SingleCommand CommandInfo

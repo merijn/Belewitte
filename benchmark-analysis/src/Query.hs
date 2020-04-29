@@ -21,6 +21,7 @@ module Query
     , runSqlQueryConduit
     , runSqlQueryCount
     , streamQuery
+    , toQueryText
     ) where
 
 import Control.Monad ((>=>), void, when)
