@@ -99,7 +99,7 @@ commands dumpCommand queryMap = HiddenGroup CommandInfo
     suffixParser = argument (maybeReader suffixReader) . mconcat $
         [ metavar "SUFFIX" ]
 
-debugQueryCommand :: String -> Parser (DebugQuery) -> Command (SqlM ())
+debugQueryCommand :: String -> Parser DebugQuery -> Command (SqlM ())
 debugQueryCommand name flags = CommandGroupWithFlags CommandInfo
     { commandName = name
     , commandHeaderDesc = "debug commands for: " ++ name
