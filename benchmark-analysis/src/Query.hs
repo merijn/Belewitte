@@ -153,15 +153,16 @@ runLoggingSqlQuery
        )
     => Query r -> ConduitT i r (Region m) ()
 runLoggingSqlQuery query = do
-    shouldExplain <- shouldExplainQuery (queryName query)
+    shouldLog <- shouldLogQuery (queryName query)
 
-    when shouldExplain $ do
+    when shouldLog $ do
         logQuery (queryName query) . mconcat $
             [ toQueryText query
             , "\n"
             ]
 
-        explainSqlQuery query >>= logExplain (queryName query)
+    shouldExplain <- shouldExplainQuery (queryName query)
+    when shouldExplain $ explainSqlQuery query >>= logExplain (queryName query)
 
     runRawSqlQuery NoExplain query
 

@@ -80,8 +80,8 @@ runCommandRoot CommandRoot{..} work progName = do
 
     optionParser =
       Options <$> databaseOption <*> vacuumOption <*> verbosityOption
-              <*> debugOption <*> explainOption <*> migrateOption
-              <*> pagerOption <*> parser
+              <*> debugOption <*> explainOption <*> queryLogOption
+              <*> migrateOption <*> pagerOption <*> parser
 
 runSqlM :: CommandRoot a -> (a -> SqlM ()) -> IO ()
 runSqlM root work = getProgName >>= runCommandRoot root work
@@ -100,6 +100,12 @@ debugOption = textSetOption . mconcat $
 explainOption :: Parser (Maybe (Set Text))
 explainOption = textSetOption . mconcat $
     [ metavar "QUERY", long "explain"
+    , help "Log query plans for specified names to stdout."
+    ]
+
+queryLogOption :: Parser (Maybe (Set Text))
+queryLogOption = textSetOption . mconcat $
+    [ metavar "QUERY", long "log-query"
     , help "Log query plans for specified names to stdout."
     ]
 

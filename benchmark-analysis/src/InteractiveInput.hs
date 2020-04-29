@@ -62,6 +62,7 @@ newtype Input m a = Input { unInput :: InputT (ReaderT (Completer m) m) a }
 
 instance MonadExplain m => MonadExplain (Input m) where
     shouldExplainQuery = lift . shouldExplainQuery
+    shouldLogQuery = lift . shouldLogQuery
 
 instance MonadResource m => MonadResource (Input m) where
     liftResourceT = Input . lift . liftResourceT

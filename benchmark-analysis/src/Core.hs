@@ -96,6 +96,7 @@ import SQLiteExts
 
 data Config = Config
     { explainQuerySet :: Maybe (Set Text)
+    , logQuerySet :: Maybe (Set Text)
     , pagerValue :: Pager
     , logWriteRef :: IORef (ByteString -> IO ())
     , logFilterFun :: LogSource -> LogLevel -> Bool
@@ -183,6 +184,7 @@ data Options a =
     , logLevel :: LogLevel
     , debugPrefixes :: Maybe (Set Text)
     , explainSet :: Maybe (Set Text)
+    , logSet :: Maybe (Set Text)
     , migrateSchema :: Bool
     , pager :: Pager
     , task :: a
@@ -199,6 +201,7 @@ redirectLogging logFun (SqlM act) = SqlM $ do
 
 class Monad m => MonadExplain m where
     shouldExplainQuery :: Text -> m Bool
+    shouldLogQuery :: Text -> m Bool
 
 instance MonadExplain CoreM where
     shouldExplainQuery name = do
@@ -208,14 +211,24 @@ instance MonadExplain CoreM where
             Just names | S.member (T.toLower name) names -> return True
             _ -> return False
 
+    shouldLogQuery name = do
+        querySet <- asks logQuerySet
+        case querySet of
+            Nothing -> return True
+            Just names | S.member (T.toLower name) names -> return True
+            _ -> return False
+
 instance MonadExplain m => MonadExplain (Region m) where
     shouldExplainQuery = lift . shouldExplainQuery
+    shouldLogQuery = lift . shouldLogQuery
 
 instance MonadExplain SqlM where
     shouldExplainQuery = SqlM . lift . shouldExplainQuery
+    shouldLogQuery = SqlM . lift . shouldLogQuery
 
 instance MonadExplain m => MonadExplain (ConduitT a b m) where
     shouldExplainQuery = lift . shouldExplainQuery
+    shouldLogQuery = lift . shouldLogQuery
 
 stderrTerminalWidth :: IO (Maybe Int)
 stderrTerminalWidth = runMaybeT $ do
@@ -273,7 +286,7 @@ runSqlMWithOptions Options{..} work = do
         runStack ref (CoreM act) = runResourceT . runReaderT act $ config ref
 
         config :: IORef (ByteString -> IO ()) -> Config
-        config ref = Config explainSet pager ref logFilter
+        config ref = Config explainSet logSet pager ref logFilter
 
         runPool
             :: (MonadLogger m, MonadUnliftIO m, MonadThrow m)
