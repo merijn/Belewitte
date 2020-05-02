@@ -60,6 +60,7 @@ Common all
 
 Common exes
   GHC-Options:          -rtsopts -threaded -with-rtsopts=-qg
+  GHC-Prof-Options:     "-with-rtsopts=-qg -p -l-au"
 
 Common sqlite3exts
   Include-Dirs:         sqlite3exts
