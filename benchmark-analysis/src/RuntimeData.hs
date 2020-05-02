@@ -1,5 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 module RuntimeData
     ( getKernelExecutableMaybe
     , getKernelExecutable
@@ -12,10 +14,12 @@ module RuntimeData
 
 import Control.Monad (unless)
 import Control.Monad.Catch (MonadMask, MonadThrow, mask_)
-import Control.Monad.Logger (MonadLogger, logInfoN)
+import Control.Monad.Logger (MonadLogger, logInfoN, logWarnN)
 import Control.Monad.IO.Class (MonadIO(liftIO))
+import Control.Monad.Trans.Maybe (MaybeT(..))
 import Data.Bool (bool)
-import System.Directory (canonicalizePath, doesDirectoryExist, doesFileExist)
+import Data.Foldable (asum)
+import qualified System.Directory as Dir
 import System.FilePath ((</>))
 import qualified System.Posix.Files as Posix
 import System.Posix.IO (OpenMode(WriteOnly))
@@ -29,7 +33,7 @@ import Utils.Process
 getKernelExecutableMaybe :: MonadIO m => m (Maybe FilePath)
 getKernelExecutableMaybe = liftIO $ do
     exePath <- getDataFileName "runtime-data/kernel-runner"
-    bool Nothing (Just exePath) <$> doesFileExist exePath
+    bool Nothing (Just exePath) <$> Dir.doesFileExist exePath
 
 getKernelExecutable :: (MonadIO m, MonadLogger m, MonadThrow m) => m FilePath
 getKernelExecutable = getKernelExecutableMaybe >>= maybe raiseError return
@@ -39,12 +43,38 @@ getKernelExecutable = getKernelExecutableMaybe >>= maybe raiseError return
 getKernelLibPathMaybe :: MonadIO m => m (Maybe FilePath)
 getKernelLibPathMaybe = liftIO $ do
     libPath <- getDataFileName "runtime-data/kernels"
-    bool Nothing (Just libPath) <$> doesDirectoryExist libPath
+    bool Nothing (Just libPath) <$> Dir.doesDirectoryExist libPath
 
 getKernelLibPath :: (MonadIO m, MonadLogger m, MonadThrow m) => m FilePath
 getKernelLibPath = getKernelLibPathMaybe >>= maybe raiseError return
   where
     raiseError = logThrowM MissingKernelLibPath
+
+findVirtualEnv
+    :: forall m
+     . (MonadIO m, MonadLogger m, MonadMask m)
+    => m (FilePath, [String])
+findVirtualEnv = do
+    mResult <- runMaybeT $ asum
+        [ (,[]) <$> virtualEnv2_7
+        , virtualEnvWithPython "python2.7"
+        , virtualEnvWithPython "python2"
+        , do
+            logWarnN "Unable to find 'python2' executable, trying 'python'!"
+            virtualEnvWithPython "python"
+        ]
+    case mResult of
+        Just r -> return r
+        Nothing -> logThrowM MissingVirtualEnv
+  where
+    virtualEnv2_7 :: MaybeT m FilePath
+    virtualEnv2_7 = MaybeT . liftIO $ Dir.findExecutable "virtualenv-2.7"
+
+    virtualEnvWithPython :: String -> MaybeT m (FilePath, [String])
+    virtualEnvWithPython python = do
+        virtualEnvExe <- MaybeT . liftIO $ Dir.findExecutable "virtualenv"
+        pythonExe <- MaybeT . liftIO $ Dir.findExecutable python
+        return (virtualEnvExe, ["-p", pythonExe])
 
 getPythonScript
     :: (MonadIO m, MonadLogger m, MonadMask m)
@@ -52,20 +82,21 @@ getPythonScript
 getPythonScript script args = do
     (virtualenv, requirements) <- liftIO $ do
         symlinkPath <- getDataFileName "runtime-data/virtualenv"
-        virtualenv <- canonicalizePath symlinkPath
+        virtualenv <- Dir.canonicalizePath symlinkPath
 
         requirements <- getDataFileName "runtime-data/requirements.txt"
         return (virtualenv, requirements)
 
-    exists <- liftIO . doesFileExist $ virtualenv </> "bin" </> "python2.7"
+    exists <- liftIO . Dir.doesFileExist $ virtualenv </> "bin" </> "python2.7"
 
     unless exists $ do
         logInfoN $ "Creating virtualenv"
-        runProcess_ "virtualenv-2.7" [virtualenv]
+        (virtualEnvExe, virtualEnvArgs) <- findVirtualEnv
+        runProcess_ virtualEnvExe (virtualEnvArgs ++ [virtualenv])
 
     let initialisedFile = virtualenv </> "initialised"
 
-    virtualenvInitialised <- liftIO $ doesFileExist $ initialisedFile
+    virtualenvInitialised <- liftIO . Dir.doesFileExist $ initialisedFile
     unless virtualenvInitialised $ do
         logInfoN $ "Initialising virtualenv"
         pipExe <- liftIO $ getDataFileName "runtime-data/virtualenv/bin/pip"
