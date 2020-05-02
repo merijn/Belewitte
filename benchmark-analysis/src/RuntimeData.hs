@@ -12,19 +12,19 @@ module RuntimeData
     , getOutputChecker
     ) where
 
-import Control.Monad (unless)
-import Control.Monad.Catch (MonadMask, MonadThrow, mask_)
+import Control.Monad.Catch (MonadMask, MonadThrow, SomeException(..))
+import qualified Control.Monad.Catch as Catch
 import Control.Monad.Logger (MonadLogger, logInfoN, logWarnN)
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Trans.Maybe (MaybeT(..))
+import Crypto.Hash (Digest, SHA512, digestFromByteString)
+import Crypto.Hash.Conduit (hashFile)
 import Data.Bool (bool)
+import qualified Data.ByteArray as ByteArray (convert)
+import qualified Data.ByteString as BS
 import Data.Foldable (asum)
 import qualified System.Directory as Dir
 import System.FilePath ((</>))
-import qualified System.Posix.Files as Posix
-import System.Posix.IO (OpenMode(WriteOnly))
-import qualified System.Posix.IO as Posix
-import System.Posix.Types (Fd)
 
 import Exceptions
 import Paths_benchmark_analysis (getDataFileName)
@@ -76,6 +76,40 @@ findVirtualEnv = do
         pythonExe <- MaybeT . liftIO $ Dir.findExecutable python
         return (virtualEnvExe, ["-p", pythonExe])
 
+checkVirtualEnv
+    :: (MonadIO m, MonadLogger m, MonadMask m)
+    => FilePath -> FilePath -> m ()
+checkVirtualEnv virtualEnv requirements = do
+    (reqHash :: Digest SHA512) <- hashFile requirements
+    virtualVersion <- liftIO . Catch.try $ BS.readFile initialisedFile
+    case virtualVersion of
+        Right bs | digestFromByteString bs == Just reqHash -> return ()
+        Right _ -> do
+            logInfoN $ "Removing out of date virtualenv"
+            liftIO $ Dir.removeDirectoryRecursive virtualEnv
+            initVirtualEnv reqHash
+        Left (SomeException _) -> initVirtualEnv reqHash
+  where
+    initialisedFile :: FilePath
+    initialisedFile = virtualEnv </> "initialised"
+
+    initVirtualEnv
+        :: (MonadIO m, MonadLogger m, MonadMask m) => Digest SHA512 -> m ()
+    initVirtualEnv reqHash = do
+        logInfoN $ "Creating virtualenv"
+        (virtualEnvExe, virtualEnvArgs) <- findVirtualEnv
+        runProcess_ virtualEnvExe (virtualEnvArgs ++ [virtualEnv])
+
+        logInfoN $ "Initialising virtualenv"
+        pipExe <- liftIO $ getDataFileName "runtime-data/virtualenv/bin/pip"
+        runProcess_ pipExe ["install", "--upgrade", "pip"]
+        runProcess_ pipExe ["install", "-r", requirements]
+        liftIO $ BS.writeFile initialisedFile (ByteArray.convert reqHash)
+            `Catch.onError` tryRemoveFile initialisedFile
+
+    tryRemoveFile :: FilePath -> IO (Either SomeException ())
+    tryRemoveFile path = Catch.try $ Dir.removeFile path
+
 getPythonScript
     :: (MonadIO m, MonadLogger m, MonadMask m)
     => String -> [String] -> m CreateProcess
@@ -87,33 +121,12 @@ getPythonScript script args = do
         requirements <- getDataFileName "runtime-data/requirements.txt"
         return (virtualenv, requirements)
 
-    exists <- liftIO . Dir.doesFileExist $ virtualenv </> "bin" </> "python2.7"
-
-    unless exists $ do
-        logInfoN $ "Creating virtualenv"
-        (virtualEnvExe, virtualEnvArgs) <- findVirtualEnv
-        runProcess_ virtualEnvExe (virtualEnvArgs ++ [virtualenv])
-
-    let initialisedFile = virtualenv </> "initialised"
-
-    virtualenvInitialised <- liftIO . Dir.doesFileExist $ initialisedFile
-    unless virtualenvInitialised $ do
-        logInfoN $ "Initialising virtualenv"
-        pipExe <- liftIO $ getDataFileName "runtime-data/virtualenv/bin/pip"
-        runProcess_ pipExe ["install", "--upgrade", "pip"]
-        runProcess_ pipExe ["install", "-r", requirements]
-        mask_ . liftIO $ touchFile initialisedFile >>= Posix.closeFd
+    checkVirtualEnv virtualenv requirements
 
     liftIO $ do
         pythonPath <- getDataFileName $ "runtime-data/virtualenv/bin/python2.7"
         scriptPath <- getDataFileName $ "runtime-data/scripts" </> script
         return $ proc pythonPath (scriptPath : args)
-  where
-    touchFile :: MonadIO m => FilePath -> m Fd
-    touchFile path = liftIO $
-        Posix.openFd path WriteOnly (Just Posix.stdFileMode) flags
-      where
-        flags = Posix.defaultFileFlags{Posix.exclusive = True}
 
 getBarPlotScript
     :: (MonadIO m, MonadLogger m, MonadMask m) => [String] -> m CreateProcess
