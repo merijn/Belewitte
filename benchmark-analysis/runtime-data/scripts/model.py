@@ -47,6 +47,7 @@ class ResultReader(threading.Thread):
             self.outputs = ohe.fit_transform(self.outputs.reshape(-1,1)).toarray()
 
 thread = ResultReader(opts.resultsFd)
+thread.daemon = True
 thread.start()
 
 inputs = np.fromfile(stdin, dtype=np.float64, count=opts.numProps * opts.numEntries)
