@@ -79,7 +79,7 @@ stepInfoQuery StepInfoConfig
   , stepInfoSteps
   , stepInfoFilterIncomplete
   , stepInfoTimestamp
-  } = Query{..}
+  } = Query{convert = Filter converter, ..}
   where
     datasets :: Set Text
     datasets = maybe mempty (S.map showSqlKey) stepInfoDatasets
@@ -93,23 +93,21 @@ stepInfoQuery StepInfoConfig
         clauses = T.intercalate ", " . map clause . S.toAscList $ s
         clause t = "'" <> t <> "'"
 
-    convert
-        :: (MonadIO m, MonadLogger m, MonadThrow m)
-        => [PersistValue] -> m (Maybe StepInfo)
-    convert [ PersistInt64 (toSqlKey -> stepVariantId)
-            , PersistInt64 stepId
-            , PersistInt64 stepBestImpl
-            , PersistByteString (byteStringToVector -> stepTimings)
-            , PersistByteString (byteStringToVector -> graphProps)
-            , rawStepProps
-            , PersistInt64 ((/=0) -> keepRow)
-            ]
-            | Just stepProps <- maybeStepProps
-            = case stepInfoQueryMode of
-                All -> return $ Just StepInfo{..}
-                Train | keepRow -> return $ Just StepInfo{..}
-                Validate | not keepRow -> return $ Just StepInfo{..}
-                _ -> return Nothing
+    converter :: MonadConvert m => [PersistValue] -> m (Maybe StepInfo)
+    converter [ PersistInt64 (toSqlKey -> stepVariantId)
+              , PersistInt64 stepId
+              , PersistInt64 stepBestImpl
+              , PersistByteString (byteStringToVector -> stepTimings)
+              , PersistByteString (byteStringToVector -> graphProps)
+              , rawStepProps
+              , PersistInt64 ((/=0) -> keepRow)
+              ]
+              | Just stepProps <- maybeStepProps
+              = case stepInfoQueryMode of
+                  All -> return $ Just StepInfo{..}
+                  Train | keepRow -> return $ Just StepInfo{..}
+                  Validate | not keepRow -> return $ Just StepInfo{..}
+                  _ -> return Nothing
       where
         maybeStepProps = case rawStepProps of
             PersistNull -> Just graphProps
@@ -117,7 +115,7 @@ stepInfoQuery StepInfoConfig
                 Just $ graphProps <> stepProps
             _ -> Nothing
 
-    convert actualValues = logThrowM $ QueryResultUnparseable actualValues
+    converter actualValues = logThrowM $ QueryResultUnparseable actualValues
         [ SqlInt64, SqlInt64, SqlInt64, SqlBlob, SqlBlob, SqlBlob, SqlBool ]
 
     commonTableExpressions :: [CTE]

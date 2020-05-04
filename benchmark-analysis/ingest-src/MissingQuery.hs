@@ -46,25 +46,23 @@ data ValidationVariant = ValidationVariant
     } deriving (Show)
 
 validationVariantQuery :: Key Platform -> Query (Job ValidationVariant)
-validationVariantQuery platformId = Query{..}
+validationVariantQuery platformId = Query{convert = Simple converter, ..}
   where
     queryName :: Text
     queryName = "validationVariantQuery"
 
-    convert
-        :: (MonadIO m, MonadLogger m, MonadThrow m)
-        => [PersistValue] -> m (Maybe (Job ValidationVariant))
-    convert [ PersistInt64 (toSqlKey -> validationAlgorithmId)
-            , PersistText algoName
-            , PersistInt64 (toSqlKey -> validationVariantId)
-            , (fromPersistValue -> Right validationCommit)
-            , PersistInt64 validationMissingCount
-            , (fromPersistValue -> Right variantFlags)
-            , PersistText graphPath
-            ] = return . Just $ makeTimingJob ValidationVariant{..}
-                                 validationVariantId
-                                 Nothing
-                                 ("-k switch" : validationArgs)
+    converter :: MonadConvert m => [PersistValue] -> m (Job ValidationVariant)
+    converter [ PersistInt64 (toSqlKey -> validationAlgorithmId)
+              , PersistText algoName
+              , PersistInt64 (toSqlKey -> validationVariantId)
+              , (fromPersistValue -> Right validationCommit)
+              , PersistInt64 validationMissingCount
+              , (fromPersistValue -> Right variantFlags)
+              , PersistText graphPath
+              ] = return $ makeTimingJob ValidationVariant{..}
+                            validationVariantId
+                            Nothing
+                            ("-k switch" : validationArgs)
       where
         validationArgs =
           [ "-a " <> algoName
@@ -73,7 +71,7 @@ validationVariantQuery platformId = Query{..}
           , graphPath
           ]
 
-    convert actualValues = logThrowM $ QueryResultUnparseable actualValues
+    converter actualValues = logThrowM $ QueryResultUnparseable actualValues
         [ SqlInt64, SqlString, SqlInt64, SqlString
         , SqlInt64, SqlString, SqlString ]
 
@@ -113,26 +111,25 @@ ON Variant.graphId = Graph.id
 
 validationRunQuery
     :: ValidationVariant -> Key Platform -> Query (MissingRun (Key Run))
-validationRunQuery ValidationVariant{..} platformId = Query{..}
+validationRunQuery ValidationVariant{..} platformId =
+    Query{convert = Simple converter, ..}
   where
     queryName :: Text
     queryName = "validationRunQuery"
 
-    convert
-        :: (MonadIO m, MonadLogger m, MonadThrow m)
-        => [PersistValue] -> m (Maybe (MissingRun (Key Run)))
-    convert [ PersistInt64 (toSqlKey -> missingRunImplId)
-            , PersistText missingRunImplName
-            , (fromPersistValue -> Right implFlags)
-            , PersistInt64 (toSqlKey -> missingRunExtraInfo)
-            ] = return $ Just MissingRun{..}
+    converter :: MonadConvert m => [PersistValue] -> m (MissingRun (Key Run))
+    converter [ PersistInt64 (toSqlKey -> missingRunImplId)
+              , PersistText missingRunImplName
+              , (fromPersistValue -> Right implFlags)
+              , PersistInt64 (toSqlKey -> missingRunExtraInfo)
+              ] = return MissingRun{..}
       where
         implArgs = fromMaybe ("-k " <> missingRunImplName) implFlags
         missingRunAlgorithmId = validationAlgorithmId
         missingRunVariantId = validationVariantId
         missingRunArgs = implArgs : "--validate" : validationArgs
 
-    convert actualValues = logThrowM $ QueryResultUnparseable actualValues
+    converter actualValues = logThrowM $ QueryResultUnparseable actualValues
         [ SqlInt64, SqlString, SqlString, SqlInt64 ]
 
     commonTableExpressions :: [CTE]
@@ -161,26 +158,25 @@ WHERE RunConfig.platformId = ?
 |]
 
 missingBenchmarkQuery :: Key RunConfig -> Query (MissingRun ExtraVariantInfo)
-missingBenchmarkQuery runConfigId = Query{..}
+missingBenchmarkQuery runConfigId = Query{convert = Simple converter, ..}
   where
     queryName :: Text
     queryName = "missingBenchmarkQuery"
 
-    convert
-        :: (MonadIO m, MonadLogger m, MonadThrow m)
-        => [PersistValue] -> m (Maybe (MissingRun ExtraVariantInfo))
-    convert [ PersistInt64 numRepeats
-            , PersistText graphPath
-            , PersistInt64 (toSqlKey -> missingRunAlgorithmId)
-            , PersistText algoName
-            , PersistInt64 (toSqlKey -> missingRunVariantId)
-            , (fromPersistValue -> Right variantFlags)
-            , (fromPersistValue -> Right extraVariantHash)
-            , (fromPersistValue -> Right extraVariantSteps)
-            , PersistInt64 (toSqlKey -> missingRunImplId)
-            , PersistText missingRunImplName
-            , (fromPersistValue -> Right implFlags)
-            ] = return $ Just MissingRun{..}
+    converter
+        :: MonadConvert m => [PersistValue] -> m (MissingRun ExtraVariantInfo)
+    converter [ PersistInt64 numRepeats
+              , PersistText graphPath
+              , PersistInt64 (toSqlKey -> missingRunAlgorithmId)
+              , PersistText algoName
+              , PersistInt64 (toSqlKey -> missingRunVariantId)
+              , (fromPersistValue -> Right variantFlags)
+              , (fromPersistValue -> Right extraVariantHash)
+              , (fromPersistValue -> Right extraVariantSteps)
+              , PersistInt64 (toSqlKey -> missingRunImplId)
+              , PersistText missingRunImplName
+              , (fromPersistValue -> Right implFlags)
+              ] = return MissingRun{..}
       where
         missingRunExtraInfo = ExtraVariantInfo{..}
         missingRunArgs =
@@ -191,7 +187,7 @@ missingBenchmarkQuery runConfigId = Query{..}
           , graphPath
           ]
 
-    convert actualValues = logThrowM $ QueryResultUnparseable actualValues
+    converter actualValues = logThrowM $ QueryResultUnparseable actualValues
         [ SqlInt64, SqlString, SqlInt64, SqlString, SqlInt64, SqlString
         , SqlBlob, SqlInt64, SqlInt64, SqlString, SqlString ]
 

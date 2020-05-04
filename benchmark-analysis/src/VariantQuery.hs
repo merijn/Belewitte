@@ -60,22 +60,22 @@ variantInfoQuery VariantInfoConfig
   , variantInfoCommit
   , variantInfoDataset
   , variantInfoFilterIncomplete
-  } = Query{..}
+  } = Query{convert = Simple converter, ..}
   where
     queryName :: Text
     queryName = "variantInfoQuery"
 
-    convert
+    converter
         :: (MonadIO m, MonadLogger m, MonadThrow m)
-        => [PersistValue] -> m (Maybe VariantInfo)
-    convert [ PersistInt64 (toSqlKey -> variantId)
-            , PersistDouble variantOptimal
-            , PersistDouble variantBestNonSwitching
-            , PersistByteString (byteStringToVector -> variantTimings)
-            , externalTimings
-            ]
-            | Just variantExternalTimings <- maybeExternalTimings
-            = return $ Just VariantInfo{..}
+        => [PersistValue] -> m VariantInfo
+    converter [ PersistInt64 (toSqlKey -> variantId)
+              , PersistDouble variantOptimal
+              , PersistDouble variantBestNonSwitching
+              , PersistByteString (byteStringToVector -> variantTimings)
+              , externalTimings
+              ]
+              | Just variantExternalTimings <- maybeExternalTimings
+              = return VariantInfo{..}
       where
         maybeExternalTimings :: Maybe (Vector ImplTiming)
         maybeExternalTimings = case externalTimings of
@@ -83,7 +83,7 @@ variantInfoQuery VariantInfoConfig
             PersistByteString (byteStringToVector -> extImpls) -> Just extImpls
             _ -> Nothing
 
-    convert actualValues = logThrowM $ QueryResultUnparseable actualValues
+    converter actualValues = logThrowM $ QueryResultUnparseable actualValues
         [SqlInt64, SqlReal, SqlReal, SqlBlob, SqlBlob ]
 
     commonTableExpressions :: [CTE]

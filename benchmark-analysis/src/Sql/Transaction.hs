@@ -10,7 +10,6 @@ module Sql.Transaction (module Sql, module Sql.Transaction) where
 
 import Control.Monad ((>=>))
 import Control.Monad.Catch (MonadThrow)
-import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Logger (MonadLogger)
 import qualified Control.Monad.Logger as Log
 import Control.Monad.Trans.Resource (MonadResource)
@@ -34,7 +33,8 @@ import qualified Database.Persist.Sqlite as Sqlite
 import Lens.Micro.Extras (view)
 
 import Exceptions
-import Query (CTE, MonadQuery, Query(..), runSqlQuerySingle)
+import Query (CTE, Converter(Simple), MonadConvert, MonadQuery, Query(..))
+import qualified Query
 import Schema
 import Sql.Core as Sql hiding (selectKeysRegion, selectSourceRegion)
 
@@ -254,7 +254,7 @@ SELECT IFNULL(ROUND(AVG(length(#{table}.#{field}))), 0)
      , IFNULL(MAX(length(#{table}.#{field})), 0)
 FROM #{table}
 |]
-    runSqlQuerySingle Query{..}
+    Query.runSqlQuerySingle Query{convert = Simple converter, ..}
   where
     queryName :: Text
     queryName = "getMaxFieldQuery"
@@ -265,12 +265,10 @@ FROM #{table}
     params :: [PersistValue]
     params = []
 
-    convert
-        :: (MonadIO n, MonadLogger n, MonadThrow n)
-        => [PersistValue] -> n (Maybe (Avg, Max))
-    convert [avgPersistVal, maxPersistVal]
+    converter :: MonadConvert n => [PersistValue] -> n (Avg, Max)
+    converter [avgPersistVal, maxPersistVal]
         | Right avgVal <- fromPersistValue avgPersistVal
         , Right maxVal <- fromPersistValue maxPersistVal
-        = return $ Just (Avg avgVal, Max maxVal)
-    convert actualValues = logThrowM $ QueryResultUnparseable actualValues
+        = return (Avg avgVal, Max maxVal)
+    converter actualValues = logThrowM $ QueryResultUnparseable actualValues
         [SqlInt64, SqlInt64]

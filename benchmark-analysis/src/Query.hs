@@ -6,9 +6,12 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 module Query
     ( CTE(..)
+    , Converter(..)
+    , MonadConvert
     , MonadQuery
     , Region
     , Query(..)
@@ -41,6 +44,8 @@ import qualified Sql.Core as Sql
 type MonadQuery m =
     (MonadResource m, MonadSql m, MonadExplain m, MonadLogger m, MonadThrow m)
 
+type MonadConvert m = (MonadIO m, MonadLogger m, MonadThrow m)
+
 data Explain = Explain | NoExplain
 
 data CTE = CTE { cteParams :: [PersistValue] , cteQuery :: Text }
@@ -49,18 +54,25 @@ data CTE = CTE { cteParams :: [PersistValue] , cteQuery :: Text }
 inCTE :: [PersistValue] -> Text -> CTE
 inCTE = CTE
 
+data Converter r
+    = Simple (forall m . MonadConvert m => [PersistValue] -> m r)
+    | Filter (forall m . MonadConvert m => [PersistValue] -> m (Maybe r))
+
+instance Functor Converter where
+    fmap f (Simple conv) = Simple $ fmap f . conv
+    fmap f (Filter conv) = Filter $ fmap (fmap f) . conv
+
 data Query r =
   Query
     { queryName :: Text
     , commonTableExpressions :: [CTE]
     , params :: [PersistValue]
-    , convert :: forall m . (MonadIO m, MonadLogger m, MonadThrow m)
-              => [PersistValue] -> m (Maybe r)
+    , convert :: Converter r
     , queryText :: Text
     }
 
 instance Functor Query where
-    fmap f query@Query{convert} = query { convert = fmap (fmap f) . convert }
+    fmap f query@Query{convert} = query { convert = fmap f convert }
 
 toQueryText :: Query r -> Text
 toQueryText Query{..} = mconcat $
@@ -95,17 +107,17 @@ explainSqlQuery originalQuery = Sql.runRegionConduit $
   where
     explain
         :: (MonadIO m, MonadLogger m, MonadThrow m)
-        => [PersistValue] -> m (Maybe (Int64, Int64, Text))
+        => [PersistValue] -> m (Int64, Int64, Text)
     explain
         [ PersistInt64 nodeId
         , PersistInt64 parentId
         , PersistInt64 _
         , PersistText t
-        ] = return $ Just (parentId, nodeId, t)
+        ] = return $ (parentId, nodeId, t)
     explain actualValues = logThrowM $ QueryResultUnparseable actualValues
         [SqlInt64, SqlInt64, SqlInt64, SqlString]
 
-    explainQuery = originalQuery { convert = explain }
+    explainQuery = originalQuery { convert = Simple explain }
 
 randomizeQuery :: Int64 -> Int -> Query r -> (Query r, Query r)
 randomizeQuery seed trainingSize originalQuery = (training, validation)
@@ -168,11 +180,12 @@ runLoggingSqlQuery query = do
     runRawSqlQuery NoExplain query
 
 runRawSqlQuery
-    :: (MonadLogger m, MonadResource m, MonadSql m, MonadThrow m)
+    :: forall i m r
+     . (MonadLogger m, MonadResource m, MonadSql m, MonadThrow m)
     => Explain -> Query r -> ConduitT i r (Region m) ()
 runRawSqlQuery isExplain query@Query{convert,params} = do
     (timing, r) <- withTime $
-        Sql.conduitQuery queryText queryParams .| C.mapMaybeM convert
+        Sql.conduitQuery queryText queryParams .| converter
 
     let formattedTime :: Text
         formattedTime = T.pack $ showGFloat (Just 3) timing "s"
@@ -180,16 +193,27 @@ runRawSqlQuery isExplain query@Query{convert,params} = do
     logInfoN $ queryName query <> " time: " <> formattedTime
     return r
   where
+    cteParameters :: [PersistValue]
     cteParameters = concatMap cteParams $ commonTableExpressions query
+
+    queryText :: Text
     queryText = explainPrefix <> toQueryText query
+
+    queryParams :: [PersistValue]
     queryParams = cteParameters ++ params
 
+    explainPrefix :: Text
     explainPrefix = case isExplain of
         Explain -> "EXPLAIN QUERY PLAN "
         NoExplain -> mempty
 
-runSqlQueryCount :: MonadQuery m => Query r -> m Int
-runSqlQueryCount originalQuery = do
+    converter :: ConduitT [PersistValue] r (Region m) ()
+    converter = case convert of
+        Simple f -> C.mapM f
+        Filter f -> C.mapMaybeM f
+
+runSqlQueryCount :: (MonadIO m, MonadQuery m) => Query r -> m Int
+runSqlQueryCount originalQuery@Query{ convert = Simple _ } = do
     result <- runSqlQueryConduit countQuery await
     case result of
         Just n -> return n
@@ -198,8 +222,11 @@ runSqlQueryCount originalQuery = do
     countQuery = originalQuery
         { queryText =
             "SELECT COUNT(*) FROM (" <> queryText originalQuery <> ")"
-        , convert = \case
-            [PersistInt64 n] -> return . Just $ fromIntegral n
+        , convert = Simple $ \case
+            [PersistInt64 n] -> return $ fromIntegral n
             actualValues -> logThrowM $ QueryResultUnparseable actualValues
                 [SqlInt64]
         }
+
+runSqlQueryCount query@Query{ convert = Filter _ } =
+    runSqlQueryConduit query C.length

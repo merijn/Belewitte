@@ -26,7 +26,8 @@ timePlotQuery
     -> CommitId
     -> Set (Key Variant)
     -> Query (Text, (Vector ImplTiming, Vector ImplTiming))
-timePlotQuery algoId platformId commitId variants = Query{..}
+timePlotQuery algoId platformId commitId variants =
+    Query{convert = Simple converter, ..}
   where
     queryName :: Text
     queryName = "timePlotQuery"
@@ -37,16 +38,16 @@ timePlotQuery algoId platformId commitId variants = Query{..}
         clauses = T.intercalate ", " . map clause . S.toAscList $ s
         clause = showText . fromSqlKey
 
-    convert
-        :: (MonadIO m, MonadLogger m, MonadThrow m)
+    converter
+        :: MonadConvert m
         => [PersistValue]
-        -> m (Maybe (Text, (Vector ImplTiming, Vector ImplTiming)))
-    convert [ PersistText graph
-            , PersistByteString (byteStringToVector -> implTimings)
-            , externalTimings
-            ]
-            | Just extImplTimings <- maybeExternalTimings
-            = return $ Just (graph, (implTimings, extImplTimings))
+        -> m (Text, (Vector ImplTiming, Vector ImplTiming))
+    converter [ PersistText graph
+              , PersistByteString (byteStringToVector -> implTimings)
+              , externalTimings
+              ]
+              | Just extImplTimings <- maybeExternalTimings
+              = return (graph, (implTimings, extImplTimings))
       where
         maybeExternalTimings :: Maybe (Vector ImplTiming)
         maybeExternalTimings = case externalTimings of
@@ -54,7 +55,7 @@ timePlotQuery algoId platformId commitId variants = Query{..}
             PersistByteString (byteStringToVector -> timings) -> Just timings
             _ -> Nothing
 
-    convert actualValues = logThrowM $ QueryResultUnparseable actualValues
+    converter actualValues = logThrowM $ QueryResultUnparseable actualValues
         [ SqlString, SqlBlob, SqlBlob ]
 
     commonTableExpressions :: [CTE]
@@ -168,19 +169,19 @@ levelTimePlotQuery
     -> CommitId
     -> Key Variant
     -> Query (Int64, Vector ImplTiming)
-levelTimePlotQuery platformId commitId variant = Query{..}
+levelTimePlotQuery platformId commitId variant =
+    Query{convert = Simple converter, ..}
   where
     queryName :: Text
     queryName = "levelTimePlotQuery"
 
-    convert
-        :: (MonadIO m, MonadLogger m, MonadThrow m)
-        => [PersistValue] -> m (Maybe (Int64, Vector ImplTiming))
-    convert [ PersistInt64 stepId
-            , PersistByteString (byteStringToVector -> timings)
-            ] = return $ Just (stepId, timings)
+    converter
+        :: MonadConvert m => [PersistValue] -> m (Int64, Vector ImplTiming)
+    converter [ PersistInt64 stepId
+              , PersistByteString (byteStringToVector -> timings)
+              ] = return (stepId, timings)
 
-    convert actualValues = logThrowM $ QueryResultUnparseable actualValues
+    converter actualValues = logThrowM $ QueryResultUnparseable actualValues
         [ SqlInt64, SqlBlob ]
 
     commonTableExpressions :: [CTE]

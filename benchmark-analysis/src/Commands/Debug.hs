@@ -17,7 +17,7 @@ import Core
 import FormattedOutput (renderOutput, renderRegionOutput)
 import InteractiveInput
 import OptionParsers
-import Query (Query(..))
+import Query (Converter(Simple), Query(..))
 import qualified Query
 import Schema (PersistValue(..))
 import VariantQuery (VariantInfo, variantInfoQuery)
@@ -193,7 +193,7 @@ toQuery sqlLines = Just $ Query
     { queryName = "Interactive"
     , commonTableExpressions = []
     , params = []
-    , convert = return . Just
+    , convert = Simple return
     , queryText = T.unlines sqlLines
     }
 

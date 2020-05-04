@@ -22,7 +22,8 @@ import Data.String.Interpolate.IsString (i)
 import Database.Persist.Sqlite (sqlType)
 
 import Core
-import Query (CTE, MonadQuery, Query(..), runSqlQuerySingleMaybe)
+import Query (CTE, Converter(Simple), MonadConvert, MonadQuery, Query(..))
+import qualified Query
 import Schema
 import Schema.GlobalVars (Unique(UniqGlobal))
 import Sql.Core as SqlCore hiding (selectKeys, selectSource)
@@ -34,7 +35,7 @@ rawGetGlobalVar
     => (Query a -> m b) -> GlobalVar a -> m b
 rawGetGlobalVar run var = do
     let queryText = [i|SELECT value FROM GlobalVars WHERE name = ?|]
-    run Query{..}
+    run Query{convert = Simple converter, ..}
   where
     queryName :: Text
     queryName = "getGlobalVar"
@@ -45,18 +46,16 @@ rawGetGlobalVar run var = do
     params :: [PersistValue]
     params = [ toPersistValue (showText var) ]
 
-    convert
-        :: (MonadIO n, MonadLogger n, MonadThrow n)
-        => [PersistValue] -> n (Maybe a)
-    convert [sqlResult]
+    converter :: MonadConvert n => [PersistValue] -> n a
+    converter [sqlResult]
         | Right result <- fromPersistValue sqlResult
-        = return $ Just result
+        = return result
 
-    convert actualValues = logThrowM $ QueryResultUnparseable actualValues
+    converter actualValues = logThrowM $ QueryResultUnparseable actualValues
         [ sqlType (Proxy :: Proxy a) ]
 
 getGlobalVar :: (MonadQuery m, PersistFieldSql a) => GlobalVar a -> m (Maybe a)
-getGlobalVar = rawGetGlobalVar runSqlQuerySingleMaybe
+getGlobalVar = rawGetGlobalVar Query.runSqlQuerySingleMaybe
 
 initialiseGlobalVar
     :: (MonadSql m, PersistFieldSql a) => GlobalVar a -> a -> m ()
