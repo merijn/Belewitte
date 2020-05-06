@@ -50,31 +50,27 @@ getKernelLibPath = getKernelLibPathMaybe >>= maybe raiseError return
   where
     raiseError = logThrowM MissingKernelLibPath
 
-findVirtualEnv
+findPython
     :: forall m
-     . (MonadIO m, MonadLogger m, MonadMask m)
-    => m (FilePath, [String])
-findVirtualEnv = do
+     . (MonadIO m, MonadLogger m, MonadMask m) => m FilePath
+findPython = do
     mResult <- runMaybeT $ asum
-        [ virtualEnvWithPython "python3.7"
-        , virtualEnvWithPython "python3.6"
+        [ tryPythonVersion "python3.7"
+        , tryPythonVersion "python3.6"
         , do
             logWarnN "Unable to find 'python3.6' or 'python3.7' executable, \
                      \trying 'python3'!"
-            virtualEnvWithPython "python3"
+            tryPythonVersion "python3"
         , do
             logWarnN "Unable to find 'python3' executable, trying 'python'!"
-            virtualEnvWithPython "python"
+            tryPythonVersion "python"
         ]
     case mResult of
         Just r -> return r
         Nothing -> logThrowM MissingVirtualEnv
   where
-    virtualEnvWithPython :: String -> MaybeT m (FilePath, [String])
-    virtualEnvWithPython python = do
-        virtualEnvExe <- MaybeT . liftIO $ Dir.findExecutable "virtualenv"
-        pythonExe <- MaybeT . liftIO $ Dir.findExecutable python
-        return (virtualEnvExe, ["-p", pythonExe])
+    tryPythonVersion :: MonadIO m => String -> MaybeT m FilePath
+    tryPythonVersion python = MaybeT . liftIO $ Dir.findExecutable python
 
 checkVirtualEnv
     :: (MonadIO m, MonadLogger m, MonadMask m)
@@ -97,11 +93,11 @@ checkVirtualEnv virtualEnv requirements = do
         :: (MonadIO m, MonadLogger m, MonadMask m) => Digest SHA512 -> m ()
     initVirtualEnv reqHash = do
         logInfoN $ "Creating virtualenv"
-        (virtualEnvExe, virtualEnvArgs) <- findVirtualEnv
-        runProcess_ virtualEnvExe (virtualEnvArgs ++ [virtualEnv])
+        pythonExe <- findPython
+        runProcess_ pythonExe ["-m", "venv", virtualEnv]
 
         logInfoN $ "Initialising virtualenv"
-        pipExe <- liftIO $ getDataFileName "runtime-data/virtualenv/bin/pip"
+        pipExe <- liftIO $ getDataFileName "runtime-data/virtualenv/bin/pip3"
         runProcess_ pipExe ["install", "--upgrade", "pip"]
         runProcess_ pipExe ["install", "-r", requirements]
         liftIO $ BS.writeFile initialisedFile (ByteArray.convert reqHash)
