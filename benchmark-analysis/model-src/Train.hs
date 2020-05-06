@@ -15,6 +15,7 @@ module Train
     , getModelTrainingConfig
     , setTrainingConfigDatasets
     , setTrainingConfigPlatform
+    , setTrainingConfigSkipIncomplete
     , trainModel
     ) where
 
@@ -90,6 +91,12 @@ setTrainingConfigPlatform platformId trainConfig = case trainConfig of
       { stepInfoPlatform = platformId }
     LegacyTrainConfig cfg@LegacyConfig{} -> LegacyTrainConfig cfg
       { legacyPlatform = platformId }
+
+setTrainingConfigSkipIncomplete :: Bool -> TrainingConfig -> TrainingConfig
+setTrainingConfigSkipIncomplete val trainConfig = case trainConfig of
+    TrainConfig cfg@StepInfoConfig{} -> TrainConfig cfg
+      { stepInfoFilterIncomplete = val }
+    LegacyTrainConfig _ -> trainConfig
 
 data ModelDescription = ModelDesc
     { modelName :: Text

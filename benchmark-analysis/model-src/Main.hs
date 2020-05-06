@@ -108,15 +108,21 @@ main = runSqlM commands $ \case
         validateModel predictor validationConfig platformId datasets
 
     EvaluatePredictor
-        {getPlatformId,getModelId,defaultImpl,evaluateConfig,getDatasetIds} -> do
+      { getPlatformId
+      , getModelId
+      , defaultImpl
+      , shouldFilterIncomplete
+      , evaluateConfig
+      , getDatasetIds
+      } -> do
+        let setSkip = setTrainingConfigSkipIncomplete shouldFilterIncomplete
 
         modelId <- getModelId
         predictor <- loadPredictor modelId (DefImpl defaultImpl)
 
         setPlatformId <- setTrainingConfigPlatform <$> getPlatformId
         setDatasets <- setTrainingConfigDatasets <$> getDatasetIds
-
-        evalConfig <- setPlatformId . setDatasets <$>
+        evalConfig <- setSkip . setPlatformId . setDatasets <$>
             getModelTrainingConfig modelId
 
         evaluateModel predictor evaluateConfig evalConfig

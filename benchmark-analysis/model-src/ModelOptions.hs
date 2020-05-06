@@ -53,6 +53,7 @@ data ModelCommand
       { getPlatformId :: SqlM (Key Platform)
       , getModelId :: SqlM (Key PredictionModel)
       , defaultImpl :: Either Int Text
+      , shouldFilterIncomplete :: Bool
       , evaluateConfig :: EvaluateReport
       , getDatasetIds :: SqlM (Maybe (Set (Key Dataset)))
       }
@@ -126,7 +127,7 @@ commands = CommandRoot
         }
         $ EvaluatePredictor
             <$> platformIdParser <*> modelIdParser <*> defaultImplParser
-            <*> evaluateParser <*> datasetsParser
+            <*> filterIncomplete <*> evaluateParser <*> datasetsParser
     , SingleCommand CommandInfo
         { commandName = "compare"
         , commandHeaderDesc = "compare implementation performance"
