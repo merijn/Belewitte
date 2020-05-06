@@ -30,6 +30,7 @@ import qualified Schema.Model.V0 as V0
 import qualified Schema.Model.V1 as V1
 import qualified Schema.Model.V2 as V2
 import qualified Schema.Model.V3 as V3
+import qualified Schema.Model.V4 as V4
 
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
 PredictionModel
@@ -40,6 +41,7 @@ PredictionModel
     prettyName Text Maybe
     description Text Maybe
     model Model
+    skipIncomplete Bool
     legacyTrainFraction Double
     trainGraphs Percentage
     trainVariants Percentage
@@ -155,7 +157,7 @@ INNER JOIN (
 ) AS Derived
 ON Derived.id = PredictionModel.id
 |]
-    , 19 .> schema $ do
+    , 19 .> V4.schema $ do
         Utils.executeSql [i|
 ALTER TABLE "PredictionModel"
 RENAME COLUMN "trainFraction" TO "legacyTrainFraction"
@@ -203,5 +205,11 @@ SELECT PredictionModel.id
          ELSE 0.0
        END
 FROM PredictionModel
+|]
+    , 23 .> schema $ do
+
+        Utils.executeSql [i|
+ALTER TABLE "PredictionModel"
+ADD COLUMN "skipIncomplete" BOOLEAN NOT NULL DEFAULT 0
 |]
     ]
