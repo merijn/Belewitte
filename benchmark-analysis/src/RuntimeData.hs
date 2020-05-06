@@ -56,20 +56,20 @@ findVirtualEnv
     => m (FilePath, [String])
 findVirtualEnv = do
     mResult <- runMaybeT $ asum
-        [ (,[]) <$> virtualEnv2_7
-        , virtualEnvWithPython "python2.7"
-        , virtualEnvWithPython "python2"
+        [ virtualEnvWithPython "python3.7"
+        , virtualEnvWithPython "python3.6"
         , do
-            logWarnN "Unable to find 'python2' executable, trying 'python'!"
+            logWarnN "Unable to find 'python3.6' or 'python3.7' executable, \
+                     \trying 'python3'!"
+            virtualEnvWithPython "python3"
+        , do
+            logWarnN "Unable to find 'python3' executable, trying 'python'!"
             virtualEnvWithPython "python"
         ]
     case mResult of
         Just r -> return r
         Nothing -> logThrowM MissingVirtualEnv
   where
-    virtualEnv2_7 :: MaybeT m FilePath
-    virtualEnv2_7 = MaybeT . liftIO $ Dir.findExecutable "virtualenv-2.7"
-
     virtualEnvWithPython :: String -> MaybeT m (FilePath, [String])
     virtualEnvWithPython python = do
         virtualEnvExe <- MaybeT . liftIO $ Dir.findExecutable "virtualenv"
@@ -124,7 +124,7 @@ getPythonScript script args = do
     checkVirtualEnv virtualenv requirements
 
     liftIO $ do
-        pythonPath <- getDataFileName $ "runtime-data/virtualenv/bin/python2.7"
+        pythonPath <- getDataFileName $ "runtime-data/virtualenv/bin/python"
         scriptPath <- getDataFileName $ "runtime-data/scripts" </> script
         return $ proc pythonPath (scriptPath : args)
 

@@ -190,10 +190,10 @@ if __name__ != "__main__":
     exit(1)
 
 if len(argv) < 5:
-    print >>stderr, "Not enough arguments!"
+    print("Not enough arguments!", file=stderr)
     exit(1)
 elif len(argv) > 5:
-    print >>stderr, "Too many arguments!"
+    print("Too many arguments!", file=stderr)
     exit(1)
 
 _, outputPDF, xAxisName, normalise, slideFormat = map(isBool, argv)
@@ -201,6 +201,6 @@ _, outputPDF, xAxisName, normalise, slideFormat = map(isBool, argv)
 with Plot(outputPDF, slideFormat) as ax:
     lines = stdin.readlines()
     columns = lines[0].strip().split(':')
-    lines = [map(lambda s: s.strip(), line.split(':')) for line in lines[1:]]
-    groups = [(k, map(float, vals.split())) for k, vals in lines]
+    lines = [[s.strip() for s in line.split(':')] for line in lines[1:]]
+    groups = [(k, [float(v) for v in vals.split()]) for k, vals in lines]
     plotBars(ax, xAxisName, columns, groups, normalise)

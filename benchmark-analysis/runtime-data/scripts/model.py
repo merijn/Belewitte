@@ -42,7 +42,8 @@ class ResultReader(threading.Thread):
 
     def run(self):
         with fdopen(self.fd, 'rb') as inputFile:
-            self.outputs = np.fromfile(inputFile, dtype=np.int64, count=opts.numEntries)
+            data = inputFile.read(opts.numEntries * 8)
+            self.outputs = np.frombuffer(data, dtype=np.int64, count=opts.numEntries)
             # one hot encoding
             self.outputs = ohe.fit_transform(self.outputs.reshape(-1,1)).toarray()
 
@@ -50,7 +51,9 @@ thread = ResultReader(opts.resultsFd)
 thread.daemon = True
 thread.start()
 
-inputs = np.fromfile(stdin, dtype=np.float64, count=opts.numProps * opts.numEntries)
+propCount = opts.numProps * opts.numEntries
+data = stdin.buffer.read(propCount * np.float64().itemsize)
+inputs = np.frombuffer(data, dtype=np.float64, count=propCount)
 inputs = inputs.reshape(opts.numEntries, opts.numProps)
 
 thread.join()
@@ -112,11 +115,11 @@ while queue:
 
 total = sum(pred['count'] for pred in unknown.values())
 
-with fdopen(opts.unknownsFd, 'wb') as unknownsFile:
-    print >>unknownsFile, total
-    print >>unknownsFile, len(unknown)
+with fdopen(opts.unknownsFd, 'w') as unknownsFile:
+    print(total, file=unknownsFile)
+    print(len(unknown), file=unknownsFile)
     for key, val in sorted(unknown.items(), key=lambda x: x[1], reverse=True):
-        print >>unknownsFile, val['id'], ":", key, ":", val['count']
+        print(val['id'], ":", key, ":", val['count'], file=unknownsFile)
 
 def translate(data):
     if data[2] != -1:
@@ -124,7 +127,7 @@ def translate(data):
     return data + (0,)
 
 for val in predictor.feature_importances_:
-    stdout.write(struct.pack("d", val))
+    stdout.buffer.write(struct.pack("d", val))
 
 for vals in map(translate, arrayTree):
-    stdout.write(struct.pack("diiii", *vals))
+    stdout.buffer.write(struct.pack("diiii", *vals))
