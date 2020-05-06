@@ -118,7 +118,7 @@ total = sum(pred['count'] for pred in unknown.values())
 with fdopen(opts.unknownsFd, 'w') as unknownsFile:
     print(total, file=unknownsFile)
     print(len(unknown), file=unknownsFile)
-    for key, val in sorted(unknown.items(), key=lambda x: x[1], reverse=True):
+    for key, val in sorted(unknown.items(), key=lambda x: x[1]['count'], reverse=True):
         print(val['id'], ":", key, ":", val['count'], file=unknownsFile)
 
 def translate(data):
