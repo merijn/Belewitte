@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 from sys import stdin, stdout, stderr
 
@@ -42,7 +43,7 @@ class ResultReader(threading.Thread):
 
     def run(self):
         with fdopen(self.fd, 'rb') as inputFile:
-            data = inputFile.read(opts.numEntries * 8)
+            data = inputFile.read(opts.numEntries * np.int64().itemsize)
             self.outputs = np.frombuffer(data, dtype=np.int64, count=opts.numEntries)
             # one hot encoding
             self.outputs = ohe.fit_transform(self.outputs.reshape(-1,1)).toarray()

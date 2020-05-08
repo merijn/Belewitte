@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from __future__ import division
-from sys import stdin, stderr
+from sys import argv, exit, stdin, stderr
 
 import locale
 
@@ -10,7 +9,6 @@ from collections import OrderedDict
 from fractions import Fraction
 from math import isinf
 import itertools
-from sys import argv, exit
 
 import numpy as np
 from colorsys import hsv_to_rgb
