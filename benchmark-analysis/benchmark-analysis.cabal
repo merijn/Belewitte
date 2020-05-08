@@ -282,8 +282,10 @@ Executable Plot
   Import:               all, exes
   Default-Language:     Haskell2010
   Hs-Source-Dirs:       plot-src
-  Main-Is:              Plot.hs
-  Other-Modules:        PlotQuery
+  Main-Is:              Main.hs
+  Other-Modules:        PlotOptions
+                        PlotQuery
+                        QueryDump
 
   Other-Extensions:     BangPatterns
                         FlexibleContexts

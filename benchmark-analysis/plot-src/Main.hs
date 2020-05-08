@@ -1,4 +1,3 @@
-{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -13,13 +12,9 @@ import Control.Monad.Catch (handle)
 import Data.Bifunctor (bimap, second)
 import Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
-import qualified Data.Conduit.List as C (chunksOf)
-import qualified Data.Conduit.Text as C
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 import Data.List (intersperse)
-import Data.Map (Map)
-import qualified Data.Map as M
 import Data.Maybe (catMaybes)
 import Data.Monoid (Any(..))
 import Data.Set (Set)
@@ -29,17 +24,17 @@ import qualified Data.Text.IO as T
 import Data.Vector (Vector)
 import qualified Data.Vector as V
 import qualified Data.Vector.Generic as Generic
-import qualified Data.Vector.Storable as Storable
 import System.IO (Handle, hPutStr, stdout)
 
 import Core
 import Options
+import PlotOptions (PlotConfig(..), PlotOptions(..), PlotType(..), commands)
 import PlotQuery (timePlotQuery, levelTimePlotQuery)
 import Utils.Process (withStdin)
 import Query
 import RuntimeData (getBarPlotScript)
 import Schema
-import Sql (SelectOpt(Asc), (==.))
+import Sql ((==.))
 import qualified Sql
 import Utils.ImplTiming
 import Utils.Pair (Pair(..), toPair, mergePair)
@@ -67,57 +62,6 @@ queryVariants algoId graphs = do
 
     return . S.fromList . map Sql.entityKey . catMaybes $ variants
 
-data PlotConfig = PlotConfig
-    { axisName :: String
-    , slideFormat :: Bool
-    , printStdout :: Bool
-    , normalise :: Bool
-    }
-
-data PlotType
-    = PlotLevels
-    | PlotTotals
-    | PlotVsOptimal
-
-data PlotOptions
-    = PlotOptions
-      { plotType :: PlotType
-      , plotConfig :: PlotConfig
-      , algoId :: Key Algorithm
-      , platformId :: Key Platform
-      , commitId :: CommitId
-      , graphSet :: Set Text
-      , implementationNames :: Set Text
-      }
-
-plotOptions :: PlotType -> Parser (PlotConfig -> SqlM PlotOptions)
-plotOptions pType = do
-    getAlgoId <- algorithmIdParser
-    getPlatformId <- platformIdParser
-    getCommitId <- commitIdParser
-    getGraphs <- graphs
-    getImpls <- impls
-
-    pure $ \plotConfig -> do
-        algoId <- getAlgoId
-        PlotOptions pType plotConfig algoId
-            <$> getPlatformId <*> getCommitId algoId <*> getGraphs <*> getImpls
-  where
-    graphs :: Parser (SqlM (Set Text))
-    graphs = readSet "graphs"
-
-    impls :: Parser (SqlM (Set Text))
-    impls = readSet "implementations"
-
-    readSet :: FilePath -> Parser (SqlM (Set Text))
-    readSet s = fmap readText . strOption $ mconcat
-        [ metavar "FILE", long s
-        , help $ "File to read " ++ s ++ " to plot from"
-        ]
-
-    readText :: MonadIO m => FilePath -> m (Set Text)
-    readText = liftIO . fmap (S.fromList . T.lines) . T.readFile
-
 filterImpls :: Set Text -> IntMap Implementation -> IntMap Implementation
 filterImpls textSet = IM.filter $ getAny . mconcat
     [ Any . (`S.member` textSet) . implementationName
@@ -126,76 +70,6 @@ filterImpls textSet = IM.filter $ getAny . mconcat
 
 filterExternal :: Set Text -> IntMap ExternalImpl -> IntMap ExternalImpl
 filterExternal names = IM.filter ((`S.member` names) . externalImplName)
-
-commands :: CommandRoot (SqlM PlotOptions)
-commands = CommandRoot
-  { mainHeaderDesc = "a tool for plotting benchmark results"
-  , mainDesc = ""
-  , mainQueryDump = plotQueryDump
-  , mainQueryMap = plotQueryMap
-  , mainCommands =
-    [ SingleCommand CommandInfo
-        { commandName = "levels"
-        , commandHeaderDesc = "plot level times for a graph" 
-        , commandDesc = ""
-        }
-        $ plotOptions PlotLevels <*> (plotConfig "Levels" <*> pure False)
-    , SingleCommand CommandInfo
-        { commandName = "totals"
-        , commandHeaderDesc = "plot total times for a set of graphs"
-        , commandDesc = ""
-        }
-        $ plotOptions PlotTotals <*> (plotConfig "Graph" <*> normaliseFlag)
-    , SingleCommand CommandInfo
-        { commandName = "vs-optimal"
-        , commandHeaderDesc =
-          "plot total times for a set of graphs against the optimal"
-        , commandDesc = ""
-        }
-        $ plotOptions PlotVsOptimal <*> (plotConfig "Graph" <*> normaliseFlag)
-    ]
-  }
-  where
-    plotConfig :: String -> Parser (Bool -> PlotConfig)
-    plotConfig axis = PlotConfig axis <$> slideFlag <*> printFlag
-
-    slideFlag :: Parser Bool
-    slideFlag = flag False True $ mconcat
-        [ long "slide", help "Render 4:3 slide dimensions" ]
-
-    printFlag :: Parser Bool
-    printFlag = flag False True $ mconcat
-        [ long "print", help "Print results to stdout, rather than plotting" ]
-
-    normaliseFlag :: Parser Bool
-    normaliseFlag = flag False True $ mconcat [long "normalise"]
-
-plotQueryMap :: Map String (Parser DebugQuery)
-plotQueryMap = M.fromList
-    [ nameDebugQuery "timePlotQuery" . Compose $ do
-        getAlgorithmId <- algorithmIdParser
-        getPlatformId <- platformIdParser
-        getCommit <- commitIdParser
-        getVariants <- variantsParser
-
-        pure $ do
-            algoId <- getAlgorithmId
-            timePlotQuery algoId
-                <$> getPlatformId <*> getCommit algoId <*> getVariants
-    , nameDebugQuery "levelTimePlotQuery" . Compose $ do
-        getAlgorithmId <- algorithmIdParser
-        getPlatformId <- platformIdParser
-        getCommit <- commitIdParser
-        getVariantId <- variantIdParser
-
-        pure $ do
-            algoId <- getAlgorithmId
-            levelTimePlotQuery
-                <$> getPlatformId <*> getCommit algoId <*> getVariantId
-    ]
-  where
-    variantsParser :: Parser (SqlM (Set (Key Variant)))
-    variantsParser = fmap S.fromList . sequence <$> some variantIdParser
 
 reportData
     :: (MonadIO m, MonadLogger m, MonadThrow m)
@@ -281,10 +155,10 @@ nameImplementations impls = V.mapMaybe translate . V.convert
 main :: IO ()
 main = runSqlM commands $ \getPlotOptions -> do
     PlotOptions{..} <- getPlotOptions
-    variants <- queryVariants algoId graphSet
+    variants <- queryVariants algorithmId graphSet
 
-    impls <- (,) <$> Sql.queryImplementations algoId
-                 <*> Sql.queryExternalImplementations algoId
+    impls <- (,) <$> Sql.queryImplementations algorithmId
+                 <*> Sql.queryExternalImplementations algorithmId
 
     let filteredImpls = filterImpls implementationNames
         filteredExt = filterExternal implementationNames
@@ -309,14 +183,15 @@ main = runSqlM commands $ \getPlotOptions -> do
                     C.map (bimap showText (nameImplementations regular))
 
         PlotTotals -> do
-            let timeQuery = timePlotQuery algoId platformId commitId variants
+            let timeQuery =
+                    timePlotQuery algorithmId platformId commitId variants
 
             plot plotConfig "times-totals" timeQuery $
                 C.map (second $ translatePair . toPair V.convert V.convert)
 
         PlotVsOptimal -> do
             let variantQuery = variantInfoQuery $
-                    VariantInfoConfig algoId platformId commitId Nothing False
+                    VariantInfoConfig algorithmId platformId commitId Nothing False
 
                 variantFilter VariantInfo{variantId} =
                     S.member variantId variants
@@ -325,64 +200,3 @@ main = runSqlM commands $ \getPlotOptions -> do
                 C.filter variantFilter
                 .| C.mapM dataFromVariantInfo
                 .| C.map (second $ translatePair . fmap V.convert)
-
-getConfigSet :: SqlM (Set (Key Algorithm, Key Platform, CommitId))
-getConfigSet = Sql.selectSource [] [] $ C.foldMap (S.singleton . toTuple)
-  where
-    toTuple :: Entity RunConfig -> (Key Algorithm, Key Platform, CommitId)
-    toTuple (Entity _ RunConfig{..}) =
-        (runConfigAlgorithmId, runConfigPlatformId, runConfigAlgorithmVersion)
-
-toTimeQueries
-    :: (Key Algorithm, Key Platform, CommitId)
-    -> ConduitT (Key Algorithm, Key Platform, CommitId)
-                (Query (Text, ( Storable.Vector ImplTiming
-                              , Storable.Vector ImplTiming
-                              )
-                       )
-                )
-                (Region SqlM)
-                ()
-toTimeQueries (algoId, platformId, commitId) =
-  Sql.selectKeysRegion [VariantAlgorithmId ==. algoId] [Asc VariantId]
-  .| C.chunksOf 500
-  .| C.map (timePlotQuery algoId platformId commitId . S.fromList)
-
-toLevelTimeQueries
-    :: (Key Platform, CommitId)
-    -> ConduitT (Key Platform, CommitId)
-                (Query (Int64, Storable.Vector ImplTiming))
-                (Region SqlM)
-                ()
-toLevelTimeQueries (platformId, commitId) =
-  Sql.selectKeysRegion [] [Asc VariantId]
-  .| C.map (levelTimePlotQuery platformId commitId)
-
-plotQueryDump :: FilePath -> SqlM ()
-plotQueryDump outputSuffix = do
-    configSet <- getConfigSet
-
-    Sql.runRegionConduit $
-        C.yieldMany configSet
-        .> toTimeQueries
-        .> streamQuery
-        .| querySink "timeQuery-"
-
-    Sql.runRegionConduit $
-        C.yieldMany (S.map stripAlgorithm configSet)
-        .> toLevelTimeQueries
-        .> streamQuery
-        .| querySink "levelTimeQuery-"
-  where
-    stripAlgorithm
-        :: (Key Algorithm, Key Platform, CommitId) -> (Key Platform, CommitId)
-    stripAlgorithm (_, platformId, commitId) = (platformId, commitId)
-
-    querySink
-        :: (MonadResource m, MonadThrow m, Show a)
-        => FilePath -> ConduitT a Void m ()
-    querySink  name =
-        C.map showText
-        .| C.map (`T.snoc` '\n')
-        .| C.encode C.utf8
-        .| C.sinkFile (name <> outputSuffix)
