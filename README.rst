@@ -48,8 +48,8 @@ OpenCL
 SLURM Workload Manager
     https://slurm.schedmd.com/documentation.html
 
-Python 2.7 & virtualenv
-    The virtualenv-2.7 executable is expected to be in the user's ``PATH``
+Python 3.6 or 3.7
+    The python 3.6/3.7 executable is expected to be in the user's ``PATH``
 
 GHC Haskell compiler 8.6
     https://www.haskell.org/ghc/download.html
