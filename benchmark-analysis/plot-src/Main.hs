@@ -168,6 +168,13 @@ main = runSqlM commands $ \getPlotOptions -> do
         translatePair :: Pair (Vector ImplTiming) -> Vector (Text, Double)
         translatePair x = mergePair $ nameImplementations <$> implMaps <*> x
 
+        timeQuery = timePlotQuery algorithmId platformId commitId variants
+
+        variantQuery = variantInfoQuery $
+            VariantInfoConfig algorithmId platformId commitId Nothing Nothing False
+
+        variantFilter VariantInfo{variantId} = S.member variantId variants
+
     case plotType of
         PlotLevels -> do
             forM_ variants $ \variantId -> do
@@ -184,19 +191,10 @@ main = runSqlM commands $ \getPlotOptions -> do
                     C.map (bimap showText (nameImplementations regular))
 
         PlotTotals -> do
-            let timeQuery =
-                    timePlotQuery algorithmId platformId commitId variants
-
             plot plotConfig "times-totals" timeQuery $
                 C.map (second $ translatePair . toPair V.convert V.convert)
 
         PlotVsOptimal -> do
-            let variantQuery = variantInfoQuery $
-                    VariantInfoConfig algorithmId platformId commitId Nothing Nothing False
-
-                variantFilter VariantInfo{variantId} =
-                    S.member variantId variants
-
             plot plotConfig "times-vs-optimal" variantQuery $
                 C.filter variantFilter
                 .| C.mapM dataFromVariantInfo
