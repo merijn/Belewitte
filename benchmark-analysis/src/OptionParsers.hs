@@ -20,6 +20,8 @@ module OptionParsers
     , runconfigIdParser
     , runconfigParser
     , utcTimeParser
+    , variantConfigIdParser
+    , variantConfigParser
     , variantIdParser
     , variantParser
     , variantInfoConfigParser
@@ -37,6 +39,7 @@ import Data.Interval (Extended(Finite), Interval)
 import qualified Data.Interval as I
 import Data.IntervalSet (IntervalSet)
 import qualified Data.IntervalSet as IS
+import Data.List (isPrefixOf)
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Time.Clock (getCurrentTime)
@@ -54,7 +57,7 @@ import Core
 import FieldQuery (getDistinctAlgorithmVersionQuery)
 import Query (runSqlQuerySingle)
 import Schema
-import Sql (ToBackendKey, SqlBackend)
+import Sql (ToBackendKey, SqlBackend, (==.))
 import qualified Sql
 import VariantQuery (VariantInfoConfig(..))
 
@@ -193,6 +196,30 @@ utcTimeParser = maybe (liftIO getCurrentTime) return <$> optional timeParser
     utcReader :: ReadM UTCTime
     utcReader = maybeReader $
         parseTimeM False defaultTimeLocale "%Y-%-m-%-d %T"
+
+variantConfigIdParser :: Parser (Key Algorithm -> SqlM (Key VariantConfig))
+variantConfigIdParser = fmap (fmap entityKey) <$> variantConfigParser
+
+variantConfigParser :: Parser (Key Algorithm -> SqlM (Entity VariantConfig))
+variantConfigParser = queryVariantConfig <$> variantConfigOpt
+  where
+    variantConfigOpt :: Parser (Maybe Int64)
+    variantConfigOpt = option (maybeReader variantConfigReader) $ mconcat
+        [ metavar "ID", long "variant", help "Numeric id of variant to use" ]
+
+    variantConfigReader :: String -> Maybe (Maybe Int64)
+    variantConfigReader s
+        | "default" `isPrefixOf` s = Just Nothing
+        | otherwise = Just <$> readMaybe s
+
+    queryVariantConfig
+        :: Maybe Int64 -> Key Algorithm -> SqlM (Entity VariantConfig)
+    queryVariantConfig key algoId = case key of
+        Just n -> Sql.validateEntity "VariantConfig" n
+        Nothing -> Sql.selectSingle
+                [ VariantConfigAlgorithmId ==. algoId
+                , VariantConfigIsDefault ==. True
+                ]
 
 variantIdParser :: Parser (SqlM (Key Variant))
 variantIdParser = fmap entityKey <$> variantParser
