@@ -245,8 +245,8 @@ variantInfoConfigParser = do
     pure $ do
         algoId <- getAlgoId
         VariantInfoConfig algoId
-            <$> getPlatformId <*> getCommit algoId <*> sequence getDatasetId
-            <*> pure filterFlag
+            <$> getPlatformId <*> getCommit algoId <*> pure Nothing
+            <*> sequence getDatasetId <*> pure filterFlag
 
 intervalReader :: ReadM (IntervalSet Int64)
 intervalReader = maybeReader . parseMaybe $

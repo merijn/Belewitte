@@ -28,6 +28,7 @@ data VariantInfoConfig = VariantInfoConfig
     { variantInfoAlgorithm :: Key Algorithm
     , variantInfoPlatform :: Key Platform
     , variantInfoCommit :: CommitId
+    , variantInfoVariantConfig :: Maybe (Key VariantConfig)
     , variantInfoDataset :: Maybe (Key Dataset)
     , variantInfoFilterIncomplete :: Bool
     } deriving (Show)
@@ -59,6 +60,7 @@ variantInfoQuery VariantInfoConfig
   , variantInfoPlatform
   , variantInfoCommit
   , variantInfoDataset
+  , variantInfoVariantConfig
   , variantInfoFilterIncomplete
   } = Query{convert = Simple converter, ..}
   where
@@ -124,6 +126,8 @@ ExternalImplVector(implTiming) AS (
             , toPersistValue variantInfoCommit
             , toPersistValue variantInfoDataset
             , toPersistValue variantInfoDataset
+            , toPersistValue variantInfoVariantConfig
+            , toPersistValue variantInfoVariantConfig
             , toPersistValue $ not variantInfoFilterIncomplete
             ]
         , cteQuery = [i|
@@ -144,10 +148,14 @@ VariantTiming(variantId, bestNonSwitching, timings) AS (
     INNER JOIN TotalTimer
     ON Run.id = TotalTimer.runId AND TotalTimer.name = 'computation'
 
+    INNER JOIN Variant
+    ON Variant.id = Run.variantId
+
     WHERE RunConfig.algorithmId = ?
     AND RunConfig.platformId = ?
     AND RunConfig.algorithmVersion = ?
     AND (RunConfig.datasetId = ? OR ? IS NULL)
+    AND (Variant.variantConfigId = ? OR ? IS NULL)
 
     GROUP BY Run.variantId
     HAVING ? OR COUNT(Run.id) = MAX(Impls.count)

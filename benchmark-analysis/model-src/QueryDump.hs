@@ -29,7 +29,7 @@ getConfigSet = Sql.selectSource [] [] $ C.foldMap (S.singleton . toTuple)
 toVariantInfoQuery
     :: (Key Algorithm, Key Platform, CommitId) -> Query VariantInfo
 toVariantInfoQuery (algoId, platformId, commitId) = variantInfoQuery $
-    VariantInfoConfig algoId platformId commitId Nothing False
+    VariantInfoConfig algoId platformId commitId Nothing Nothing False
 
 toStepInfoQueries
     :: (Key Algorithm, Key Platform, CommitId)

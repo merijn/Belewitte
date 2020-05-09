@@ -192,7 +192,7 @@ main = runSqlM commands $ \getPlotOptions -> do
 
         PlotVsOptimal -> do
             let variantQuery = variantInfoQuery $
-                    VariantInfoConfig algorithmId platformId commitId Nothing False
+                    VariantInfoConfig algorithmId platformId commitId Nothing Nothing False
 
                 variantFilter VariantInfo{variantId} =
                     S.member variantId variants
