@@ -11,11 +11,12 @@ import qualified Data.Text as T
 import qualified Data.Vector.Storable as Storable
 
 import Core
-import PlotQuery (levelTimePlotQuery, timePlotQuery)
+import LevelQuery (levelTimePlotQuery)
 import Query
 import Schema
 import Sql (SelectOpt(Asc), (==.))
 import qualified Sql
+import TimeQuery (timePlotQuery)
 import Utils.ImplTiming
 
 getConfigSet :: SqlM (Set (Key Algorithm, Key Platform, CommitId))

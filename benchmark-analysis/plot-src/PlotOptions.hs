@@ -14,10 +14,11 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 
 import Core
+import LevelQuery (levelTimePlotQuery)
 import Schema
 import Options
-import PlotQuery (levelTimePlotQuery, timePlotQuery)
 import QueryDump (plotQueryDump)
+import TimeQuery (timePlotQuery)
 
 data PlotConfig = PlotConfig
     { axisName :: String

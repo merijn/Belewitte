@@ -284,7 +284,8 @@ Executable Plot
   Hs-Source-Dirs:       plot-src
   Main-Is:              Main.hs
   Other-Modules:        PlotOptions
-                        PlotQuery
+                        TimeQuery
+                        LevelQuery
                         QueryDump
 
   Other-Extensions:     BangPatterns

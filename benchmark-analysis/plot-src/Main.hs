@@ -28,16 +28,17 @@ import System.IO (Handle, hPutStr, stdout)
 
 import Core
 import Options
+import LevelQuery (levelTimePlotQuery)
 import PlotOptions (PlotConfig(..), PlotOptions(..), PlotType(..), commands)
-import PlotQuery (timePlotQuery, levelTimePlotQuery)
-import Utils.Process (withStdin)
 import Query
 import RuntimeData (getBarPlotScript)
 import Schema
 import Sql ((==.))
 import qualified Sql
+import TimeQuery (timePlotQuery)
 import Utils.ImplTiming
 import Utils.Pair (Pair(..), toPair, mergePair)
+import Utils.Process (withStdin)
 import VariantQuery
 
 queryVariants :: Key Algorithm -> Set Text -> SqlM (Set (Key Variant))
