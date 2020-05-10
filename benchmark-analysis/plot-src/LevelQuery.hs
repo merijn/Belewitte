@@ -6,7 +6,6 @@ module LevelQuery (levelTimePlotQuery) where
 
 import Data.String.Interpolate.IsString (i)
 import Data.Vector.Storable (Vector)
-import qualified Data.Vector.Storable as VS
 
 import Core
 import Query
