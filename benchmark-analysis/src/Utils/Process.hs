@@ -4,8 +4,10 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Utils.Process
-    ( CreateProcess
+    ( ClosedStream(..)
+    , CreateProcess
     , ExitCode(..)
+    , Inherited(..)
     , Process.proc
     , ReadWrite(..)
     , UnexpectedTermination(..)
@@ -30,7 +32,7 @@ import Control.Monad.Trans.Cont (ContT(..), mapContT)
 import Control.Monad.Reader (ReaderT, runReaderT, local, ask)
 import Control.Monad.Trans.Resource (MonadResource, register, release)
 import Data.Conduit.Process
-    (ClosedStream(..), CmdSpec(..), StreamingProcessHandle)
+    (ClosedStream(..), CmdSpec(..), Inherited(..), StreamingProcessHandle)
 import qualified Data.Conduit.Process as Process
 import Data.Streaming.Process
     (InputSource, OutputSink, ProcessExitedUnsuccessfully(..))
