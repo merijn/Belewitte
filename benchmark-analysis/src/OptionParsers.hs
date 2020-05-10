@@ -205,7 +205,9 @@ variantConfigParser = queryVariantConfig <$> variantConfigOpt
   where
     variantConfigOpt :: Parser (Maybe Int64)
     variantConfigOpt = option (maybeReader variantConfigReader) $ mconcat
-        [ metavar "ID", long "variant", help "Numeric id of variant to use" ]
+        [ metavar "ID", long "variant-config"
+        , help "Numeric id of variant to use"
+        ]
 
     variantConfigReader :: String -> Maybe (Maybe Int64)
     variantConfigReader s
