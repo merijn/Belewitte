@@ -154,8 +154,7 @@ nameImplementations impls = V.mapMaybe translate . V.convert
     translate (ImplTiming impl val) = (,val) <$> impls IM.!? fromIntegral impl
 
 main :: IO ()
-main = runSqlM commands $ \getPlotOptions -> do
-    PlotOptions{..} <- getPlotOptions
+main = runSqlMCommand commands $ \PlotOptions{..} -> do
     variants <- queryVariants algorithmId graphSet
 
     impls <- (,) <$> Sql.queryImplementations algorithmId

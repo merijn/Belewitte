@@ -13,10 +13,15 @@ module Options
     , pattern HiddenCommand
     , pattern SingleCommand
     , nameDebugQuery
-    , runSqlM
+    , runCommand
+    , runSqlMCommand
+    , runSqlMCommand_
+    , runInputCommand
+    , runInputCommand_
     , module OptionParsers
     ) where
 
+import Control.Monad (void)
 import Control.Monad.Logger (LogLevel(..))
 import Data.Char (toLower)
 import Data.Functor.Compose (Compose(..))
@@ -36,6 +41,7 @@ import Core
 import Commands
 import Commands.Debug (DebugQuery(..))
 import qualified Commands.Debug as Debug
+import InteractiveInput (Input, runInput)
 import OptionParsers
 import Query (Query)
 
@@ -83,8 +89,20 @@ runCommandRoot CommandRoot{..} work progName = do
               <*> debugOption <*> explainOption <*> queryLogOption
               <*> migrateOption <*> pagerOption <*> parser
 
-runSqlM :: CommandRoot a -> (a -> SqlM ()) -> IO ()
-runSqlM root work = getProgName >>= runCommandRoot root work
+runCommand :: CommandRoot a -> (a -> SqlM ()) -> IO ()
+runCommand root work = getProgName >>= runCommandRoot root work
+
+runSqlMCommand :: CommandRoot (SqlM a) -> (a -> SqlM ()) -> IO ()
+runSqlMCommand root work = runCommand root (>>= work)
+
+runSqlMCommand_ :: CommandRoot (SqlM ()) -> IO ()
+runSqlMCommand_ root = runCommand root void
+
+runInputCommand :: CommandRoot (Input SqlM a) -> (a -> SqlM ()) -> IO ()
+runInputCommand root work = runCommand root (\act -> runInput act >>= work)
+
+runInputCommand_ :: CommandRoot (Input SqlM ()) -> IO ()
+runInputCommand_ root = runCommand root runInput
 
 databaseOption :: Parser Text
 databaseOption = strOption . mconcat $

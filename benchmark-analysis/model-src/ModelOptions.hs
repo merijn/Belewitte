@@ -7,7 +7,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
-module ModelOptions (ModelCommand(..), commands, runSqlM) where
+module ModelOptions (ModelCommand(..), commands, runCommand) where
 
 import Data.Char (toLower)
 import qualified Data.Conduit.Combinators as C

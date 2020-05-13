@@ -71,7 +71,7 @@ reportModelStats ModelStats{..} = do
                   $ M.elems modelUnknownPreds
 
 main :: IO ()
-main = runSqlM commands $ \case
+main = runCommand commands $ \case
     Train{getConfig} -> runInput $ do
         modelName <- getInteractive textInput "Model Name"
         modelPrettyName <- getInteractive optionalInput "Model Pretty Name"

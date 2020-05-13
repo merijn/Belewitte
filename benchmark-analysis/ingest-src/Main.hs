@@ -44,10 +44,7 @@ import qualified Sql
 import qualified Sql.Transaction as SqlTrans
 
 main :: IO ()
-main = runSqlM commands $ runInput
-
-commands :: CommandRoot (Input SqlM ())
-commands = CommandRoot
+main = runInputCommand_ CommandRoot
   { mainHeaderDesc = "a tool for registering and running GPU benchmarks"
   , mainDesc =
         "Register GPUs, algorithms, algorithm implementations, and graphs in \
