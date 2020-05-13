@@ -52,7 +52,7 @@ main = runInputCommand_ CommandRoot
         \configurations and store all results in the database."
   , mainQueryDump = ingestQueryDump
   , mainQueryMap = ingestQueryMap
-  , mainCommands =
+  , mainCommands = SubCommands
     [ Add.commands
     , lift <$> Set.commands
     , lift <$> Unset.commands

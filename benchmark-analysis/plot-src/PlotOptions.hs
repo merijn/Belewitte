@@ -77,7 +77,7 @@ commands = CommandRoot
   , mainDesc = ""
   , mainQueryDump = plotQueryDump
   , mainQueryMap = plotQueryMap
-  , mainCommands =
+  , mainCommands = SubCommands
     [ SingleCommand CommandInfo
         { commandName = "levels"
         , commandHeaderDesc = "plot level times for a graph"

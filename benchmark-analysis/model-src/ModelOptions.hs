@@ -74,7 +74,7 @@ commands = CommandRoot
         \models for predicting which implementation to use for an algorithm."
   , mainQueryDump = modelQueryDump
   , mainQueryMap = modelQueryMap
-  , mainCommands =
+  , mainCommands = SubCommands
     [ SingleCommand CommandInfo
         { commandName = "train"
         , commandHeaderDesc = "train a model"

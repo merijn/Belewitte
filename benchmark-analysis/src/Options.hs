@@ -1,12 +1,15 @@
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Options
     ( CommandRoot(..)
     , Command
     , CommandInfo(..)
     , Compose(Compose)
     , DebugQuery(..)
+    , SubCommands(..)
     , pattern CommandGroup
     , pattern CommandWithSubGroup
     , pattern HiddenGroup
@@ -50,8 +53,14 @@ data CommandRoot a = CommandRoot
     , mainDesc :: String
     , mainQueryDump :: FilePath -> SqlM ()
     , mainQueryMap :: Map String (Parser DebugQuery)
-    , mainCommands :: [Command a]
+    , mainCommands :: SubCommands a
     }
+
+data SubCommands a where
+    SubCommands :: [Command a] -> SubCommands a
+
+    SubCommandsWithGlobalOptions
+        :: Parser b -> [Command (b -> a)] -> SubCommands a
 
 nameDebugQuery
     :: Show v
@@ -60,7 +69,7 @@ nameDebugQuery
     -> (String, Parser DebugQuery)
 nameDebugQuery name (Compose queryParser) = (name, DebugQuery <$> queryParser)
 
-runCommandRoot :: CommandRoot a -> (a -> SqlM ()) -> String -> IO ()
+runCommandRoot :: forall a . CommandRoot a -> (a -> SqlM ()) -> String -> IO ()
 runCommandRoot CommandRoot{..} work progName = do
     System.hFlush System.stdout >> System.hFlush System.stderr
 
@@ -71,23 +80,47 @@ runCommandRoot CommandRoot{..} work progName = do
     config <- customExecParser parsePrefs parseInfo
     runSqlMWithOptions config (either id work)
   where
-    debugCommand = Left <$> Debug.commands mainQueryDump mainQueryMap
+    mainCommand :: Command a
+    mainCommand = case mainCommands of
+        SubCommands cmds ->
+            CommandGroup CommandInfo
+                { commandName = progName
+                , commandHeaderDesc = mainHeaderDesc
+                , commandDesc = mainDesc
+                }
+                cmds
 
-    mainCommand = CommandGroup CommandInfo
+        SubCommandsWithGlobalOptions parser cmds ->
+            CommandGroupWithFlags CommandInfo
+                { commandName = progName
+                , commandHeaderDesc = mainHeaderDesc
+                , commandDesc = mainDesc
+                }
+                parser
+                cmds
+
+    debugCommand :: Command (SqlM ())
+    debugCommand = CommandGroup CommandInfo
         { commandName = progName
         , commandHeaderDesc = mainHeaderDesc
         , commandDesc = mainDesc
         }
-        $ map (fmap Right) mainCommands <> [debugCommand]
+        $ [Debug.commands mainQueryDump mainQueryMap]
 
+    parseInfo :: ParserInfo (Options (Either (SqlM ()) a))
     parseInfo = info (optionParser <**> helper) helpInfo
 
-    (parser, helpInfo) = buildCommand mainCommand
+    mainParser :: Parser (Either (SqlM ()) a)
+    (mainParser, helpInfo) = buildCommand $ Right <$> mainCommand
 
+    debugParser :: Parser (Either (SqlM ()) a)
+    (debugParser, _) = buildCommand $ Left <$> debugCommand
+
+    optionParser :: Parser (Options (Either (SqlM ()) a))
     optionParser =
       Options <$> databaseOption <*> vacuumOption <*> verbosityOption
               <*> debugOption <*> explainOption <*> queryLogOption
-              <*> migrateOption <*> pagerOption <*> parser
+              <*> migrateOption <*> pagerOption <*> (mainParser <|> debugParser)
 
 runCommand :: CommandRoot a -> (a -> SqlM ()) -> IO ()
 runCommand root work = getProgName >>= runCommandRoot root work
