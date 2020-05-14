@@ -1,12 +1,22 @@
 {-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 module PlotOptions
     ( BarPlot(..)
     , commands
     ) where
 
+import Control.Monad (forM)
+import Data.Bifunctor (bimap)
+import Data.Conduit ((.|))
+import qualified Data.Conduit.Combinators as C
+import Data.IntMap (IntMap)
+import qualified Data.IntMap.Strict as IM
 import Data.Map (Map)
 import qualified Data.Map as M
+import Data.Maybe (catMaybes)
+import Data.Monoid (Any(..))
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
@@ -14,6 +24,8 @@ import qualified Data.Text.IO as T
 
 import Core
 import Schema
+import Sql ((==.))
+import qualified Sql
 import Options
 
 import BarPlot
@@ -22,6 +34,28 @@ import LevelQuery (levelTimePlotQuery)
 import QueryDump (plotQueryDump)
 import TimeQuery (timePlotQuery)
 
+queryVariants :: Key Algorithm -> Set Text -> SqlM (Set (Key Variant))
+queryVariants algoId graphs = do
+    gids <- Sql.selectSource [] [] $
+        C.filter (\i -> S.member (graphName (Sql.entityVal i)) graphs)
+        .| C.map Sql.entityKey
+        .| C.foldMap S.singleton
+
+    variantConfigId <- Sql.selectKeysList
+        [VariantConfigAlgorithmId ==. algoId, VariantConfigIsDefault ==. True]
+        [] >>= \case
+            [key] -> return key
+            [] -> logThrowM . PatternFailed $
+              "No default variant config for algorithm #" <> showSqlKey algoId
+            _ -> logThrowM . PatternFailed . mconcat $
+                [ "Multiple default variant configs for algorithm #"
+                , showSqlKey algoId ]
+
+    variants <- forM (S.toList gids) $ \gId ->
+        Sql.getBy $ UniqVariant gId variantConfigId
+
+    return . S.fromList . map Sql.entityKey . catMaybes $ variants
+
 barPlotParser :: BarPlotType -> Parser (PlotConfig -> SqlM BarPlot)
 barPlotParser barPlotType = do
     getGlobalOpts <- globalOptionsParser
@@ -29,8 +63,16 @@ barPlotParser barPlotType = do
     getImpls <- impls
 
     pure $ \config -> do
+        rawImpls <- getImpls
+        rawGraphs <- getGraphs
+
         globalOpts@GlobalPlotOptions{..} <- getGlobalOpts
-        BarPlot globalOpts config barPlotType <$> getGraphs <*> getImpls
+
+        let finalGlobalOpts = globalOpts
+              { globalPlotImpls = filterImpls rawImpls globalPlotImpls }
+
+        BarPlot finalGlobalOpts config barPlotType
+            <$> queryVariants globalPlotAlgorithm rawGraphs
   where
     graphs :: Parser (SqlM (Set Text))
     graphs = readSet "graphs"
@@ -46,6 +88,22 @@ barPlotParser barPlotType = do
 
     readText :: MonadIO m => FilePath -> m (Set Text)
     readText = liftIO . fmap (S.fromList . T.lines) . T.readFile
+
+    filterImpls
+        :: Set Text
+        -> (IntMap Implementation, IntMap ExternalImpl)
+        -> (IntMap Implementation, IntMap ExternalImpl)
+    filterImpls is = bimap (filterImplementation is) (filterExternal is)
+
+    filterImplementation
+        :: Set Text -> IntMap Implementation -> IntMap Implementation
+    filterImplementation textSet = IM.filter $ getAny . mconcat
+        [ Any . (`S.member` textSet) . implementationName
+        , Any . (Builtin==) . implementationType
+        ]
+
+    filterExternal :: Set Text -> IntMap ExternalImpl -> IntMap ExternalImpl
+    filterExternal names = IM.filter ((`S.member` names) . externalImplName)
 
 commands :: CommandRoot (SqlM BarPlot)
 commands = CommandRoot

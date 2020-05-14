@@ -11,7 +11,7 @@ module BarPlot
     , barPlot
     ) where
 
-import Control.Monad (forM, forM_)
+import Control.Monad (forM_)
 import Control.Monad.Catch (handle)
 import Data.Bifunctor (bimap, second)
 import Data.Conduit (ConduitT, (.|))
@@ -19,8 +19,6 @@ import qualified Data.Conduit.Combinators as C
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 import Data.List (intersperse)
-import Data.Maybe (catMaybes)
-import Data.Monoid (Any(..))
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
@@ -34,7 +32,7 @@ import Core
 import RuntimeData (getBarPlotScript)
 import Query (streamQuery)
 import Schema
-import Sql (Region, (==.))
+import Sql (Region)
 import qualified Sql
 import Utils.ImplTiming (ImplTiming(..))
 import Utils.Pair (Pair(..), mergePair, toPair)
@@ -62,40 +60,13 @@ data BarPlot
     { barPlotGlobalOpts :: GlobalPlotOptions
     , barPlotPlotConfig :: PlotConfig
     , barPlotType :: BarPlotType
-    , barPlotGraphs :: Set Text
-    , barPlotImplementations :: Set Text
+    , barPlotVariants :: Set (Key Variant)
     }
-
-queryVariants :: Key Algorithm -> Set Text -> SqlM (Set (Key Variant))
-queryVariants algoId graphs = do
-    gids <- Sql.selectSource [] [] $
-        C.filter (\i -> S.member (graphName (Sql.entityVal i)) graphs)
-        .| C.map Sql.entityKey
-        .| C.foldMap S.singleton
-
-    variantConfigId <- Sql.selectKeysList
-        [VariantConfigAlgorithmId ==. algoId, VariantConfigIsDefault ==. True]
-        [] >>= \case
-            [key] -> return key
-            [] -> logThrowM . PatternFailed $
-              "No default variant config for algorithm #" <> showSqlKey algoId
-            _ -> logThrowM . PatternFailed . mconcat $
-                [ "Multiple default variant configs for algorithm #"
-                , showSqlKey algoId ]
-
-    variants <- forM (S.toList gids) $ \gId ->
-        Sql.getBy $ UniqVariant gId variantConfigId
-
-    return . S.fromList . map Sql.entityKey . catMaybes $ variants
 
 barPlot :: BarPlot -> SqlM ()
 barPlot BarPlot{barPlotGlobalOpts = GlobalPlotOptions{..}, ..} = do
-    variants <- queryVariants globalPlotAlgorithm barPlotGraphs
-
-    let variantFilter VariantInfo{variantId} = S.member variantId variants
-
     case barPlotType of
-        Levels -> forM_ variants $ \variantId -> do
+        Levels -> forM_ barPlotVariants $ \variantId -> do
             graphId <- variantGraphId <$> Sql.getJust variantId
             name <- graphName <$> Sql.getJust graphId
 
@@ -109,7 +80,7 @@ barPlot BarPlot{barPlotGlobalOpts = GlobalPlotOptions{..}, ..} = do
                 .| C.map (bimap showText (nameImplementations regular))
 
         Totals -> runPlotScript barPlotPlotConfig "times-totals" $
-            streamQuery (variantsToTimePlotQuery variants)
+            streamQuery (variantsToTimePlotQuery barPlotVariants)
             .| C.map (second $ translatePair . toPair V.convert V.convert)
 
         VsOptimal -> runPlotScript barPlotPlotConfig "times-vs-optimal" $
@@ -118,10 +89,9 @@ barPlot BarPlot{barPlotGlobalOpts = GlobalPlotOptions{..}, ..} = do
             .| C.mapM dataFromVariantInfo
             .| C.map (second $ translatePair . fmap V.convert)
   where
-    filteredImpls = filterImpls barPlotImplementations
-    filteredExt = filterExternal barPlotImplementations
-    implMaps@Pair{regular} =
-        toImplNames filteredImpls filteredExt globalPlotImpls
+    variantFilter VariantInfo{variantId} = S.member variantId barPlotVariants
+
+    implMaps@Pair{regular} = toImplNames id id globalPlotImpls
 
     translatePair :: Pair (Vector ImplTiming) -> Vector (Text, Double)
     translatePair x = mergePair $ nameImplementations <$> implMaps <*> x
@@ -140,15 +110,6 @@ barPlot BarPlot{barPlotGlobalOpts = GlobalPlotOptions{..}, ..} = do
         , variantInfoDataset = Nothing
         , variantInfoFilterIncomplete = False
         }
-
-filterImpls :: Set Text -> IntMap Implementation -> IntMap Implementation
-filterImpls textSet = IM.filter $ getAny . mconcat
-    [ Any . (`S.member` textSet) . implementationName
-    , Any . (Builtin==) . implementationType
-    ]
-
-filterExternal :: Set Text -> IntMap ExternalImpl -> IntMap ExternalImpl
-filterExternal names = IM.filter ((`S.member` names) . externalImplName)
 
 dataFromVariantInfo
     :: VariantInfo -> Region SqlM (Text, Pair (Vector ImplTiming))
