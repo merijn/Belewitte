@@ -27,6 +27,7 @@ module Options
 import Control.Monad (void)
 import Control.Monad.Logger (LogLevel(..))
 import Data.Char (toLower)
+import Data.Function ((&))
 import Data.Functor.Compose (Compose(..))
 import Data.Map (Map)
 import qualified Data.Map as M
@@ -60,7 +61,7 @@ data SubCommands a where
     SubCommands :: [Command a] -> SubCommands a
 
     SubCommandsWithGlobalOptions
-        :: Parser b -> [Command (b -> a)] -> SubCommands a
+        :: Parser (b -> a) -> [Command b] -> SubCommands a
 
 nameDebugQuery
     :: Show v
@@ -95,9 +96,8 @@ runCommandRoot CommandRoot{..} work progName = do
                 { commandName = progName
                 , commandHeaderDesc = mainHeaderDesc
                 , commandDesc = mainDesc
-                }
-                parser
-                cmds
+                } parser
+                $ map (fmap (&)) cmds
 
     debugCommand :: Command (SqlM ())
     debugCommand = CommandGroup CommandInfo
