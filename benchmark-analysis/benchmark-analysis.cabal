@@ -283,7 +283,8 @@ Executable Plot
   Default-Language:     Haskell2010
   Hs-Source-Dirs:       plot-src
   Main-Is:              Main.hs
-  Other-Modules:        PlotOptions
+  Other-Modules:        BarPlot
+                        PlotOptions
                         TimeQuery
                         LevelQuery
                         QueryDump

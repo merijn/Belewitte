@@ -4,7 +4,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
-{-# LANGUAGE ViewPatterns #-}
 module Main (main) where
 
 import Control.Monad (forM, forM_)
@@ -14,31 +13,26 @@ import Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
-import Data.List (intersperse)
 import Data.Maybe (catMaybes)
 import Data.Monoid (Any(..))
 import Data.Set (Set)
 import qualified Data.Set as S
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
 import Data.Vector (Vector)
 import qualified Data.Vector as V
 import qualified Data.Vector.Generic as Generic
-import System.IO (Handle, hPutStr, stdout)
 
 import Core
+import BarPlot (barPlot)
 import Options
 import LevelQuery (levelTimePlotQuery)
-import PlotOptions (PlotConfig(..), PlotOptions(..), PlotType(..), commands)
+import PlotOptions (PlotOptions(..), PlotType(..), commands)
 import Query
-import RuntimeData (getBarPlotScript)
 import Schema
 import Sql ((==.))
 import qualified Sql
 import TimeQuery (timePlotQuery)
 import Utils.ImplTiming
 import Utils.Pair (Pair(..), toPair, mergePair)
-import Utils.Process (withStdin)
 import VariantQuery
 
 queryVariants :: Key Algorithm -> Set Text -> SqlM (Set (Key Variant))
@@ -72,49 +66,8 @@ filterImpls textSet = IM.filter $ getAny . mconcat
 filterExternal :: Set Text -> IntMap ExternalImpl -> IntMap ExternalImpl
 filterExternal names = IM.filter ((`S.member` names) . externalImplName)
 
-reportData
-    :: (MonadIO m, MonadLogger m, MonadThrow m)
-    => Handle -> Bool -> ConduitT (Text, Vector (Text, Double)) Void m ()
-reportData hnd normalise = do
-    impls <- C.peek >>= \case
-        Just (_, v) -> return $ V.map fst v
-        Nothing -> logThrowM . PatternFailed $
-            "Expected at least one output row"
-
-    liftIO . T.hPutStrLn hnd $ toColumnLabels impls
-    C.mapM_ $ printGraph impls
-  where
-    toColumnLabels :: Vector Text -> Text
-    toColumnLabels = mconcat . intersperse ":" . V.toList
-
-    printGraph
-        :: (MonadIO m, MonadLogger m, MonadThrow m)
-        => Vector Text -> (Text, Vector (Text, Double)) -> m ()
-    printGraph impls (graph, timingsPair)
-        | mismatch = logThrowM $
-            QueryResultMismatch (V.toList impls) (V.toList timingImpls)
-
-        | otherwise = liftIO $ do
-            T.hPutStr hnd $ graph <> " :"
-            V.forM_ processedTimings $ \time -> hPutStr hnd $ " " ++ show time
-            T.hPutStrLn hnd ""
-      where
-        mismatch :: Bool
-        mismatch = not . V.and $ V.zipWith (==) impls timingImpls
-
-        timingImpls :: Vector Text
-        timings :: Vector Double
-        (timingImpls, timings) = V.unzip timingsPair
-
-        maxTime :: Double
-        maxTime = V.maximum . V.filter (not . isInfinite) $ timings
-
-        processedTimings :: Vector Double
-        processedTimings
-            | normalise = V.map (/ maxTime) timings
-            | otherwise = timings
-
-dataFromVariantInfo :: VariantInfo -> SqlM (Text, Pair (Vector ImplTiming))
+dataFromVariantInfo
+    :: VariantInfo -> Region SqlM (Text, Pair (Vector ImplTiming))
 dataFromVariantInfo VariantInfo{..} = do
     graphId <- variantGraphId <$> Sql.getJust variantId
     name <- graphName <$> Sql.getJust graphId
@@ -123,25 +76,6 @@ dataFromVariantInfo VariantInfo{..} = do
     extendedTimings = V.convert variantTimings
         `V.snoc` ImplTiming bestNonSwitchingImplId variantBestNonSwitching
         `V.snoc` ImplTiming optimalImplId variantOptimal
-
-plot
-    :: PlotConfig
-    -> Text
-    -> Query a
-    -> ConduitT a (Text, Vector (Text, Double)) SqlM ()
-    -> SqlM ()
-plot PlotConfig{..} plotName query convert
-  | printStdout = doWithHandle stdout
-  | otherwise = do
-        plotProcess <- getBarPlotScript args
-        withStdin plotProcess doWithHandle
-  where
-    args :: [String]
-    args = [T.unpack plotName, axisName, show normalise, show slideFormat]
-
-    doWithHandle :: Handle -> SqlM ()
-    doWithHandle hnd = runSqlQueryConduit query $
-        convert .| reportData hnd normalise
 
 nameImplementations
     :: Generic.Vector v ImplTiming
@@ -186,15 +120,18 @@ main = runSqlMCommand commands $ \PlotOptions{..} -> do
                         [ "Missing results for graph \"", name
                         , "\", variant #", showSqlKey variantId ]
 
-                handle missingResults $ plot plotConfig pdfName query $
-                    C.map (bimap showText (nameImplementations regular))
+                handle missingResults . plot plotConfig pdfName $
+                    streamQuery query
+                    .| C.map (bimap showText (nameImplementations regular))
 
         PlotTotals -> do
-            plot plotConfig "times-totals" timeQuery $
-                C.map (second $ translatePair . toPair V.convert V.convert)
+            plot plotConfig "times-totals" $
+                streamQuery timeQuery
+                .| C.map (second $ translatePair . toPair V.convert V.convert)
 
         PlotVsOptimal -> do
-            plot plotConfig "times-vs-optimal" variantQuery $
-                C.filter variantFilter
+            plot plotConfig "times-vs-optimal" $
+                streamQuery variantQuery
+                .| C.filter variantFilter
                 .| C.mapM dataFromVariantInfo
                 .| C.map (second $ translatePair . fmap V.convert)
