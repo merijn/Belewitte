@@ -1,8 +1,7 @@
 {-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE RecordWildCards #-}
 module PlotOptions
-    ( PlotConfig(..)
-    , PlotOptions(..)
-    , PlotType(..)
+    ( BarPlot(..)
     , commands
     ) where
 
@@ -14,47 +13,24 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 
 import Core
-import LevelQuery (levelTimePlotQuery)
 import Schema
 import Options
+
+import BarPlot
+import GlobalPlotOptions
+import LevelQuery (levelTimePlotQuery)
 import QueryDump (plotQueryDump)
 import TimeQuery (timePlotQuery)
 
-data PlotConfig = PlotConfig
-    { axisName :: String
-    , slideFormat :: Bool
-    , printStdout :: Bool
-    , normalise :: Bool
-    }
-
-data PlotType
-    = PlotLevels
-    | PlotTotals
-    | PlotVsOptimal
-
-data PlotOptions
-    = PlotOptions
-      { plotType :: PlotType
-      , plotConfig :: PlotConfig
-      , algorithmId :: Key Algorithm
-      , platformId :: Key Platform
-      , commitId :: CommitId
-      , graphSet :: Set Text
-      , implementationNames :: Set Text
-      }
-
-plotOptions :: PlotType -> Parser (PlotConfig -> SqlM PlotOptions)
-plotOptions pType = do
-    getAlgoId <- algorithmIdParser
-    getPlatformId <- platformIdParser
-    getCommit <- commitIdParser
+barPlotParser :: BarPlotType -> Parser (PlotConfig -> SqlM BarPlot)
+barPlotParser barPlotType = do
+    getGlobalOpts <- globalOptionsParser
     getGraphs <- graphs
     getImpls <- impls
 
     pure $ \config -> do
-        algoId <- getAlgoId
-        PlotOptions pType config algoId
-            <$> getPlatformId <*> getCommit algoId <*> getGraphs <*> getImpls
+        globalOpts@GlobalPlotOptions{..} <- getGlobalOpts
+        BarPlot globalOpts config barPlotType <$> getGraphs <*> getImpls
   where
     graphs :: Parser (SqlM (Set Text))
     graphs = readSet "graphs"
@@ -71,7 +47,7 @@ plotOptions pType = do
     readText :: MonadIO m => FilePath -> m (Set Text)
     readText = liftIO . fmap (S.fromList . T.lines) . T.readFile
 
-commands :: CommandRoot (SqlM PlotOptions)
+commands :: CommandRoot (SqlM BarPlot)
 commands = CommandRoot
   { mainHeaderDesc = "a tool for plotting benchmark results"
   , mainDesc = ""
@@ -83,22 +59,20 @@ commands = CommandRoot
         , commandHeaderDesc = "plot level times for a graph"
         , commandDesc = ""
         }
-        $ plotOptions PlotLevels <*> (plotConfigParser "Levels" <*> pure False)
+        $ barPlotParser Levels <*> (plotConfigParser "Levels" <*> pure False)
     , SingleCommand CommandInfo
         { commandName = "totals"
         , commandHeaderDesc = "plot total times for a set of graphs"
         , commandDesc = ""
         }
-        $ plotOptions PlotTotals <*>
-            (plotConfigParser "Graph" <*> normaliseFlag)
+        $ barPlotParser Totals <*> (plotConfigParser "Graph" <*> normaliseFlag)
     , SingleCommand CommandInfo
         { commandName = "vs-optimal"
         , commandHeaderDesc =
           "plot total times for a set of graphs against the optimal"
         , commandDesc = ""
         }
-        $ plotOptions PlotVsOptimal <*>
-                (plotConfigParser "Graph" <*> normaliseFlag)
+        $ barPlotParser VsOptimal <*> (plotConfigParser "Graph" <*> normaliseFlag)
     ]
   }
   where

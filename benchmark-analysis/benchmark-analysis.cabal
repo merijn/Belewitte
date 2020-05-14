@@ -284,6 +284,7 @@ Executable Plot
   Hs-Source-Dirs:       plot-src
   Main-Is:              Main.hs
   Other-Modules:        BarPlot
+                        GlobalPlotOptions
                         PlotOptions
                         TimeQuery
                         LevelQuery
