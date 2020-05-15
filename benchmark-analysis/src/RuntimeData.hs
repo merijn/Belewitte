@@ -8,6 +8,7 @@ module RuntimeData
     , getKernelLibPathMaybe
     , getKernelLibPath
     , getBarPlotScript
+    , getHeatmapScript
     , getModelScript
     , getOutputChecker
     ) where
@@ -127,6 +128,10 @@ getPythonScript script args = do
 getBarPlotScript
     :: (MonadIO m, MonadLogger m, MonadMask m) => [String] -> m CreateProcess
 getBarPlotScript = getPythonScript "bar-plot.py"
+
+getHeatmapScript
+    :: (MonadIO m, MonadLogger m, MonadMask m) => [String] -> m CreateProcess
+getHeatmapScript = getPythonScript "heatmap.py"
 
 getModelScript
     :: (MonadIO m, MonadLogger m, MonadMask m) => [String] -> m CreateProcess
