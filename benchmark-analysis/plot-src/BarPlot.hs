@@ -6,7 +6,6 @@
 {-# LANGUAGE TupleSections #-}
 module BarPlot
     ( BarPlotType(..)
-    , PlotConfig(..)
     , BarPlot(..)
     , barPlot
     ) where
@@ -45,21 +44,23 @@ import TimeQuery (timePlotQuery)
 
 data BarPlotType
     = Levels
-    | Totals
-    | VsOptimal
+    | Totals { normalise :: Bool }
+    | VsOptimal { normalise :: Bool }
 
-data PlotConfig = PlotConfig
-    { axisName :: String
+data BarPlotConfig = BarPlotConfig
+    { plotName :: Text
+    , axisName :: String
     , slideFormat :: Bool
     , printStdout :: Bool
-    , normalise :: Bool
+    , normaliseData :: Bool
     }
 
 data BarPlot
     = BarPlot
     { barPlotGlobalOpts :: GlobalPlotOptions
-    , barPlotPlotConfig :: PlotConfig
     , barPlotType :: BarPlotType
+    , barPlotSlideFormat :: Bool
+    , barPlotPrintStdout :: Bool
     , barPlotVariants :: Set (Key Variant)
     }
 
@@ -75,20 +76,32 @@ barPlot BarPlot{barPlotGlobalOpts = GlobalPlotOptions{..}, ..} = do
                     [ "Missing results for graph \"", name
                     , "\", variant #", showSqlKey variantId ]
 
-            handle missingResults . runPlotScript barPlotPlotConfig pdfName $
+            handle missingResults . runPlotScript (plotConfig pdfName) $
                 streamQuery (variantToLevelTimePlotQuery variantId)
                 .| C.map (bimap showText (nameImplementations regular))
 
-        Totals -> runPlotScript barPlotPlotConfig "times-totals" $
+        Totals _ -> runPlotScript (plotConfig "times-totals") $
             streamQuery (variantsToTimePlotQuery barPlotVariants)
             .| C.map (second $ translatePair . toPair V.convert V.convert)
 
-        VsOptimal -> runPlotScript barPlotPlotConfig "times-vs-optimal" $
+        VsOptimal _ -> runPlotScript (plotConfig "times-vs-optimal") $
             streamQuery variantQuery
             .| C.filter variantFilter
             .| C.mapM dataFromVariantInfo
             .| C.map (second $ translatePair . fmap V.convert)
   where
+    plotConfig name = BarPlotConfig
+        { plotName = name
+        , slideFormat = barPlotSlideFormat
+        , printStdout = barPlotPrintStdout
+        , ..
+        }
+      where
+        (axisName, normaliseData) = case barPlotType of
+            Levels -> ("Levels", False)
+            Totals b -> ("Graph", b)
+            VsOptimal b -> ("Graph", b)
+
     variantFilter VariantInfo{variantId} = S.member variantId barPlotVariants
 
     implMaps@Pair{regular} = toImplNames id id globalPlotImpls
@@ -133,18 +146,17 @@ nameImplementations impls = V.mapMaybe translate . V.convert
     translate (ImplTiming impl val) = (,val) <$> impls IM.!? fromIntegral impl
 
 runPlotScript
-    :: PlotConfig
-    -> Text
+    :: BarPlotConfig
     -> ConduitT () (Text, Vector (Text, Double)) (Region SqlM) ()
     -> SqlM ()
-runPlotScript PlotConfig{..} plotName queryDataConduit
+runPlotScript BarPlotConfig{..} queryDataConduit
   | printStdout = doWithHandle stdout
   | otherwise = do
         plotProcess <- getBarPlotScript args
         withStdin plotProcess doWithHandle
   where
     args :: [String]
-    args = [T.unpack plotName, axisName, show normalise, show slideFormat]
+    args = [T.unpack plotName, axisName, show normaliseData, show slideFormat]
 
     doWithHandle :: Handle -> SqlM ()
     doWithHandle hnd = Sql.runRegionConduit $
@@ -185,5 +197,5 @@ runPlotScript PlotConfig{..} plotName queryDataConduit
 
         processedTimings :: Vector Double
         processedTimings
-            | normalise = V.map (/ maxTime) timings
+            | normaliseData = V.map (/ maxTime) timings
             | otherwise = timings

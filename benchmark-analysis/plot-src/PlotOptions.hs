@@ -56,13 +56,15 @@ queryVariants algoId graphs = do
 
     return . S.fromList . map Sql.entityKey . catMaybes $ variants
 
-barPlotParser :: BarPlotType -> Parser (PlotConfig -> SqlM BarPlot)
-barPlotParser barPlotType = do
+barPlotParser :: Parser (BarPlotType -> SqlM BarPlot)
+barPlotParser = do
     getGlobalOpts <- globalOptionsParser
+    slideFormat <- slideFlag
+    printStdout <- printFlag
     getGraphs <- graphs
     getImpls <- impls
 
-    pure $ \config -> do
+    pure $ \barPlotType -> do
         rawImpls <- getImpls
         rawGraphs <- getGraphs
 
@@ -71,7 +73,7 @@ barPlotParser barPlotType = do
         let finalGlobalOpts = globalOpts
               { globalPlotImpls = filterImpls rawImpls globalPlotImpls }
 
-        BarPlot finalGlobalOpts config barPlotType
+        BarPlot finalGlobalOpts barPlotType slideFormat printStdout
             <$> queryVariants globalPlotAlgorithm rawGraphs
   where
     graphs :: Parser (SqlM (Set Text))
@@ -88,6 +90,14 @@ barPlotParser barPlotType = do
 
     readText :: MonadIO m => FilePath -> m (Set Text)
     readText = liftIO . fmap (S.fromList . T.lines) . T.readFile
+
+    slideFlag :: Parser Bool
+    slideFlag = flag False True $ mconcat
+        [ long "slide", help "Render 4:3 slide dimensions" ]
+
+    printFlag :: Parser Bool
+    printFlag = flag False True $ mconcat
+        [ long "print", help "Print results to stdout, rather than plotting" ]
 
     filterImpls
         :: Set Text
@@ -117,34 +127,23 @@ commands = CommandRoot
         , commandHeaderDesc = "plot level times for a graph"
         , commandDesc = ""
         }
-        $ barPlotParser Levels <*> (plotConfigParser "Levels" <*> pure False)
+        $ barPlotParser <*> pure Levels
     , SingleCommand CommandInfo
         { commandName = "totals"
         , commandHeaderDesc = "plot total times for a set of graphs"
         , commandDesc = ""
         }
-        $ barPlotParser Totals <*> (plotConfigParser "Graph" <*> normaliseFlag)
+        $ barPlotParser <*> (Totals <$> normaliseFlag)
     , SingleCommand CommandInfo
         { commandName = "vs-optimal"
         , commandHeaderDesc =
           "plot total times for a set of graphs against the optimal"
         , commandDesc = ""
         }
-        $ barPlotParser VsOptimal <*> (plotConfigParser "Graph" <*> normaliseFlag)
+        $ barPlotParser <*> (VsOptimal <$> normaliseFlag)
     ]
   }
   where
-    plotConfigParser :: String -> Parser (Bool -> PlotConfig)
-    plotConfigParser axis = PlotConfig axis <$> slideFlag <*> printFlag
-
-    slideFlag :: Parser Bool
-    slideFlag = flag False True $ mconcat
-        [ long "slide", help "Render 4:3 slide dimensions" ]
-
-    printFlag :: Parser Bool
-    printFlag = flag False True $ mconcat
-        [ long "print", help "Print results to stdout, rather than plotting" ]
-
     normaliseFlag :: Parser Bool
     normaliseFlag = flag False True $ mconcat [long "normalise"]
 
