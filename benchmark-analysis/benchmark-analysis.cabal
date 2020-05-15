@@ -26,6 +26,7 @@ Data-Files:             runtime-data/kernel-runner
                         runtime-data/requirements.txt
                         runtime-data/scripts/model.py
                         runtime-data/scripts/bar-plot.py
+                        runtime-data/scripts/heatmap.py
                         runtime-data/virtualenv
 
 Extra-Source-Files:     cbits/*.h sqlite3exts/*.h
@@ -44,6 +45,7 @@ Common all
                         ViewPatterns
 
   Build-Depends:        base
+               ,        bytestring
                ,        conduit ^>= 1.3.1.1
                ,        conduit-extra ^>= 1.3.4
                ,        containers >= 0.5.11 && < 0.7
@@ -187,7 +189,6 @@ Library
                         UndecidableInstances
 
   Build-Depends:        SQLiteExts
-               ,        bytestring
                ,        base64 ^>= 0.4.1
                ,        binary ^>= 0.8.7
                ,        clock ^>= 0.8
@@ -239,7 +240,6 @@ Executable Ingest
 
   Build-Depends:        benchmark-analysis
                ,        broadcast-chan-conduit ^>= 0.2.1
-               ,        bytestring
                ,        attoparsec ^>= 0.13.1
                ,        cryptonite-conduit ^>= 0.2.0
                ,        directory ^>= 1.3.4.0
@@ -271,7 +271,6 @@ Executable Model
   Build-Depends:        benchmark-analysis
                ,        binary ^>= 0.8.7
                ,        binary-conduit ^>= 1.3
-               ,        bytestring
                ,        data-interval ^>= 1.3.0
                ,        megaparsec ^>= 7.0.0
                ,        validated-literals ^>= 0.3.0
@@ -285,6 +284,7 @@ Executable Plot
   Main-Is:              Main.hs
   Other-Modules:        BarPlot
                         GlobalPlotOptions
+                        Heatmap
                         PlotOptions
                         TimeQuery
                         LevelQuery
@@ -294,6 +294,7 @@ Executable Plot
                         FlexibleContexts
 
   Build-Depends:        benchmark-analysis
+               ,        binary ^>= 0.8.7
                ,        vector ^>= 0.12.0.1
 
 Source-Repository head

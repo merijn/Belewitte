@@ -2,15 +2,13 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-module PlotOptions
-    ( BarPlot(..)
-    , commands
-    ) where
+module PlotOptions (PlotCommand(..), commands) where
 
 import Control.Monad (forM)
 import Data.Bifunctor (bimap)
 import Data.Conduit ((.|))
 import qualified Data.Conduit.Combinators as C
+import Data.Foldable (asum)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 import Data.Map (Map)
@@ -30,9 +28,12 @@ import Options
 
 import BarPlot
 import GlobalPlotOptions
+import Heatmap
 import LevelQuery (levelTimePlotQuery)
 import QueryDump (plotQueryDump)
 import TimeQuery (timePlotQuery)
+
+data PlotCommand = PlotBar BarPlot | PlotHeatmap Heatmap
 
 queryVariants :: Key Algorithm -> Set Text -> SqlM (Set (Key Variant))
 queryVariants algoId graphs = do
@@ -115,32 +116,59 @@ barPlotParser = do
     filterExternal :: Set Text -> IntMap ExternalImpl -> IntMap ExternalImpl
     filterExternal names = IM.filter ((`S.member` names) . externalImplName)
 
-commands :: CommandRoot (SqlM BarPlot)
+variantSelectionOption :: Parser (Key Algorithm -> SqlM VariantSelection)
+variantSelectionOption = asum
+    [ fmap (fmap ConfigSelection) <$> variantConfigIdParser
+    , pure $ const (return Everything)
+    ]
+
+heatmapParser :: Parser (SqlM Heatmap)
+heatmapParser = do
+    getGlobalOpts <- globalOptionsParser
+    getVariantSelection <- variantSelectionOption
+
+    pure $ do
+        globalOpts@GlobalPlotOptions{..} <- getGlobalOpts
+        Heatmap globalOpts <$> getVariantSelection globalPlotAlgorithm
+
+commands :: CommandRoot (SqlM PlotCommand)
 commands = CommandRoot
   { mainHeaderDesc = "a tool for plotting benchmark results"
   , mainDesc = ""
   , mainQueryDump = plotQueryDump
   , mainQueryMap = plotQueryMap
   , mainCommands = SubCommands
-    [ SingleCommand CommandInfo
-        { commandName = "levels"
-        , commandHeaderDesc = "plot level times for a graph"
+    [ fmap PlotBar <$> CommandGroup CommandInfo
+        { commandName = "bar"
+        , commandHeaderDesc = "bar plots"
         , commandDesc = ""
         }
-        $ barPlotParser <*> pure Levels
+        [ SingleCommand CommandInfo
+            { commandName = "levels"
+            , commandHeaderDesc = "plot level times for a graph"
+            , commandDesc = ""
+            }
+            $ barPlotParser <*> pure Levels
+        , SingleCommand CommandInfo
+            { commandName = "totals"
+            , commandHeaderDesc = "plot total times for a set of graphs"
+            , commandDesc = ""
+            }
+            $ barPlotParser <*> (Totals <$> normaliseFlag)
+        , SingleCommand CommandInfo
+            { commandName = "vs-optimal"
+            , commandHeaderDesc =
+            "plot total times for a set of graphs against the optimal"
+            , commandDesc = ""
+            }
+            $ barPlotParser <*> (VsOptimal <$> normaliseFlag)
+        ]
     , SingleCommand CommandInfo
-        { commandName = "totals"
-        , commandHeaderDesc = "plot total times for a set of graphs"
+        { commandName = "heatmap"
+        , commandHeaderDesc = "heatmap plots"
         , commandDesc = ""
         }
-        $ barPlotParser <*> (Totals <$> normaliseFlag)
-    , SingleCommand CommandInfo
-        { commandName = "vs-optimal"
-        , commandHeaderDesc =
-          "plot total times for a set of graphs against the optimal"
-        , commandDesc = ""
-        }
-        $ barPlotParser <*> (VsOptimal <$> normaliseFlag)
+        $ fmap PlotHeatmap <$> heatmapParser
     ]
   }
   where
