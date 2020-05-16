@@ -122,14 +122,21 @@ variantSelectionOption = asum
     , pure $ const (return Everything)
     ]
 
-heatmapParser :: Parser (SqlM Heatmap)
-heatmapParser = do
+totalsHeatmapParser :: Parser (SqlM Heatmap)
+totalsHeatmapParser = do
     getGlobalOpts <- globalOptionsParser
     getVariantSelection <- variantSelectionOption
+    showOptimal <- showOptimalFlag
+    getDatasetId <- optional datasetIdParser
 
     pure $ do
         globalOpts@GlobalPlotOptions{..} <- getGlobalOpts
-        Heatmap globalOpts <$> getVariantSelection globalPlotAlgorithm
+        TotalHeatmap globalOpts
+            <$> getVariantSelection globalPlotAlgorithm
+            <*> sequence getDatasetId <*> pure showOptimal
+  where
+    showOptimalFlag :: Parser Bool
+    showOptimalFlag = flag False True $ mconcat [long "show-optimal"]
 
 commands :: CommandRoot (SqlM PlotCommand)
 commands = CommandRoot
@@ -163,12 +170,18 @@ commands = CommandRoot
             }
             $ barPlotParser <*> (VsOptimal <$> normaliseFlag)
         ]
-    , SingleCommand CommandInfo
+    , fmap PlotHeatmap <$> CommandGroup CommandInfo
         { commandName = "heatmap"
         , commandHeaderDesc = "heatmap plots"
         , commandDesc = ""
         }
-        $ fmap PlotHeatmap <$> heatmapParser
+        [ SingleCommand CommandInfo
+            { commandName = "total"
+            , commandHeaderDesc = "plot heatmap for all variants"
+            , commandDesc = ""
+            }
+            $ totalsHeatmapParser
+        ]
     ]
   }
   where

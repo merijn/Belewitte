@@ -35,26 +35,35 @@ import GlobalPlotOptions
 data VariantSelection = ConfigSelection (Key VariantConfig) | Everything
 
 data Heatmap
-    = Heatmap
-    { heatmapGlobalOpts :: GlobalPlotOptions
-    , heatmapVariantSelection :: VariantSelection
-    }
+    = TotalHeatmap
+      { heatmapGlobalOpts :: GlobalPlotOptions
+      , heatmapVariantSelection :: VariantSelection
+      , heatmapDataset :: Maybe (Key Dataset)
+      , heatmapShowOptimal :: Bool
+      }
 
 plotHeatmap :: Heatmap -> SqlM ()
-plotHeatmap Heatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
+plotHeatmap TotalHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
     numVariants <- runSqlQueryCount variantQuery
     runPlotScript implNames numVariants $ streamQuery variantQuery
   where
     Pair implNames _ = toImplNames id id globalPlotImpls
 
-    variantQuery = variantTimings <$> variantInfoQuery VariantInfoConfig
+    extractTimings :: VariantInfo -> Vector ImplTiming
+    extractTimings VariantInfo{..}
+        | heatmapShowOptimal = extendTimings variantTimings
+        | otherwise = variantTimings
+      where
+        extendTimings = VS.cons (ImplTiming optimalImplId variantOptimal)
+
+    variantQuery = extractTimings <$> variantInfoQuery VariantInfoConfig
         { variantInfoAlgorithm = globalPlotAlgorithm
         , variantInfoPlatform = globalPlotPlatform
         , variantInfoCommit = globalPlotCommit
         , variantInfoVariantConfig = case heatmapVariantSelection of
             Everything -> Nothing
             ConfigSelection n -> Just n
-        , variantInfoDataset = Nothing
+        , variantInfoDataset = heatmapDataset
         , variantInfoFilterIncomplete = False
         }
 

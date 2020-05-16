@@ -285,9 +285,9 @@ Executable Plot
   Other-Modules:        BarPlot
                         GlobalPlotOptions
                         Heatmap
+                        LevelQuery
                         PlotOptions
                         TimeQuery
-                        LevelQuery
                         QueryDump
 
   Other-Extensions:     BangPatterns
