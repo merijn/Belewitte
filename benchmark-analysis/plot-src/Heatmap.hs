@@ -24,6 +24,7 @@ import Query
 import RuntimeData (getHeatmapScript)
 import Schema
 import Sql (runRegionConduit)
+import StepQuery
 import Utils.ImplTiming
 import Utils.Pair (Pair(..))
 import Utils.Process (Inherited(..), ReadWrite(Write))
@@ -40,6 +41,10 @@ data Heatmap
       , heatmapVariantSelection :: VariantSelection
       , heatmapDataset :: Maybe (Key Dataset)
       , heatmapShowOptimal :: Bool
+      }
+    | LevelHeatmap
+      { heatmapGlobalOpts :: GlobalPlotOptions
+      , heatmapVariant :: Key Variant
       }
 
 plotHeatmap :: Heatmap -> SqlM ()
@@ -65,6 +70,19 @@ plotHeatmap TotalHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
             ConfigSelection n -> Just n
         , variantInfoDataset = heatmapDataset
         , variantInfoFilterIncomplete = False
+        }
+
+plotHeatmap LevelHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
+    numSteps <- runSqlQueryCount stepQuery
+    runPlotScript implNames numSteps $ streamQuery stepQuery
+  where
+    Pair implNames _ = toImplNames id id globalPlotImpls
+
+    stepQuery = stepTimings <$> stepHeatmapQuery StepHeatmapConfig
+        { stepHeatmapAlgorithm = globalPlotAlgorithm
+        , stepHeatmapPlatform = globalPlotPlatform
+        , stepHeatmapCommit = globalPlotCommit
+        , stepHeatmapVariant = heatmapVariant
         }
 
 runPlotScript

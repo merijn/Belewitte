@@ -138,6 +138,15 @@ totalsHeatmapParser = do
     showOptimalFlag :: Parser Bool
     showOptimalFlag = flag False True $ mconcat [long "show-optimal"]
 
+levelsHeatmapParser :: Parser (SqlM Heatmap)
+levelsHeatmapParser = do
+    getGlobalOpts <- globalOptionsParser
+    getVariantId <- variantIdParser
+
+    pure $ do
+        globalOpts@GlobalPlotOptions{..} <- getGlobalOpts
+        LevelHeatmap globalOpts <$> getVariantId
+
 commands :: CommandRoot (SqlM PlotCommand)
 commands = CommandRoot
   { mainHeaderDesc = "a tool for plotting benchmark results"
@@ -181,6 +190,12 @@ commands = CommandRoot
             , commandDesc = ""
             }
             $ totalsHeatmapParser
+        , SingleCommand CommandInfo
+            { commandName = "levels"
+            , commandHeaderDesc = "plot heatmap for a variant"
+            , commandDesc = ""
+            }
+            $ levelsHeatmapParser
         ]
     ]
   }
