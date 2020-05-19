@@ -287,7 +287,7 @@ Executable Plot
                         Heatmap
                         LevelQuery
                         PlotOptions
-                        StepQuery
+                        StepHeatmapQuery
                         TimeQuery
                         QueryDump
 

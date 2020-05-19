@@ -24,7 +24,7 @@ import Query
 import RuntimeData (getHeatmapScript)
 import Schema
 import Sql (runRegionConduit)
-import StepQuery
+import StepHeatmapQuery
 import Utils.ImplTiming
 import Utils.Pair (Pair(..))
 import Utils.Process (Inherited(..), ReadWrite(Write))

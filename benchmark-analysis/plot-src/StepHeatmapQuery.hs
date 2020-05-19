@@ -3,7 +3,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
-module StepQuery
+module StepHeatmapQuery
     ( StepHeatmap(..)
     , StepHeatmapConfig(..)
     , stepHeatmapQuery
