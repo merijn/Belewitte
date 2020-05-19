@@ -52,13 +52,6 @@ import VariantQuery
 padText :: Word -> Text -> Text
 padText n t = t <> T.replicate (fromIntegral n - T.length t) " "
 
-liftImplTiming
-    :: (Double -> Double -> Double) -> ImplTiming -> ImplTiming -> ImplTiming
-liftImplTiming f (ImplTiming i1 v1) (ImplTiming i2 v2)
-    | i1 == i2 = ImplTiming i1 (f v1 v2)
-    | otherwise = error $ mconcat
-        [ "Shouldn't happen! Found: " , show i1, " and ", show i2]
-
 filterImpls :: Set ImplType -> IntMap Implementation -> IntMap Implementation
 filterImpls implTypes = IM.filter (implFilter . implementationType)
   where

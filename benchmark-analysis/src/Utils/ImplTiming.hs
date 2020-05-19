@@ -10,6 +10,13 @@ data ImplTiming = ImplTiming
     , implTimingTiming :: {-# UNPACK #-} ! Double
     }
 
+liftImplTiming
+    :: (Double -> Double -> Double) -> ImplTiming -> ImplTiming -> ImplTiming
+liftImplTiming f (ImplTiming i1 v1) (ImplTiming i2 v2)
+   | i1 == i2 = ImplTiming i1 (f v1 v2)
+   | otherwise = error $ mconcat
+        [ "Shouldn't happen! Found: " , show i1, " and ", show i2]
+
 instance Show ImplTiming where
     show ImplTiming{..} = ('(':) . shows implTimingImpl . (',':)
                         . shows implTimingTiming $ ")"
