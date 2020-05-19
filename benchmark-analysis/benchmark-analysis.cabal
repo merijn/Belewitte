@@ -93,6 +93,7 @@ Library
                         Schema
                         Sql
                         Sql.Transaction
+                        StepQuery
                         Utils.ImplTiming
                         Utils.Pair
                         Utils.Process
@@ -260,7 +261,6 @@ Executable Model
                         Train
                         Validate
                         QueryDump
-                        StepQuery
 
   Other-Extensions:     BangPatterns
                         DeriveFunctor
