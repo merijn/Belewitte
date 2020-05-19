@@ -94,6 +94,7 @@ Library
                         Sql
                         Sql.Transaction
                         StepQuery
+                        Utils.Conduit
                         Utils.ImplTiming
                         Utils.Pair
                         Utils.Process

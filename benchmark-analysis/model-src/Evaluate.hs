@@ -15,7 +15,6 @@ module Evaluate
     ) where
 
 import Control.Applicative (ZipList(..))
-import Control.Monad.Fix (fix)
 import Data.Conduit as C
 import Data.Conduit.List as C (mapAccum)
 import qualified Data.Conduit.Combinators as C
@@ -45,6 +44,7 @@ import Schema
 import StepQuery (StepInfo(..))
 import qualified Sql
 import Train
+import Utils.Conduit (foldGroup)
 import Utils.ImplTiming
 import Utils.Pair (Pair(..), mapFirst, mergePair)
 import VariantQuery
@@ -92,18 +92,6 @@ reportImplementations pad implMaps cmp f =
 
     renderEntry (name, (_, val)) = mconcat
         [ T.replicate pad " ", padText padSize $ name <> ":", f val ]
-
-foldGroup
-    :: Monad m
-    => (a -> a -> Bool)
-    -> ConduitT a Void m b
-    -> ConduitT a b m ()
-foldGroup p sink = fix $ \loop -> await >>= \case
-    Nothing -> return ()
-    Just e -> do
-        leftover e
-        (C.takeWhile (p e) .| C.toConsumer sink) >>= yield
-        loop
 
 data VariantAggregate =
   VariantAgg
