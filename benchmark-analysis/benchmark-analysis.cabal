@@ -93,6 +93,7 @@ Library
                         Schema
                         Sql
                         Sql.Transaction
+                        StepAggregate
                         StepQuery
                         Utils.Conduit
                         Utils.ImplTiming
