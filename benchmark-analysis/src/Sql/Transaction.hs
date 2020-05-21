@@ -11,7 +11,6 @@ module Sql.Transaction (module Sql, module Sql.Transaction) where
 import Control.Monad ((>=>))
 import Control.Monad.Catch (MonadThrow)
 import Control.Monad.Logger (MonadLogger)
-import qualified Control.Monad.Logger as Log
 import Control.Monad.Trans.Resource (MonadResource)
 import Data.Conduit (await)
 import qualified Data.Conduit.Combinators as C
@@ -92,14 +91,16 @@ getUniq record = do
         Just (Entity k _) -> return k
 
 insertUniq
-    :: (MonadLogger m, MonadSql m, SqlRecord record, AtLeastOneUniqueKey record, Eq record, Show record)
-    => record -> Transaction m ()
+    :: (MonadLogger m, MonadSql m, MonadThrow m, SqlRecord record, AtLeastOneUniqueKey record, Eq record, Show record)
+    => record -> Transaction m (Key record)
 insertUniq record = do
     result <- insertBy record
     case result of
-        Left (Entity _ r) | record /= r -> Log.logErrorN . T.pack $ mconcat
-            ["Unique insert failed:\nFound: ", show r, "\nNew: ", show record]
-        _ -> return ()
+        Left (Entity key r)
+            | record == r -> return key
+            | otherwise -> logThrowM $
+                UniqueViolation (T.pack $ show record) (T.pack $ show r)
+        Right key -> return key
 
 fieldFromEntity :: PersistEntity r => EntityField r v -> Entity r -> v
 fieldFromEntity field = view (Sqlite.fieldLens field)
