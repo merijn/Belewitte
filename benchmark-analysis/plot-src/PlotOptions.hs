@@ -147,6 +147,19 @@ levelsHeatmapParser = do
         globalOpts@GlobalPlotOptions{..} <- getGlobalOpts
         LevelHeatmap globalOpts <$> getVariantId
 
+predictHeatmapParser :: Parser (SqlM Heatmap)
+predictHeatmapParser = do
+    getGlobalOpts <- globalOptionsParser
+    getVariantSelection <- variantSelectionOption
+    getDatasetId <- optional datasetIdParser
+    getModelId <- modelIdParser
+
+    pure $ do
+        globalOpts@GlobalPlotOptions{..} <- getGlobalOpts
+        PredictHeatmap globalOpts
+            <$> getVariantSelection globalPlotAlgorithm
+            <*> sequence getDatasetId <*> getModelId
+
 commands :: CommandRoot (SqlM PlotCommand)
 commands = CommandRoot
   { mainHeaderDesc = "a tool for plotting benchmark results"
@@ -196,6 +209,12 @@ commands = CommandRoot
             , commandDesc = ""
             }
             $ levelsHeatmapParser
+        , SingleCommand CommandInfo
+            { commandName = "predict"
+            , commandHeaderDesc = "plot heatmap for a predictor"
+            , commandDesc = ""
+            }
+            $ predictHeatmapParser
         ]
     ]
   }

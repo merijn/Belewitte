@@ -27,9 +27,9 @@ data StepHeatmapConfig = StepHeatmapConfig
 
 data StepHeatmap =
   StepHeatmap
-    { stepVariantId :: {-# UNPACK #-} !(Key Variant)
-    , stepId :: {-# UNPACK #-} !Int64
-    , stepTimings :: {-# UNPACK #-} !(Vector ImplTiming)
+    { stepHeatmapVariantId :: {-# UNPACK #-} !(Key Variant)
+    , stepHeatmapId :: {-# UNPACK #-} !Int64
+    , stepHeatmapTimings :: {-# UNPACK #-} !(Vector ImplTiming)
     } deriving (Show)
 
 stepHeatmapQuery :: StepHeatmapConfig -> Query StepHeatmap
@@ -44,9 +44,9 @@ stepHeatmapQuery StepHeatmapConfig
     queryName = "stepHeatmapQuery"
 
     converter :: MonadConvert m => [PersistValue] -> m StepHeatmap
-    converter [ PersistInt64 (toSqlKey -> stepVariantId)
-              , PersistInt64 stepId
-              , PersistByteString (byteStringToVector -> stepTimings)
+    converter [ PersistInt64 (toSqlKey -> stepHeatmapVariantId)
+              , PersistInt64 stepHeatmapId
+              , PersistByteString (byteStringToVector -> stepHeatmapTimings)
               ] = return StepHeatmap{..}
 
     converter actualValues = logThrowM $ QueryResultUnparseable actualValues

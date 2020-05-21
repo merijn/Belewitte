@@ -2,6 +2,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE TemplateHaskell #-}
 module Heatmap
     ( VariantSelection(..)
     , Heatmap(..)
@@ -12,19 +13,28 @@ import Data.Binary.Put (putDoublehost, runPut)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
+import Data.Function (on)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
+import qualified Data.Set as S
 import qualified Data.Text.IO as T
+import Data.Time.Clock (getCurrentTime)
 import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as VS
 import System.IO (hClose)
 
 import Core
+import FieldQuery (getDistinctFieldQuery)
+import Predictor (MispredictionStrategy(None), loadPredictor)
 import Query
 import RuntimeData (getHeatmapScript)
 import Schema
-import Sql (runRegionConduit)
+import Sql ((==.))
+import qualified Sql
+import StepAggregate (VariantAggregate(..), aggregateSteps)
 import StepHeatmapQuery
+import StepQuery
+import Utils.Conduit (foldGroup)
 import Utils.ImplTiming
 import Utils.Pair (Pair(..))
 import Utils.Process (Inherited(..), ReadWrite(Write))
@@ -45,6 +55,12 @@ data Heatmap
     | LevelHeatmap
       { heatmapGlobalOpts :: GlobalPlotOptions
       , heatmapVariant :: Key Variant
+      }
+    | PredictHeatmap
+      { heatmapGlobalOpts :: GlobalPlotOptions
+      , heatmapVariantSelection :: VariantSelection
+      , heatmapDataset :: Maybe (Key Dataset)
+      , heatmapPredictor :: Key PredictionModel
       }
 
 plotHeatmap :: Heatmap -> SqlM ()
@@ -78,12 +94,48 @@ plotHeatmap LevelHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
   where
     Pair implNames _ = toImplNames id id globalPlotImpls
 
-    stepQuery = stepTimings <$> stepHeatmapQuery StepHeatmapConfig
+    stepQuery = stepHeatmapTimings <$> stepHeatmapQuery StepHeatmapConfig
         { stepHeatmapAlgorithm = globalPlotAlgorithm
         , stepHeatmapPlatform = globalPlotPlatform
         , stepHeatmapCommit = globalPlotCommit
         , stepHeatmapVariant = heatmapVariant
         }
+
+plotHeatmap PredictHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
+    query <- getDistinctFieldQuery GraphPropProperty
+    stepInfoGraphProps <- runSqlQueryConduit query $ C.foldMap S.singleton
+
+    stepInfoStepProps <- S.fromList . map (stepPropProperty . entityVal) <$>
+        Sql.selectList [StepPropAlgorithmId ==. globalPlotAlgorithm] []
+
+    stepInfoTimestamp <- liftIO getCurrentTime
+
+    predictor <- loadPredictor heatmapPredictor None
+
+    let stepQuery = stepInfoQuery StepInfoConfig
+            { stepInfoQueryMode = All
+            , stepInfoAlgorithm = globalPlotAlgorithm
+            , stepInfoPlatform = globalPlotPlatform
+            , stepInfoCommit = globalPlotCommit
+            , stepInfoSeed = 42
+            , stepInfoDatasets = S.singleton <$> heatmapDataset
+            , stepInfoFilterIncomplete = True
+            , stepInfoGraphs = $$(validRational 1)
+            , stepInfoVariants = $$(validRational 1)
+            , stepInfoSteps = $$(validRational 1)
+            , ..
+            }
+
+        aggregateQuery =
+          streamQuery stepQuery
+            .| foldGroup ((==) `on` stepVariantId) (aggregateSteps predictor)
+
+    numSteps <- runRegionConduit $ aggregateQuery .| C.length
+
+    runPlotScript implNames numSteps $
+        aggregateQuery .| C.map (regular . implTimes)
+  where
+    implNames = regular $ toImplNames id id globalPlotImpls
 
 runPlotScript
     :: IntMap Text
