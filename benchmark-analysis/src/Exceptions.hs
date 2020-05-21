@@ -438,6 +438,22 @@ instance Exception ForeignKeyViolation where
     fromException = fromSchemaException
     displayException = show . pretty
 
+data UniquenessViolation = UniqueViolation Text Text
+    deriving (Show, Typeable)
+
+instance Pretty UniquenessViolation where
+    pretty (UniqueViolation expected found) = Pretty.vsep
+        [ Pretty.reflow "Found unexpected conflicting value on unique insert!"
+        , Pretty.line, "Expected:", Pretty.line
+        , Pretty.reflow expected, Pretty.line, Pretty.line, "Found:"
+        , Pretty.line, Pretty.reflow found
+        ]
+
+instance Exception UniquenessViolation where
+    toException = toSchemaException
+    fromException = fromSchemaException
+    displayException = show . pretty
+
 data SqlException where
     SqlException :: (Exception e, Pretty e) => e -> SqlException
     deriving (Typeable)
