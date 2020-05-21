@@ -86,7 +86,9 @@ aggregateSteps predictor = do
             })
       where
         newPrediction :: ImplTiming
-        newPrediction = ImplTiming predictedImplId (getTime predictedImpl)
+        newPrediction
+            | predictedImpl == -1 = ImplTiming predictedImplId (0/0)
+            | otherwise = ImplTiming predictedImplId (getTime predictedImpl)
 
         predictedImpl :: Int
         predictedImpl = predict predictor stepProps lastImpl
