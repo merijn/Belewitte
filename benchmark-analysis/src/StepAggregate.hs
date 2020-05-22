@@ -18,6 +18,7 @@ import Schema
 import StepQuery (StepInfo(..))
 import Utils.ImplTiming (ImplTiming(..), liftImplTiming)
 import Utils.Pair (Pair(..))
+import Utils.PropValue (propValueValue)
 
 data VariantAggregate =
   VariantAgg
@@ -91,7 +92,9 @@ aggregateSteps predictor = do
             | otherwise = ImplTiming predictedImplId (getTime predictedImpl)
 
         predictedImpl :: Int
-        predictedImpl = predict predictor stepProps lastImpl
+        predictedImpl = predict predictor props lastImpl
+          where
+            props = VS.map propValueValue stepProps
 
         getTime :: Integral n => n -> Double
         getTime ix = implTimingTiming $

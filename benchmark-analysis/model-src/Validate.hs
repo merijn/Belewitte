@@ -12,6 +12,7 @@ import qualified Data.Conduit.Combinators as C
 import Data.Set (Set)
 import qualified Data.Text as T
 import Data.Vector.Storable (Vector)
+import qualified Data.Vector.Storable as VS
 
 import Core
 import FormattedOutput (renderOutput)
@@ -21,6 +22,7 @@ import Query
 import Schema
 import StepQuery (StepInfo(..))
 import Train
+import Utils.PropValue (propValueValue)
 
 data ValidateStats = ValidateStats
     { rightPreds :: !Int
@@ -52,7 +54,7 @@ validateModel predictor config mPlatform mDatasets = renderOutput $
             computeResults "comparison" $ reduceInfo <$> comparisonQuery
   where
     reduceInfo :: StepInfo -> (Vector Double, Int64)
-    reduceInfo StepInfo{..} = (stepProps, stepBestImpl)
+    reduceInfo StepInfo{..} = (VS.map propValueValue stepProps, stepBestImpl)
 
     total :: Query StepInfo
     total = getTotalQuery config

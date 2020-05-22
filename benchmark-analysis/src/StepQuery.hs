@@ -25,6 +25,7 @@ import Core
 import Query
 import Schema
 import Utils.ImplTiming
+import Utils.PropValue
 import Utils.Vector (byteStringToVector)
 
 data QueryMode = Train | Validate | All deriving (Show, Eq)
@@ -47,7 +48,7 @@ data StepInfoConfig = StepInfoConfig
 
 data StepInfo =
   StepInfo
-    { stepProps :: {-# UNPACK #-} !(Vector Double)
+    { stepProps :: {-# UNPACK #-} !(Vector PropValue)
     , stepBestImpl :: {-# UNPACK #-} !Int64
     , stepVariantId :: {-# UNPACK #-} !(Key Variant)
     , stepId :: {-# UNPACK #-} !Int64
@@ -184,9 +185,16 @@ GraphPropIndices AS (
     WHERE property IN #{inExpression stepInfoGraphProps}
     AND NOT isStepProp
 ),
+
+GraphPropVector(graphProps) AS (
+    SELECT init_key_value_vector_nan(id, idx, count)
+    FROM GraphPropIndices
+),
+
 GraphProps AS (
-    SELECT graphId, double_vector(value, idx, count) AS props
-    FROM GraphPropValue
+    SELECT graphId
+         , update_key_value_vector(graphProps, idx, id, value) AS props
+    FROM GraphPropValue, GraphPropVector
     INNER JOIN GraphPropIndices
     ON GraphPropValue.propId = GraphPropIndices.id
     GROUP BY graphId
@@ -206,9 +214,17 @@ StepPropIndices AS (
          , counts AS
            (stepProps ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
 ),
+
+StepPropVector(stepProps) AS (
+    SELECT init_key_value_vector_nan(id, idx, count)
+    FROM StepPropIndices
+),
+
 StepProps AS (
-    SELECT variantId, stepId, double_vector(value, idx, count) AS props
-    FROM StepPropValue
+    SELECT variantId
+         , stepId
+         , update_key_value_vector(stepProps, idx, id, value) AS props
+    FROM StepPropValue, StepPropVector
     INNER JOIN StepPropIndices
     ON StepPropValue.propId = StepPropIndices.id
     GROUP BY variantId, stepId

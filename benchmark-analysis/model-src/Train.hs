@@ -48,6 +48,7 @@ import Model (byteStringToModel)
 import Model.Stats (UnknownSet(..), ModelStats(..))
 import Utils.Process
     (ReadWrite(..), runProcessCreation_, withPipe, withProcess)
+import Utils.PropValue (propValueValue)
 import Query
 import RuntimeData (getModelScript)
 import Schema
@@ -321,7 +322,7 @@ trainModel ModelDesc{..} = do
 
     trainQuery = reduceInfo <$> stepInfoQuery modelTrainConfig
 
-    reduceInfo StepInfo{..} = (stepProps, stepBestImpl)
+    reduceInfo StepInfo{..} = (VS.map propValueValue stepProps, stepBestImpl)
 
 putProps :: Vector Double -> ByteString
 putProps = LBS.toStrict . runPut . VS.mapM_ putDoublehost
