@@ -99,6 +99,7 @@ Library
                         Utils.ImplTiming
                         Utils.Pair
                         Utils.Process
+                        Utils.PropValue
                         Utils.Vector
                         VariantQuery
 
