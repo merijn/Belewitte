@@ -57,9 +57,10 @@ init_key_value_vector_step
             return;
         }
 
+        double defaultVal = *((double*) sqlite3_user_data(ctxt));
         for (int64_t i = 0; i < data->size; i++) {
             data->vector[i].key = 0;
-            data->vector[i].val = INFINITY;
+            data->vector[i].val = defaultVal;
         }
     }
 

@@ -7,15 +7,18 @@ module SQLiteExts
     ) where
 
 import Control.Monad ((>=>), when)
-import Control.Monad.Catch (MonadCatch, MonadThrow, handle, throwM)
+import Control.Monad.Catch (MonadCatch, MonadThrow)
+import qualified Control.Monad.Catch as Catch
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Logger (MonadLogger)
 import qualified Data.ByteString as BS
 import Data.Text (Text)
 import Data.Text.Encoding (decodeUtf8')
 import Data.Typeable (Typeable)
-import Foreign (Ptr, FunPtr, castFunPtr, nullPtr, nullFunPtr)
+import Foreign (Ptr, FinalizerPtr, FunPtr, castFunPtr, nullPtr, nullFunPtr)
+import qualified Foreign
 import Foreign.C (CInt(..), CString, withCString)
+import Foreign.Storable (Storable)
 
 import Exceptions
 import qualified Pretty
@@ -41,15 +44,17 @@ registerSqlFunctions
     :: (MonadIO m, MonadLogger m, MonadThrow m) => Ptr () -> m ()
 registerSqlFunctions sqlitePtr = mapM_ ($sqlitePtr)
     [ createSqlFunction 1 "legacy_random" randomFun
-    , createSqlAggregate 3 "double_vector"
+    , createSqlAggregate_ 3 "double_vector"
         double_vector_step double_vector_finalise
-    , createSqlAggregate 3 "init_key_value_vector"
+    , createSqlAggregate 3 "init_key_value_vector" infinity
         init_key_value_vector_step key_value_vector_finalise
-    , createSqlAggregate 4 "update_key_value_vector"
+    , createSqlAggregate 3 "init_key_value_vector_nan" nan
+        init_key_value_vector_step key_value_vector_finalise
+    , createSqlAggregate_ 4 "update_key_value_vector"
         update_key_value_vector_step key_value_vector_finalise
-    , createSqlAggregate 1 "check_unique"
+    , createSqlAggregate_ 1 "check_unique"
         check_unique_step check_unique_finalise
-    , createSqlAggregate (-1) "min_key"
+    , createSqlAggregate_ (-1) "min_key"
         min_key_step min_key_finalise
     , createSqlWindow 4 "random_sample" random_sample_step
         random_sample_finalise random_sample_value random_sample_inverse
@@ -57,19 +62,25 @@ registerSqlFunctions sqlitePtr = mapM_ ($sqlitePtr)
         count_transitions_finalise count_transitions_value
         count_transitions_inverse
     ]
+  where
+    infinity :: Double
+    infinity = 1/0
+
+    nan :: Double
+    nan = 0/0
 
 wrapSqliteExceptions :: (MonadLogger m, MonadCatch m) => m r -> m r
-wrapSqliteExceptions = handle logUnwrappedSqliteException
+wrapSqliteExceptions = Catch.handle logUnwrappedSqliteException
   where
     logUnwrappedSqliteException exc
         | Just (BenchmarkException e) <- fromException exc
-        = throwM e
+        = Catch.throwM e
 
         | Just e@SqliteException{} <- fromException exc
         = logThrowM $ PrettySqliteException e
 
         | otherwise
-        = throwM exc
+        = Catch.throwM exc
 
 foreign import ccall "sqlite-functions.h &randomFun"
     randomFun :: FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
@@ -139,10 +150,11 @@ foreign import ccall "sqlite3.h sqlite3_extended_errcode"
 foreign import ccall "sqlite3.h sqlite3_errstr"
     getErrorString :: CInt -> IO CString
 
-foreign import ccall "sqlite3.h sqlite3_create_function"
+foreign import ccall "sqlite3.h sqlite3_create_function_v2"
     createFun :: Ptr () -> CString -> CInt -> CInt -> Ptr ()
               -> FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
               -> FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
+              -> FunPtr (Ptr () -> IO ())
               -> FunPtr (Ptr () -> IO ())
               -> IO CInt
 
@@ -167,20 +179,22 @@ initialiseSqlite :: (MonadIO m, MonadThrow m) => m ()
 initialiseSqlite = do
     result <- liftIO $ registerAutoExtension (castFunPtr sqlite3_series_init)
     when (result /= sqliteOk) $ do
-        throwM . SqliteErrorCode result $ ""
+        Catch.throwM . SqliteErrorCode result $ ""
 
 createSqliteFun
-    :: (MonadIO m, MonadLogger m, MonadThrow m)
+    :: (MonadIO m, MonadLogger m, MonadThrow m, Storable a)
     => CInt
     -> String
+    -> Maybe a
     -> FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
     -> FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
     -> FunPtr (Ptr () -> IO ())
     -> Ptr ()
     -> m ()
-createSqliteFun nArgs strName sqlFun aggStep aggFinal sqlPtr = do
+createSqliteFun nArgs strName userData sqlFun aggStep aggFinal sqlPtr = do
     result <- liftIO . withCString strName $ \name -> do
-        createFun sqlPtr name nArgs sqliteAny nullPtr sqlFun aggStep aggFinal
+        withUserData $ \(dataPtr, finaliserPtr) ->
+            createFun sqlPtr name nArgs sqliteAny dataPtr sqlFun aggStep aggFinal finaliserPtr
     when (result /= sqliteOk) $ do
         bs <- liftIO $ unpackError sqlPtr
         case decodeUtf8' bs of
@@ -188,6 +202,19 @@ createSqliteFun nArgs strName sqlFun aggStep aggFinal sqlPtr = do
             Right txt -> logThrowM $ SqliteErrorCode result txt
   where
     unpackError = getExtendedError >=> getErrorString >=> BS.packCString
+
+    allocUserData :: Storable a => a -> IO (Ptr (), FinalizerPtr ())
+    allocUserData val = do
+        valPtr <- Foreign.new val
+        return (Foreign.castPtr valPtr, Foreign.finalizerFree)
+
+    withUserData :: ((Ptr (), FinalizerPtr ()) -> IO b) -> IO b
+    withUserData f = case userData of
+        Nothing -> f (nullPtr, nullFunPtr)
+        Just v -> Catch.bracketOnError (allocUserData v) (Foreign.free . fst) f
+
+noUserData :: Maybe (Ptr ())
+noUserData = Nothing
 
 createSqlFunction
     :: (MonadIO m, MonadLogger m, MonadThrow m)
@@ -197,9 +224,21 @@ createSqlFunction
     -> Ptr ()
     -> m ()
 createSqlFunction nArgs name funPtr =
-  createSqliteFun nArgs name funPtr nullFunPtr nullFunPtr
+  createSqliteFun nArgs name noUserData funPtr nullFunPtr nullFunPtr
 
 createSqlAggregate
+    :: (MonadIO m, MonadLogger m, MonadThrow m, Storable a)
+    => CInt
+    -> String
+    -> a
+    -> FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
+    -> FunPtr (Ptr () -> IO ())
+    -> Ptr ()
+    -> m ()
+createSqlAggregate nArgs name userData =
+  createSqliteFun nArgs name (Just userData) nullFunPtr
+
+createSqlAggregate_
     :: (MonadIO m, MonadLogger m, MonadThrow m)
     => CInt
     -> String
@@ -207,7 +246,8 @@ createSqlAggregate
     -> FunPtr (Ptr () -> IO ())
     -> Ptr ()
     -> m ()
-createSqlAggregate nArgs name = createSqliteFun nArgs name nullFunPtr
+createSqlAggregate_ nArgs name =
+  createSqliteFun nArgs name noUserData nullFunPtr
 
 createSqlWindow
     :: (MonadIO m, MonadLogger m, MonadThrow m)
