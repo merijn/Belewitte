@@ -177,29 +177,30 @@ Variants AS (
 
       , [] `inCTE` [i|
 GraphPropIndices AS (
-    SELECT property
-         , ROW_NUMBER() OVER graphProps AS idx
-         , COUNT() OVER counts AS count
-    FROM GraphProp
+    SELECT id
+         , ROW_NUMBER() OVER (ORDER BY property) AS idx
+         , COUNT() OVER () AS count
+    FROM PropertyName
     WHERE property IN #{inExpression stepInfoGraphProps}
-    WINDOW graphProps AS (PARTITION BY graphId ORDER BY property)
-         , counts AS
-           (graphProps ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+    AND NOT isStepProp
 ),
 GraphProps AS (
     SELECT graphId, double_vector(value, idx, count) AS props
-    FROM GraphProp
+    FROM GraphPropValue
     INNER JOIN GraphPropIndices
-    ON GraphProp.property = GraphPropIndices.property
+    ON GraphPropValue.propId = GraphPropIndices.id
     GROUP BY graphId
 )|]
 
       , [toPersistValue stepInfoAlgorithm] `inCTE` [i|
 StepPropIndices AS (
-    SELECT property
+    SELECT id
          , ROW_NUMBER() OVER stepProps AS idx
          , COUNT() OVER counts AS count
-    FROM StepProp
+    FROM PropertyName
+    INNER JOIN StepProp
+    ON PropertyName.id = StepProp.propId
+
     WHERE algorithmId = ? AND property IN #{inExpression stepInfoStepProps}
     WINDOW stepProps AS (ORDER BY property)
          , counts AS
@@ -209,7 +210,7 @@ StepProps AS (
     SELECT variantId, stepId, double_vector(value, idx, count) AS props
     FROM StepPropValue
     INNER JOIN StepPropIndices
-    ON StepPropValue.property = StepPropIndices.property
+    ON StepPropValue.propId = StepPropIndices.id
     GROUP BY variantId, stepId
 )|]
 

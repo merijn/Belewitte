@@ -9,6 +9,7 @@
 {-# LANGUAGE TypeFamilies #-}
 module ModelOptions (ModelCommand(..), commands, runCommand) where
 
+import Control.Monad (forM)
 import Data.Char (toLower)
 import qualified Data.Conduit.Combinators as C
 import Data.Foldable (asum)
@@ -25,10 +26,8 @@ import qualified Data.Text.IO as T
 import Core
 import Evaluate
     (CompareReport, EvaluateReport, Report(..), RelativeTo(..), SortBy(..))
-import FieldQuery (getDistinctFieldQuery)
 import Options
 import Pretty.List (Field(..), FieldSpec(..), (=.), buildOptions)
-import Query (runSqlQueryConduit)
 import QueryDump (modelQueryDump)
 import Schema
 import Sql ((==.))
@@ -147,6 +146,16 @@ commands = CommandRoot
         [ metavar "FILE", short 'e', long "export", value "test.cpp"
         , showDefaultWith id, help "C++ file to write predictor to." ]
 
+getGraphProps :: SqlM (Set Text)
+getGraphProps = Sql.selectSource [PropertyNameIsStepProp ==. False] [] $
+    C.foldMap (S.singleton . propertyNameProperty . entityVal)
+
+getStepProps :: Key Algorithm -> SqlM (Set Text)
+getStepProps algoId = do
+    stepProps <- Sql.selectList [StepPropAlgorithmId ==. algoId] []
+    fmap S.fromList . forM stepProps $ \Entity{entityVal = prop} ->
+        propertyNameProperty <$> Sql.getJust (stepPropPropId prop)
+
 datasetsParser :: Parser (SqlM (Maybe (Set (Key Dataset))))
 datasetsParser = sequence <$> optional rawDatasetsParser
   where
@@ -190,8 +199,8 @@ modelQueryMap = M.fromList
         pure $ do
             algoId <- getAlgoId
             cfg <- StepInfoConfig queryMode algoId
-                    <$> getPlatformId <*> getCommitId algoId <*> graphProps
-                    <*> stepProps algoId <*> pure trainSeed <*> getDatasets
+                    <$> getPlatformId <*> getCommitId algoId <*> getGraphProps
+                    <*> getStepProps algoId <*> pure trainSeed <*> getDatasets
                     <*> pure shouldFilter <*> pure graphPercent
                     <*> pure variantPercent <*> pure stepPercent
                     <*> getUtcTime
@@ -212,15 +221,6 @@ modelQueryMap = M.fromList
             , ("validate", StepQuery.Validate)
             , ("all", StepQuery.All)
             ]
-
-    graphProps :: SqlM (Set Text)
-    graphProps = do
-        graphPropQuery <- getDistinctFieldQuery GraphPropProperty
-        runSqlQueryConduit graphPropQuery $ C.foldMap S.singleton
-
-    stepProps :: Key Algorithm -> SqlM (Set Text)
-    stepProps algoId = S.fromList . map (stepPropProperty . entityVal) <$>
-        Sql.selectList [StepPropAlgorithmId ==. algoId] []
 
 defaultImplParser :: Parser (Either Int Text)
 defaultImplParser = implParser <|> pure (Right "edge-list")
@@ -326,8 +326,8 @@ stepInfoConfig = do
         algoId <- getAlgoId
         StepInfoConfig StepQuery.Train algoId
                 <$> getPlatformId <*> getCommitId algoId
-                <*> (filterGraphProps <*> gatherGraphProps)
-                <*> (filterStepProps <*> gatherStepProps algoId)
+                <*> (filterGraphProps <*> getGraphProps)
+                <*> (filterStepProps <*> getStepProps algoId)
                 <*> pure trainSeed <*> getDatasets <*> pure shouldFilter
                 <*> pure graphPercent <*> pure variantPercent
                 <*> pure stepPercent <*> getUtcTime
@@ -363,13 +363,3 @@ stepInfoConfig = do
             [ metavar "FILE", long ("drop-" <> name <> "-props")
             , help "File listing properties not to use for training, \
                    \one per line."]
-
-    gatherGraphProps :: SqlM (Set Text)
-    gatherGraphProps = do
-        query <- getDistinctFieldQuery GraphPropProperty
-        runSqlQueryConduit query $ C.foldMap S.singleton
-
-    gatherStepProps :: Key Algorithm -> SqlM (Set Text)
-    gatherStepProps algoId = do
-        stepProps <- Sql.selectList [StepPropAlgorithmId ==. algoId] []
-        return . S.fromList $ map (stepPropProperty . entityVal) stepProps

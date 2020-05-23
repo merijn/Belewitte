@@ -54,8 +54,8 @@ resetResults = Sql.updateWhere [] [VariantResult =. Nothing]
 
 resetProperties :: MonadSql m => m ()
 resetProperties = SqlTrans.runTransaction $ do
-    SqlTrans.deleteWhere ([] :: [Filter GraphProp])
-    SqlTrans.deleteWhere ([] :: [Filter StepProp])
+    SqlTrans.deleteWhere ([] :: [Filter GraphPropValue])
+    SqlTrans.deleteWhere ([] :: [Filter StepPropValue])
     SqlTrans.updateWhere [] [VariantPropsStored =. False]
 
 resetMeasurements :: MonadSql m => m ()
@@ -67,7 +67,6 @@ resetMeasurements = SqlTrans.runTransaction $ do
 resetModels :: MonadSql m => m ()
 resetModels = SqlTrans.runTransaction $ do
     SqlTrans.deleteWhere ([] :: [Filter PredictionModel])
-    SqlTrans.deleteWhere ([] :: [Filter ModelGraphProperty])
-    SqlTrans.deleteWhere ([] :: [Filter ModelStepProperty])
+    SqlTrans.deleteWhere ([] :: [Filter ModelProperty])
     SqlTrans.deleteWhere ([] :: [Filter UnknownPrediction])
     SqlTrans.deleteWhere ([] :: [Filter UnknownPredictionSet])

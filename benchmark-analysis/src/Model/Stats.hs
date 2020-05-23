@@ -29,8 +29,8 @@ implInUnknownSet n = S.member implKey . unknownSetImpls
     implKey = toSqlKey $ fromIntegral n
 
 data ModelStats = ModelStats
-    { modelGraphPropImportance :: Map Text Double
-    , modelStepPropImportance :: Map Text Double
+    { modelGraphPropImportance :: Map (Key PropertyName) Double
+    , modelStepPropImportance :: Map (Key PropertyName) Double
     , modelUnknownCount :: Int
     , modelUnknownPreds :: Map Int64 UnknownSet
     } deriving (Eq, Show)
@@ -40,13 +40,21 @@ getModelStats modelId = SqlTrans.runTransaction $ do
     modelUnknownCount <-
         predictionModelTotalUnknownCount <$> SqlTrans.getJust modelId
 
+    modelProps <- SqlTrans.selectSource [ModelPropertyModelId ==. modelId] [] $
+        C.foldMap propNameMap
+
+    let checkKey :: Entity PropertyName -> Map (Key PropertyName) Double
+        checkKey (Entity k _) = case M.lookup k modelProps of
+            Nothing -> M.empty
+            Just val -> M.singleton k val
+
     modelGraphPropImportance <-
-        SqlTrans.selectSource [ModelGraphPropertyModelId ==. modelId] [] $
-            C.foldMap (graphPropMap . SqlTrans.entityVal)
+        SqlTrans.selectSource [PropertyNameIsStepProp ==. False] [] $
+            C.foldMap checkKey
 
     modelStepPropImportance <-
-        SqlTrans.selectSource [ModelStepPropertyModelId ==. modelId] [] $
-            C.foldMap (stepPropMap . SqlTrans.entityVal)
+        SqlTrans.selectSource [PropertyNameIsStepProp ==. True] [] $
+            C.foldMap checkKey
 
     unknowns <- SqlTrans.selectList [UnknownPredictionModelId ==. modelId] []
     unknownPreds <- forM unknowns $ \SqlTrans.Entity{..} -> do
@@ -61,10 +69,8 @@ getModelStats modelId = SqlTrans.runTransaction $ do
 
     return ModelStats{modelUnknownPreds = mconcat unknownPreds, ..}
   where
-    graphPropMap ModelGraphProperty{..} =
-      M.singleton modelGraphPropertyProperty modelGraphPropertyImportance
-
-    stepPropMap ModelStepProperty{..} =
-      M.singleton modelStepPropertyProperty modelStepPropertyImportance
+    propNameMap :: Entity ModelProperty -> Map (Key PropertyName) Double
+    propNameMap (Entity _ ModelProperty{..}) =
+        M.singleton modelPropertyPropId modelPropertyImportance
 
     toImplSet UnknownPredictionSet{..} = S.singleton unknownPredictionSetImplId

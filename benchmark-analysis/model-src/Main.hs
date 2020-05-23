@@ -4,8 +4,7 @@
 {-# LANGUAGE RecordWildCards #-}
 module Main(main) where
 
-import Control.Monad (unless)
-import Data.Bifunctor (first)
+import Control.Monad (forM, unless)
 import Data.Conduit (ConduitT, (.|))
 import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
@@ -30,16 +29,34 @@ import Validate
 
 reportModelStats :: ModelStats -> ConduitT () Text SqlM ()
 reportModelStats ModelStats{..} = do
+    features <- forM allFeatures $ \(propId, val) -> do
+        PropertyName{..} <- Sql.getJust propId
+
+        let label | propertyNameIsStepProp = "Step:  "
+                  | otherwise = "Graph: "
+
+        return (label <> propertyNameProperty, val)
+
+    let maxFeatureNameLength :: Int
+        maxFeatureNameLength = maximum $ map ((1+) . T.length . fst) features
+
+        sortedFeatures :: [(Text, Double)]
+        sortedFeatures = sortBy (flip (comparing snd)) features
+
     C.yield "Feature importance:\n"
-    C.yieldMany sortedFeatures .| C.map renderFeature
+    C.yieldMany sortedFeatures .| C.map (renderFeature maxFeatureNameLength)
     unless (null sortedUnknown) $ do
         C.yield "\n"
         C.yield "Unknown predictions:\n"
         C.yieldMany sortedUnknown .| C.mapM renderImplSet
   where
-    renderFeature :: (Text, Double) -> Text
-    renderFeature (lbl, val) = mconcat
-        [ padName (lbl <> ":"), " ", paddedPercent, "\n" ]
+    allFeatures :: [(Key PropertyName, Double)]
+    allFeatures = M.toList modelGraphPropImportance
+               ++ M.toList modelStepPropImportance
+
+    renderFeature :: Int -> (Text, Double) -> Text
+    renderFeature maxFeatureNameLength (lbl, val) = mconcat
+        [ padName (lbl <> ":"), " " , paddedPercent, "\n" ]
       where
         valTxt = percent val 1
         paddedPercent = T.replicate (6 - T.length valTxt) " " <> valTxt
@@ -55,16 +72,6 @@ reportModelStats ModelStats{..} = do
 
         getName :: Key Implementation -> SqlM Text
         getName i = getImplName <$> Sql.getJust i
-
-    maxFeatureNameLength :: Int
-    maxFeatureNameLength = maximum $ map ((1+) . T.length . fst) features
-
-    features :: [(Text, Double)]
-    features = map (first ("Graph: " <>)) (M.toList modelGraphPropImportance)
-            ++ map (first ("Step:  " <>)) (M.toList modelStepPropImportance)
-
-    sortedFeatures :: [(Text, Double)]
-    sortedFeatures = sortBy (flip (comparing snd)) features
 
     sortedUnknown :: [UnknownSet]
     sortedUnknown = sortBy (flip (comparing unknownSetOccurence))

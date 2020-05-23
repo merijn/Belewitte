@@ -24,7 +24,6 @@ import qualified Data.Vector.Storable as VS
 import System.IO (hClose)
 
 import Core
-import FieldQuery (getDistinctFieldQuery)
 import Predictor (MispredictionStrategy(None), loadPredictor)
 import Query
 import RuntimeData (getHeatmapScript)
@@ -102,11 +101,14 @@ plotHeatmap LevelHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
         }
 
 plotHeatmap PredictHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
-    query <- getDistinctFieldQuery GraphPropProperty
-    stepInfoGraphProps <- runSqlQueryConduit query $ C.foldMap S.singleton
+    stepInfoGraphProps <-
+        Sql.selectSource [PropertyNameIsStepProp ==. False] [] $
+            C.foldMap (S.singleton . propertyNameProperty . entityVal)
 
-    stepInfoStepProps <- S.fromList . map (stepPropProperty . entityVal) <$>
-        Sql.selectList [StepPropAlgorithmId ==. globalPlotAlgorithm] []
+    stepInfoStepProps <-
+        Sql.selectSource [StepPropAlgorithmId ==. globalPlotAlgorithm] [] $
+            C.mapM (Sql.getJust . stepPropPropId . entityVal)
+            .| C.foldMap (S.singleton . propertyNameProperty)
 
     stepInfoTimestamp <- liftIO getCurrentTime
 

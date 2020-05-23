@@ -128,10 +128,12 @@ Library
                         Schema.Model.V4
                         Schema.ModelMetadata
                         Schema.ModelMetadata.V0
+                        Schema.ModelMetadata.V1
                         Schema.Platform
                         Schema.Platform.V0
                         Schema.Properties
                         Schema.Properties.V0
+                        Schema.Properties.V1
                         Schema.Run
                         Schema.Run.V0
                         Schema.RunConfig

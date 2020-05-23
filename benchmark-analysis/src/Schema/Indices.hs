@@ -38,7 +38,6 @@ ON "RunConfig"("id", "algorithmId")
 CREATE UNIQUE INDEX IF NOT EXISTS "ForeignUniqueVariantConfig"
 ON "VariantConfig"("id", "algorithmId")
 |]
-
         , 9 <=..<= currentVersion .= [i|
 CREATE UNIQUE INDEX IF NOT EXISTS "ForeignUniqueVariant"
 ON "Variant"("id", "algorithmId")

@@ -99,16 +99,27 @@ commands = CommandGroup CommandInfo
             , "default" =. SortOnlyField $ PlatformIsDefault
             ]
     , SingleCommand CommandInfo
+        { commandName = "properties"
+        , commandHeaderDesc = "list properties"
+        , commandDesc = "List all properties."
+        }
+        $ buildOptions
+            [ "property" =. StringField 'p' $ Simple PropertyNameProperty
+            , "step-prop" =. EnumField 's' $ Simple PropertyNameIsStepProp
+            ]
+    , SingleCommand CommandInfo
         { commandName = "graph-properties"
         , commandHeaderDesc = "list graph properties"
         , commandDesc = "List all graph properties."
         }
         $ buildOptionsWithoutId
-            [AnyField GraphPropGraphId, AnyField GraphPropProperty]
+            [ AnyField GraphPropValueGraphId
+            , AnyField GraphPropValuePropId
+            ]
 
-            [ "graph" =. IdField 'g' $ Simple GraphPropGraphId
-            , "property" =. StringField 'p' $ Simple GraphPropProperty
-            , "value" =. SortOnlyField $ GraphPropValue
+            [ "graph" =. IdField 'g' $ Simple GraphPropValueGraphId
+            , "graph-prop" =. IdField 'p' $ Simple GraphPropValuePropId
+            , "value" =. SortOnlyField $ GraphPropValueValue
             ]
     , SingleCommand CommandInfo
         { commandName = "step-properties"
@@ -119,13 +130,13 @@ commands = CommandGroup CommandInfo
             [ AnyField StepPropValueAlgorithmId
             , AnyField StepPropValueVariantId
             , AnyField StepPropValueStepId
-            , AnyField StepPropValueProperty
+            , AnyField StepPropValuePropId
             ]
 
             [ "algorithm" =. IdField 'a' $ Simple StepPropValueAlgorithmId
             , "variant" =. IdField 'v' $ Simple StepPropValueVariantId
             , "step" =. IntField 's' $ Simple StepPropValueStepId
-            , "property" =. StringField 'p' $ Simple StepPropValueProperty
+            , "prop-id" =. IdField 'p' $ Simple StepPropValuePropId
             , "value" =. SortOnlyField $ StepPropValueValue
             ]
     , SingleCommand CommandInfo

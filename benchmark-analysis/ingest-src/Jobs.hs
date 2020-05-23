@@ -180,7 +180,8 @@ processProperty result@Result
   where
     insertProperty :: Property -> Transaction SqlM (Maybe (Max Int))
     insertProperty (GraphProperty name val) = Nothing <$ do
-        SqlTrans.insertUniq $ GraphProp graphId name val
+        propId <- SqlTrans.insertUniq $ GraphPropName name
+        SqlTrans.insertUniq $ GraphPropValue graphId propId val
 
     insertProperty (StepProperty n _ _)
         | Just i <- maxStep
@@ -191,8 +192,9 @@ processProperty result@Result
             ]
 
     insertProperty (StepProperty n name val) = Just (Max n) <$ do
-        SqlTrans.insertUniq $ StepProp algoId name
-        SqlTrans.insertUniq $ StepPropValue algoId resultVariant n name val
+        propId <- SqlTrans.insertUniq $ StepPropName name
+        SqlTrans.insertUniq $ StepProp propId algoId
+        SqlTrans.insertUniq $ StepPropValue resultVariant n propId algoId val
 
     insertProperty Prediction{} = return Nothing
 
