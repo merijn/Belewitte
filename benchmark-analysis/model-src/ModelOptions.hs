@@ -78,7 +78,7 @@ commands = CommandRoot
         { commandName = "train"
         , commandHeaderDesc = "train a model"
         , commandDesc = "Train a new model"
-        } (Train <$> stepInfoConfig)
+        } (Train <$> (stepInfoConfig <*> pure StepQuery.Train))
     , SingleCommand CommandInfo
         { commandName = "query"
         , commandHeaderDesc = "report model info"
@@ -183,29 +183,8 @@ stepPercentageParser = percentageParser
 
 modelQueryMap :: Map String (Parser DebugQuery)
 modelQueryMap = M.fromList
-    [ nameDebugQuery "stepInfoQuery" $ Compose $ do
-        getAlgoId <- algorithmIdParser
-        getPlatformId <- platformIdParser
-        getCommitId <- commitIdParser
-        getUtcTime <- utcTimeParser
-        queryMode <- queryModeParser
-        trainSeed <- trainSeedParser
-        getDatasets <- datasetsParser
-        shouldFilter <- filterIncomplete
-        graphPercent <- graphPercentageParser
-        variantPercent <- variantPercentageParser
-        stepPercent <- stepPercentageParser
-
-        pure $ do
-            algoId <- getAlgoId
-            cfg <- StepInfoConfig queryMode algoId
-                    <$> getPlatformId <*> getCommitId algoId <*> getGraphProps
-                    <*> getStepProps algoId <*> pure trainSeed <*> getDatasets
-                    <*> pure shouldFilter <*> pure graphPercent
-                    <*> pure variantPercent <*> pure stepPercent
-                    <*> getUtcTime
-
-            pure $ stepInfoQuery cfg
+    [ nameDebugQuery "stepInfoQuery" $
+        stepInfoQuery <$> Compose (stepInfoConfig <*> queryModeParser)
     ]
   where
     queryModeParser :: Parser QueryMode
@@ -307,7 +286,7 @@ trainSeedParser = option auto . mconcat $
     [ metavar "N", short 's', long "seed", value 42, showDefault
     , help "Seed for training set randomisation" ]
 
-stepInfoConfig :: Parser (SqlM StepInfoConfig)
+stepInfoConfig :: Parser (QueryMode -> SqlM StepInfoConfig)
 stepInfoConfig = do
     getAlgoId <- algorithmIdParser
     getPlatformId <- platformIdParser
@@ -322,9 +301,9 @@ stepInfoConfig = do
     variantPercent <- variantPercentageParser
     stepPercent <- stepPercentageParser
 
-    pure $ do
+    pure $ \queryMode -> do
         algoId <- getAlgoId
-        StepInfoConfig StepQuery.Train algoId
+        StepInfoConfig queryMode algoId
                 <$> getPlatformId <*> getCommitId algoId
                 <*> (filterGraphProps <*> getGraphProps)
                 <*> (filterStepProps <*> getStepProps algoId)
