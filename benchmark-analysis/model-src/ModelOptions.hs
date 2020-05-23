@@ -184,7 +184,7 @@ stepPercentageParser = percentageParser
 modelQueryMap :: Map String (Parser DebugQuery)
 modelQueryMap = M.fromList
     [ nameDebugQuery "stepInfoQuery" $
-        stepInfoQuery <$> Compose (stepInfoConfig <*> queryModeParser)
+        fmap StepQuery.sortStepTimings . stepInfoQuery <$> Compose (stepInfoConfig <*> queryModeParser)
     ]
   where
     queryModeParser :: Parser QueryMode
