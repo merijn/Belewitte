@@ -118,6 +118,20 @@ validateUniqKey
     => Text -> Unique r -> m (Key r)
 validateUniqKey name = fmap entityKey . validateUniqEntity name
 
+getJustBy
+    :: (MonadLogger m, MonadSql m, MonadThrow m, Show (Unique rec), SqlRecord rec)
+    => Unique rec -> m (Entity rec)
+getJustBy k = do
+    mVal <- getBy k
+    case mVal of
+        Just v -> return v
+        Nothing -> logThrowM $ MissingUniqEntity "value" k
+
+getJustKeyBy
+    :: (MonadLogger m, MonadSql m, MonadThrow m, Show (Unique rec), SqlRecord rec)
+    => Unique rec -> m (Key rec)
+getJustKeyBy k = entityKey <$> getJustBy k
+
 getBy :: (MonadSql m, SqlRecord rec) => Unique rec -> m (Maybe (Entity rec))
 getBy = runTransaction . SqlTrans.getBy
 

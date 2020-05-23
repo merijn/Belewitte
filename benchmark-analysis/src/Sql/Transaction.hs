@@ -105,6 +105,20 @@ insertUniq record = do
 fieldFromEntity :: PersistEntity r => EntityField r v -> Entity r -> v
 fieldFromEntity field = view (Sqlite.fieldLens field)
 
+getJustBy
+    :: (MonadLogger m, MonadSql m, MonadThrow m, Show (Unique rec), SqlRecord rec)
+    => Unique rec -> Transaction m (Entity rec)
+getJustBy k = do
+    mVal <- getBy k
+    case mVal of
+        Just v -> return v
+        Nothing -> logThrowM $ MissingUniqEntity "value" k
+
+getJustKeyBy
+    :: (MonadLogger m, MonadSql m, MonadThrow m, Show (Unique rec), SqlRecord rec)
+    => Unique rec -> Transaction m (Key rec)
+getJustKeyBy k = entityKey <$> getJustBy k
+
 -- Generalisations
 deleteBy :: (MonadSql m, SqlRecord rec) => Unique rec -> Transaction m ()
 deleteBy = Transaction . Sqlite.deleteBy
