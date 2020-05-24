@@ -7,6 +7,7 @@ module StepQuery
     ( QueryMode(..)
     , StepInfo(..)
     , StepInfoConfig(..)
+    , TrainStepConfig(..)
     , stepInfoQuery
     , sortStepTimings
     ) where
@@ -31,18 +32,22 @@ import Utils.Vector (byteStringToVector)
 data QueryMode = Train | Validate | All deriving (Show, Eq)
 
 data StepInfoConfig = StepInfoConfig
-    { stepInfoQueryMode :: QueryMode
-    , stepInfoAlgorithm :: Key Algorithm
+    { stepInfoAlgorithm :: Key Algorithm
     , stepInfoPlatform :: Key Platform
     , stepInfoCommit :: CommitId
-    , stepInfoProps :: Set (Key PropertyName)
-    , stepInfoSeed :: Int64
     , stepInfoDatasets :: Maybe (Set (Key Dataset))
     , stepInfoFilterIncomplete :: Bool
-    , stepInfoGraphs :: Percentage
-    , stepInfoVariants :: Percentage
-    , stepInfoSteps :: Percentage
     , stepInfoTimestamp :: UTCTime
+    } deriving (Show)
+
+data TrainStepConfig = TrainStepConfig
+    { trainStepInfoConfig :: StepInfoConfig
+    , trainStepQueryMode :: QueryMode
+    , trainStepProps :: Set (Key PropertyName)
+    , trainStepSeed :: Int64
+    , trainStepGraphs :: Percentage
+    , trainStepVariants :: Percentage
+    , trainStepSteps :: Percentage
     } deriving (Show)
 
 data StepInfo =
@@ -64,20 +69,22 @@ sortStepTimings info@StepInfo{..} =
         V.sortBy (comparing implTimingImpl) mvec
         VS.unsafeFreeze mvec
 
-stepInfoQuery :: StepInfoConfig -> Query StepInfo
-stepInfoQuery StepInfoConfig
-  { stepInfoAlgorithm
-  , stepInfoPlatform
-  , stepInfoQueryMode
-  , stepInfoCommit
-  , stepInfoProps
-  , stepInfoSeed
-  , stepInfoDatasets
-  , stepInfoGraphs
-  , stepInfoVariants
-  , stepInfoSteps
-  , stepInfoFilterIncomplete
-  , stepInfoTimestamp
+stepInfoQuery :: TrainStepConfig -> Query StepInfo
+stepInfoQuery TrainStepConfig
+  { trainStepInfoConfig = StepInfoConfig
+    { stepInfoAlgorithm
+    , stepInfoPlatform
+    , stepInfoCommit
+    , stepInfoDatasets
+    , stepInfoFilterIncomplete
+    , stepInfoTimestamp
+    }
+  , trainStepQueryMode
+  , trainStepProps
+  , trainStepSeed
+  , trainStepGraphs
+  , trainStepVariants
+  , trainStepSteps
   } = Query{convert = Filter converter, ..}
   where
     datasets :: Set Text
@@ -94,7 +101,7 @@ stepInfoQuery StepInfoConfig
 
     checkProperty :: PropValue -> Bool
     checkProperty PropValue{propValuePropId} =
-        toSqlKey propValuePropId `S.member` stepInfoProps
+        toSqlKey propValuePropId `S.member` trainStepProps
 
     converter :: MonadConvert m => [PersistValue] -> m (Maybe StepInfo)
     converter [ PersistInt64 (toSqlKey -> stepVariantId)
@@ -106,7 +113,7 @@ stepInfoQuery StepInfoConfig
               , PersistInt64 ((/=0) -> keepRow)
               ]
               | Just stepProps <- VS.filter checkProperty <$> maybeStepProps
-              = case stepInfoQueryMode of
+              = case trainStepQueryMode of
                   All -> return $ Just StepInfo{..}
                   Train | keepRow -> return $ Just StepInfo{..}
                   Validate | not keepRow -> return $ Just StepInfo{..}
@@ -157,10 +164,10 @@ GraphVariants AS (
 
       , CTE
         { cteParams =
-            [ toPersistValue stepInfoSeed
-            , toPersistValue stepInfoGraphs
-            , toPersistValue stepInfoSeed
-            , toPersistValue stepInfoVariants
+            [ toPersistValue trainStepSeed
+            , toPersistValue trainStepGraphs
+            , toPersistValue trainStepSeed
+            , toPersistValue trainStepVariants
             ]
         , cteQuery = [i|
 Variants AS (
@@ -254,8 +261,8 @@ ImplVector(implTiming) AS (
 
     params :: [PersistValue]
     params =
-      [ toPersistValue stepInfoSeed
-      , toPersistValue stepInfoSteps
+      [ toPersistValue trainStepSeed
+      , toPersistValue trainStepSteps
       , toPersistValue stepInfoTimestamp
       , toPersistValue stepInfoAlgorithm
       , toPersistValue stepInfoAlgorithm

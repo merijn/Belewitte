@@ -32,13 +32,14 @@ import QueryDump (modelQueryDump)
 import Schema
 import Sql ((==.))
 import qualified Sql
-import StepQuery (QueryMode, StepInfoConfig(..), stepInfoQuery)
+import StepQuery
+    (QueryMode, StepInfoConfig(..), TrainStepConfig(..), stepInfoQuery)
 import qualified StepQuery
 import VariantQuery
 
 data ModelCommand
     = Train
-      { getConfig :: SqlM StepInfoConfig }
+      { getConfig :: SqlM TrainStepConfig }
     | QueryModel
       { getModelEntity :: SqlM (Entity PredictionModel) }
     | ListModels
@@ -78,7 +79,7 @@ commands = CommandRoot
         { commandName = "train"
         , commandHeaderDesc = "train a model"
         , commandDesc = "Train a new model"
-        } (Train <$> (stepInfoConfig <*> pure StepQuery.Train))
+        } (Train <$> (trainStepConfig <*> pure StepQuery.Train))
     , SingleCommand CommandInfo
         { commandName = "query"
         , commandHeaderDesc = "report model info"
@@ -192,7 +193,7 @@ stepPercentageParser = percentageParser
 modelQueryMap :: Map String (Parser DebugQuery)
 modelQueryMap = M.fromList
     [ nameDebugQuery "stepInfoQuery" $
-        fmap StepQuery.sortStepTimings . stepInfoQuery <$> Compose (stepInfoConfig <*> queryModeParser)
+        fmap StepQuery.sortStepTimings . stepInfoQuery <$> Compose (trainStepConfig <*> queryModeParser)
     ]
   where
     queryModeParser :: Parser QueryMode
@@ -294,31 +295,47 @@ trainSeedParser = option auto . mconcat $
     [ metavar "N", short 's', long "seed", value 42, showDefault
     , help "Seed for training set randomisation" ]
 
-stepInfoConfig :: Parser (QueryMode -> SqlM StepInfoConfig)
+stepInfoConfig :: Parser (SqlM StepInfoConfig)
 stepInfoConfig = do
     getAlgoId <- algorithmIdParser
     getPlatformId <- platformIdParser
     getCommitId <- commitIdParser
     getUtcTime <- utcTimeParser
-    trainSeed <- trainSeedParser
     getDatasets <- datasetsParser
+    shouldFilter <- filterIncomplete
+
+    pure $ do
+        algoId <- getAlgoId
+        StepInfoConfig algoId
+            <$> getPlatformId <*> getCommitId algoId <*> getDatasets
+            <*> pure shouldFilter <*> getUtcTime
+
+trainStepConfig :: Parser (QueryMode -> SqlM TrainStepConfig)
+trainStepConfig = do
+    getStepInfoConfig <- stepInfoConfig
+    trainSeed <- trainSeedParser
     filterGraphProps <- props "graph"
     filterStepProps <- props "step"
-    shouldFilter <- filterIncomplete
     graphPercent <- graphPercentageParser
     variantPercent <- variantPercentageParser
     stepPercent <- stepPercentageParser
 
     pure $ \queryMode -> do
-        algoId <- getAlgoId
-        stepProps <- S.union <$> (filterGraphProps <*> getGraphProps)
-                             <*> (filterStepProps <*> getStepProps algoId)
-        StepInfoConfig queryMode algoId
-                <$> getPlatformId <*> getCommitId algoId
-                <*> pure stepProps
-                <*> pure trainSeed <*> getDatasets <*> pure shouldFilter
-                <*> pure graphPercent <*> pure variantPercent
-                <*> pure stepPercent <*> getUtcTime
+        cfg@StepInfoConfig{..} <- getStepInfoConfig
+
+        stepProps <- S.union
+            <$> (filterGraphProps <*> getGraphProps)
+            <*> (filterStepProps <*> getStepProps stepInfoAlgorithm)
+
+        return $ TrainStepConfig
+            { trainStepInfoConfig = cfg
+            , trainStepQueryMode = queryMode
+            , trainStepProps = stepProps
+            , trainStepSeed = trainSeed
+            , trainStepGraphs = graphPercent
+            , trainStepVariants = variantPercent
+            , trainStepSteps = stepPercent
+            }
   where
     readProps :: MonadIO m => FilePath -> m (Set Text)
     readProps = liftIO . fmap (S.fromList . T.lines) . T.readFile

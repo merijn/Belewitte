@@ -100,24 +100,27 @@ plotHeatmap LevelHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
         }
 
 plotHeatmap PredictHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
-    stepInfoProps <- Sql.selectSource [] [] $
+    trainStepProps <- Sql.selectSource [] [] $
         C.foldMap (S.singleton . entityKey)
 
     stepInfoTimestamp <- liftIO getCurrentTime
 
     predictor <- loadPredictor heatmapPredictor None
 
-    let stepQuery = stepInfoQuery StepInfoConfig
-            { stepInfoQueryMode = All
-            , stepInfoAlgorithm = globalPlotAlgorithm
-            , stepInfoPlatform = globalPlotPlatform
-            , stepInfoCommit = globalPlotCommit
-            , stepInfoSeed = 42
-            , stepInfoDatasets = S.singleton <$> heatmapDataset
-            , stepInfoFilterIncomplete = True
-            , stepInfoGraphs = $$(validRational 1)
-            , stepInfoVariants = $$(validRational 1)
-            , stepInfoSteps = $$(validRational 1)
+    let stepQuery = stepInfoQuery TrainStepConfig
+            { trainStepInfoConfig = StepInfoConfig
+              { stepInfoAlgorithm = globalPlotAlgorithm
+              , stepInfoPlatform = globalPlotPlatform
+              , stepInfoCommit = globalPlotCommit
+              , stepInfoDatasets = S.singleton <$> heatmapDataset
+              , stepInfoFilterIncomplete = True
+              , ..
+              }
+            , trainStepQueryMode = All
+            , trainStepSeed = 42
+            , trainStepGraphs = $$(validRational 1)
+            , trainStepVariants = $$(validRational 1)
+            , trainStepSteps = $$(validRational 1)
             , ..
             }
 

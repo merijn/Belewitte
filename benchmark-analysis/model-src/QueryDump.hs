@@ -37,22 +37,31 @@ toStepInfoQueries
                 (Region SqlM)
                 ()
 toStepInfoQueries (stepInfoAlgorithm, stepInfoPlatform, stepInfoCommit) = do
-    stepInfoProps <- Sql.selectSource [] [] $
+    trainStepProps <- Sql.selectSource [] [] $
         C.foldMap (S.singleton . entityKey)
 
     stepInfoTimestamp <- liftIO getCurrentTime
 
-    yield $ stepInfoQuery StepInfoConfig {stepInfoQueryMode = Train, ..}
-    yield $ stepInfoQuery StepInfoConfig {stepInfoQueryMode = Validate, ..}
+    yield $ stepInfoQuery TrainStepConfig
+      { trainStepInfoConfig = StepInfoConfig{..}
+      , trainStepQueryMode = Train
+      , ..
+      }
+
+    yield $ stepInfoQuery TrainStepConfig
+      { trainStepInfoConfig = StepInfoConfig{..}
+      , trainStepQueryMode = Validate
+      , ..
+      }
   where
-    stepInfoSeed = 42
+    trainStepSeed = 42
     stepInfoDatasets = mempty
     stepInfoFilterIncomplete = False
 
-    stepInfoGraphs, stepInfoVariants, stepInfoSteps :: Percentage
-    stepInfoGraphs = $$(validRational 0.5)
-    stepInfoVariants = $$(validRational 0.5)
-    stepInfoSteps = $$(validRational 0.5)
+    trainStepGraphs, trainStepVariants, trainStepSteps :: Percentage
+    trainStepGraphs = $$(validRational 0.5)
+    trainStepVariants = $$(validRational 0.5)
+    trainStepSteps = $$(validRational 0.5)
 
 modelQueryDump :: FilePath -> SqlM ()
 modelQueryDump outputSuffix = do

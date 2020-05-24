@@ -141,8 +141,8 @@ main = runCommand commands $ \case
         let (algoId, modelProps) = case trainConfig of
                 LegacyTrainConfig LegacyConfig{..} ->
                     (legacyAlgorithm, legacyProps)
-                TrainConfig StepInfoConfig{..} ->
-                    (stepInfoAlgorithm, stepInfoProps)
+                TrainConfig TrainStepConfig{..} ->
+                    (stepInfoAlgorithm trainStepInfoConfig, trainStepProps)
 
         impls <- Sql.queryImplementations algoId
 

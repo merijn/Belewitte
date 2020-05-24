@@ -234,7 +234,8 @@ evaluateModel predictor reportCfg@Report{..} trainConfig =
   where
     algoId = case trainConfig of
         LegacyTrainConfig LegacyConfig{legacyAlgorithm} -> legacyAlgorithm
-        TrainConfig StepInfoConfig{stepInfoAlgorithm} -> stepInfoAlgorithm
+        TrainConfig TrainStepConfig{trainStepInfoConfig} ->
+            stepInfoAlgorithm trainStepInfoConfig
 
     query = getTotalQuery trainConfig
 
