@@ -164,7 +164,7 @@ Library
                         cbits/min_key.c
                         cbits/pcg_basic.c
                         cbits/random_sample.c
-                        cbits/sqlite-functions.c
+                        cbits/random_fun.c
 
   CC-Options:           -Wall -Wextra -pedantic -std=c11 -g -O3 -DSQLITE_CORE
   Include-Dirs:         cbits
