@@ -29,7 +29,7 @@ import Validate
 
 reportModelStats :: ModelStats -> ConduitT () Text SqlM ()
 reportModelStats ModelStats{..} = do
-    features <- forM allFeatures $ \(propId, val) -> do
+    features <- forM (M.toList modelPropImportance) $ \(propId, val) -> do
         PropertyName{..} <- Sql.getJust propId
 
         let label | propertyNameIsStepProp = "Step:  "
@@ -50,10 +50,6 @@ reportModelStats ModelStats{..} = do
         C.yield "Unknown predictions:\n"
         C.yieldMany sortedUnknown .| C.mapM renderImplSet
   where
-    allFeatures :: [(Key PropertyName, Double)]
-    allFeatures = M.toList modelGraphPropImportance
-               ++ M.toList modelStepPropImportance
-
     renderFeature :: Int -> (Text, Double) -> Text
     renderFeature maxFeatureNameLength (lbl, val) = mconcat
         [ padName (lbl <> ":"), " " , paddedPercent, "\n" ]
@@ -142,13 +138,17 @@ main = runCommand commands $ \case
         Entity modelId PredictionModel{..} <- getModel
         trainConfig <- getModelTrainingConfig modelId
 
-        let (algoId, graphProps, stepProps) = case trainConfig of
+        let (algoId, modelProps) = case trainConfig of
                 LegacyTrainConfig LegacyConfig{..} ->
-                    (legacyAlgorithm, legacyGraphProps, legacyStepProps)
+                    (legacyAlgorithm, legacyProps)
                 TrainConfig StepInfoConfig{..} ->
-                    (stepInfoAlgorithm, stepInfoGraphProps, stepInfoStepProps)
+                    (stepInfoAlgorithm, stepInfoProps)
 
         impls <- Sql.queryImplementations algoId
 
-        dumpCppModel cppFile predictionModelModel graphProps stepProps
+        namedModelProps <- forM (S.toList modelProps) $ \propId -> do
+            name <- propertyNameProperty <$> Sql.getJust propId
+            return (propId, name)
+
+        dumpCppModel cppFile predictionModelModel (M.fromList namedModelProps)
             (implementationName <$> impls)

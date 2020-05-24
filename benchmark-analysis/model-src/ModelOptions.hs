@@ -146,15 +146,23 @@ commands = CommandRoot
         [ metavar "FILE", short 'e', long "export", value "test.cpp"
         , showDefaultWith id, help "C++ file to write predictor to." ]
 
-getGraphProps :: SqlM (Set Text)
+getGraphProps :: SqlM (Map Text (Key PropertyName))
 getGraphProps = Sql.selectSource [PropertyNameIsStepProp ==. False] [] $
-    C.foldMap (S.singleton . propertyNameProperty . entityVal)
+    C.foldMap propMap
+  where
+    propMap (Entity key PropertyName{propertyNameProperty}) =
+        M.singleton propertyNameProperty key
 
-getStepProps :: Key Algorithm -> SqlM (Set Text)
+getStepProps :: Key Algorithm -> SqlM (Map Text (Key PropertyName))
 getStepProps algoId = do
-    stepProps <- Sql.selectList [StepPropAlgorithmId ==. algoId] []
-    fmap S.fromList . forM stepProps $ \Entity{entityVal = prop} ->
-        propertyNameProperty <$> Sql.getJust (stepPropPropId prop)
+    stepPropIds <- Sql.selectList [StepPropAlgorithmId ==. algoId] []
+    stepProps <- forM stepPropIds $ \(Entity _ prop) ->
+        Sql.getJustEntity (stepPropPropId prop)
+
+    return $ foldMap propMap stepProps
+  where
+    propMap (Entity key PropertyName{propertyNameProperty}) =
+        M.singleton propertyNameProperty key
 
 datasetsParser :: Parser (SqlM (Maybe (Set (Key Dataset))))
 datasetsParser = sequence <$> optional rawDatasetsParser
@@ -303,10 +311,11 @@ stepInfoConfig = do
 
     pure $ \queryMode -> do
         algoId <- getAlgoId
+        stepProps <- S.union <$> (filterGraphProps <*> getGraphProps)
+                             <*> (filterStepProps <*> getStepProps algoId)
         StepInfoConfig queryMode algoId
                 <$> getPlatformId <*> getCommitId algoId
-                <*> (filterGraphProps <*> getGraphProps)
-                <*> (filterStepProps <*> getStepProps algoId)
+                <*> pure stepProps
                 <*> pure trainSeed <*> getDatasets <*> pure shouldFilter
                 <*> pure graphPercent <*> pure variantPercent
                 <*> pure stepPercent <*> getUtcTime
@@ -314,29 +323,49 @@ stepInfoConfig = do
     readProps :: MonadIO m => FilePath -> m (Set Text)
     readProps = liftIO . fmap (S.fromList . T.lines) . T.readFile
 
-    props :: MonadIO m => String -> Parser (m (Set Text -> Set Text))
-    props name = asum [keepFilter name, dropFilter name, pure (return id)]
+    props
+        :: MonadIO m
+        => String
+        -> Parser (m (Map Text (Key PropertyName) -> Set (Key PropertyName)))
+    props name = asum
+        [ keepFilter name
+        , dropFilter name
+        , pure . return $ S.fromList . M.elems
+        ]
 
-    keepFilter :: MonadIO m => String -> Parser (m (Set Text -> Set Text))
+    keepFilter
+        :: MonadIO m
+        => String
+        -> Parser (m (Map Text (Key PropertyName) -> Set (Key PropertyName)))
     keepFilter name = fmap keepProps <$> (readProps <$> keepOpt)
       where
-        keepProps :: Set Text -> Set Text -> Set Text
+        keepProps
+            :: Set Text
+            -> Map Text (Key PropertyName)
+            -> Set (Key PropertyName)
         keepProps input db
-            | S.null input = db
-            | otherwise = S.intersection input db
+            | S.null input = S.fromList $ M.elems db
+            | otherwise = S.fromList . M.elems $
+                M.filterWithKey (\key _ -> S.member key input) db
 
         keepOpt = strOption $ mconcat
             [ metavar "FILE", long ("keep-" <> name <> "-props")
             , help "File listing properties to use for training, one per line."
             ]
 
-    dropFilter :: MonadIO m => String -> Parser (m (Set Text -> Set Text))
+    dropFilter
+        :: MonadIO m
+        => String
+        -> Parser (m (Map Text (Key PropertyName) -> Set (Key PropertyName)))
     dropFilter name = fmap dropProps <$> (readProps <$> dropOpt)
       where
-        dropProps :: Set Text -> Set Text -> Set Text
+        dropProps
+            :: Set Text
+            -> Map Text (Key PropertyName)
+            -> Set (Key PropertyName)
         dropProps input db
-            | S.null input = db
-            | otherwise = S.difference db input
+            | S.null input = S.fromList $ M.elems db
+            | otherwise = S.fromList . M.elems $ M.withoutKeys db input
 
         dropOpt = strOption $ mconcat
             [ metavar "FILE", long ("drop-" <> name <> "-props")

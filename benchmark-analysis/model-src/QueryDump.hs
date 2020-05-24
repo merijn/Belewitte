@@ -13,7 +13,7 @@ import Data.Time.Clock (getCurrentTime)
 import Core
 import Query (Query, streamQuery)
 import Schema
-import Sql (Region, (==.))
+import Sql (Region)
 import qualified Sql
 import StepQuery
 import VariantQuery
@@ -37,14 +37,8 @@ toStepInfoQueries
                 (Region SqlM)
                 ()
 toStepInfoQueries (stepInfoAlgorithm, stepInfoPlatform, stepInfoCommit) = do
-    stepInfoGraphProps <-
-        Sql.selectSource [PropertyNameIsStepProp ==. False] [] $
-            C.foldMap (S.singleton . propertyNameProperty . entityVal)
-
-    stepInfoStepProps <-
-        Sql.selectSource [StepPropAlgorithmId ==. stepInfoAlgorithm] [] $
-            C.mapM (Sql.getJust . stepPropPropId . entityVal)
-            .| C.foldMap (S.singleton . propertyNameProperty)
+    stepInfoProps <- Sql.selectSource [] [] $
+        C.foldMap (S.singleton . entityKey)
 
     stepInfoTimestamp <- liftIO getCurrentTime
 

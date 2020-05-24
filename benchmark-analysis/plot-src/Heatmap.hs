@@ -28,7 +28,6 @@ import Predictor (MispredictionStrategy(None), loadPredictor)
 import Query
 import RuntimeData (getHeatmapScript)
 import Schema
-import Sql ((==.))
 import qualified Sql
 import StepAggregate (VariantAggregate(..), aggregateSteps)
 import StepHeatmapQuery
@@ -101,14 +100,8 @@ plotHeatmap LevelHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
         }
 
 plotHeatmap PredictHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
-    stepInfoGraphProps <-
-        Sql.selectSource [PropertyNameIsStepProp ==. False] [] $
-            C.foldMap (S.singleton . propertyNameProperty . entityVal)
-
-    stepInfoStepProps <-
-        Sql.selectSource [StepPropAlgorithmId ==. globalPlotAlgorithm] [] $
-            C.mapM (Sql.getJust . stepPropPropId . entityVal)
-            .| C.foldMap (S.singleton . propertyNameProperty)
+    stepInfoProps <- Sql.selectSource [] [] $
+        C.foldMap (S.singleton . entityKey)
 
     stepInfoTimestamp <- liftIO getCurrentTime
 

@@ -11,10 +11,10 @@ import Data.Int (Int32)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 import Data.List (sortBy)
+import Data.Map (Map)
+import qualified Data.Map as M
 import Data.Ord (comparing)
 import Data.String.Interpolate.IsString (i)
-import Data.Set (Set)
-import qualified Data.Set as S
 import Data.Text (Text)
 import qualified Data.Text as T
 import Data.Text.Lazy.Builder (Builder, fromText, toLazyText)
@@ -29,6 +29,7 @@ import Foreign.Ptr (castPtr)
 import Foreign.Storable (Storable(..))
 import Text.Read (readMaybe)
 
+import Schema.Properties
 import Utils.Vector (byteStringToVector, vectorToByteString)
 
 newtype Model = Model { getModelVector :: VS.Vector TreeNode }
@@ -56,12 +57,11 @@ dumpCppModel
     :: MonadIO m
     => FilePath
     -> Model
-    -> Set Text
-    -> Set Text
+    -> Map (Key PropertyName) Text
     -> IntMap Text
     -> m ()
-dumpCppModel name (Model tree) graphProps stepProps implNames =
-  liftIO . LT.writeFile name . toLazyText $ [i|#include <functional>
+dumpCppModel name (Model tree) modelProps implNames =
+    liftIO . LT.writeFile name . toLazyText $ [i|#include <functional>
 #include <map>
 #include <string>
 #include <vector>
@@ -103,7 +103,7 @@ extern "C" int32_t lookup()
 }
 |]
   where
-    numProps = S.size graphProps + S.size stepProps
+    numProps = M.size modelProps
 
     (decisionTree, newLabels) = VS.foldl' relabel (mempty, IM.empty) tree
 
@@ -143,10 +143,8 @@ extern "C" int32_t lookup()
             (kernelName, warpConfig) = kernelConfig implName
 
     propEntries :: Builder
-    propEntries = foldMap propEntry . zip [0..] $ props
-      where
-        props = S.toList graphProps ++ S.toList stepProps
-
+    propEntries = foldMap propEntry . zip [0..] $ M.elems modelProps
+        where
         propEntry :: (Int, Text) -> Builder
         propEntry (idx, propName) = mconcat
             [ "    { \"", fromText propName

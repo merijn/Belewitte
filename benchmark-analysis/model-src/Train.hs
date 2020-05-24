@@ -19,7 +19,7 @@ module Train
     , trainModel
     ) where
 
-import Control.Monad (forM, forM_, replicateM)
+import Control.Monad (forM_, replicateM)
 import Control.Monad.Trans.Resource (register, release)
 import Data.Binary.Get (getDoublehost, getRemainingLazyByteString, runGet)
 import Data.Binary.Put (putDoublehost, putInt64host, runPut)
@@ -55,7 +55,6 @@ import Schema
 import StepQuery
     (QueryMode(..), StepInfo(..), StepInfoConfig(..), stepInfoQuery)
 import Sql (MonadSql, (==.))
-import qualified Sql
 import qualified Sql.Transaction as SqlTrans
 
 data TrainingConfig
@@ -67,8 +66,7 @@ data LegacyConfig = LegacyConfig
     { legacyAlgorithm :: Key Algorithm
     , legacyPlatform :: Key Platform
     , legacyCommit :: CommitId
-    , legacyGraphProps :: Set Text
-    , legacyStepProps :: Set Text
+    , legacyProps :: Set (Key PropertyName)
     , legacyFraction :: Double
     , legacySeed :: Int64
     , legacyDatasets :: Maybe (Set (Key Dataset))
@@ -140,8 +138,7 @@ getTotalQuery (LegacyTrainConfig LegacyConfig{..}) =
         , stepInfoPlatform = legacyPlatform
         , stepInfoQueryMode = All
         , stepInfoCommit = legacyCommit
-        , stepInfoGraphProps = legacyGraphProps
-        , stepInfoStepProps = legacyStepProps
+        , stepInfoProps = legacyProps
         , stepInfoSeed = legacySeed
         , stepInfoTimestamp = legacyTimestamp
         , stepInfoDatasets = legacyDatasets
@@ -159,21 +156,13 @@ getModelTrainingConfig modelId = SqlTrans.runTransaction $ do
     PredictionModel{..} <- SqlTrans.getJust modelId
 
     modelProps <- SqlTrans.selectSource [ModelPropertyModelId ==. modelId] [] $
-        C.map (modelPropertyPropId . SqlTrans.entityVal)
-        .| C.foldMap S.singleton
+        C.foldMap (S.singleton . modelPropertyPropId . SqlTrans.entityVal)
 
     let checkKey :: Entity PropertyName -> Bool
         checkKey (Entity k _) = S.member k modelProps
 
-    graphProps <-
-        SqlTrans.selectSource [PropertyNameIsStepProp ==. False] [] $
-            C.filter checkKey
-            .| C.foldMap (S.singleton . propertyNameProperty . entityVal)
-
-    stepProps <-
-        SqlTrans.selectSource [PropertyNameIsStepProp ==. True] [] $
-            C.filter checkKey
-            .| C.foldMap (S.singleton . propertyNameProperty . entityVal)
+    props <- SqlTrans.selectSource [] [] $
+        C.filter checkKey .| C.foldMap (S.singleton . entityKey)
 
     trainingDatasets <-
         SqlTrans.selectSource [ModelTrainDatasetModelId ==. modelId] [] $
@@ -182,31 +171,29 @@ getModelTrainingConfig modelId = SqlTrans.runTransaction $ do
 
     if predictionModelLegacyTrainFraction /= 0.0
        then return $ LegacyTrainConfig LegacyConfig
-            { legacyAlgorithm = predictionModelAlgorithmId
-            , legacyPlatform = predictionModelPlatformId
-            , legacyCommit = predictionModelAlgorithmVersion
-            , legacyGraphProps = graphProps
-            , legacyStepProps = stepProps
-            , legacyFraction = predictionModelLegacyTrainFraction
-            , legacySeed = predictionModelTrainSeed
-            , legacyDatasets = Just trainingDatasets
-            , legacyTimestamp = predictionModelTimestamp
-            }
+                { legacyAlgorithm = predictionModelAlgorithmId
+                , legacyPlatform = predictionModelPlatformId
+                , legacyCommit = predictionModelAlgorithmVersion
+                , legacyProps = props
+                , legacyFraction = predictionModelLegacyTrainFraction
+                , legacySeed = predictionModelTrainSeed
+                , legacyDatasets = Just trainingDatasets
+                , legacyTimestamp = predictionModelTimestamp
+                }
        else return $ TrainConfig StepInfoConfig
-            { stepInfoQueryMode = All
-            , stepInfoAlgorithm = predictionModelAlgorithmId
-            , stepInfoPlatform = predictionModelPlatformId
-            , stepInfoCommit = predictionModelAlgorithmVersion
-            , stepInfoGraphProps = graphProps
-            , stepInfoStepProps = stepProps
-            , stepInfoSeed = predictionModelTrainSeed
-            , stepInfoDatasets = Just trainingDatasets
-            , stepInfoFilterIncomplete = predictionModelSkipIncomplete
-            , stepInfoGraphs = predictionModelTrainGraphs
-            , stepInfoVariants = predictionModelTrainVariants
-            , stepInfoSteps = predictionModelTrainSteps
-            , stepInfoTimestamp = predictionModelTimestamp
-            }
+                { stepInfoQueryMode = All
+                , stepInfoAlgorithm = predictionModelAlgorithmId
+                , stepInfoPlatform = predictionModelPlatformId
+                , stepInfoCommit = predictionModelAlgorithmVersion
+                , stepInfoProps = props
+                , stepInfoSeed = predictionModelTrainSeed
+                , stepInfoDatasets = Just trainingDatasets
+                , stepInfoFilterIncomplete = predictionModelSkipIncomplete
+                , stepInfoGraphs = predictionModelTrainGraphs
+                , stepInfoVariants = predictionModelTrainVariants
+                , stepInfoSteps = predictionModelTrainSteps
+                , stepInfoTimestamp = predictionModelTimestamp
+                }
 
 trainModel
     :: (MonadMask m, MonadQuery m)
@@ -256,24 +243,8 @@ trainModel ModelDesc{..} = do
             unknownTxt <- liftIO $ T.hGetContents unknownsHnd
             (modelUnknownCount, modelUnknownPreds) <- getUnknowns unknownTxt
 
-            let (graphProps, stepProps) =
-                    VS.splitAt (S.size stepInfoGraphProps) featureImportance
-
-                labelledGraphProps =
-                    zip (S.toAscList stepInfoGraphProps) (VS.toList graphProps)
-
-                labelledStepProps =
-                    zip (S.toAscList stepInfoStepProps) (VS.toList stepProps)
-
-            modelGraphPropImportance <- fmap M.fromList $
-                forM labelledGraphProps $ \(propName, value) -> do
-                    propId <- Sql.getJustKeyBy $ UniqProperty propName
-                    return (propId, value)
-
-            modelStepPropImportance <- fmap M.fromList $
-                forM labelledStepProps $ \(propName, value) -> do
-                    propId <- Sql.getJustKeyBy $ UniqProperty propName
-                    return (propId, value)
+            let modelPropImportance = M.fromList $
+                    zip (S.toAscList stepInfoProps) (VS.toList featureImportance)
 
             return (model, ModelStats{..})
 
@@ -299,10 +270,7 @@ trainModel ModelDesc{..} = do
         forM_ (fromMaybe mempty stepInfoDatasets) $
             SqlTrans.insert_ . ModelTrainDataset modelId
 
-        forM_ (M.toList modelGraphPropImportance) $
-            SqlTrans.insert_ . uncurry (ModelProperty modelId)
-
-        forM_ (M.toList modelStepPropImportance) $
+        forM_ (M.toList modelPropImportance) $
             SqlTrans.insert_ . uncurry (ModelProperty modelId)
 
         forM_ (M.toList modelUnknownPreds) $ \(setId, UnknownSet{..}) -> do

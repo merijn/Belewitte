@@ -35,8 +35,7 @@ data StepInfoConfig = StepInfoConfig
     , stepInfoAlgorithm :: Key Algorithm
     , stepInfoPlatform :: Key Platform
     , stepInfoCommit :: CommitId
-    , stepInfoGraphProps :: Set Text
-    , stepInfoStepProps :: Set Text
+    , stepInfoProps :: Set (Key PropertyName)
     , stepInfoSeed :: Int64
     , stepInfoDatasets :: Maybe (Set (Key Dataset))
     , stepInfoFilterIncomplete :: Bool
@@ -71,8 +70,7 @@ stepInfoQuery StepInfoConfig
   , stepInfoPlatform
   , stepInfoQueryMode
   , stepInfoCommit
-  , stepInfoGraphProps
-  , stepInfoStepProps
+  , stepInfoProps
   , stepInfoSeed
   , stepInfoDatasets
   , stepInfoGraphs
@@ -94,6 +92,10 @@ stepInfoQuery StepInfoConfig
         clauses = T.intercalate ", " . map clause . S.toAscList $ s
         clause t = "'" <> t <> "'"
 
+    checkProperty :: PropValue -> Bool
+    checkProperty PropValue{propValuePropId} =
+        toSqlKey propValuePropId `S.member` stepInfoProps
+
     converter :: MonadConvert m => [PersistValue] -> m (Maybe StepInfo)
     converter [ PersistInt64 (toSqlKey -> stepVariantId)
               , PersistInt64 stepId
@@ -103,7 +105,7 @@ stepInfoQuery StepInfoConfig
               , rawStepProps
               , PersistInt64 ((/=0) -> keepRow)
               ]
-              | Just stepProps <- maybeStepProps
+              | Just stepProps <- VS.filter checkProperty <$> maybeStepProps
               = case stepInfoQueryMode of
                   All -> return $ Just StepInfo{..}
                   Train | keepRow -> return $ Just StepInfo{..}
@@ -179,11 +181,10 @@ Variants AS (
       , [] `inCTE` [i|
 GraphPropIndices AS (
     SELECT id
-         , ROW_NUMBER() OVER (ORDER BY property) AS idx
+         , ROW_NUMBER() OVER (ORDER BY id) AS idx
          , COUNT() OVER () AS count
     FROM PropertyName
-    WHERE property IN #{inExpression stepInfoGraphProps}
-    AND NOT isStepProp
+    WHERE NOT isStepProp
 ),
 
 GraphPropVector(graphProps) AS (
@@ -209,10 +210,15 @@ StepPropIndices AS (
     INNER JOIN StepProp
     ON PropertyName.id = StepProp.propId
 
-    WHERE algorithmId = ? AND property IN #{inExpression stepInfoStepProps}
-    WINDOW stepProps AS (ORDER BY property)
+    WHERE algorithmId = ?
+    WINDOW stepProps AS (ORDER BY id)
          , counts AS
            (stepProps ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
+),
+
+StepPropCount(count) AS (
+    SELECT COUNT(*)
+    FROM StepPropIndices
 ),
 
 StepPropVector(stepProps) AS (
@@ -255,7 +261,6 @@ ImplVector(implTiming) AS (
       , toPersistValue stepInfoAlgorithm
       , toPersistValue stepInfoPlatform
       , toPersistValue stepInfoCommit
-      , toPersistValue $ S.size stepInfoStepProps
       , toPersistValue $ not stepInfoFilterIncomplete
       ]
 
@@ -272,7 +277,7 @@ SELECT StepTimer.variantId
      , random_sample(2, ?, Variants.stepCount, ?) OVER
             (ORDER BY StepTimer.variantId, StepTimer.stepId)
        AND Variants.keepGraph AND Variants.keepVariant
-FROM StepTimer, ImplVector
+FROM StepTimer, ImplVector, StepPropCount
 INNER JOIN Run
 ON Run.id = StepTimer.runId
 
@@ -298,7 +303,7 @@ AND Run.algorithmId = ?
 AND RunConfig.algorithmId = ?
 AND RunConfig.platformId = ?
 AND RunConfig.algorithmVersion = ?
-AND (StepProps.props NOT NULL OR ? = 0)
+AND (StepProps.props NOT NULL OR StepPropCount.count = 0)
 
 GROUP BY StepTimer.variantId, StepTimer.stepId
 HAVING ? OR COUNT(Run.id) = MAX(Impls.count)

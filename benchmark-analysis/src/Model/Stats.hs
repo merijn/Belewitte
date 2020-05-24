@@ -29,8 +29,7 @@ implInUnknownSet n = S.member implKey . unknownSetImpls
     implKey = toSqlKey $ fromIntegral n
 
 data ModelStats = ModelStats
-    { modelGraphPropImportance :: Map (Key PropertyName) Double
-    , modelStepPropImportance :: Map (Key PropertyName) Double
+    { modelPropImportance :: Map (Key PropertyName) Double
     , modelUnknownCount :: Int
     , modelUnknownPreds :: Map Int64 UnknownSet
     } deriving (Eq, Show)
@@ -48,13 +47,7 @@ getModelStats modelId = SqlTrans.runTransaction $ do
             Nothing -> M.empty
             Just val -> M.singleton k val
 
-    modelGraphPropImportance <-
-        SqlTrans.selectSource [PropertyNameIsStepProp ==. False] [] $
-            C.foldMap checkKey
-
-    modelStepPropImportance <-
-        SqlTrans.selectSource [PropertyNameIsStepProp ==. True] [] $
-            C.foldMap checkKey
+    modelPropImportance <- SqlTrans.selectSource [] [] $ C.foldMap checkKey
 
     unknowns <- SqlTrans.selectList [UnknownPredictionModelId ==. modelId] []
     unknownPreds <- forM unknowns $ \SqlTrans.Entity{..} -> do
