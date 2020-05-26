@@ -15,7 +15,8 @@ import Query (Query, streamQuery)
 import Schema
 import Sql (Region)
 import qualified Sql
-import StepQuery
+import StepQuery (sortStepTimings)
+import TrainQuery
 import VariantQuery
 
 getConfigSet :: SqlM (Set (Key Algorithm, Key Platform, CommitId))
@@ -42,20 +43,20 @@ toStepInfoQueries (stepInfoAlgorithm, stepInfoPlatform, stepInfoCommit) = do
 
     stepInfoTimestamp <- liftIO getCurrentTime
 
-    yield $ stepInfoQuery TrainStepConfig
+    yield $ trainStepQuery TrainStepConfig
       { trainStepInfoConfig = StepInfoConfig{..}
       , trainStepQueryMode = Train
       , ..
       }
 
-    yield $ stepInfoQuery TrainStepConfig
+    yield $ trainStepQuery TrainStepConfig
       { trainStepInfoConfig = StepInfoConfig{..}
       , trainStepQueryMode = Validate
       , ..
       }
   where
     trainStepSeed = 42
-    stepInfoDatasets = mempty
+    trainStepDatasets = mempty
     stepInfoFilterIncomplete = False
 
     trainStepGraphs, trainStepVariants, trainStepSteps :: Percentage

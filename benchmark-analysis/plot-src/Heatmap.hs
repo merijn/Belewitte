@@ -31,7 +31,7 @@ import Schema
 import qualified Sql
 import StepAggregate (VariantAggregate(..), aggregateSteps)
 import StepHeatmapQuery
-import StepQuery
+import TrainQuery
 import Utils.Conduit (foldGroup)
 import Utils.ImplTiming
 import Utils.Pair (Pair(..))
@@ -107,16 +107,16 @@ plotHeatmap PredictHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
 
     predictor <- loadPredictor heatmapPredictor None
 
-    let stepQuery = stepInfoQuery TrainStepConfig
+    let stepQuery = trainStepQuery TrainStepConfig
             { trainStepInfoConfig = StepInfoConfig
               { stepInfoAlgorithm = globalPlotAlgorithm
               , stepInfoPlatform = globalPlotPlatform
               , stepInfoCommit = globalPlotCommit
-              , stepInfoDatasets = S.singleton <$> heatmapDataset
               , stepInfoFilterIncomplete = True
               , ..
               }
             , trainStepQueryMode = All
+            , trainStepDatasets = S.singleton <$> heatmapDataset
             , trainStepSeed = 42
             , trainStepGraphs = $$(validRational 1)
             , trainStepVariants = $$(validRational 1)

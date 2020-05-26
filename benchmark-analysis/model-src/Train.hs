@@ -53,12 +53,12 @@ import Utils.PropValue (propValueValue)
 import Query
 import RuntimeData (getModelScript)
 import Schema
-import StepQuery
+import TrainQuery
     ( QueryMode(..)
     , StepInfo(..)
     , StepInfoConfig(..)
     , TrainStepConfig(..)
-    , stepInfoQuery
+    , trainStepQuery
     )
 import Sql (MonadSql, (==.))
 import qualified Sql.Transaction as SqlTrans
@@ -82,12 +82,9 @@ data LegacyConfig = LegacyConfig
 setTrainingConfigDatasets
     :: Maybe (Set (Key Dataset)) -> TrainingConfig -> TrainingConfig
 setTrainingConfigDatasets datasets trainConfig = case trainConfig of
-    TrainConfig cfg@TrainStepConfig
-      { trainStepInfoConfig = stepCfg@StepInfoConfig{stepInfoDatasets}} ->
-        TrainConfig cfg
-            { trainStepInfoConfig = stepCfg
-                { stepInfoDatasets = updateDatasets stepInfoDatasets }
-            }
+    TrainConfig cfg@TrainStepConfig{trainStepDatasets} ->
+        TrainConfig cfg{ trainStepDatasets = updateDatasets trainStepDatasets }
+
     LegacyTrainConfig cfg@LegacyConfig{legacyDatasets} -> LegacyTrainConfig cfg
       { legacyDatasets = updateDatasets legacyDatasets }
   where
@@ -124,7 +121,7 @@ data ModelDescription = ModelDesc
 splitQuery
     :: MonadQuery m => TrainingConfig -> m (Query StepInfo, Query StepInfo)
 splitQuery (TrainConfig cfg) =
-    return (stepInfoQuery trainConfig, stepInfoQuery validateConfig)
+    return (trainStepQuery trainConfig, trainStepQuery validateConfig)
   where
     trainConfig = cfg { trainStepQueryMode = Train }
     validateConfig = cfg { trainStepQueryMode = Validate }
@@ -146,19 +143,19 @@ getValidationQuery :: MonadQuery m => TrainingConfig -> m (Query StepInfo)
 getValidationQuery = fmap snd . splitQuery
 
 getTotalQuery :: TrainingConfig -> Query StepInfo
-getTotalQuery (TrainConfig cfg) = stepInfoQuery cfg{ trainStepQueryMode = All }
+getTotalQuery (TrainConfig cfg) = trainStepQuery cfg{trainStepQueryMode = All}
 
 getTotalQuery (LegacyTrainConfig LegacyConfig{..}) =
-    stepInfoQuery TrainStepConfig
+    trainStepQuery TrainStepConfig
         { trainStepInfoConfig = StepInfoConfig
           { stepInfoAlgorithm = legacyAlgorithm
           , stepInfoPlatform = legacyPlatform
           , stepInfoCommit = legacyCommit
           , stepInfoTimestamp = legacyTimestamp
-          , stepInfoDatasets = legacyDatasets
           , stepInfoFilterIncomplete = False
           }
         , trainStepQueryMode = All
+        , trainStepDatasets = legacyDatasets
         , trainStepProps = legacyProps
         , trainStepSeed = legacySeed
         , ..
@@ -203,11 +200,11 @@ getModelTrainingConfig modelId = SqlTrans.runTransaction $ do
                   { stepInfoAlgorithm = predictionModelAlgorithmId
                   , stepInfoPlatform = predictionModelPlatformId
                   , stepInfoCommit = predictionModelAlgorithmVersion
-                  , stepInfoDatasets = Just trainingDatasets
                   , stepInfoFilterIncomplete = predictionModelSkipIncomplete
                   , stepInfoTimestamp = predictionModelTimestamp
                   }
                 , trainStepQueryMode = All
+                , trainStepDatasets = Just trainingDatasets
                 , trainStepProps = props
                 , trainStepSeed = predictionModelTrainSeed
                 , trainStepGraphs = predictionModelTrainGraphs
@@ -288,7 +285,7 @@ trainModel ModelDesc{..} = do
             , predictionModelTimestamp = timestamp
             }
 
-        forM_ (fromMaybe mempty stepInfoDatasets) $
+        forM_ (fromMaybe mempty trainStepDatasets) $
             SqlTrans.insert_ . ModelTrainDataset modelId
 
         forM_ (M.toList modelPropImportance) $
@@ -310,7 +307,7 @@ trainModel ModelDesc{..} = do
     TrainStepConfig{..} = modelTrainConfig
     StepInfoConfig{..} = trainStepInfoConfig
 
-    trainQuery = reduceInfo <$> stepInfoQuery modelTrainConfig
+    trainQuery = reduceInfo <$> trainStepQuery modelTrainConfig
 
     reduceInfo StepInfo{..} = (VS.map propValueValue stepProps, stepBestImpl)
 

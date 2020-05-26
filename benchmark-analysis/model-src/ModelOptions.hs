@@ -32,9 +32,10 @@ import QueryDump (modelQueryDump)
 import Schema
 import Sql ((==.))
 import qualified Sql
-import StepQuery
-    (QueryMode, StepInfoConfig(..), TrainStepConfig(..), stepInfoQuery)
-import qualified StepQuery
+import StepQuery (stepInfoQuery)
+import TrainQuery
+    (QueryMode, StepInfoConfig(..), TrainStepConfig(..), trainStepQuery)
+import qualified TrainQuery
 import VariantQuery
 
 data ModelCommand
@@ -79,7 +80,7 @@ commands = CommandRoot
         { commandName = "train"
         , commandHeaderDesc = "train a model"
         , commandDesc = "Train a new model"
-        } (Train <$> (trainStepConfig <*> pure StepQuery.Train))
+        } (Train <$> (trainStepConfig <*> pure TrainQuery.Train))
     , SingleCommand CommandInfo
         { commandName = "query"
         , commandHeaderDesc = "report model info"
@@ -192,22 +193,24 @@ stepPercentageParser = percentageParser
 
 modelQueryMap :: Map String (Parser DebugQuery)
 modelQueryMap = M.fromList
-    [ nameDebugQuery "stepInfoQuery" $
-        fmap StepQuery.sortStepTimings . stepInfoQuery <$> Compose (trainStepConfig <*> queryModeParser)
+    [ nameDebugQuery "trainStepQuery" $
+        fmap TrainQuery.sortStepTimings . trainStepQuery <$> Compose (trainStepConfig <*> queryModeParser)
+    , nameDebugQuery "stepInfoQuery" $
+        stepInfoQuery <$> Compose stepInfoConfig <*> Compose variantIdParser
     ]
   where
     queryModeParser :: Parser QueryMode
     queryModeParser =
         optionParserFromValues modeMap "QUERY-MODE" helpTxt $ mconcat
-            [ short 'q', long "query-mode", value StepQuery.All
+            [ short 'q', long "query-mode", value TrainQuery.All
             , showDefaultWith (map toLower . show)
             ]
       where
         helpTxt = "Query mode."
         modeMap = M.fromList
-            [ ("train", StepQuery.Train)
-            , ("validate", StepQuery.Validate)
-            , ("all", StepQuery.All)
+            [ ("train", TrainQuery.Train)
+            , ("validate", TrainQuery.Validate)
+            , ("all", TrainQuery.All)
             ]
 
 defaultImplParser :: Parser (Either Int Text)
@@ -301,18 +304,18 @@ stepInfoConfig = do
     getPlatformId <- platformIdParser
     getCommitId <- commitIdParser
     getUtcTime <- utcTimeParser
-    getDatasets <- datasetsParser
     shouldFilter <- filterIncomplete
 
     pure $ do
         algoId <- getAlgoId
         StepInfoConfig algoId
-            <$> getPlatformId <*> getCommitId algoId <*> getDatasets
-            <*> pure shouldFilter <*> getUtcTime
+            <$> getPlatformId <*> getCommitId algoId <*> pure shouldFilter
+            <*> getUtcTime
 
 trainStepConfig :: Parser (QueryMode -> SqlM TrainStepConfig)
 trainStepConfig = do
     getStepInfoConfig <- stepInfoConfig
+    getDatasets <- datasetsParser
     trainSeed <- trainSeedParser
     filterGraphProps <- props "graph"
     filterStepProps <- props "step"
@@ -323,6 +326,8 @@ trainStepConfig = do
     pure $ \queryMode -> do
         cfg@StepInfoConfig{..} <- getStepInfoConfig
 
+        datasets <- getDatasets
+
         stepProps <- S.union
             <$> (filterGraphProps <*> getGraphProps)
             <*> (filterStepProps <*> getStepProps stepInfoAlgorithm)
@@ -330,6 +335,7 @@ trainStepConfig = do
         return $ TrainStepConfig
             { trainStepInfoConfig = cfg
             , trainStepQueryMode = queryMode
+            , trainStepDatasets = datasets
             , trainStepProps = stepProps
             , trainStepSeed = trainSeed
             , trainStepGraphs = graphPercent

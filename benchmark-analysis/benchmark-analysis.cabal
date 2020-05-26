@@ -95,6 +95,7 @@ Library
                         Sql.Transaction
                         StepAggregate
                         StepQuery
+                        TrainQuery
                         Utils.Conduit
                         Utils.ImplTiming
                         Utils.Pair
