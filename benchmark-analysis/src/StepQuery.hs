@@ -2,7 +2,14 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
-module StepQuery where
+module StepQuery
+    ( StepInfoConfig(..)
+    , StepInfo(..)
+    , algorithmVariantQuery
+    , datasetVariantQuery
+    , sortStepTimings
+    , stepInfoQuery
+    ) where
 
 import Control.Monad.ST (runST)
 import Data.Ord (comparing)
@@ -44,6 +51,58 @@ sortStepTimings info@StepInfo{..} =
         mvec <- VS.thaw vec
         V.sortBy (comparing implTimingImpl) mvec
         VS.unsafeFreeze mvec
+
+algorithmVariantQuery :: Key Algorithm -> Query (Key Variant)
+algorithmVariantQuery algorithmId =
+    Query{convert = Simple converter, ..}
+  where
+    queryName :: Text
+    queryName = "algorithmVariantQuery"
+
+    converter :: MonadConvert m => [PersistValue] -> m (Key Variant)
+    converter [ PersistInt64 (toSqlKey -> variantId) ] = return variantId
+
+    converter actualValues = logThrowM $ QueryResultUnparseable actualValues
+        [ SqlInt64 ]
+
+    commonTableExpressions :: [CTE]
+    commonTableExpressions = []
+
+    params :: [PersistValue]
+    params = [ toPersistValue algorithmId ]
+
+    queryText = [i|
+SELECT Variant.id
+FROM Variant
+WHERE Variant.algorithmId = ?
+ORDER BY Variant.id ASC|]
+
+datasetVariantQuery :: Key Algorithm -> Key Dataset -> Query (Key Variant)
+datasetVariantQuery algorithmId datasetId =
+    Query{convert = Simple converter, ..}
+  where
+    queryName :: Text
+    queryName = "datasetVariantQuery"
+
+    converter :: MonadConvert m => [PersistValue] -> m (Key Variant)
+    converter [ PersistInt64 (toSqlKey -> variantId) ] = return variantId
+
+    converter actualValues = logThrowM $ QueryResultUnparseable actualValues
+        [ SqlInt64 ]
+
+    commonTableExpressions :: [CTE]
+    commonTableExpressions = []
+
+    params :: [PersistValue]
+    params = [ toPersistValue datasetId, toPersistValue algorithmId ]
+
+    queryText = [i|
+SELECT Variant.id
+FROM Variant
+INNER JOIN Graph
+ON Variant.graphId = Graph.id
+WHERE Graph.datasetId = ? AND Variant.algorithmId = ?
+ORDER BY Variant.id ASC|]
 
 stepInfoQuery :: StepInfoConfig -> Key Variant -> Query StepInfo
 stepInfoQuery StepInfoConfig{..} variantId =
