@@ -8,7 +8,10 @@ import Foreign.Storable (Storable(..))
 data PropValue = PropValue
     { propValuePropId :: {-# UNPACK #-} !Int64
     , propValueValue :: {-# UNPACK #-} ! Double
-    } deriving (Show)
+    }
+
+instance Show PropValue where
+    show PropValue{..} = show propValueValue
 
 instance Storable PropValue where
     sizeOf _ = sizeOf (0 :: Int64) + sizeOf (0.0 :: Double)
