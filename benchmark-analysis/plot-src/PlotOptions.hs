@@ -144,7 +144,7 @@ levelsHeatmapParser = do
     getVariantId <- variantIdParser
 
     pure $ do
-        globalOpts@GlobalPlotOptions{..} <- getGlobalOpts
+        globalOpts <- getGlobalOpts
         LevelHeatmap globalOpts <$> getVariantId
 
 predictHeatmapParser :: Parser (SqlM Heatmap)
