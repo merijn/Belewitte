@@ -135,12 +135,15 @@ stepInfoQuery StepInfoConfig{..} variantId =
         , cteQuery = [i|
 PropIndices AS (
     SELECT PropertyName.id AS propId
-         , ROW_NUMBER() OVER (ORDER BY PropertyName.id) AS idx
-         , COUNT() OVER () AS count
-    FROM PropertyName, Algorithm
+         , ROW_NUMBER() OVER idWindow AS idx
+         , COUNT() OVER countWindow AS count
+    FROM PropertyName
     LEFT JOIN StepProp
     ON PropertyName.id = StepProp.propId
     WHERE NOT isStepProp OR (StepProp.algorithmId = ?)
+    WINDOW idWindow AS(ORDER BY PropertyName.id),
+           countWindow AS
+           (idWindow ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
 ),
 EmptyPropVector(emptyProps) AS (
     SELECT init_key_value_vector_nan(propId, idx, count)
@@ -152,17 +155,18 @@ GraphPropVector(variantId, graphProps) AS (
     FROM Variant, EmptyPropVector
     INNER JOIN GraphPropValue USING (graphId)
     INNER JOIN PropIndices USING (propId)
+    WHERE Variant.id = ?
     GROUP BY Variant.id
-    HAVING Variant.id = ?
 ),
 StepProps(variantId, stepId, stepProps) AS (
     SELECT variantId, stepId
          , update_key_value_vector(graphProps, idx, propId, value)
-    FROM GraphPropVector
-    INNER JOIN StepPropValue USING (variantId)
+    FROM StepPropValue
     INNER JOIN PropIndices USING (propId)
+    INNER JOIN GraphPropVector USING (variantId)
+    WHERE variantId = ?
     GROUP BY variantId, stepId
-    HAVING variantId = ?
+    ORDER BY variantId, stepId
 )|]
         }
 
@@ -201,12 +205,13 @@ SELECT StepProps.variantId
      , StepProps.stepProps
 FROM StepProps, ImplVector
 
-INNER JOIN Run USING (variantId)
+INNER JOIN StepTimer USING (variantId, stepId)
+
+INNER JOIN Run
+ON StepTimer.runId = Run.id
+
 INNER JOIN RunConfig
 ON RunConfig.id = Run.runConfigId
-
-INNER JOIN StepTimer
-ON StepTimer.runId = Run.id
 
 INNER JOIN IndexedImpls AS Impls USING (implId)
 
