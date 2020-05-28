@@ -15,7 +15,7 @@ import qualified Data.Set as S
 
 import Core
 import Schema
-import Sql ((==.))
+import Sql (MonadSql, (==.))
 import qualified Sql.Transaction as SqlTrans
 
 data UnknownSet = UnknownSet
@@ -34,7 +34,7 @@ data ModelStats = ModelStats
     , modelUnknownPreds :: Map Int64 UnknownSet
     } deriving (Eq, Show)
 
-getModelStats :: Key PredictionModel -> SqlM ModelStats
+getModelStats :: MonadSql m => Key PredictionModel -> m ModelStats
 getModelStats modelId = SqlTrans.runTransaction $ do
     modelUnknownCount <-
         predictionModelTotalUnknownCount <$> SqlTrans.getJust modelId

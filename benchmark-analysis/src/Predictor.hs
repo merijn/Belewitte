@@ -27,6 +27,7 @@ import Core
 import qualified Model
 import Model.Stats (ModelStats(..), UnknownSet, getModelStats)
 import Schema
+import Sql (MonadSql)
 import qualified Sql
 import Utils.PropValue (PropValue(..))
 
@@ -103,7 +104,9 @@ loadPredictor modelId (DefImpl defImpl) = do
 
     rawLoad defaultImplementation (const (-1)) modelId
 
-makeGeneralPredictor :: Predictor -> Vector PropValue -> SqlM GeneralPredictor
+makeGeneralPredictor
+    :: (MonadLogger m, MonadSql m, MonadThrow m)
+    => Predictor -> Vector PropValue -> m GeneralPredictor
 makeGeneralPredictor predictor@Predictor{predictorModelId} propVec = do
     ModelStats{..} <- getModelStats predictorModelId
     generalIdxLUT <- V.ifoldM' buildLookup M.empty propVec
@@ -112,7 +115,7 @@ makeGeneralPredictor predictor@Predictor{predictorModelId} propVec = do
         Nothing -> logThrowM $ GenericInvariantViolation
             "Encountered duplicate properties!"
 
-    let vectorBuilder :: Int -> SqlM Int
+    let vectorBuilder :: (MonadLogger m, MonadThrow m) => Int -> m Int
         vectorBuilder i
             | Just propId <- M.lookup i propIdxLUT
             , Just generalIdx <- M.lookup propId generalIdxLUT
@@ -125,10 +128,11 @@ makeGeneralPredictor predictor@Predictor{predictorModelId} propVec = do
     return . GPredictor predictor $ fromLookupVector lookupVec
   where
     buildLookup
-        :: Map (Key PropertyName) Int
+        :: (MonadLogger m, MonadSql m, MonadThrow m)
+        => Map (Key PropertyName) Int
         -> Int
         -> PropValue
-        -> SqlM (Map (Key PropertyName) Int)
+        -> m (Map (Key PropertyName) Int)
     buildLookup lut i PropValue{propValuePropId} = do
         propId <- Sql.validateKey "PropertyName" propValuePropId
 
