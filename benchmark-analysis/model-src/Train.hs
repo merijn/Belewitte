@@ -20,7 +20,7 @@ module Train
     , trainModel
     ) where
 
-import Control.Monad (forM_, replicateM)
+import Control.Monad (forM_, replicateM, when)
 import Control.Monad.Trans.Resource (register, release)
 import Data.Binary.Get (getDoublehost, getRemainingLazyByteString, runGet)
 import Data.Binary.Put (putDoublehost, putInt64host, runPut)
@@ -49,7 +49,7 @@ import Model (byteStringToModel)
 import Model.Stats (UnknownSet(..), ModelStats(..))
 import Utils.Process
     (ReadWrite(..), runProcessCreation_, withPipe, withProcess)
-import Utils.PropValue (propValueValue)
+import Utils.PropValue (PropValue(..))
 import Query
 import RuntimeData (getModelScript)
 import Schema
@@ -218,8 +218,8 @@ trainModel
 trainModel ModelDesc{..} = do
     numEntries <- runSqlQueryCount trainQuery
 
-    propCount <- runSqlQueryConduit trainQuery C.head >>= \case
-        Just (v, _) -> return $ VS.length v
+    (propCount, propIds) <- runSqlQueryConduit trainQuery C.head >>= \case
+        Just (v, _) -> return $ (VS.length v, VS.map propValuePropId v)
         Nothing -> logThrowM . PatternFailed $
             "Unable to compute property count for model"
 
@@ -260,9 +260,15 @@ trainModel ModelDesc{..} = do
             unknownTxt <- liftIO $ T.hGetContents unknownsHnd
             (modelUnknownCount, modelUnknownPreds) <- getUnknowns unknownTxt
 
-            let modelPropImportance = M.fromList $
-                    zip (S.toAscList trainStepProps)
-                        (VS.toList featureImportance)
+            when (propCount /= VS.length featureImportance) $ do
+                logThrowM $ UnexpectedMissingData
+                    "Incorrect number of property importances reported by"
+                    "model.py"
+
+            let mkIndexMap idx key v = M.singleton key (idx, v)
+                modelPropImportance = mconcat $
+                    zipWith3 mkIndexMap [0..] (toSqlKey <$> VS.toList propIds)
+                                              (VS.toList featureImportance)
 
             return (model, ModelStats{..})
 
@@ -288,8 +294,8 @@ trainModel ModelDesc{..} = do
         forM_ (fromMaybe mempty trainStepDatasets) $
             SqlTrans.insert_ . ModelTrainDataset modelId
 
-        forM_ (M.toList modelPropImportance) $
-            SqlTrans.insert_ . uncurry (ModelProperty modelId)
+        forM_ (M.toList modelPropImportance) $ \(propId, (idx, v)) ->
+            SqlTrans.insert_ $ ModelProperty modelId propId idx v
 
         forM_ (M.toList modelUnknownPreds) $ \(setId, UnknownSet{..}) -> do
             unknownId <- SqlTrans.insert $
@@ -309,10 +315,10 @@ trainModel ModelDesc{..} = do
 
     trainQuery = reduceInfo <$> trainStepQuery modelTrainConfig
 
-    reduceInfo StepInfo{..} = (VS.map propValueValue stepProps, stepBestImpl)
+    reduceInfo StepInfo{..} = (stepProps, stepBestImpl)
 
-putProps :: Vector Double -> ByteString
-putProps = LBS.toStrict . runPut . VS.mapM_ putDoublehost
+putProps :: Vector PropValue -> ByteString
+putProps = LBS.toStrict . runPut . VS.mapM_ (putDoublehost . propValueValue)
 
 putResults :: Int64 -> ByteString
 putResults = LBS.toStrict . runPut . putInt64host

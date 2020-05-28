@@ -131,6 +131,7 @@ Library
                         Schema.ModelMetadata
                         Schema.ModelMetadata.V0
                         Schema.ModelMetadata.V1
+                        Schema.ModelMetadata.V2
                         Schema.Platform
                         Schema.Platform.V0
                         Schema.Properties

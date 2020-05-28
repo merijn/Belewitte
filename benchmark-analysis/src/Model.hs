@@ -11,9 +11,9 @@ import Data.Int (Int32)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 import Data.List (sortBy)
-import Data.Map (Map)
-import qualified Data.Map as M
 import Data.Ord (comparing)
+import Data.Set (Set)
+import qualified Data.Set as S
 import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -29,7 +29,6 @@ import Foreign.Ptr (castPtr)
 import Foreign.Storable (Storable(..))
 import Text.Read (readMaybe)
 
-import Schema.Properties
 import Utils.Vector (byteStringToVector, vectorToByteString)
 
 newtype Model = Model { getModelVector :: VS.Vector TreeNode }
@@ -57,7 +56,7 @@ dumpCppModel
     :: MonadIO m
     => FilePath
     -> Model
-    -> Map (Key PropertyName) Text
+    -> Set (Int, Text)
     -> IntMap Text
     -> m ()
 dumpCppModel name (Model tree) modelProps implNames =
@@ -103,7 +102,7 @@ extern "C" int32_t lookup()
 }
 |]
   where
-    numProps = M.size modelProps
+    numProps = S.size modelProps
 
     (decisionTree, newLabels) = VS.foldl' relabel (mempty, IM.empty) tree
 
@@ -143,8 +142,8 @@ extern "C" int32_t lookup()
             (kernelName, warpConfig) = kernelConfig implName
 
     propEntries :: Builder
-    propEntries = foldMap propEntry . zip [0..] $ M.elems modelProps
-        where
+    propEntries = foldMap propEntry modelProps
+      where
         propEntry :: (Int, Text) -> Builder
         propEntry (idx, propName) = mconcat
             [ "    { \"", fromText propName

@@ -29,7 +29,7 @@ implInUnknownSet n = S.member implKey . unknownSetImpls
     implKey = toSqlKey $ fromIntegral n
 
 data ModelStats = ModelStats
-    { modelPropImportance :: Map (Key PropertyName) Double
+    { modelPropImportance :: Map (Key PropertyName) (Int, Double)
     , modelUnknownCount :: Int
     , modelUnknownPreds :: Map Int64 UnknownSet
     } deriving (Eq, Show)
@@ -39,15 +39,9 @@ getModelStats modelId = SqlTrans.runTransaction $ do
     modelUnknownCount <-
         predictionModelTotalUnknownCount <$> SqlTrans.getJust modelId
 
-    modelProps <- SqlTrans.selectSource [ModelPropertyModelId ==. modelId] [] $
-        C.foldMap propNameMap
-
-    let checkKey :: Entity PropertyName -> Map (Key PropertyName) Double
-        checkKey (Entity k _) = case M.lookup k modelProps of
-            Nothing -> M.empty
-            Just val -> M.singleton k val
-
-    modelPropImportance <- SqlTrans.selectSource [] [] $ C.foldMap checkKey
+    modelPropImportance <-
+        SqlTrans.selectSource [ModelPropertyModelId ==. modelId] [] $
+            C.foldMap propNameMap
 
     unknowns <- SqlTrans.selectList [UnknownPredictionModelId ==. modelId] []
     unknownPreds <- forM unknowns $ \SqlTrans.Entity{..} -> do
@@ -62,8 +56,8 @@ getModelStats modelId = SqlTrans.runTransaction $ do
 
     return ModelStats{modelUnknownPreds = mconcat unknownPreds, ..}
   where
-    propNameMap :: Entity ModelProperty -> Map (Key PropertyName) Double
-    propNameMap (Entity _ ModelProperty{..}) =
-        M.singleton modelPropertyPropId modelPropertyImportance
+    propNameMap :: Entity ModelProperty -> Map (Key PropertyName) (Int, Double)
+    propNameMap (Entity _ ModelProperty{..}) = M.singleton modelPropertyPropId
+        (modelPropertyPropertyIdx, modelPropertyImportance)
 
     toImplSet UnknownPredictionSet{..} = S.singleton unknownPredictionSetImplId

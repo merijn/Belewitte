@@ -23,13 +23,14 @@ import Model.Stats (ModelStats(..), UnknownSet(..), getModelStats)
 import ModelOptions
 import Predictor
 import Schema
+import Sql ((==.))
 import qualified Sql
 import Train
 import Validate
 
 reportModelStats :: ModelStats -> ConduitT () Text SqlM ()
 reportModelStats ModelStats{..} = do
-    features <- forM (M.toList modelPropImportance) $ \(propId, val) -> do
+    features <- forM (M.toList modelPropImportance) $ \(propId, (_, val)) -> do
         PropertyName{..} <- Sql.getJust propId
 
         let label | propertyNameIsStepProp = "Step:  "
@@ -136,19 +137,14 @@ main = runCommand commands $ \case
 
     ExportModel{getModel,cppFile} -> do
         Entity modelId PredictionModel{..} <- getModel
-        trainConfig <- getModelTrainingConfig modelId
 
-        let (algoId, modelProps) = case trainConfig of
-                LegacyTrainConfig LegacyConfig{..} ->
-                    (legacyAlgorithm, legacyProps)
-                TrainConfig TrainStepConfig{..} ->
-                    (stepInfoAlgorithm trainStepInfoConfig, trainStepProps)
+        impls <- Sql.queryImplementations predictionModelAlgorithmId
+        modelProps <- Sql.selectSource [ModelPropertyModelId ==. modelId] [] $
+            C.mapM (mkPropIdx . entityVal) .| C.foldMap S.singleton
 
-        impls <- Sql.queryImplementations algoId
-
-        namedModelProps <- forM (S.toList modelProps) $ \propId -> do
-            name <- propertyNameProperty <$> Sql.getJust propId
-            return (propId, name)
-
-        dumpCppModel cppFile predictionModelModel (M.fromList namedModelProps)
+        dumpCppModel cppFile predictionModelModel modelProps
             (implementationName <$> impls)
+  where
+    mkPropIdx ModelProperty{..} = do
+        name <- propertyNameProperty <$> Sql.getJust modelPropertyPropId
+        return (modelPropertyPropertyIdx, name)
