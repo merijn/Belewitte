@@ -220,7 +220,7 @@ data Report a = Report
 evaluateModel :: Predictor -> EvaluateReport -> TrainingConfig -> SqlM ()
 evaluateModel predictor reportCfg@Report{..} trainConfig =
   renderRegionOutput $ do
-    impls <- Sql.queryImplementations algoId
+    impls <- Sql.queryImplementations stepInfoAlgorithm
 
     let implMaps :: Pair (IntMap Text)
         implMaps = toImplNames (filterImpls reportImplTypes) id (impls, mempty)
@@ -232,10 +232,7 @@ evaluateModel predictor reportCfg@Report{..} trainConfig =
 
     reportTotalStatistics reportCfg implMaps stats
   where
-    algoId = case trainConfig of
-        LegacyTrainConfig LegacyConfig{legacyAlgorithm} -> legacyAlgorithm
-        TrainConfig TrainStepConfig{trainStepInfoConfig} ->
-            stepInfoAlgorithm trainStepInfoConfig
+    StepInfoConfig{..} = getStepInfoConfig trainConfig
 
     query = getTotalQuery trainConfig
 

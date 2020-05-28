@@ -10,6 +10,8 @@ module Train
     , StepInfoConfig(..)
     , TrainStepConfig(..)
     , TrainingConfig(..)
+    , getStepInfoConfig
+    , mapStepInfoConfig
     , getTotalQuery
     , getTrainingQuery
     , getValidationQuery
@@ -69,15 +71,25 @@ data TrainingConfig
     deriving (Show)
 
 data LegacyConfig = LegacyConfig
-    { legacyAlgorithm :: Key Algorithm
-    , legacyPlatform :: Key Platform
-    , legacyCommit :: CommitId
+    { legacyStepInfoConfig :: StepInfoConfig
     , legacyProps :: Set (Key PropertyName)
     , legacyFraction :: Double
     , legacySeed :: Int64
     , legacyDatasets :: Maybe (Set (Key Dataset))
-    , legacyTimestamp :: UTCTime
     } deriving (Show)
+
+getStepInfoConfig :: TrainingConfig -> StepInfoConfig
+getStepInfoConfig trainConfig = case trainConfig of
+    TrainConfig cfg -> trainStepInfoConfig cfg
+    LegacyTrainConfig cfg -> legacyStepInfoConfig cfg
+
+mapStepInfoConfig
+    :: (StepInfoConfig -> StepInfoConfig) -> TrainingConfig -> TrainingConfig
+mapStepInfoConfig f trainConfig = case trainConfig of
+    TrainConfig cfg -> TrainConfig cfg
+        {trainStepInfoConfig = f (trainStepInfoConfig cfg)}
+    LegacyTrainConfig cfg -> LegacyTrainConfig cfg
+        {legacyStepInfoConfig = f (legacyStepInfoConfig cfg)}
 
 setTrainingConfigDatasets
     :: Maybe (Set (Key Dataset)) -> TrainingConfig -> TrainingConfig
@@ -93,23 +105,15 @@ setTrainingConfigDatasets datasets trainConfig = case trainConfig of
         | otherwise = const datasets
 
 setTrainingConfigPlatform :: Key Platform -> TrainingConfig -> TrainingConfig
-setTrainingConfigPlatform platformId trainConfig = case trainConfig of
-    TrainConfig cfg@TrainStepConfig{trainStepInfoConfig} ->
-        TrainConfig cfg
-            { trainStepInfoConfig = trainStepInfoConfig
-                { stepInfoPlatform = platformId }
-            }
-    LegacyTrainConfig cfg@LegacyConfig{} -> LegacyTrainConfig cfg
-      { legacyPlatform = platformId }
+setTrainingConfigPlatform platformId = mapStepInfoConfig $ \cfg ->
+    cfg{ stepInfoPlatform = platformId }
 
 setTrainingConfigSkipIncomplete :: Bool -> TrainingConfig -> TrainingConfig
 setTrainingConfigSkipIncomplete val trainConfig = case trainConfig of
-    TrainConfig cfg@TrainStepConfig{trainStepInfoConfig} ->
-        TrainConfig cfg
-            { trainStepInfoConfig = trainStepInfoConfig
-                { stepInfoFilterIncomplete = val }
-            }
-    LegacyTrainConfig _ -> trainConfig
+    LegacyTrainConfig{} -> trainConfig
+    TrainConfig{} -> mapStepInfoConfig go trainConfig
+  where
+    go cfg = cfg{ stepInfoFilterIncomplete = val }
 
 data ModelDescription = ModelDesc
     { modelName :: Text
@@ -147,13 +151,7 @@ getTotalQuery (TrainConfig cfg) = trainStepQuery cfg{trainStepQueryMode = All}
 
 getTotalQuery (LegacyTrainConfig LegacyConfig{..}) =
     trainStepQuery TrainStepConfig
-        { trainStepInfoConfig = StepInfoConfig
-          { stepInfoAlgorithm = legacyAlgorithm
-          , stepInfoPlatform = legacyPlatform
-          , stepInfoCommit = legacyCommit
-          , stepInfoTimestamp = legacyTimestamp
-          , stepInfoFilterIncomplete = False
-          }
+        { trainStepInfoConfig = legacyStepInfoConfig
         , trainStepQueryMode = All
         , trainStepDatasets = legacyDatasets
         , trainStepProps = legacyProps
@@ -186,14 +184,17 @@ getModelTrainingConfig modelId = SqlTrans.runTransaction $ do
 
     if predictionModelLegacyTrainFraction /= 0.0
        then return $ LegacyTrainConfig LegacyConfig
-                { legacyAlgorithm = predictionModelAlgorithmId
-                , legacyPlatform = predictionModelPlatformId
-                , legacyCommit = predictionModelAlgorithmVersion
+                { legacyStepInfoConfig = StepInfoConfig
+                  { stepInfoAlgorithm = predictionModelAlgorithmId
+                  , stepInfoPlatform = predictionModelPlatformId
+                  , stepInfoCommit = predictionModelAlgorithmVersion
+                  , stepInfoFilterIncomplete = False
+                  , stepInfoTimestamp = predictionModelTimestamp
+                  }
                 , legacyProps = props
                 , legacyFraction = predictionModelLegacyTrainFraction
                 , legacySeed = predictionModelTrainSeed
                 , legacyDatasets = Just trainingDatasets
-                , legacyTimestamp = predictionModelTimestamp
                 }
        else return $ TrainConfig TrainStepConfig
                 { trainStepInfoConfig = StepInfoConfig
