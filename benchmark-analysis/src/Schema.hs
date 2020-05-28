@@ -28,9 +28,9 @@ module Schema
     , module Schema.UnknownPredictions
     , module Schema.Variant
     , module Schema.VariantConfig
+    , optimalImplId
     , bestNonSwitchingImplId
     , predictedImplId
-    , optimalImplId
     , getAlgoName
     , getImplName
     , getExternalName
@@ -93,14 +93,14 @@ import Schema.VariantConfig hiding (migrations, schema)
 import qualified Schema.VariantConfig as VariantConfig
 import Schema.Version (schemaVersion)
 
+optimalImplId :: Integral n => n
+optimalImplId = -1
+
 bestNonSwitchingImplId :: Integral n => n
-bestNonSwitchingImplId = -1
+bestNonSwitchingImplId = -2
 
 predictedImplId :: Integral n => n
-predictedImplId = -2
-
-optimalImplId :: Integral n => n
-optimalImplId = -3
+predictedImplId = -3
 
 getAlgoName :: Algorithm -> Text
 getAlgoName Algorithm{algorithmName,algorithmPrettyName} =
