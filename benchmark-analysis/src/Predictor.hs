@@ -106,8 +106,8 @@ loadPredictor modelId (DefImpl defImpl) = do
 
 makeGeneralPredictor
     :: (MonadLogger m, MonadSql m, MonadThrow m)
-    => Predictor -> Vector PropValue -> m GeneralPredictor
-makeGeneralPredictor predictor@Predictor{predictorModelId} propVec = do
+    => Vector PropValue -> Predictor -> m GeneralPredictor
+makeGeneralPredictor propVec predictor@Predictor{predictorModelId} = do
     ModelStats{..} <- getModelStats predictorModelId
     generalIdxLUT <- V.ifoldM' buildLookup M.empty propVec
     propIdxLUT <- case swapMap modelPropImportance of

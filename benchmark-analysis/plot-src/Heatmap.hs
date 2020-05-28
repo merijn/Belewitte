@@ -126,7 +126,7 @@ plotHeatmap PredictHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
 
         aggregateQuery =
           streamQuery stepQuery
-            .| foldGroup ((==) `on` stepVariantId) (aggregateSteps predictor)
+            .| foldGroup ((==) `on` stepVariantId) (aggregateSteps [predictor])
 
     numSteps <- runRegionConduit $ aggregateQuery .| C.length
 

@@ -31,6 +31,7 @@ import Data.Ord (comparing)
 import Data.Semigroup (Max, getMax)
 import qualified Data.Semigroup as Semigroup
 import Data.Set (Set)
+import qualified Data.Set as S
 import qualified Data.Text as T
 import Data.Vector.Storable (Storable, Vector)
 import qualified Data.Vector.Storable as VS
@@ -42,7 +43,7 @@ import Predictor
 import Query
 import Schema
 import StepAggregate (VariantAggregate(..), aggregateSteps)
-import StepQuery (StepInfo(..))
+import StepQuery
 import qualified Sql
 import Train
 import Utils.Conduit (foldGroup)
@@ -225,16 +226,25 @@ evaluateModel predictor reportCfg@Report{..} trainConfig =
     let implMaps :: Pair (IntMap Text)
         implMaps = toImplNames (filterImpls reportImplTypes) id (impls, mempty)
 
-    stats <- streamQuery query
-      .| foldGroup ((==) `on` stepVariantId) (aggregateSteps predictor)
-      .| C.map (addBestNonSwitching impls)
-      .| aggregateVariants reportVariants reportRelativeTo implMaps
+    stats <- variantConduit
+        .> streamQuery . stepInfoQuery stepCfg
+        .| foldGroup ((==) `on` stepVariantId) (aggregateSteps [predictor])
+        .| C.map (addBestNonSwitching impls)
+        .| aggregateVariants reportVariants reportRelativeTo implMaps
 
     reportTotalStatistics reportCfg implMaps stats
   where
-    StepInfoConfig{..} = getStepInfoConfig trainConfig
+    variantConduit :: ConduitT a (Key Variant) (Region SqlM) ()
+    variantConduit = case mDatasets of
+        Just datasets | not (S.null datasets) -> C.yieldMany datasets
+            .> streamQuery . datasetVariantQuery stepInfoAlgorithm
 
-    query = getTotalQuery trainConfig
+        _ -> streamQuery (algorithmVariantQuery stepInfoAlgorithm)
+
+    stepCfg@StepInfoConfig{..} = getStepInfoConfig trainConfig
+    mDatasets = case trainConfig of
+        LegacyTrainConfig LegacyConfig{..} -> legacyDatasets
+        TrainConfig TrainStepConfig{..} -> trainStepDatasets
 
     addBestNonSwitching
         :: IntMap Implementation -> VariantAggregate -> VariantAggregate
