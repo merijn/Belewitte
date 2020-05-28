@@ -2,24 +2,33 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 module Predictor
-    ( MispredictionStrategy(..)
+    ( GeneralPredictor
+    , MispredictionStrategy(..)
     , Predictor
     , RawPrediction(..)
     , loadPredictor
     , predict
+    , predictGeneral
+    , makeGeneralPredictor
     , rawPredict
+    , rawPredictGeneral
     ) where
 
+import Control.Monad (when)
 import qualified Data.IntMap.Strict as IM
 import Data.Maybe (listToMaybe)
 import Data.Map.Strict (Map, (!?))
+import qualified Data.Map.Strict as M
+import qualified Data.Vector.Generic as V
 import Data.Vector.Storable (Vector)
+import qualified Data.Vector.Storable as VS
 
 import Core
 import qualified Model
 import Model.Stats (ModelStats(..), UnknownSet, getModelStats)
 import Schema
 import qualified Sql
+import Utils.PropValue (PropValue(..))
 
 data MispredictionStrategy
     = None
@@ -93,3 +102,65 @@ loadPredictor modelId (DefImpl defImpl) = do
                 (getAlgoName algorithm)
 
     rawLoad defaultImplementation (const (-1)) modelId
+
+makeGeneralPredictor :: Predictor -> Vector PropValue -> SqlM GeneralPredictor
+makeGeneralPredictor predictor@Predictor{predictorModelId} propVec = do
+    ModelStats{..} <- getModelStats predictorModelId
+    generalIdxLUT <- V.ifoldM' buildLookup M.empty propVec
+    propIdxLUT <- case swapMap modelPropImportance of
+        Just lut -> return lut
+        Nothing -> logThrowM $ GenericInvariantViolation
+            "Encountered duplicate properties!"
+
+    let vectorBuilder :: Int -> SqlM Int
+        vectorBuilder i
+            | Just propId <- M.lookup i propIdxLUT
+            , Just generalIdx <- M.lookup propId generalIdxLUT
+            = return generalIdx
+
+            | otherwise = logThrowM $ GenericInvariantViolation
+                "Unable to determine property index!"
+
+    lookupVec <- VS.generateM (M.size modelPropImportance) vectorBuilder
+    return . GPredictor predictor $ fromLookupVector lookupVec
+  where
+    buildLookup
+        :: Map (Key PropertyName) Int
+        -> Int
+        -> PropValue
+        -> SqlM (Map (Key PropertyName) Int)
+    buildLookup lut i PropValue{propValuePropId} = do
+        propId <- Sql.validateKey "PropertyName" propValuePropId
+
+        when (propId `M.member` lut) . logThrowM $ GenericInvariantViolation
+            "Found duplicate property id in input!"
+
+        return $ M.insert propId i lut
+
+    swapMap
+        :: Map (Key PropertyName) (Int, Double)
+        -> Maybe (Map Int (Key PropertyName))
+    swapMap = sequence . M.fromListWith merge . map swapKeyValue . M.toList
+      where
+        merge :: a -> b -> Maybe c
+        merge _ _ = Nothing
+
+        swapKeyValue
+            :: (Key PropertyName, (Int, Double))
+            -> (Int, Maybe (Key PropertyName))
+        swapKeyValue (k, (val, _)) = (val, Just k)
+
+    fromLookupVector :: Vector Int -> Vector PropValue -> Vector Double
+    fromLookupVector idx props = VS.generate (VS.length idx) $
+        propValueValue . VS.unsafeIndex props . VS.unsafeIndex idx
+
+data GeneralPredictor = GPredictor
+     { realPredictor :: Predictor
+     , prepInput :: Vector PropValue -> Vector Double
+     }
+
+predictGeneral :: GeneralPredictor -> Vector PropValue -> Maybe Int -> Int
+predictGeneral GPredictor{..} = predict realPredictor . prepInput
+
+rawPredictGeneral :: GeneralPredictor -> Vector PropValue -> RawPrediction
+rawPredictGeneral GPredictor{..} = rawPredict realPredictor . prepInput
