@@ -16,7 +16,6 @@ import qualified Data.Conduit.Combinators as C
 import Data.Function (on)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
-import qualified Data.Set as S
 import qualified Data.Text.IO as T
 import Data.Time.Clock (getCurrentTime)
 import Data.Vector.Storable (Vector)
@@ -28,10 +27,9 @@ import Predictor (MispredictionStrategy(None), loadPredictor)
 import Query
 import RuntimeData (getHeatmapScript)
 import Schema
-import qualified Sql
 import StepAggregate (VariantAggregate(..), aggregateSteps)
+import StepQuery
 import StepHeatmapQuery
-import TrainQuery
 import Utils.Conduit (foldGroup)
 import Utils.ImplTiming
 import Utils.Pair (Pair(..))
@@ -100,32 +98,20 @@ plotHeatmap LevelHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
         }
 
 plotHeatmap PredictHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
-    trainStepProps <- Sql.selectSource [] [] $
-        C.foldMap (S.singleton . entityKey)
-
     stepInfoTimestamp <- liftIO getCurrentTime
 
     predictor <- loadPredictor heatmapPredictor None
 
-    let stepQuery = trainStepQuery TrainStepConfig
-            { trainStepInfoConfig = StepInfoConfig
-              { stepInfoAlgorithm = globalPlotAlgorithm
-              , stepInfoPlatform = globalPlotPlatform
-              , stepInfoCommit = globalPlotCommit
-              , stepInfoFilterIncomplete = True
-              , ..
-              }
-            , trainStepQueryMode = All
-            , trainStepDatasets = S.singleton <$> heatmapDataset
-            , trainStepSeed = 42
-            , trainStepGraphs = $$(validRational 1)
-            , trainStepVariants = $$(validRational 1)
-            , trainStepSteps = $$(validRational 1)
+    let stepCfg = StepInfoConfig
+            { stepInfoAlgorithm = globalPlotAlgorithm
+            , stepInfoPlatform = globalPlotPlatform
+            , stepInfoCommit = globalPlotCommit
+            , stepInfoFilterIncomplete = True
             , ..
             }
 
-        aggregateQuery =
-          streamQuery stepQuery
+        aggregateQuery = variantConduit
+            .> streamQuery . stepInfoQuery stepCfg
             .| foldGroup ((==) `on` stepVariantId) (aggregateSteps [predictor])
 
     numSteps <- runRegionConduit $ aggregateQuery .| C.length
@@ -134,6 +120,10 @@ plotHeatmap PredictHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
         aggregateQuery .| C.map (regular . implTimes)
   where
     implNames = regular $ toImplNames id id globalPlotImpls
+
+    variantConduit = case heatmapDataset of
+        Nothing -> streamQuery (algorithmVariantQuery globalPlotAlgorithm)
+        Just d -> streamQuery (datasetVariantQuery globalPlotAlgorithm d)
 
 runPlotScript
     :: IntMap Text
