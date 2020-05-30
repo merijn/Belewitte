@@ -159,11 +159,14 @@ GraphPropVector(variantId, graphProps) AS (
     GROUP BY Variant.id
 ),
 StepProps(variantId, stepId, stepProps) AS (
-    SELECT variantId, stepId
-         , update_key_value_vector(graphProps, idx, propId, value)
-    FROM StepPropValue
-    INNER JOIN PropIndices USING (propId)
-    INNER JOIN GraphPropVector USING (variantId)
+    SELECT variantId, ifnull(stepId, 0)
+         , CASE WHEN stepId IS NULL
+            THEN graphProps
+            ELSE update_key_value_vector(graphProps, idx, propId, value)
+           END
+    FROM GraphPropVector
+    LEFT JOIN StepPropValue USING (variantId)
+    LEFT JOIN PropIndices USING (propId)
     WHERE variantId = ?
     GROUP BY variantId, stepId
     ORDER BY variantId, stepId
