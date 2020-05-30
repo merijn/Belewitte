@@ -104,6 +104,11 @@ update_key_value_vector_step
         memcpy(data->vector, original, data->size * sizeof *data->vector);
     }
 
+    // No-op when attempting to update NULL values
+    if (sqlite3_value_type(args[1]) == SQLITE_NULL) return;
+    if (sqlite3_value_type(args[2]) == SQLITE_NULL) return;
+    if (sqlite3_value_type(args[3]) == SQLITE_NULL) return;
+
     int64_t idx = sqlite3_value_int(args[1]) - 1;
     if (idx > data->size || idx < 0) {
         sqlite3_result_error(ctxt, "Out of bounds initialisation!", -1);
@@ -118,6 +123,7 @@ update_key_value_vector_step
         data->vector = NULL;
         return;
     }
+
     data->vector[idx].val = sqlite3_value_double(args[3]);
 }
 

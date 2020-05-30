@@ -160,10 +160,7 @@ GraphPropVector(variantId, graphProps) AS (
 ),
 StepProps(variantId, stepId, stepProps) AS (
     SELECT variantId, ifnull(stepId, 0)
-         , CASE WHEN stepId IS NULL
-            THEN graphProps
-            ELSE update_key_value_vector(graphProps, idx, propId, value)
-           END
+         , update_key_value_vector(graphProps, idx, propId, value)
     FROM GraphPropVector
     LEFT JOIN StepPropValue USING (variantId)
     LEFT JOIN PropIndices USING (propId)
