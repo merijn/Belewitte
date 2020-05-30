@@ -105,16 +105,18 @@ update_key_value_vector_step
     }
 
     int64_t idx = sqlite3_value_int(args[1]) - 1;
-    if (idx > data->size) {
+    if (idx > data->size || idx < 0) {
         sqlite3_result_error(ctxt, "Out of bounds initialisation!", -1);
         sqlite3_free(data->vector);
         data->vector = NULL;
+        return;
     }
 
     if (data->vector[idx].key != sqlite3_value_int64(args[2])) {
         sqlite3_result_error(ctxt, "Key mismatch!", -1);
         sqlite3_free(data->vector);
         data->vector = NULL;
+        return;
     }
     data->vector[idx].val = sqlite3_value_double(args[3]);
 }
