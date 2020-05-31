@@ -77,22 +77,16 @@ trainStepQuery TrainStepConfig
               , PersistInt64 stepId
               , PersistInt64 stepBestImpl
               , PersistByteString (byteStringToVector -> stepTimings)
-              , PersistByteString (byteStringToVector -> graphProps)
-              , rawStepProps
+              , PersistByteString (byteStringToVector -> rawStepProps)
               , PersistInt64 ((/=0) -> keepRow)
               ]
-              | Just stepProps <- VS.filter checkProperty <$> maybeStepProps
               = case trainStepQueryMode of
                   All -> return $ Just StepInfo{..}
                   Train | keepRow -> return $ Just StepInfo{..}
                   Validate | not keepRow -> return $ Just StepInfo{..}
                   _ -> return Nothing
       where
-        maybeStepProps = case rawStepProps of
-            PersistNull -> Just graphProps
-            PersistByteString (byteStringToVector -> stepProps) ->
-                Just $ graphProps <> stepProps
-            _ -> Nothing
+        stepProps = VS.filter checkProperty rawStepProps
 
     converter actualValues = logThrowM $ QueryResultUnparseable actualValues
         [ SqlInt64, SqlInt64, SqlInt64, SqlBlob, SqlBlob, SqlBlob, SqlBool ]
@@ -139,76 +133,53 @@ GraphVariants AS (
             , toPersistValue trainStepVariants
             ]
         , cteQuery = [i|
-Variants AS (
+Variants(graphId, variantId, stepCount, keepGraph, keepVariant) AS (
     SELECT graphId
-          , variantId
-          , SUM(maxStepId + 1) OVER () AS stepCount
-          , random_sample(0, ?, graphCount, ?)
-            OVER (ORDER BY graphId)
-            AS keepGraph
-          , random_sample(1, ?, variantCount, ?)
-            OVER (ORDER BY variantId)
-            AS keepVariant
+         , variantId
+         , SUM(maxStepId + 1) OVER ()
+         , random_sample(0, ?, graphCount, ?)
+           OVER (ORDER BY graphId)
+         , random_sample(1, ?, variantCount, ?)
+           OVER (ORDER BY variantId)
     FROM GraphVariants
     ORDER BY variantId
 )|]
         }
 
-      , [] `inCTE` [i|
-GraphPropIndices AS (
-    SELECT id
-         , ROW_NUMBER() OVER (ORDER BY id) AS idx
-         , COUNT() OVER () AS count
+      , [toPersistValue stepInfoAlgorithm] `inCTE` [i|
+PropIndices AS (
+    SELECT PropertyName.id AS propId
+         , ROW_NUMBER() OVER idWindow AS idx
+         , COUNT() OVER countWindow AS count
     FROM PropertyName
-    WHERE NOT isStepProp
+    LEFT JOIN StepProp
+    ON PropertyName.id = StepProp.propId
+    WHERE NOT isStepProp OR (StepProp.algorithmId = ?)
+    WINDOW idWindow AS(ORDER BY PropertyName.id),
+           countWindow AS
+           (idWindow ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
 ),
-
-GraphPropVector(graphProps) AS (
-    SELECT init_key_value_vector_nan(id, idx, count)
-    FROM GraphPropIndices
+EmptyPropVector(emptyProps) AS (
+    SELECT init_key_value_vector_nan(propId, idx, count)
+    FROM PropIndices
 ),
-
-GraphProps AS (
-    SELECT graphId
-         , update_key_value_vector(graphProps, idx, id, value) AS props
-    FROM GraphPropValue, GraphPropVector
-    INNER JOIN GraphPropIndices
-    ON GraphPropValue.propId = GraphPropIndices.id
-    GROUP BY graphId
+GraphPropVectors(variantId, graphProps) AS (
+    SELECT variantId
+         , update_key_value_vector(emptyProps, idx, propId, value)
+    FROM Variants, EmptyPropVector
+    INNER JOIN GraphPropValue USING (graphId)
+    INNER JOIN PropIndices USING (propId)
+    GROUP BY variantId
 )|]
 
-      , [toPersistValue stepInfoAlgorithm] `inCTE` [i|
-StepPropIndices AS (
-    SELECT id
-         , ROW_NUMBER() OVER stepProps AS idx
-         , COUNT() OVER counts AS count
-    FROM PropertyName
-    INNER JOIN StepProp
-    ON PropertyName.id = StepProp.propId
-
-    WHERE algorithmId = ?
-    WINDOW stepProps AS (ORDER BY id)
-         , counts AS
-           (stepProps ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)
-),
-
-StepPropCount(count) AS (
-    SELECT COUNT(*)
-    FROM StepPropIndices
-),
-
-StepPropVector(stepProps) AS (
-    SELECT init_key_value_vector_nan(id, idx, count)
-    FROM StepPropIndices
-),
-
-StepProps AS (
+      , [] `inCTE` [i|
+StepPropVectors(variantId, stepId, stepProps) AS (
     SELECT variantId
-         , stepId
-         , update_key_value_vector(stepProps, idx, id, value) AS props
-    FROM StepPropValue, StepPropVector
-    INNER JOIN StepPropIndices
-    ON StepPropValue.propId = StepPropIndices.id
+         , ifnull(stepId, 0)
+         , update_key_value_vector(graphProps, idx, propId, value)
+    FROM GraphPropVectors
+    LEFT JOIN StepPropValue USING (variantId)
+    LEFT JOIN PropIndices USING (propId)
     GROUP BY variantId, stepId
 )|]
 
@@ -248,30 +219,21 @@ SELECT StepTimer.variantId
        AS minVal
      , update_key_value_vector(implTiming, idx, Impls.implId, avgTime)
        AS timings
-     , GraphProps.props
-     , StepProps.props
+     , stepProps
      , random_sample(2, ?, Variants.stepCount, ?) OVER
             (ORDER BY StepTimer.variantId, StepTimer.stepId)
        AND Variants.keepGraph AND Variants.keepVariant
-FROM StepTimer, ImplVector, StepPropCount
+FROM StepPropVectors, ImplVector
+INNER JOIN StepTimer USING (variantId, stepId)
+INNER JOIN Variants USING (variantId)
+
 INNER JOIN Run
 ON Run.id = StepTimer.runId
-
-INNER JOIN IndexedImpls AS Impls
-ON Impls.implId = Run.implId
 
 INNER JOIN RunConfig
 ON Run.runConfigId = RunConfig.id
 
-INNER JOIN Variants
-ON StepTimer.variantId = Variants.variantId
-
-INNER JOIN GraphProps
-ON GraphProps.graphId = Variants.graphId
-
-LEFT JOIN StepProps
-ON StepProps.variantId = StepTimer.variantId
-AND StepProps.stepId = StepTimer.stepId
+INNER JOIN IndexedImpls AS Impls USING (implId)
 
 WHERE Run.validated = 1
 AND Run.timestamp < ?
@@ -279,7 +241,6 @@ AND Run.algorithmId = ?
 AND RunConfig.algorithmId = ?
 AND RunConfig.platformId = ?
 AND RunConfig.algorithmVersion = ?
-AND (StepProps.props NOT NULL OR StepPropCount.count = 0)
 
 GROUP BY StepTimer.variantId, StepTimer.stepId
 HAVING ? OR COUNT(Run.id) = MAX(Impls.count)
