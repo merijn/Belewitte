@@ -14,7 +14,6 @@ import Data.Binary.Put (putDoublehost, runPut)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
-import Data.Function (on)
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 import qualified Data.Text.IO as T
@@ -28,10 +27,9 @@ import Predictor (MispredictionStrategy(None), loadPredictor)
 import Query
 import RuntimeData (getHeatmapScript)
 import Schema
-import StepAggregate (VariantAggregate(..), aggregateSteps)
+import StepAggregate (VariantAggregate(..), stepAggregator)
 import StepQuery
 import StepHeatmapQuery
-import Utils.Conduit (foldGroup)
 import Utils.ImplTiming
 import Utils.Pair (Pair(..))
 import Utils.Process (Inherited(..), ReadWrite(Write))
@@ -113,7 +111,7 @@ plotHeatmap PredictHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
 
         aggregateQuery = variantConduit
             .> streamQuery . stepInfoQuery stepCfg
-            .| foldGroup ((==) `on` stepVariantId) (aggregateSteps predictors)
+            .| stepAggregator predictors
 
     numSteps <- runRegionConduit $ aggregateQuery .| C.length
 

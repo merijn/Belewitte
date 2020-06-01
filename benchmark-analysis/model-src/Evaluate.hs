@@ -42,11 +42,10 @@ import FormattedOutput (renderRegionOutput)
 import Predictor
 import Query
 import Schema
-import StepAggregate (VariantAggregate(..), aggregateSteps)
+import StepAggregate (VariantAggregate(..), stepAggregator)
 import StepQuery
 import qualified Sql
 import Train
-import Utils.Conduit (foldGroup)
 import Utils.ImplTiming
 import Utils.Pair (Pair(..), mapFirst, mergePair)
 import VariantQuery
@@ -99,11 +98,10 @@ data TotalStatistics =
   }
 
 aggregateVariants
-    :: (MonadLogger m, MonadThrow m)
-    => IntervalSet Int64
+    :: IntervalSet Int64
     -> RelativeTo
     -> Pair (IntMap Text)
-    -> ConduitT VariantAggregate Text m TotalStatistics
+    -> ConduitT VariantAggregate Text (Region SqlM) TotalStatistics
 aggregateVariants variantIntervals relTo implMaps = do
     VariantAgg{implTimes} <- C.peek >>= \case
         Just v -> return v
@@ -228,7 +226,7 @@ evaluateModel predictors reportCfg@Report{..} trainConfig =
 
     stats <- variantConduit
         .> streamQuery . stepInfoQuery stepCfg
-        .| foldGroup ((==) `on` stepVariantId) (aggregateSteps predictors)
+        .| stepAggregator predictors
         .| C.map (addBestNonSwitching impls)
         .| aggregateVariants reportVariants reportRelativeTo implMaps
 
