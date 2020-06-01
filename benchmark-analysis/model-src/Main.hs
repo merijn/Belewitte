@@ -113,7 +113,7 @@ main = runCommand commands $ \case
 
     EvaluatePredictor
       { getPlatformId
-      , getModelId
+      , getModelIds
       , defaultImpl
       , shouldFilterIncomplete
       , evaluateConfig
@@ -121,15 +121,16 @@ main = runCommand commands $ \case
       } -> do
         let setSkip = setTrainingConfigSkipIncomplete shouldFilterIncomplete
 
-        modelId <- getModelId
-        predictor <- loadPredictor modelId (DefImpl defaultImpl)
+        ~modelIds@(baseModelId:_) <- getModelIds
+        predictors <- forM modelIds $ \modelId ->
+            loadPredictor modelId (DefImpl defaultImpl)
 
         setPlatformId <- setTrainingConfigPlatform <$> getPlatformId
         setDatasets <- setTrainingConfigDatasets <$> getDatasetIds
         evalConfig <- setSkip . setPlatformId . setDatasets <$>
-            getModelTrainingConfig modelId
+            getModelTrainingConfig baseModelId
 
-        evaluateModel predictor evaluateConfig evalConfig
+        evaluateModel predictors evaluateConfig evalConfig
 
     Compare{getVariantInfoConfig,compareConfig} -> do
         variantInfoConfig <- getVariantInfoConfig

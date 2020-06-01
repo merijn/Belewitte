@@ -9,6 +9,7 @@ module Heatmap
     , plotHeatmap
     ) where
 
+import Control.Monad (forM)
 import Data.Binary.Put (putDoublehost, runPut)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Conduit as C
@@ -56,7 +57,7 @@ data Heatmap
       { heatmapGlobalOpts :: GlobalPlotOptions
       , heatmapVariantSelection :: VariantSelection
       , heatmapDataset :: Maybe (Key Dataset)
-      , heatmapPredictor :: Key PredictionModel
+      , heatmapPredictors :: [Key PredictionModel]
       }
 
 plotHeatmap :: Heatmap -> SqlM ()
@@ -100,7 +101,7 @@ plotHeatmap LevelHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
 plotHeatmap PredictHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
     stepInfoTimestamp <- liftIO getCurrentTime
 
-    predictor <- loadPredictor heatmapPredictor None
+    predictors <- forM heatmapPredictors $ \p -> loadPredictor p None
 
     let stepCfg = StepInfoConfig
             { stepInfoAlgorithm = globalPlotAlgorithm
@@ -112,7 +113,7 @@ plotHeatmap PredictHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
 
         aggregateQuery = variantConduit
             .> streamQuery . stepInfoQuery stepCfg
-            .| foldGroup ((==) `on` stepVariantId) (aggregateSteps [predictor])
+            .| foldGroup ((==) `on` stepVariantId) (aggregateSteps predictors)
 
     numSteps <- runRegionConduit $ aggregateQuery .| C.length
 

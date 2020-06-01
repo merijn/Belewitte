@@ -218,8 +218,8 @@ data Report a = Report
      , reportDetailed :: Bool
      }
 
-evaluateModel :: Predictor -> EvaluateReport -> TrainingConfig -> SqlM ()
-evaluateModel predictor reportCfg@Report{..} trainConfig =
+evaluateModel :: [Predictor] -> EvaluateReport -> TrainingConfig -> SqlM ()
+evaluateModel predictors reportCfg@Report{..} trainConfig =
   renderRegionOutput $ do
     impls <- Sql.queryImplementations stepInfoAlgorithm
 
@@ -228,7 +228,7 @@ evaluateModel predictor reportCfg@Report{..} trainConfig =
 
     stats <- variantConduit
         .> streamQuery . stepInfoQuery stepCfg
-        .| foldGroup ((==) `on` stepVariantId) (aggregateSteps [predictor])
+        .| foldGroup ((==) `on` stepVariantId) (aggregateSteps predictors)
         .| C.map (addBestNonSwitching impls)
         .| aggregateVariants reportVariants reportRelativeTo implMaps
 

@@ -152,13 +152,13 @@ predictHeatmapParser = do
     getGlobalOpts <- globalOptionsParser
     getVariantSelection <- variantSelectionOption
     getDatasetId <- optional datasetIdParser
-    getModelId <- modelIdParser
+    getModelIds <- some modelIdParser
 
     pure $ do
         globalOpts@GlobalPlotOptions{..} <- getGlobalOpts
         PredictHeatmap globalOpts
             <$> getVariantSelection globalPlotAlgorithm
-            <*> sequence getDatasetId <*> getModelId
+            <*> sequence getDatasetId <*> sequence getModelIds
 
 commands :: CommandRoot (SqlM PlotCommand)
 commands = CommandRoot
