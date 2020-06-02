@@ -53,7 +53,7 @@ stepAggregator predictors = do
 
         zeroTimeVec :: Vector ImplTiming
         zeroTimeVec = VS.map zerooutTiming stepTimings <>
-            VS.replicate (V.length genericPredictors) (ImplTiming predictedImplId 1)
+            VS.replicate (V.length genericPredictors) (ImplTiming predictedImplId 0)
 
         translateMap :: IntMap Int
         translateMap = VS.ifoldl' build IM.empty zeroTimeVec
