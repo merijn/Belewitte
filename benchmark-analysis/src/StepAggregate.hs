@@ -48,12 +48,17 @@ stepAggregator predictors = do
     genericPredictors <- V.fromList <$>
         mapM (makeGeneralPredictor stepProps) predictors
 
-    let zerooutTiming :: ImplTiming -> ImplTiming
+    let zerooutPredictor :: GeneralPredictor -> ImplTiming
+        zerooutPredictor p = ImplTiming (predictedImplId - modelId) 0
+          where
+            modelId = fromIntegral . fromSqlKey $ predictorId p
+
+        zerooutTiming :: ImplTiming -> ImplTiming
         zerooutTiming implTime = implTime { implTimingTiming = 0 }
 
         zeroTimeVec :: Vector ImplTiming
         zeroTimeVec = VS.map zerooutTiming stepTimings <>
-            VS.replicate (V.length genericPredictors) (ImplTiming predictedImplId 0)
+            VS.convert (V.map zerooutPredictor genericPredictors)
 
         translateMap :: IntMap Int
         translateMap = VS.ifoldl' build IM.empty zeroTimeVec
@@ -105,12 +110,15 @@ aggregateSteps predictors translateMap zeroTimeVec = do
             })
       where
         newPredictions :: Vector ImplTiming
-        newPredictions = VS.map wrapImpl predictedImpls
+        newPredictions = VS.imap wrapImpl predictedImpls
           where
-            wrapImpl :: Int -> ImplTiming
-            wrapImpl n
-                | n == -1 = ImplTiming predictedImplId (0/0)
-                | otherwise = ImplTiming predictedImplId (getTime n)
+            wrapImpl :: Int -> Int -> ImplTiming
+            wrapImpl idx n
+                | n == -1 = ImplTiming implId (0/0)
+                | otherwise = ImplTiming implId (getTime n)
+              where
+                modelId = predictorId $ V.unsafeIndex predictors idx
+                implId = predictedImplId - fromIntegral (fromSqlKey modelId)
 
         predictedImpls :: Vector Int
         predictedImpls = VS.generate (V.length predictors) doPredict

@@ -34,6 +34,7 @@ module Schema
     , getAlgoName
     , getImplName
     , getExternalName
+    , getModelName
     , mkPercentage
     , percent
     , renderPercentage
@@ -113,6 +114,10 @@ getImplName Implementation{implementationName,implementationPrettyName} =
 getExternalName :: ExternalImpl -> Text
 getExternalName ExternalImpl{externalImplName,externalImplPrettyName} =
   fromMaybe externalImplName externalImplPrettyName
+
+getModelName :: PredictionModel -> Text
+getModelName PredictionModel{predictionModelName,predictionModelPrettyName} =
+  fromMaybe predictionModelName predictionModelPrettyName
 
 toImplNames
     :: (IntMap Implementation -> IntMap Implementation)

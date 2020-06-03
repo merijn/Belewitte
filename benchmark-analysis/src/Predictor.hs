@@ -2,9 +2,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 module Predictor
-    ( GeneralPredictor
+    ( GeneralPredictor(predictorId)
     , MispredictionStrategy(..)
-    , Predictor
+    , Predictor(predictorModelId)
     , RawPrediction(..)
     , loadPredictor
     , predict
@@ -12,6 +12,7 @@ module Predictor
     , makeGeneralPredictor
     , rawPredict
     , rawPredictGeneral
+    , toPredictorName
     ) where
 
 import Control.Monad (when)
@@ -30,6 +31,11 @@ import Schema
 import Sql (MonadSql)
 import qualified Sql
 import Utils.PropValue (PropValue(..))
+
+toPredictorName :: MonadSql m => Key PredictionModel -> m (Int, Text)
+toPredictorName modelId = do
+    predName <- getModelName <$> Sql.getJust modelId
+    return (predictedImplId - fromIntegral (fromSqlKey modelId), predName)
 
 data MispredictionStrategy
     = None
@@ -125,7 +131,7 @@ makeGeneralPredictor propVec predictor@Predictor{predictorModelId} = do
                 "Unable to determine property index!"
 
     lookupVec <- VS.generateM (M.size modelPropImportance) vectorBuilder
-    return . GPredictor predictor $ fromLookupVector lookupVec
+    return . GPredictor predictorModelId predictor $ fromLookupVector lookupVec
   where
     buildLookup
         :: (MonadLogger m, MonadSql m, MonadThrow m)
@@ -159,7 +165,8 @@ makeGeneralPredictor propVec predictor@Predictor{predictorModelId} = do
         propValueValue . VS.unsafeIndex props . VS.unsafeIndex idx
 
 data GeneralPredictor = GPredictor
-     { realPredictor :: Predictor
+     { predictorId :: Key PredictionModel
+     , realPredictor :: Predictor
      , prepInput :: Vector PropValue -> Vector Double
      }
 

@@ -23,7 +23,12 @@ import qualified Data.Vector.Storable as VS
 import System.IO (hClose)
 
 import Core
-import Predictor (MispredictionStrategy(None), loadPredictor)
+import Predictor
+    ( MispredictionStrategy(None)
+    , loadPredictor
+    , predictorModelId
+    , toPredictorName
+    )
 import Query
 import RuntimeData (getHeatmapScript)
 import Schema
@@ -100,6 +105,7 @@ plotHeatmap PredictHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
     stepInfoTimestamp <- liftIO getCurrentTime
 
     predictors <- forM heatmapPredictors $ \p -> loadPredictor p None
+    predictorNames <- mapM (toPredictorName . predictorModelId) predictors
 
     let stepCfg = StepInfoConfig
             { stepInfoAlgorithm = globalPlotAlgorithm
@@ -115,7 +121,7 @@ plotHeatmap PredictHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
 
     numSteps <- runRegionConduit $ aggregateQuery .| C.length
 
-    runPlotScript implNames numSteps $
+    runPlotScript (implNames <> IM.fromList predictorNames) numSteps $
         aggregateQuery .| C.map (regular . implTimes)
   where
     implNames = regular $ toImplNames id id globalPlotImpls
