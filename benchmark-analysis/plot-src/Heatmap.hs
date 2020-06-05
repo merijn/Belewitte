@@ -36,7 +36,7 @@ import StepAggregate (VariantAggregate(..), stepAggregator)
 import StepQuery
 import StepHeatmapQuery
 import Utils.ImplTiming
-import Utils.Pair (Pair(..))
+import Utils.Pair (Pair(..), mapFirst)
 import Utils.Process (Inherited(..), ReadWrite(Write))
 import qualified Utils.Process as Proc
 import VariantQuery
@@ -118,6 +118,7 @@ plotHeatmap PredictHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
         aggregateQuery = variantConduit
             .> streamQuery . stepInfoQuery stepCfg
             .| stepAggregator predictors
+            .| C.map addOptimal
 
     numSteps <- runRegionConduit $ aggregateQuery .| C.length
 
@@ -125,6 +126,12 @@ plotHeatmap PredictHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
         aggregateQuery .| C.map (regular . implTimes)
   where
     implNames = regular $ toImplNames id id globalPlotImpls
+
+    addOptimal :: VariantAggregate -> VariantAggregate
+    addOptimal agg@VariantAgg{optimalTime, implTimes} =
+        agg{ implTimes = mapFirst (VS.cons optimalTiming) implTimes }
+      where
+        optimalTiming = ImplTiming optimalImplId optimalTime
 
     variantConduit = case heatmapDataset of
         Nothing -> streamQuery (algorithmVariantQuery globalPlotAlgorithm)
