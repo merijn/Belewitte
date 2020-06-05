@@ -1,6 +1,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Predictor
     ( CookedPredictor(predictorId)
     , MispredictionStrategy(..)
@@ -21,7 +22,6 @@ import Data.Map.Strict (Map, (!?))
 import qualified Data.Map.Strict as M
 import qualified Data.Vector.Generic as V
 import Data.Vector.Storable (Vector)
-import qualified Data.Vector.Storable as VS
 
 import Core
 import qualified Model
@@ -113,7 +113,7 @@ loadPredictor modelId (DefImpl defImpl) = do
     rawLoad defaultImplementation (const (-1)) modelId
 
 cookPredictor
-    :: (MonadLogger m, MonadSql m, MonadThrow m)
+    :: forall m . (MonadLogger m, MonadSql m, MonadThrow m)
     => Vector PropValue -> RawPredictor -> m CookedPredictor
 cookPredictor propVec RawPredictor{..} = do
     ModelStats{..} <- getModelStats rawPredictorId
@@ -123,19 +123,29 @@ cookPredictor propVec RawPredictor{..} = do
         Nothing -> logThrowM $ GenericInvariantViolation
             "Encountered duplicate properties!"
 
-    let vectorBuilder :: (MonadLogger m, MonadThrow m) => Int -> m Int
-        vectorBuilder i
-            | Just propId <- M.lookup i propIdxLUT
-            , Just generalIdx <- M.lookup propId generalIdxLUT
-            = return generalIdx
+    let translateProp :: Int -> m Int
+        translateProp i = do
+            propId <- case M.lookup i propIdxLUT of
+                Nothing -> logThrowM . GenericInvariantViolation $
+                    "Unable to lookup property: " <> showText i
+                Just v -> return v
 
-            | otherwise = logThrowM $ GenericInvariantViolation
-                "Unable to determine property index!"
+            case M.lookup propId generalIdxLUT of
+                Nothing -> logThrowM . GenericInvariantViolation $
+                    "Unable to property index: " <> showText i
+                Just v -> return v
 
-    lookupVec <- VS.generateM (M.size modelPropImportance) vectorBuilder
+        translateMispredictions :: Int -> m Int
+        translateMispredictions i
+            | i >= 0 = return i
+            | otherwise = return $ rawPredictorMispredictionStrategy i
+
+    propModel <- Model.mapPropIndices translateProp rawPredictorModel
+    newModel <- Model.mapImplementations translateMispredictions propModel
+
     return $ CookedPredictor
         { predictorId = rawPredictorId
-        , cookedPredictorModel = rawPredictorModel
+        , cookedPredictorModel = newModel
         , cookedPredictorDefaultImpl = rawPredictorDefaultImpl
         }
   where
@@ -165,10 +175,6 @@ cookPredictor propVec RawPredictor{..} = do
             :: (Key PropertyName, (Int, Double))
             -> (Int, Maybe (Key PropertyName))
         swapKeyValue (k, (val, _)) = (val, Just k)
-
-    fromLookupVector :: Vector Int -> Vector PropValue -> Vector Double
-    fromLookupVector idx props = VS.generate (VS.length idx) $
-        propValueValue . VS.unsafeIndex props . VS.unsafeIndex idx
 
 data CookedPredictor = CookedPredictor
      { predictorId :: Key PredictionModel
