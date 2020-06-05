@@ -3,7 +3,13 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
-module Model (Model, predict, dumpCppModel, byteStringToModel) where
+module Model
+    ( Model
+    , predict
+    , predictPropVector
+    , dumpCppModel
+    , byteStringToModel
+    ) where
 
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Data.ByteString (ByteString)
@@ -29,6 +35,7 @@ import Foreign.Ptr (castPtr)
 import Foreign.Storable (Storable(..))
 import Text.Read (readMaybe)
 
+import Utils.PropValue (PropValue(propValueValue))
 import Utils.Vector (byteStringToVector, vectorToByteString)
 
 newtype Model = Model { getModelVector :: VS.Vector TreeNode }
@@ -51,6 +58,19 @@ predict (Model tree) props = go (tree `VS.unsafeIndex` 0)
         where
           belowThreshold = props `VS.unsafeIndex` propIdx <= threshold
 {-# INLINE predict #-}
+
+predictPropVector :: Model -> Vector PropValue -> Int
+predictPropVector (Model tree) props = go (tree `VS.unsafeIndex` 0)
+  where
+    go :: TreeNode -> Int
+    go !Node{..}
+        | leftNode == -1 = rightNode
+        | belowThreshold = go (tree `VS.unsafeIndex` leftNode)
+        | otherwise = go (tree `VS.unsafeIndex` rightNode)
+        where
+          belowThreshold =
+            propValueValue (props `VS.unsafeIndex` propIdx) <= threshold
+{-# INLINE predictPropVector #-}
 
 dumpCppModel
     :: MonadIO m
