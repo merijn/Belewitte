@@ -5,6 +5,8 @@
 {-# LANGUAGE RecordWildCards #-}
 module Model
     ( Model
+    , mapPropIndices
+    , mapImplementations
     , predict
     , predictPropVector
     , dumpCppModel
@@ -71,6 +73,24 @@ predictPropVector (Model tree) props = go (tree `VS.unsafeIndex` 0)
           belowThreshold =
             propValueValue (props `VS.unsafeIndex` propIdx) <= threshold
 {-# INLINE predictPropVector #-}
+
+mapPropIndices :: (Int -> Maybe Int) -> Model -> Maybe Model
+mapPropIndices f (Model vec) = Model <$> VS.mapM changeNode vec
+  where
+    changeNode :: TreeNode -> Maybe TreeNode
+    changeNode node = case f (propIdx node) of
+        Just v -> Just node{ propIdx = v }
+        Nothing -> Nothing
+
+mapImplementations :: (Int -> Maybe Int) -> Model -> Maybe Model
+mapImplementations f (Model vec) = Model <$> VS.mapM changeNode vec
+  where
+    changeNode :: TreeNode -> Maybe TreeNode
+    changeNode node
+        | leftNode node /= -1 = Just node
+        | otherwise = case f (rightNode node) of
+            Just v -> Just node{ rightNode = v }
+            Nothing -> Nothing
 
 dumpCppModel
     :: MonadIO m
