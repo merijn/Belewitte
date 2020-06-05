@@ -2,16 +2,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 module Predictor
-    ( GeneralPredictor(predictorId)
+    ( CookedPredictor(predictorId)
     , MispredictionStrategy(..)
     , RawPredictor(rawPredictorId)
     , RawPrediction(..)
+    , cookPredictor
     , loadPredictor
     , predict
-    , predictGeneral
-    , makeGeneralPredictor
+    , predictCooked
     , rawPredict
-    , rawPredictGeneral
     , toPredictorName
     ) where
 
@@ -113,10 +112,10 @@ loadPredictor modelId (DefImpl defImpl) = do
 
     rawLoad defaultImplementation (const (-1)) modelId
 
-makeGeneralPredictor
+cookPredictor
     :: (MonadLogger m, MonadSql m, MonadThrow m)
-    => Vector PropValue -> RawPredictor -> m GeneralPredictor
-makeGeneralPredictor propVec predictor@RawPredictor{rawPredictorId} = do
+    => Vector PropValue -> RawPredictor -> m CookedPredictor
+cookPredictor propVec RawPredictor{..} = do
     ModelStats{..} <- getModelStats rawPredictorId
     generalIdxLUT <- V.ifoldM' buildLookup M.empty propVec
     propIdxLUT <- case swapMap modelPropImportance of
@@ -134,7 +133,11 @@ makeGeneralPredictor propVec predictor@RawPredictor{rawPredictorId} = do
                 "Unable to determine property index!"
 
     lookupVec <- VS.generateM (M.size modelPropImportance) vectorBuilder
-    return . GPredictor rawPredictorId predictor $ fromLookupVector lookupVec
+    return $ CookedPredictor
+        { predictorId = rawPredictorId
+        , cookedPredictorModel = rawPredictorModel
+        , cookedPredictorDefaultImpl = rawPredictorDefaultImpl
+        }
   where
     buildLookup
         :: (MonadLogger m, MonadSql m, MonadThrow m)
@@ -167,14 +170,17 @@ makeGeneralPredictor propVec predictor@RawPredictor{rawPredictorId} = do
     fromLookupVector idx props = VS.generate (VS.length idx) $
         propValueValue . VS.unsafeIndex props . VS.unsafeIndex idx
 
-data GeneralPredictor = GPredictor
+data CookedPredictor = CookedPredictor
      { predictorId :: Key PredictionModel
-     , realPredictor :: RawPredictor
-     , prepInput :: Vector PropValue -> Vector Double
+     , cookedPredictorModel :: Model
+     , cookedPredictorDefaultImpl :: Int
      }
 
-predictGeneral :: GeneralPredictor -> Vector PropValue -> Maybe Int -> Int
-predictGeneral GPredictor{..} = predict realPredictor . prepInput
-
-rawPredictGeneral :: GeneralPredictor -> Vector PropValue -> RawPrediction
-rawPredictGeneral GPredictor{..} = rawPredict realPredictor . prepInput
+predictCooked :: CookedPredictor -> Vector PropValue -> Maybe Int -> Int
+predictCooked CookedPredictor{..} props old
+    | prediction >= 0 = prediction
+    | otherwise = case old of
+        Nothing -> cookedPredictorDefaultImpl
+        Just v -> v
+  where
+    prediction = Model.predictPropVector cookedPredictorModel props

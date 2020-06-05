@@ -46,9 +46,9 @@ stepAggregator predictors = do
             "Expected at least one step input"
 
     genericPredictors <- V.fromList <$>
-        mapM (makeGeneralPredictor stepProps) predictors
+        mapM (cookPredictor stepProps) predictors
 
-    let zerooutPredictor :: GeneralPredictor -> ImplTiming
+    let zerooutPredictor :: CookedPredictor -> ImplTiming
         zerooutPredictor p = ImplTiming (predictedImplId - modelId) 0
           where
             modelId = fromIntegral . fromSqlKey $ predictorId p
@@ -71,7 +71,7 @@ stepAggregator predictors = do
         aggregateSteps genericPredictors translateMap zeroTimeVec
 
 aggregateSteps
-    :: V.Vector GeneralPredictor
+    :: V.Vector CookedPredictor
     -> IntMap Int
     -> Vector ImplTiming
     -> ConduitT StepInfo Void (Region SqlM) VariantAggregate
@@ -123,7 +123,7 @@ aggregateSteps predictors translateMap zeroTimeVec = do
         predictedImpls :: Vector Int
         predictedImpls = VS.generate (V.length predictors) doPredict
           where
-            doPredict n = predictGeneral (V.unsafeIndex predictors n) stepProps
+            doPredict n = predictCooked (V.unsafeIndex predictors n) stepProps
                 ((`VS.unsafeIndex` n) <$> lastImpls)
 
         getTime :: Integral n => n -> Double
