@@ -32,7 +32,7 @@ data ValidateStats = ValidateStats
     } deriving (Show)
 
 validateModel
-    :: Predictor
+    :: RawPredictor
     -> TrainingConfig
     -> Maybe (Key Platform)
     -> Maybe (Set (Key Dataset))

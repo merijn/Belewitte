@@ -216,13 +216,13 @@ data Report a = Report
      , reportDetailed :: Bool
      }
 
-evaluateModel :: [Predictor] -> EvaluateReport -> TrainingConfig -> SqlM ()
+evaluateModel :: [RawPredictor] -> EvaluateReport -> TrainingConfig -> SqlM ()
 evaluateModel predictors reportCfg@Report{..} trainConfig =
   renderRegionOutput $ do
     impls <- filterImpls reportImplTypes <$>
         Sql.queryImplementations stepInfoAlgorithm
 
-    predictorNames <- mapM (toPredictorName . predictorModelId) predictors
+    predictorNames <- mapM (toPredictorName . rawPredictorId) predictors
 
     let implMaps :: Pair (IntMap Text)
         implMaps = mapFirst (<> IM.fromList predictorNames) $

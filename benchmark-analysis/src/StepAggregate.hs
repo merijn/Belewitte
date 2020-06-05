@@ -38,7 +38,7 @@ data StepVariantAggregate =
   }
 
 stepAggregator
-    :: [Predictor] -> ConduitT StepInfo VariantAggregate (Region SqlM) ()
+    :: [RawPredictor] -> ConduitT StepInfo VariantAggregate (Region SqlM) ()
 stepAggregator predictors = do
     StepInfo{stepProps,stepTimings} <- C.peek >>= \case
         Just info -> return info

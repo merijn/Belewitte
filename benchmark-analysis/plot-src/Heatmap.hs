@@ -26,7 +26,7 @@ import Core
 import Predictor
     ( MispredictionStrategy(None)
     , loadPredictor
-    , predictorModelId
+    , rawPredictorId
     , toPredictorName
     )
 import Query
@@ -105,7 +105,7 @@ plotHeatmap PredictHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
     stepInfoTimestamp <- liftIO getCurrentTime
 
     predictors <- forM heatmapPredictors $ \p -> loadPredictor p None
-    predictorNames <- mapM (toPredictorName . predictorModelId) predictors
+    predictorNames <- mapM (toPredictorName . rawPredictorId) predictors
 
     let stepCfg = StepInfoConfig
             { stepInfoAlgorithm = globalPlotAlgorithm

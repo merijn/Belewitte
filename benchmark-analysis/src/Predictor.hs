@@ -4,7 +4,7 @@
 module Predictor
     ( GeneralPredictor(predictorId)
     , MispredictionStrategy(..)
-    , Predictor(predictorModelId)
+    , RawPredictor(rawPredictorId)
     , RawPrediction(..)
     , loadPredictor
     , predict
@@ -41,12 +41,12 @@ data MispredictionStrategy
     = None
     | DefImpl (Either Int Text)
 
-data Predictor = Predictor
-    { predictorModelId :: Key PredictionModel
-    , predictorModel :: Model
-    , predictorUnknownSets :: Map Int64 UnknownSet
-    , defaultImplementation :: Int
-    , mispredictionStrategy :: Int -> Int
+data RawPredictor = RawPredictor
+    { rawPredictorId :: Key PredictionModel
+    , rawPredictorModel :: Model
+    , rawPredictorUnknownSets :: Map Int64 UnknownSet
+    , rawPredictorDefaultImpl :: Int
+    , rawPredictorMispredictionStrategy :: Int -> Int
     }
 
 data RawPrediction
@@ -54,40 +54,43 @@ data RawPrediction
     | MisPredictionSet UnknownSet
     | Unknown
 
-rawPredict :: Predictor -> Vector Double -> RawPrediction
-rawPredict Predictor{..} props
+rawPredict :: RawPredictor -> Vector Double -> RawPrediction
+rawPredict RawPredictor{..} props
     | modelPrediction >= 0 = ImplPrediction modelPrediction
-    | otherwise = case predictorUnknownSets !? unknownSetId of
+    | otherwise = case rawPredictorUnknownSets !? unknownSetId of
         Just s -> MisPredictionSet s
         Nothing -> Unknown
   where
-    modelPrediction = Model.predict predictorModel props
+    modelPrediction = Model.predict rawPredictorModel props
     unknownSetId = negate $ fromIntegral modelPrediction
 
-predict :: Predictor -> Vector Double -> Maybe Int -> Int
-predict Predictor{..} props lastImpl
+predict :: RawPredictor -> Vector Double -> Maybe Int -> Int
+predict RawPredictor{..} props lastImpl
     | modelPrediction >= 0 = modelPrediction
     | disambiguatedPrediction /= -1 = disambiguatedPrediction
     | otherwise = case lastImpl of
         Just i -> i
-        Nothing -> defaultImplementation
+        Nothing -> rawPredictorDefaultImpl
   where
-    modelPrediction = Model.predict predictorModel props
-    disambiguatedPrediction = mispredictionStrategy modelPrediction
+    modelPrediction = Model.predict rawPredictorModel props
+    disambiguatedPrediction = rawPredictorMispredictionStrategy modelPrediction
 
 rawLoad
-    :: Int -> (Int -> Int) -> Key PredictionModel -> SqlM Predictor
-rawLoad defaultImplementation mispredictionStrategy predictorModelId = do
-    PredictionModel{..} <- Sql.getJust predictorModelId
-    ModelStats{modelUnknownPreds} <- getModelStats predictorModelId
+    :: Int -> (Int -> Int) -> Key PredictionModel -> SqlM RawPredictor
+rawLoad defaultImpl strategy rawPredictorId = do
+    PredictionModel{..} <- Sql.getJust rawPredictorId
+    ModelStats{modelUnknownPreds} <- getModelStats rawPredictorId
 
-    return Predictor
-      { predictorModel = predictionModelModel
-      , predictorUnknownSets = modelUnknownPreds
+    return RawPredictor
+      { rawPredictorModel = predictionModelModel
+      , rawPredictorUnknownSets = modelUnknownPreds
+      , rawPredictorDefaultImpl = defaultImpl
+      , rawPredictorMispredictionStrategy = strategy
       , ..
       }
 
-loadPredictor :: Key PredictionModel -> MispredictionStrategy -> SqlM Predictor
+loadPredictor
+    :: Key PredictionModel -> MispredictionStrategy -> SqlM RawPredictor
 loadPredictor modelId None = rawLoad (-1) (const (-1)) modelId
 
 loadPredictor modelId (DefImpl defImpl) = do
@@ -112,9 +115,9 @@ loadPredictor modelId (DefImpl defImpl) = do
 
 makeGeneralPredictor
     :: (MonadLogger m, MonadSql m, MonadThrow m)
-    => Vector PropValue -> Predictor -> m GeneralPredictor
-makeGeneralPredictor propVec predictor@Predictor{predictorModelId} = do
-    ModelStats{..} <- getModelStats predictorModelId
+    => Vector PropValue -> RawPredictor -> m GeneralPredictor
+makeGeneralPredictor propVec predictor@RawPredictor{rawPredictorId} = do
+    ModelStats{..} <- getModelStats rawPredictorId
     generalIdxLUT <- V.ifoldM' buildLookup M.empty propVec
     propIdxLUT <- case swapMap modelPropImportance of
         Just lut -> return lut
@@ -131,7 +134,7 @@ makeGeneralPredictor propVec predictor@Predictor{predictorModelId} = do
                 "Unable to determine property index!"
 
     lookupVec <- VS.generateM (M.size modelPropImportance) vectorBuilder
-    return . GPredictor predictorModelId predictor $ fromLookupVector lookupVec
+    return . GPredictor rawPredictorId predictor $ fromLookupVector lookupVec
   where
     buildLookup
         :: (MonadLogger m, MonadSql m, MonadThrow m)
@@ -166,7 +169,7 @@ makeGeneralPredictor propVec predictor@Predictor{predictorModelId} = do
 
 data GeneralPredictor = GPredictor
      { predictorId :: Key PredictionModel
-     , realPredictor :: Predictor
+     , realPredictor :: RawPredictor
      , prepInput :: Vector PropValue -> Vector Double
      }
 
