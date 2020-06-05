@@ -204,7 +204,7 @@ SELECT StepProps.variantId
      , min_key(Impls.implId, avgTime, maxTime, minTime)
        FILTER (WHERE Impls.type == 'Core')
      , min_key(Impls.idx, avgTime, maxTime, minTime, Impls.implId)
-       FILTER (WHERE Impls.type == 'Core')
+       FILTER (WHERE Impls.type == 'Core') - 1
      , update_key_value_vector(implTiming, idx, Impls.implId, avgTime)
      , StepProps.stepProps
 FROM StepProps, ImplVector
