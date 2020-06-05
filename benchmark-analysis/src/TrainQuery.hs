@@ -76,6 +76,7 @@ trainStepQuery TrainStepConfig
     converter [ PersistInt64 (toSqlKey -> stepVariantId)
               , PersistInt64 stepId
               , PersistInt64 stepBestImpl
+              , PersistInt64 stepBestIdx
               , PersistByteString (byteStringToVector -> stepTimings)
               , PersistByteString (byteStringToVector -> rawStepProps)
               , PersistInt64 ((/=0) -> keepRow)
@@ -89,7 +90,7 @@ trainStepQuery TrainStepConfig
         stepProps = VS.filter checkProperty rawStepProps
 
     converter actualValues = logThrowM $ QueryResultUnparseable actualValues
-        [ SqlInt64, SqlInt64, SqlInt64, SqlBlob, SqlBlob, SqlBlob, SqlBool ]
+        [ SqlInt64, SqlInt64, SqlInt64, SqlInt64, SqlBlob, SqlBlob, SqlBlob, SqlBool ]
 
     commonTableExpressions :: [CTE]
     commonTableExpressions =
@@ -216,9 +217,9 @@ SELECT StepTimer.variantId
      , StepTimer.stepId
      , min_key(Impls.implId, avgTime, maxTime, minTime)
        FILTER (WHERE Impls.type == 'Core')
-       AS minVal
+     , min_key(Impls.idx, avgTime, maxTime, minTime, Impls.implId)
+       FILTER (WHERE Impls.type == 'Core')
      , update_key_value_vector(implTiming, idx, Impls.implId, avgTime)
-       AS timings
      , stepProps
      , random_sample(2, ?, Variants.stepCount, ?) OVER
             (ORDER BY StepTimer.variantId, StepTimer.stepId)

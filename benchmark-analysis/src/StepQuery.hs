@@ -37,6 +37,7 @@ data StepInfo =
   StepInfo
     { stepProps :: {-# UNPACK #-} !(Vector PropValue)
     , stepBestImpl :: {-# UNPACK #-} !Int64
+    , stepBestIdx :: {-# UNPACK #-} !Int64
     , stepVariantId :: {-# UNPACK #-} !(Key Variant)
     , stepId :: {-# UNPACK #-} !Int64
     , stepTimings :: {-# UNPACK #-} !(Vector ImplTiming)
@@ -116,13 +117,14 @@ stepInfoQuery StepInfoConfig{..} variantId =
         [ PersistInt64 (toSqlKey -> stepVariantId)
         , PersistInt64 stepId
         , PersistInt64 stepBestImpl
+        , PersistInt64 stepBestIdx
         , PersistByteString (byteStringToVector -> stepTimings)
         , PersistByteString (byteStringToVector -> stepProps)
         ]
         = return StepInfo{..}
 
     converter actualValues = logThrowM $ QueryResultUnparseable actualValues
-        [ SqlInt64, SqlInt64, SqlInt64, SqlBlob, SqlBlob ]
+        [ SqlInt64, SqlInt64, SqlInt64, SqlInt64, SqlBlob, SqlBlob ]
 
     commonTableExpressions :: [CTE]
     commonTableExpressions =
@@ -200,6 +202,8 @@ ImplVector(implTiming) AS (
 SELECT StepProps.variantId
      , StepProps.stepId
      , min_key(Impls.implId, avgTime, maxTime, minTime)
+       FILTER (WHERE Impls.type == 'Core')
+     , min_key(Impls.idx, avgTime, maxTime, minTime, Impls.implId)
        FILTER (WHERE Impls.type == 'Core')
      , update_key_value_vector(implTiming, idx, Impls.implId, avgTime)
      , StepProps.stepProps
