@@ -3,6 +3,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Model
     ( Model
     , mapPropIndices
@@ -74,23 +75,25 @@ predictPropVector (Model tree) props = go (tree `VS.unsafeIndex` 0)
             propValueValue (props `VS.unsafeIndex` propIdx) <= threshold
 {-# INLINE predictPropVector #-}
 
-mapPropIndices :: (Int -> Maybe Int) -> Model -> Maybe Model
-mapPropIndices f (Model vec) = Model <$> VS.mapM changeNode vec
-  where
-    changeNode :: TreeNode -> Maybe TreeNode
-    changeNode node = case f (propIdx node) of
-        Just v -> Just node{ propIdx = v }
-        Nothing -> Nothing
+mapModel :: Monad m => (TreeNode -> m TreeNode) -> Model -> m Model
+mapModel f (Model vec) = Model <$> VS.mapM f vec
 
-mapImplementations :: (Int -> Maybe Int) -> Model -> Maybe Model
-mapImplementations f (Model vec) = Model <$> VS.mapM changeNode vec
+mapPropIndices :: forall m . Monad m => (Int -> m Int) -> Model -> m Model
+mapPropIndices f = mapModel changeNode
   where
-    changeNode :: TreeNode -> Maybe TreeNode
+    changeNode :: TreeNode -> m TreeNode
     changeNode node
-        | leftNode node /= -1 = Just node
-        | otherwise = case f (rightNode node) of
-            Just v -> Just node{ rightNode = v }
-            Nothing -> Nothing
+        | leftNode node == -1 = pure node
+        | otherwise = (\v -> node{ propIdx = v }) <$> f (propIdx node)
+
+mapImplementations
+    :: forall m . Monad m => (Int -> m Int) -> Model -> m Model
+mapImplementations f = mapModel changeNode
+  where
+    changeNode :: TreeNode -> m TreeNode
+    changeNode node
+        | leftNode node /= -1 = pure node
+        | otherwise = (\v -> node{ rightNode = v }) <$> f (rightNode node)
 
 dumpCppModel
     :: MonadIO m
