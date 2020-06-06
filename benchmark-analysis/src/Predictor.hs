@@ -1,7 +1,9 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TypeFamilies #-}
 module Predictor
     ( CookedPredictor(predictorId)
     , MispredictionStrategy(..)
@@ -27,8 +29,9 @@ import Core
 import qualified Model
 import Model.Stats (ModelStats(..), UnknownSet, getModelStats)
 import Schema
-import Sql (MonadSql)
+import Sql (MonadSql, SqlBackend, SqlRecord, ToBackendKey)
 import qualified Sql
+import Utils.ImplTiming (ImplTiming(..))
 import Utils.PropValue (PropValue(..))
 
 toPredictorName :: MonadSql m => Key PredictionModel -> m (Int, Text)
@@ -114,54 +117,82 @@ loadPredictor modelId (DefImpl defImpl) = do
 
 cookPredictor
     :: forall m . (MonadLogger m, MonadSql m, MonadThrow m)
-    => Vector PropValue -> RawPredictor -> m CookedPredictor
-cookPredictor propVec RawPredictor{..} = do
+    => Vector PropValue
+    -> Vector ImplTiming
+    -> RawPredictor
+    -> m CookedPredictor
+cookPredictor propVec implVec RawPredictor{..} = do
     ModelStats{..} <- getModelStats rawPredictorId
-    generalIdxLUT <- V.ifoldM' buildLookup M.empty propVec
-    propIdxLUT <- case swapMap modelPropImportance of
+    idxForPropMap <-
+        V.ifoldM' (buildLookup "PropertyName" propValuePropId) M.empty propVec
+
+    (idxForImplMap :: Map (Key Implementation) Int) <-
+        V.ifoldM' (buildLookup "Implementation" implTimingImpl) M.empty implVec
+
+    propIdxMap <- case swapMap modelPropImportance of
         Just lut -> return lut
         Nothing -> logThrowM $ GenericInvariantViolation
             "Encountered duplicate properties!"
 
     let translateProp :: Int -> m Int
         translateProp i = do
-            propId <- case M.lookup i propIdxLUT of
+            propId <- case M.lookup i propIdxMap of
                 Nothing -> logThrowM . GenericInvariantViolation $
                     "Unable to lookup property: " <> showText i
                 Just v -> return v
 
-            case M.lookup propId generalIdxLUT of
+            case M.lookup propId idxForPropMap of
                 Nothing -> logThrowM . GenericInvariantViolation $
-                    "Unable to property index: " <> showText i
+                    "Unable to lookup property index: " <> showText i
                 Just v -> return v
 
-        translateMispredictions :: Int -> m Int
-        translateMispredictions i
-            | i >= 0 = return i
-            | otherwise = return $ rawPredictorMispredictionStrategy i
+        translateImplementations :: Int -> m Int
+        translateImplementations i
+            | impl == -1 = return impl
+            | otherwise = do
+                implId <- Sql.validateKey "Implementation" $ fromIntegral impl
+
+                case M.lookup implId idxForImplMap of
+                    Nothing -> logThrowM . GenericInvariantViolation $
+                        "Unable to lookup implementation index: " <> showText i
+                    Just v -> return v
+          where
+            impl | i >= -1 = i
+                 | otherwise = rawPredictorMispredictionStrategy i
+
+    defaultImpl <- Sql.validateKey "Implementation" $
+        fromIntegral rawPredictorDefaultImpl
+
+    newDefaultImpl <- case M.lookup defaultImpl idxForImplMap of
+        Nothing -> logThrowM . GenericInvariantViolation $
+            "Unable to lookup implementation index: "
+            <> showText rawPredictorDefaultImpl
+        Just v -> return v
 
     propModel <- Model.mapPropIndices translateProp rawPredictorModel
-    newModel <- Model.mapImplementations translateMispredictions propModel
+    newModel <- Model.mapImplementations translateImplementations propModel
 
     return $ CookedPredictor
         { predictorId = rawPredictorId
         , cookedPredictorModel = newModel
-        , cookedPredictorDefaultImpl = rawPredictorDefaultImpl
+        , cookedPredictorDefaultImpl = newDefaultImpl
         }
   where
     buildLookup
-        :: (MonadLogger m, MonadSql m, MonadThrow m)
-        => Map (Key PropertyName) Int
+        :: (Ord (Key k), SqlRecord k, ToBackendKey SqlBackend k)
+        => Text
+        -> (v -> Int64)
+        -> Map (Key k) Int
         -> Int
-        -> PropValue
-        -> m (Map (Key PropertyName) Int)
-    buildLookup lut i PropValue{propValuePropId} = do
-        propId <- Sql.validateKey "PropertyName" propValuePropId
+        -> v
+        -> m (Map (Key k) Int)
+    buildLookup name f lut i val = do
+        key <- Sql.validateKey name $ f val
 
-        when (propId `M.member` lut) . logThrowM $ GenericInvariantViolation
+        when (key `M.member` lut) . logThrowM $ GenericInvariantViolation
             "Found duplicate property id in input!"
 
-        return $ M.insert propId i lut
+        return $ M.insert key i lut
 
     swapMap
         :: Map (Key PropertyName) (Int, Double)

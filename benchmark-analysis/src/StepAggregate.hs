@@ -8,8 +8,6 @@ module StepAggregate (VariantAggregate(..), stepAggregator) where
 import Data.Conduit (ConduitT, Void)
 import qualified Data.Conduit.Combinators as C
 import Data.Function (on)
-import Data.IntMap (IntMap)
-import qualified Data.IntMap as IM
 import qualified Data.Vector as V
 import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as VS
@@ -46,7 +44,7 @@ stepAggregator predictors = do
             "Expected at least one step input"
 
     genericPredictors <- V.fromList <$>
-        mapM (cookPredictor stepProps) predictors
+        mapM (cookPredictor stepProps stepTimings) predictors
 
     let zerooutPredictor :: CookedPredictor -> ImplTiming
         zerooutPredictor p = ImplTiming (predictedImplId - modelId) 0
@@ -60,22 +58,14 @@ stepAggregator predictors = do
         zeroTimeVec = VS.map zerooutTiming stepTimings <>
             VS.convert (V.map zerooutPredictor genericPredictors)
 
-        translateMap :: IntMap Int
-        translateMap = VS.ifoldl' build IM.empty zeroTimeVec
-          where
-            build :: IntMap Int -> Int -> ImplTiming -> IntMap Int
-            build implMap idx (ImplTiming impl _) =
-                IM.insert (fromIntegral impl) idx implMap
-
     foldGroup ((==) `on` stepVariantId) $
-        aggregateSteps genericPredictors translateMap zeroTimeVec
+        aggregateSteps genericPredictors zeroTimeVec
 
 aggregateSteps
     :: V.Vector CookedPredictor
-    -> IntMap Int
     -> Vector ImplTiming
     -> ConduitT StepInfo Void (Region SqlM) VariantAggregate
-aggregateSteps predictors translateMap zeroTimeVec = do
+aggregateSteps predictors zeroTimeVec = do
     variantId <- C.peek >>= \case
         Just StepInfo{stepVariantId} -> return stepVariantId
         Nothing -> logThrowM . PatternFailed $
@@ -104,7 +94,8 @@ aggregateSteps predictors translateMap zeroTimeVec = do
     aggregate (!lastImpls, !StepVariantAgg{..}) !StepInfo{..} =
       (Just predictedImpls, StepVariantAgg
             { stepVariantid = stepVariantId
-            , stepOptimalTime = stepOptimalTime + getTime stepBestImpl
+            , stepOptimalTime =
+                stepOptimalTime + getTime (fromIntegral stepBestIdx)
             , stepImplTimes = VS.zipWith (liftImplTiming (+)) stepImplTimes
                     (stepTimings <> newPredictions)
             })
@@ -126,6 +117,5 @@ aggregateSteps predictors translateMap zeroTimeVec = do
             doPredict n = predictCooked (V.unsafeIndex predictors n) stepProps
                 ((`VS.unsafeIndex` n) <$> lastImpls)
 
-        getTime :: Integral n => n -> Double
-        getTime ix = implTimingTiming $
-            stepTimings `VS.unsafeIndex` (translateMap IM.! fromIntegral ix)
+        getTime :: Int -> Double
+        getTime ix = implTimingTiming $ stepTimings `VS.unsafeIndex` ix
