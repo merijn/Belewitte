@@ -7,6 +7,7 @@
 module Predictor
     ( CookedPredictor(predictorId)
     , MispredictionStrategy(..)
+    , PredictorConfig(..)
     , RawPredictor(rawPredictorId)
     , RawPrediction(..)
     , cookPredictor
@@ -42,6 +43,12 @@ toPredictorName modelId = do
 data MispredictionStrategy
     = None
     | DefImpl (Either Int Text)
+
+data PredictorConfig = PConfig
+    { pConfigModelId :: Key PredictionModel
+    , pConfigDefaultImpl :: Key Implementation
+    , pConfigStrategy :: MispredictionStrategy
+    }
 
 data RawPredictor = RawPredictor
     { rawPredictorId :: Key PredictionModel

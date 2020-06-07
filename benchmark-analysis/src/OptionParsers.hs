@@ -1,6 +1,7 @@
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 module OptionParsers
@@ -17,6 +18,7 @@ module OptionParsers
     , percentageParser
     , platformIdParser
     , platformParser
+    , predictorParser
     , runconfigIdParser
     , runconfigParser
     , utcTimeParser
@@ -34,7 +36,9 @@ module OptionParsers
     ) where
 
 import Data.Char (toLower)
+import Data.Foldable (asum)
 import Data.Function (on)
+import qualified Data.IntMap as IM
 import Data.Interval (Extended(Finite), Interval)
 import qualified Data.Interval as I
 import Data.IntervalSet (IntervalSet)
@@ -42,19 +46,23 @@ import qualified Data.IntervalSet as IS
 import Data.List (isPrefixOf)
 import Data.Map (Map)
 import qualified Data.Map as M
+import Data.Maybe (listToMaybe)
+import qualified Data.Text as T
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.Format (defaultTimeLocale, parseTimeM)
 import Options.Applicative hiding (Completer)
 import Options.Applicative.Help (Doc, (</>))
 import qualified Options.Applicative.Help as Help
 import System.Exit (exitFailure)
-import Text.Megaparsec (Parsec, parseMaybe, sepBy1, try)
-import Text.Megaparsec.Char (char)
+import Text.Megaparsec
+    (Parsec, eof, lookAhead, manyTill, notFollowedBy, parseMaybe, sepBy1, try)
+import Text.Megaparsec.Char (alphaNumChar, char, string')
 import Text.Megaparsec.Char.Lexer (decimal)
 import Text.Read (readMaybe)
 
 import Core
 import FieldQuery (getDistinctAlgorithmVersionQuery)
+import Predictor (PredictorConfig(..), MispredictionStrategy(..))
 import Query (runSqlQuerySingle)
 import Schema
 import Sql (ToBackendKey, SqlBackend, (==.))
@@ -170,6 +178,56 @@ platformParser = queryPlatform <$> platformOpt
     queryPlatform (Right n) = Sql.validateEntity "Platform" n
     queryPlatform (Left name) = Sql.validateUniqEntity "platform" $
         UniqPlatform name
+
+predictorParser :: Parser (SqlM PredictorConfig)
+predictorParser = do
+    predictorConfig <- predictorOpt
+    pure $ do
+        let (model, defImpl, strategy) = predictorConfig
+
+        Entity modelId PredictionModel{..} <-
+            Sql.validateEntity "PredictionModel" model
+
+        algorithm <- Sql.getJust predictionModelAlgorithmId
+        impls <- Sql.queryImplementations predictionModelAlgorithmId
+
+        let lookupByName :: Text -> Maybe Int
+            lookupByName t = fmap fst
+                            . listToMaybe
+                            . filter ((t==) . implementationName . snd)
+                            $ IM.toList impls
+
+        defaultImpl <- fromIntegral <$> case defImpl of
+            Left i | IM.member i impls -> return i
+            Right t | Just i <- lookupByName t -> return i
+            _ -> logThrowM $ UnexpectedMissingData
+                    "Default implementation not found for algorithm"
+                    (getAlgoName algorithm)
+
+        defaultImplId <- Sql.validateKey "Implementation" defaultImpl
+
+        return $ PConfig modelId defaultImplId strategy
+  where
+    predictorOpt :: Parser (Int64, Either Int Text, MispredictionStrategy)
+    predictorOpt = option configReader $ mconcat
+        [ metavar "ID", short 'm', long "predictor"
+        , help "Predictor to use."
+        ]
+
+    configReader :: ReadM (Int64, Either Int Text, MispredictionStrategy)
+    configReader = maybeReader . parseMaybe $ do
+        modelId <- decimal <* char ':'
+        implId <- (Left <$> numericId) <|> (Right <$> textId)
+        strategy <- strategyParser
+        return (modelId, implId, strategy)
+      where
+        numericId = decimal <* notFollowedBy (lookAhead (char ':'))
+        textId = T.pack <$> manyTill alphaNumChar (char ':')
+
+    strategyParser :: Parsec () String MispredictionStrategy
+    strategyParser = (char ':' *> asum strategies) <|> (None <$ eof)
+      where
+        strategies = [ None <$ string' "none" ]
 
 runconfigIdParser :: Parser (SqlM (Key RunConfig))
 runconfigIdParser = fmap entityKey <$> runconfigParser
