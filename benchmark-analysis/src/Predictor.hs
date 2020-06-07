@@ -14,7 +14,6 @@ module Predictor
     , loadPredictor
     , predict
     , predictCooked
-    , predictorFromModelId
     , rawPredict
     , toPredictorName
     ) where
@@ -50,6 +49,7 @@ data RawPredictor = RawPredictor
 
 data RawPrediction
     = ImplPrediction Int
+    | RefinedPrediction Int64 UnknownSet
     | MisPredictionSet UnknownSet
     | Unknown
 
@@ -57,10 +57,13 @@ rawPredict :: RawPredictor -> Vector Double -> RawPrediction
 rawPredict RawPredictor{..} props
     | modelPrediction >= 0 = ImplPrediction modelPrediction
     | otherwise = case rawPredictorUnknownSets !? unknownSetId of
-        Just s -> MisPredictionSet s
+        Just s | refinedPrediction < 0 -> MisPredictionSet s
+               | otherwise -> RefinedPrediction refinedPrediction s
         Nothing -> Unknown
   where
     modelPrediction = Model.predict rawPredictorModel props
+    refinedPrediction = fromIntegral $
+        rawPredictorMispredictionStrategy modelPrediction
     unknownSetId = negate $ fromIntegral modelPrediction
 
 predict :: RawPredictor -> Vector Double -> Maybe Int -> Int
@@ -90,9 +93,6 @@ rawLoad defaultImpl strategy rawPredictorId = do
       , rawPredictorMispredictionStrategy = strategy modelUnknownPreds
       , ..
       }
-
-predictorFromModelId :: Key PredictionModel -> SqlM RawPredictor
-predictorFromModelId = rawLoad (-1) (\_ _ -> (-1))
 
 loadPredictor :: PredictorConfig -> SqlM RawPredictor
 loadPredictor PConfig{..} = do

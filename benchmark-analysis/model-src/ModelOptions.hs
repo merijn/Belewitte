@@ -47,7 +47,7 @@ data ModelCommand
     | ListModels
       { listModels :: SqlM () }
     | ValidateModel
-      { getModelId :: SqlM (Key PredictionModel)
+      { getPredictorConfig :: SqlM PredictorConfig
       , getOptionalPlatformId :: SqlM (Maybe (Key Platform))
       , getOptionalDatasetIds :: SqlM (Maybe (Set (Key Dataset)))
       }
@@ -117,7 +117,7 @@ commands = CommandRoot
             \full dataset"
         }
         $ ValidateModel
-            <$> modelIdParser <*> (sequence <$> optional platformIdParser)
+            <$> predictorParser <*> (sequence <$> optional platformIdParser)
             <*> datasetsParser
     , SingleCommand CommandInfo
         { commandName = "evaluate"

@@ -29,6 +29,10 @@ data ValidateStats = ValidateStats
     , partialPreds :: !Int
     , wrongPreds :: !Int
     , unknownPreds :: !Int
+    , rightRefinements :: !Int
+    , partialRefinements :: !Int
+    , wrongRefinements :: !Int
+    , unknownRefinements :: !Int
     } deriving (Show)
 
 validateModel
@@ -65,7 +69,7 @@ validateModel predictor config mPlatform mDatasets = renderOutput $
         result <- runSqlQueryConduit predictions $ C.foldl aggregate initial
         C.yield $ report name result
       where
-        initial = ValidateStats 0 0 0 0
+        initial = ValidateStats 0 0 0 0 0 0 0 0
         predictions = first (rawPredict predictor) <$> query
 
     aggregate :: ValidateStats -> (RawPrediction, Int64) -> ValidateStats
@@ -73,6 +77,28 @@ validateModel predictor config mPlatform mDatasets = renderOutput $
         ImplPrediction (fromIntegral -> impl)
             | impl == actual -> stats{ rightPreds = 1 + rightPreds }
             | otherwise -> stats{ wrongPreds = 1 + wrongPreds }
+
+        RefinedPrediction predicted unknowns
+            | actual == predicted -> stats
+                { rightPreds = 1 + rightPreds
+                , rightRefinements = 1 + rightRefinements
+                }
+
+            | actual `implInUnknownSet` unknowns
+            && predicted `implInUnknownSet` unknowns -> stats
+                { partialPreds = 1 + partialPreds
+                , partialRefinements = 1 + partialRefinements
+                }
+
+            | actual `implInUnknownSet` unknowns -> stats
+                { wrongPreds = 1 + wrongPreds
+                , wrongRefinements = 1 + wrongRefinements
+                }
+
+            | otherwise -> stats
+                { wrongPreds = 1 + wrongPreds
+                , unknownRefinements = 1 + unknownRefinements
+                }
 
         MisPredictionSet unknowns
             | actual `implInUnknownSet` unknowns ->
@@ -83,13 +109,27 @@ validateModel predictor config mPlatform mDatasets = renderOutput $
 
 report :: Text -> ValidateStats -> Text
 report name ValidateStats{..} = T.unlines $
-    [ "Right predictions (" <> name <> "): " <> showText rightPreds
+    [ "Total prediction (" <> name <> "): " <> showText totalPreds
+    , "Right predictions (" <> name <> "): " <> showText rightPreds
     , "Partial predictions (" <> name <> "): " <> showText partialPreds
     , "Wrong predictions (" <> name <> "): " <> showText wrongPreds
     , "Unknown predictions (" <> name <> "): " <> showText unknownPreds
-    , "Hard error rate (" <> name <> "): " <> percent wrongPreds totalPreds
-    , "Soft error rate (" <> name <> "): "
+    , "Hard prediction error rate (" <> name <> "): "
+        <> percent wrongPreds totalPreds
+    , "Soft prediction error rate (" <> name <> "): "
         <> percent (wrongPreds + partialPreds) totalPreds
+    , ""
+    , "Total refinements (" <> name <> "): " <> showText totalRefinements
+    , "Right refinements (" <> name <> "): " <> showText rightRefinements
+    , "Partial refinements (" <> name <> "): " <> showText partialRefinements
+    , "Wrong refinements (" <> name <> "): " <> showText wrongRefinements
+    , "Unknown refinements (" <> name <> "): " <> showText unknownRefinements
+    , "Hard refinements error rate (" <> name <> "): "
+        <> percent wrongRefinements totalRefinements
+    , "Soft refinements error rate (" <> name <> "): "
+        <> percent (wrongRefinements + partialRefinements) totalRefinements
     ]
   where
     totalPreds = rightPreds + partialPreds + wrongPreds + unknownPreds
+    totalRefinements = rightRefinements + partialRefinements + wrongRefinements
+                     + unknownRefinements

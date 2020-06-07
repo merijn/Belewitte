@@ -101,13 +101,16 @@ main = runCommand commands $ \case
 
     ListModels{listModels} -> listModels
 
-    ValidateModel{getModelId,getOptionalPlatformId,getOptionalDatasetIds} -> do
-        modelId <- getModelId
+    ValidateModel
+      { getPredictorConfig
+      , getOptionalPlatformId
+      , getOptionalDatasetIds
+      } -> do
+        predictor <- getPredictorConfig >>= loadPredictor
         platformId <- getOptionalPlatformId
         datasets <- getOptionalDatasetIds
-        predictor <- predictorFromModelId modelId
 
-        validationConfig <- getModelTrainingConfig modelId
+        validationConfig <- getModelTrainingConfig (rawPredictorId predictor)
 
         validateModel predictor validationConfig platformId datasets
 
