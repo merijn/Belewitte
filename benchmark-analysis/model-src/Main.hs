@@ -105,7 +105,7 @@ main = runCommand commands $ \case
         modelId <- getModelId
         platformId <- getOptionalPlatformId
         datasets <- getOptionalDatasetIds
-        predictor <- loadPredictor modelId None
+        predictor <- predictorFromModelId modelId
 
         validationConfig <- getModelTrainingConfig modelId
 
@@ -113,22 +113,20 @@ main = runCommand commands $ \case
 
     EvaluatePredictor
       { getPlatformId
-      , getModelIds
-      , defaultImpl
+      , getPredictorConfigs
       , shouldFilterIncomplete
       , evaluateConfig
       , getDatasetIds
       } -> do
         let setSkip = setTrainingConfigSkipIncomplete shouldFilterIncomplete
 
-        ~modelIds@(baseModelId:_) <- getModelIds
-        predictors <- forM modelIds $ \modelId ->
-            loadPredictor modelId (DefImpl defaultImpl)
+        ~predictorConfigs@(baseConfig:_) <- getPredictorConfigs
+        predictors <- mapM loadPredictor predictorConfigs
 
         setPlatformId <- setTrainingConfigPlatform <$> getPlatformId
         setDatasets <- setTrainingConfigDatasets <$> getDatasetIds
         evalConfig <- setSkip . setPlatformId . setDatasets <$>
-            getModelTrainingConfig baseModelId
+            getModelTrainingConfig (pConfigModelId baseConfig)
 
         evaluateModel predictors evaluateConfig evalConfig
 

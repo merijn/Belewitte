@@ -14,13 +14,12 @@ module Predictor
     , loadPredictor
     , predict
     , predictCooked
+    , predictorFromModelId
     , rawPredict
     , toPredictorName
     ) where
 
 import Control.Monad (when)
-import qualified Data.IntMap.Strict as IM
-import Data.Maybe (listToMaybe)
 import Data.Map.Strict (Map, (!?))
 import qualified Data.Map.Strict as M
 import qualified Data.Vector.Generic as V
@@ -40,15 +39,13 @@ toPredictorName modelId = do
     predName <- getModelName <$> Sql.getJust modelId
     return (predictedImplId - fromIntegral (fromSqlKey modelId), predName)
 
-data MispredictionStrategy
-    = None
-    | DefImpl (Either Int Text)
-
 data PredictorConfig = PConfig
     { pConfigModelId :: Key PredictionModel
     , pConfigDefaultImpl :: Key Implementation
     , pConfigStrategy :: MispredictionStrategy
     }
+
+data MispredictionStrategy = None
 
 data RawPredictor = RawPredictor
     { rawPredictorId :: Key PredictionModel
@@ -98,29 +95,22 @@ rawLoad defaultImpl strategy rawPredictorId = do
       , ..
       }
 
-loadPredictor
-    :: Key PredictionModel -> MispredictionStrategy -> SqlM RawPredictor
-loadPredictor modelId None = rawLoad (-1) (const (-1)) modelId
+predictorFromModelId :: Key PredictionModel -> SqlM RawPredictor
+predictorFromModelId = rawLoad (-1) (const (-1))
 
-loadPredictor modelId (DefImpl defImpl) = do
-    PredictionModel{..} <- Sql.getJust modelId
-    algorithm <- Sql.getJust predictionModelAlgorithmId
-    impls <- Sql.queryImplementations predictionModelAlgorithmId
+loadPredictor :: PredictorConfig -> SqlM RawPredictor
+loadPredictor PConfig{..} = do
+    PredictionModel{..} <- Sql.getJust pConfigModelId
+    Implementation{..} <- Sql.getJust pConfigDefaultImpl
 
-    let lookupByName :: Text -> Maybe Int
-        lookupByName t = fmap fst
-                        . listToMaybe
-                        . filter ((t==) . implementationName . snd)
-                        $ IM.toList impls
+    when (implementationAlgorithmId /= predictionModelAlgorithmId) $ do
+        logThrowM $ GenericInvariantViolation
+           "Default implementation algorithm and model algorithm do not match."
 
-    defaultImplementation <- case defImpl of
-        Left i | IM.member i impls -> return i
-        Right t | Just i <- lookupByName t -> return i
-        _ -> logThrowM $ UnexpectedMissingData
-                "Default implementation not found for algorithm"
-                (getAlgoName algorithm)
-
-    rawLoad defaultImplementation (const (-1)) modelId
+    rawLoad defaultImpl (const (-1)) pConfigModelId
+  where
+    defaultImpl :: Int
+    defaultImpl = fromIntegral $ fromSqlKey pConfigDefaultImpl
 
 cookPredictor
     :: forall m . (MonadLogger m, MonadSql m, MonadThrow m)

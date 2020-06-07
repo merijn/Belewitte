@@ -27,6 +27,7 @@ import Core
 import Evaluate
     (CompareReport, EvaluateReport, Report(..), RelativeTo(..), SortBy(..))
 import Options
+import Predictor (PredictorConfig)
 import Pretty.List (Field(..), FieldSpec(..), (=.), buildOptions)
 import QueryDump (modelQueryDump)
 import Schema
@@ -52,8 +53,7 @@ data ModelCommand
       }
     | EvaluatePredictor
       { getPlatformId :: SqlM (Key Platform)
-      , getModelIds :: SqlM [Key PredictionModel]
-      , defaultImpl :: Either Int Text
+      , getPredictorConfigs :: SqlM [PredictorConfig]
       , shouldFilterIncomplete :: Bool
       , evaluateConfig :: EvaluateReport
       , getDatasetIds :: SqlM (Maybe (Set (Key Dataset)))
@@ -127,9 +127,8 @@ commands = CommandRoot
             \against performance of other implementations"
         }
         $ EvaluatePredictor
-            <$> platformIdParser <*> (sequence <$> some modelIdParser)
-            <*> defaultImplParser <*> filterIncomplete <*> evaluateParser
-            <*> datasetsParser
+            <$> platformIdParser <*> (sequence <$> some predictorParser)
+            <*> filterIncomplete <*> evaluateParser <*> datasetsParser
     , SingleCommand CommandInfo
         { commandName = "compare"
         , commandHeaderDesc = "compare implementation performance"

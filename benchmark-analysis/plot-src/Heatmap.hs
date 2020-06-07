@@ -9,7 +9,6 @@ module Heatmap
     , plotHeatmap
     ) where
 
-import Control.Monad (forM)
 import Data.Binary.Put (putDoublehost, runPut)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Conduit as C
@@ -24,7 +23,7 @@ import System.IO (hClose)
 
 import Core
 import Predictor
-    ( MispredictionStrategy(None)
+    ( PredictorConfig
     , loadPredictor
     , rawPredictorId
     , toPredictorName
@@ -60,7 +59,7 @@ data Heatmap
       { heatmapGlobalOpts :: GlobalPlotOptions
       , heatmapVariantSelection :: VariantSelection
       , heatmapDataset :: Maybe (Key Dataset)
-      , heatmapPredictors :: [Key PredictionModel]
+      , heatmapPredictors :: [PredictorConfig]
       }
 
 plotHeatmap :: Heatmap -> SqlM ()
@@ -104,7 +103,7 @@ plotHeatmap LevelHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
 plotHeatmap PredictHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
     stepInfoTimestamp <- liftIO getCurrentTime
 
-    predictors <- forM heatmapPredictors $ \p -> loadPredictor p None
+    predictors <- mapM loadPredictor heatmapPredictors
     predictorNames <- mapM (toPredictorName . rawPredictorId) predictors
 
     let stepCfg = StepInfoConfig
