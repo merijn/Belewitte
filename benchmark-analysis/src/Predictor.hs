@@ -6,8 +6,8 @@
 {-# LANGUAGE TypeFamilies #-}
 module Predictor
     ( CookedPredictor(predictorId)
-    , MispredictionStrategy(..)
-    , PredictorConfig(..)
+    , MispredictionStrategy
+    , PredictorConfig
     , RawPredictor(rawPredictorId)
     , RawPrediction(..)
     , cookPredictor
@@ -27,7 +27,8 @@ import Data.Vector.Storable (Vector)
 
 import Core
 import qualified Model
-import Model.Stats (ModelStats(..), UnknownSet, getModelStats)
+import Model.Stats (ModelStats(..), UnknownSet(..), getModelStats)
+import Predictor.Config
 import Schema
 import Sql (MonadSql, SqlBackend, SqlRecord, ToBackendKey)
 import qualified Sql
@@ -38,14 +39,6 @@ toPredictorName :: MonadSql m => Key PredictionModel -> m (Int, Text)
 toPredictorName modelId = do
     predName <- getModelName <$> Sql.getJust modelId
     return (predictedImplId - fromIntegral (fromSqlKey modelId), predName)
-
-data PredictorConfig = PConfig
-    { pConfigModelId :: Key PredictionModel
-    , pConfigDefaultImpl :: Key Implementation
-    , pConfigStrategy :: MispredictionStrategy
-    }
-
-data MispredictionStrategy = None
 
 data RawPredictor = RawPredictor
     { rawPredictorId :: Key PredictionModel
@@ -82,7 +75,10 @@ predict RawPredictor{..} props lastImpl
     disambiguatedPrediction = rawPredictorMispredictionStrategy modelPrediction
 
 rawLoad
-    :: Int -> (Int -> Int) -> Key PredictionModel -> SqlM RawPredictor
+    :: Int
+    -> (Map Int64 UnknownSet -> Int -> Int)
+    -> Key PredictionModel
+    -> SqlM RawPredictor
 rawLoad defaultImpl strategy rawPredictorId = do
     PredictionModel{..} <- Sql.getJust rawPredictorId
     ModelStats{modelUnknownPreds} <- getModelStats rawPredictorId
@@ -91,12 +87,12 @@ rawLoad defaultImpl strategy rawPredictorId = do
       { rawPredictorModel = predictionModelModel
       , rawPredictorUnknownSets = modelUnknownPreds
       , rawPredictorDefaultImpl = defaultImpl
-      , rawPredictorMispredictionStrategy = strategy
+      , rawPredictorMispredictionStrategy = strategy modelUnknownPreds
       , ..
       }
 
 predictorFromModelId :: Key PredictionModel -> SqlM RawPredictor
-predictorFromModelId = rawLoad (-1) (const (-1))
+predictorFromModelId = rawLoad (-1) (\_ _ -> (-1))
 
 loadPredictor :: PredictorConfig -> SqlM RawPredictor
 loadPredictor PConfig{..} = do
@@ -107,7 +103,9 @@ loadPredictor PConfig{..} = do
         logThrowM $ GenericInvariantViolation
            "Default implementation algorithm and model algorithm do not match."
 
-    rawLoad defaultImpl (const (-1)) pConfigModelId
+    lookupMisprediction <- getMispredictionStrategy pConfigStrategy
+
+    rawLoad defaultImpl lookupMisprediction pConfigModelId
   where
     defaultImpl :: Int
     defaultImpl = fromIntegral $ fromSqlKey pConfigDefaultImpl

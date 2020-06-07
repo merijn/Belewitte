@@ -120,13 +120,12 @@ main = runCommand commands $ \case
       } -> do
         let setSkip = setTrainingConfigSkipIncomplete shouldFilterIncomplete
 
-        ~predictorConfigs@(baseConfig:_) <- getPredictorConfigs
-        predictors <- mapM loadPredictor predictorConfigs
+        ~predictors@(basePred:_) <- getPredictorConfigs >>= mapM loadPredictor
 
         setPlatformId <- setTrainingConfigPlatform <$> getPlatformId
         setDatasets <- setTrainingConfigDatasets <$> getDatasetIds
         evalConfig <- setSkip . setPlatformId . setDatasets <$>
-            getModelTrainingConfig (pConfigModelId baseConfig)
+            getModelTrainingConfig (rawPredictorId basePred)
 
         evaluateModel predictors evaluateConfig evalConfig
 

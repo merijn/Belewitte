@@ -63,7 +63,7 @@ import Text.Read (readMaybe)
 
 import Core
 import FieldQuery (getDistinctAlgorithmVersionQuery)
-import Predictor (PredictorConfig(..), MispredictionStrategy(..))
+import Predictor.Config (PredictorConfig(..), MispredictionStrategy(..))
 import Query (runSqlQuerySingle)
 import Schema
 import Sql (ToBackendKey, SqlBackend, (==.))
@@ -227,9 +227,12 @@ predictorParser = do
         textId = T.pack <$> manyTill (alphaNumChar <|> char '-') ending
 
     strategyParser :: Parsec () String MispredictionStrategy
-    strategyParser = (char ':' *> asum strategies) <|> (None <$ eof)
+    strategyParser = (char ':' *> strategies) <|> (None <$ eof)
       where
-        strategies = [ None <$ string' "none" ]
+        strategies = asum
+          [ None <$ string' "none"
+          , FirstInSet <$ string' "firstinset"
+          ]
 
 runconfigIdParser :: Parser (SqlM (Key RunConfig))
 runconfigIdParser = fmap entityKey <$> runconfigParser

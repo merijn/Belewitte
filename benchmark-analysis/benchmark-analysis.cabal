@@ -111,6 +111,7 @@ Library
                         Migration
                         OptionParsers
                         Paths_benchmark_analysis
+                        Predictor.Config
                         Pretty
                         Schema.Algorithm
                         Schema.Dataset
