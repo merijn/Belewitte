@@ -5,7 +5,7 @@
 {-# LANGUAGE RecordWildCards #-}
 module StepAggregate (VariantAggregate(..), stepAggregator) where
 
-import Data.Conduit (ConduitT, Void)
+import Data.Conduit (ConduitT)
 import qualified Data.Conduit.Combinators as C
 import Data.Function (on)
 import qualified Data.Vector as V
