@@ -55,8 +55,8 @@ stepAggregator predictors = do
         zerooutTiming implTime = implTime { implTimingTiming = 0 }
 
         zeroTimeVec :: Vector ImplTiming
-        zeroTimeVec = VS.map zerooutTiming stepTimings <>
-            VS.convert (V.map zerooutPredictor genericPredictors)
+        zeroTimeVec = VS.convert (V.map zerooutPredictor genericPredictors)
+                   <> VS.map zerooutTiming stepTimings
 
     foldGroup ((==) `on` stepVariantId) $
         aggregateSteps genericPredictors zeroTimeVec
@@ -97,7 +97,7 @@ aggregateSteps predictors zeroTimeVec = do
             , stepOptimalTime =
                 stepOptimalTime + getTime (fromIntegral stepBestIdx)
             , stepImplTimes = VS.zipWith (liftImplTiming (+)) stepImplTimes
-                    (stepTimings <> newPredictions)
+                    (newPredictions <> stepTimings)
             })
       where
         newPredictions :: Vector ImplTiming
