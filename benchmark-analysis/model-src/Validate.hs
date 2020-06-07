@@ -87,8 +87,8 @@ report name ValidateStats{..} = T.unlines $
     , "Partial predictions (" <> name <> "): " <> showText partialPreds
     , "Wrong predictions (" <> name <> "): " <> showText wrongPreds
     , "Unknown predictions (" <> name <> "): " <> showText unknownPreds
-    , "Soft error rate (" <> name <> "): " <> percent wrongPreds totalPreds
-    , "Hard error rate (" <> name <> "): "
+    , "Hard error rate (" <> name <> "): " <> percent wrongPreds totalPreds
+    , "Soft error rate (" <> name <> "): "
         <> percent (wrongPreds + partialPreds) totalPreds
     ]
   where
