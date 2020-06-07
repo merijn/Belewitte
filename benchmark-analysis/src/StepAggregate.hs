@@ -64,7 +64,7 @@ stepAggregator predictors = do
 aggregateSteps
     :: V.Vector CookedPredictor
     -> Vector ImplTiming
-    -> ConduitT StepInfo Void (Region SqlM) VariantAggregate
+    -> ConduitT StepInfo VariantAggregate (Region SqlM) VariantAggregate
 aggregateSteps predictors zeroTimeVec = do
     variantId <- C.peek >>= \case
         Just StepInfo{stepVariantId} -> return stepVariantId
