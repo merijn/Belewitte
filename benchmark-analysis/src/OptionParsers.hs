@@ -35,6 +35,7 @@ module OptionParsers
     , module Options.Applicative
     ) where
 
+import Control.Monad (void)
 import Data.Char (toLower)
 import Data.Foldable (asum)
 import Data.Function (on)
@@ -55,7 +56,7 @@ import Options.Applicative.Help (Doc, (</>))
 import qualified Options.Applicative.Help as Help
 import System.Exit (exitFailure)
 import Text.Megaparsec
-    (Parsec, eof, lookAhead, manyTill, notFollowedBy, parseMaybe, sepBy1, try)
+    (Parsec, eof, lookAhead, manyTill, parseMaybe, sepBy1, try)
 import Text.Megaparsec.Char (alphaNumChar, char, string')
 import Text.Megaparsec.Char.Lexer (decimal)
 import Text.Read (readMaybe)
@@ -221,8 +222,9 @@ predictorParser = do
         strategy <- strategyParser
         return (modelId, implId, strategy)
       where
-        numericId = decimal <* notFollowedBy (lookAhead (char ':'))
-        textId = T.pack <$> manyTill alphaNumChar (char ':')
+        ending = lookAhead . try $ void (char ':') <|> eof
+        numericId = decimal <* ending
+        textId = T.pack <$> manyTill (alphaNumChar <|> char '-') ending
 
     strategyParser :: Parsec () String MispredictionStrategy
     strategyParser = (char ':' *> asum strategies) <|> (None <$ eof)
