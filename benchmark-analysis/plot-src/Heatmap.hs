@@ -121,14 +121,21 @@ plotHeatmap PredictHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
 
     numSteps <- runRegionConduit $ aggregateQuery .| C.length
 
-    runPlotScript (implNames <> IM.fromList predictorNames) numSteps $
+    runPlotScript (regular implNames <> IM.fromList predictorNames) numSteps $
         aggregateQuery .| C.map (regular . implTimes)
   where
-    implNames = regular $ toImplNames id id globalPlotImpls
+    implNames = toImplNames id id globalPlotImpls
+
+    keepImpl :: IntMap v -> ImplTiming -> Bool
+    keepImpl implMap ImplTiming{implTimingImpl} =
+      implTimingImpl < 0 || IM.member (fromIntegral implTimingImpl) implMap
+
+    filterFuns :: Pair (VS.Vector ImplTiming -> VS.Vector ImplTiming)
+    filterFuns = VS.filter . keepImpl <$> implNames
 
     normalise :: VariantAggregate -> VariantAggregate
     normalise agg@VariantAgg{optimalTime, implTimes} = agg
-      { implTimes = VS.map normaliseTiming <$> implTimes }
+      { implTimes = VS.map normaliseTiming <$> (filterFuns <*> implTimes) }
       where
         normaliseTiming :: ImplTiming -> ImplTiming
         normaliseTiming (ImplTiming implId timing) =

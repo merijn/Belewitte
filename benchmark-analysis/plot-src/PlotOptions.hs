@@ -57,13 +57,41 @@ queryVariants algoId graphs = do
 
     return . S.fromList . map Sql.entityKey . catMaybes $ variants
 
+readTextSet :: String -> Parser (SqlM (Set Text))
+readTextSet name = readSet
+  where
+    readSet :: Parser (SqlM (Set Text))
+    readSet = fmap readText . strOption $ mconcat
+        [ metavar "FILE", long name
+        , help $ "File to read " ++ name ++ " to plot from"
+        ]
+
+    readText :: MonadIO m => FilePath -> m (Set Text)
+    readText = liftIO . fmap (S.fromList . T.lines) . T.readFile
+
+filterImpls
+    :: Set Text
+    -> (IntMap Implementation, IntMap ExternalImpl)
+    -> (IntMap Implementation, IntMap ExternalImpl)
+filterImpls is = bimap (filterImplementation is) (filterExternal is)
+  where
+    filterImplementation
+        :: Set Text -> IntMap Implementation -> IntMap Implementation
+    filterImplementation textSet = IM.filter $ getAny . mconcat
+        [ Any . (`S.member` textSet) . implementationName
+        , Any . (Builtin==) . implementationType
+        ]
+
+    filterExternal :: Set Text -> IntMap ExternalImpl -> IntMap ExternalImpl
+    filterExternal names = IM.filter ((`S.member` names) . externalImplName)
+
 barPlotParser :: Parser (BarPlotType -> SqlM BarPlot)
 barPlotParser = do
     getGlobalOpts <- globalOptionsParser
     slideFormat <- slideFlag
     printStdout <- printFlag
-    getGraphs <- graphs
-    getImpls <- impls
+    getGraphs <- readTextSet "graphs"
+    getImpls <- readTextSet "implementations"
 
     pure $ \barPlotType -> do
         rawImpls <- getImpls
@@ -77,21 +105,6 @@ barPlotParser = do
         BarPlot finalGlobalOpts barPlotType slideFormat printStdout
             <$> queryVariants globalPlotAlgorithm rawGraphs
   where
-    graphs :: Parser (SqlM (Set Text))
-    graphs = readSet "graphs"
-
-    impls :: Parser (SqlM (Set Text))
-    impls = readSet "implementations"
-
-    readSet :: FilePath -> Parser (SqlM (Set Text))
-    readSet s = fmap readText . strOption $ mconcat
-        [ metavar "FILE", long s
-        , help $ "File to read " ++ s ++ " to plot from"
-        ]
-
-    readText :: MonadIO m => FilePath -> m (Set Text)
-    readText = liftIO . fmap (S.fromList . T.lines) . T.readFile
-
     slideFlag :: Parser Bool
     slideFlag = flag False True $ mconcat
         [ long "slide", help "Render 4:3 slide dimensions" ]
@@ -99,22 +112,6 @@ barPlotParser = do
     printFlag :: Parser Bool
     printFlag = flag False True $ mconcat
         [ long "print", help "Print results to stdout, rather than plotting" ]
-
-    filterImpls
-        :: Set Text
-        -> (IntMap Implementation, IntMap ExternalImpl)
-        -> (IntMap Implementation, IntMap ExternalImpl)
-    filterImpls is = bimap (filterImplementation is) (filterExternal is)
-
-    filterImplementation
-        :: Set Text -> IntMap Implementation -> IntMap Implementation
-    filterImplementation textSet = IM.filter $ getAny . mconcat
-        [ Any . (`S.member` textSet) . implementationName
-        , Any . (Builtin==) . implementationType
-        ]
-
-    filterExternal :: Set Text -> IntMap ExternalImpl -> IntMap ExternalImpl
-    filterExternal names = IM.filter ((`S.member` names) . externalImplName)
 
 variantSelectionOption :: Parser (Key Algorithm -> SqlM VariantSelection)
 variantSelectionOption = asum
@@ -153,10 +150,19 @@ predictHeatmapParser = do
     getVariantSelection <- variantSelectionOption
     getDatasetId <- optional datasetIdParser
     getPredictorConfigs <- some predictorParser
+    getImpls <- optional $ readTextSet "implementations"
 
     pure $ do
         globalOpts@GlobalPlotOptions{..} <- getGlobalOpts
-        PredictHeatmap globalOpts
+        keepImpls <- sequence getImpls
+
+        let finalGlobalOpts = globalOpts
+              { globalPlotImpls = case keepImpls of
+                  Just impls -> filterImpls impls globalPlotImpls
+                  Nothing -> globalPlotImpls
+              }
+
+        PredictHeatmap finalGlobalOpts
             <$> getVariantSelection globalPlotAlgorithm
             <*> sequence getDatasetId <*> sequence getPredictorConfigs
 
