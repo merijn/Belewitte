@@ -35,7 +35,7 @@ import StepAggregate (VariantAggregate(..), stepAggregator)
 import StepQuery
 import StepHeatmapQuery
 import Utils.ImplTiming
-import Utils.Pair (Pair(..), mapFirst)
+import Utils.Pair (Pair(..))
 import Utils.Process (Inherited(..), ReadWrite(Write))
 import qualified Utils.Process as Proc
 import VariantQuery
@@ -117,7 +117,7 @@ plotHeatmap PredictHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
         aggregateQuery = variantConduit
             .> streamQuery . stepInfoQuery stepCfg
             .| stepAggregator predictors
-            .| C.map addOptimal
+            .| C.map normalise
 
     numSteps <- runRegionConduit $ aggregateQuery .| C.length
 
@@ -126,11 +126,13 @@ plotHeatmap PredictHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
   where
     implNames = regular $ toImplNames id id globalPlotImpls
 
-    addOptimal :: VariantAggregate -> VariantAggregate
-    addOptimal agg@VariantAgg{optimalTime, implTimes} =
-        agg{ implTimes = mapFirst (VS.cons optimalTiming) implTimes }
+    normalise :: VariantAggregate -> VariantAggregate
+    normalise agg@VariantAgg{optimalTime, implTimes} = agg
+      { implTimes = VS.map normaliseTiming <$> implTimes }
       where
-        optimalTiming = ImplTiming optimalImplId optimalTime
+        normaliseTiming :: ImplTiming -> ImplTiming
+        normaliseTiming (ImplTiming implId timing) =
+            ImplTiming implId (timing / optimalTime)
 
     variantConduit = case heatmapDataset of
         Nothing -> streamQuery (algorithmVariantQuery globalPlotAlgorithm)
@@ -161,7 +163,7 @@ runPlotScript implNames rowCount queryDataConduit = do
 
             runRegionConduit $
                 queryDataConduit
-                .| C.map (putTimings . normaliseVector)
+                .| C.map putTimings
                 .| C.sinkHandle dataHnd
 
             liftIO $ hClose dataHnd
@@ -170,10 +172,5 @@ runPlotScript implNames rowCount queryDataConduit = do
     lookupName ImplTiming{implTimingImpl} =
         IM.findWithDefault "?" (fromIntegral implTimingImpl) implNames
 
-normaliseVector :: VS.Vector ImplTiming -> VS.Vector Double
-normaliseVector vec = VS.map (/ VS.maximum newVec) newVec
-  where
-    newVec = VS.map implTimingTiming vec
-
-putTimings :: VS.Vector Double -> ByteString
-putTimings = LBS.toStrict . runPut . VS.mapM_ putDoublehost
+putTimings :: VS.Vector ImplTiming -> ByteString
+putTimings = LBS.toStrict . runPut . VS.mapM_ (putDoublehost . implTimingTiming)

@@ -10,6 +10,7 @@ from os import fdopen
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+from matplotlib.colors import LogNorm
 
 if __name__ != "__main__":
     exit(1)
@@ -56,8 +57,7 @@ with fdopen(opts.dataFd, 'rb') as dataFile:
     data = np.frombuffer(rawData, dtype=np.float64, count=elemCount)
     data = data.reshape(opts.rowCount, opts.numImpls)
 
-maxVal = np.nanmax(data[data != np.inf])
-ax = sns.heatmap(data, vmin=0.0, vmax=maxVal, xticklabels=columns)
+ax = sns.heatmap(data, vmin=1.0, vmax=50, norm=LogNorm(), xticklabels=columns)
 
 fig = ax.get_figure()
 fig.set_size_inches(30, 10)
