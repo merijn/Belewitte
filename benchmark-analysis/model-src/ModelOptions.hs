@@ -33,6 +33,7 @@ import Schema
 import Sql ((==.))
 import qualified Sql
 import Query.Dump (modelQueryDump)
+import Query.ImplRank (implRankQuery)
 import Query.Step (stepInfoQuery)
 import Query.Train
     (QueryMode, StepInfoConfig(..), TrainStepConfig(..), trainStepQuery)
@@ -197,6 +198,7 @@ modelQueryMap = M.fromList
         fmap Train.sortStepTimings . trainStepQuery <$> Compose (trainStepConfig <*> queryModeParser)
     , nameDebugQuery "stepInfoQuery" $
         stepInfoQuery <$> Compose stepInfoConfig <*> Compose variantIdParser
+    , nameDebugQuery "implRankQuery" $ implRankQuery <$> Compose stepInfoConfig
     ]
   where
     queryModeParser :: Parser QueryMode

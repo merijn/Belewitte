@@ -90,6 +90,7 @@ Library
                         Query
                         Query.Field
                         Query.Step
+                        Query.ImplRank
                         Query.Train
                         Query.Variant
                         RuntimeData
