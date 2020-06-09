@@ -65,6 +65,7 @@ import Core
 import Predictor.Config (PredictorConfig(..), MispredictionStrategy(..))
 import Query (runSqlQuerySingle)
 import Query.Field (getDistinctAlgorithmVersionQuery)
+import Query.ImplRank (Column(..), Ranking(..))
 import Query.Variant (VariantInfoConfig(..))
 import Schema
 import Sql (ToBackendKey, SqlBackend, (==.))
@@ -232,7 +233,22 @@ predictorParser = do
         strategies = asum
           [ None <$ string' "none"
           , FirstInSet <$ string' "firstinset"
+          , Ranked <$> columnParser <* char '-' <*> rankParser
           ]
+
+    columnParser :: Parsec () String Column
+    columnParser = asum
+        [ MinTime <$ string' "min"
+        , AvgTime <$ string' "avg"
+        , MaxTime <$ string' "max"
+        ]
+
+    rankParser :: Parsec () String Ranking
+    rankParser = asum
+        [ Min <$ string' "min"
+        , Avg <$ string' "avg"
+        , Total <$ string' "total"
+        ]
 
 runconfigIdParser :: Parser (SqlM (Key RunConfig))
 runconfigIdParser = fmap entityKey <$> runconfigParser

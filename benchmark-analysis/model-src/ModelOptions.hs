@@ -33,7 +33,8 @@ import Schema
 import Sql ((==.))
 import qualified Sql
 import Query.Dump (modelQueryDump)
-import Query.ImplRank (implRankQuery)
+import Query.ImplRank (Column, Ranking, implRankQuery)
+import qualified Query.ImplRank as ImplRank
 import Query.Step (stepInfoQuery)
 import Query.Train
     (QueryMode, StepInfoConfig(..), TrainStepConfig(..), trainStepQuery)
@@ -198,7 +199,8 @@ modelQueryMap = M.fromList
         fmap Train.sortStepTimings . trainStepQuery <$> Compose (trainStepConfig <*> queryModeParser)
     , nameDebugQuery "stepInfoQuery" $
         stepInfoQuery <$> Compose stepInfoConfig <*> Compose variantIdParser
-    , nameDebugQuery "implRankQuery" $ implRankQuery <$> Compose stepInfoConfig
+    , nameDebugQuery "implRankQuery" $
+        implRankQuery <$> Compose stepInfoConfig <*> columnParser <*> rankParser
     ]
   where
     queryModeParser :: Parser QueryMode
@@ -213,6 +215,34 @@ modelQueryMap = M.fromList
             [ ("train", Train.Train)
             , ("validate", Train.Validate)
             , ("all", Train.All)
+            ]
+
+    columnParser :: Compose Parser SqlM Column
+    columnParser = Compose . fmap pure .
+        optionParserFromValues modeMap "COLUMN" helpTxt $ mconcat
+            [ long "column", value ImplRank.AvgTime
+            , showDefaultWith (const "avg")
+            ]
+      where
+        helpTxt = "The timing data to rank by."
+        modeMap = M.fromList
+            [ ("min", ImplRank.MinTime)
+            , ("avg", ImplRank.AvgTime)
+            , ("max", ImplRank.MaxTime)
+            ]
+
+    rankParser :: Compose Parser SqlM Ranking
+    rankParser = Compose . fmap pure .
+        optionParserFromValues modeMap "RANKING" helpTxt $ mconcat
+            [ long "ranking", value ImplRank.Avg
+            , showDefaultWith (const "avg")
+            ]
+      where
+        helpTxt = "How to rank implementation timings."
+        modeMap = M.fromList
+            [ ("min", ImplRank.Min)
+            , ("avg", ImplRank.Avg)
+            , ("total", ImplRank.Total)
             ]
 
 defaultImplParser :: Parser (Either Int Text)

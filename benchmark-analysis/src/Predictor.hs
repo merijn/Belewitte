@@ -103,7 +103,8 @@ loadPredictor PConfig{..} = do
         logThrowM $ GenericInvariantViolation
            "Default implementation algorithm and model algorithm do not match."
 
-    lookupMisprediction <- getMispredictionStrategy pConfigStrategy
+    lookupMisprediction <-
+        getMispredictionStrategy pConfigModelId pConfigStrategy
 
     rawLoad defaultImpl lookupMisprediction pConfigModelId
   where

@@ -2,7 +2,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
-module Query.ImplRank (implRankQuery) where
+module Query.ImplRank (Column(..), Ranking(..), implRankQuery) where
 
 import Data.String.Interpolate.IsString (i)
 import Data.Vector.Storable (Vector)
@@ -14,11 +14,28 @@ import Schema
 import Utils.ImplTiming
 import Utils.Vector (byteStringToVector)
 
-implRankQuery :: StepInfoConfig -> Query (Vector ImplTiming)
-implRankQuery StepInfoConfig{..} = Query{convert = Simple converter, ..}
+data Column = MinTime | AvgTime | MaxTime
+data Ranking = Min | Avg | Total
+
+implRankQuery
+    :: StepInfoConfig -> Column -> Ranking -> Query (Vector ImplTiming)
+implRankQuery StepInfoConfig{..} column ranking =
+    Query{convert = Simple converter, ..}
   where
     queryName :: Text
     queryName = "implRankQuery"
+
+    columnName :: Text
+    columnName = case column of
+        MinTime -> "minTime"
+        AvgTime -> "avgTime"
+        MaxTime -> "maxTime"
+
+    rankFunction :: Text
+    rankFunction = case ranking of
+        Min -> "MIN"
+        Avg -> "AVG"
+        Total -> "TOTAL"
 
     converter :: MonadConvert m => [PersistValue] -> m (Vector ImplTiming)
     converter [ PersistByteString (byteStringToVector -> vec) ] = return vec
@@ -52,7 +69,7 @@ ImplVector(implValues) AS (
             ]
         , cteQuery = [i|
 ImplValues(implId, value) AS (
-    SELECT Run.implId, SUM(avgTime)
+    SELECT Run.implId, #{rankFunction}(#{columnName})
     FROM StepTimer
 
     INNER JOIN Run
