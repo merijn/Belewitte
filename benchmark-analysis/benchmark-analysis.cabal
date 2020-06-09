@@ -79,7 +79,6 @@ Library
   Import:               all, sqlite3exts
   Hs-Source-Dirs:       src
   Exposed-Modules:      Core
-                        FieldQuery
                         FormattedOutput
                         InteractiveInput
                         Model
@@ -89,20 +88,21 @@ Library
                         Pretty.Fields
                         Pretty.List
                         Query
+                        Query.Field
+                        Query.Step
+                        Query.Train
+                        Query.Variant
                         RuntimeData
                         Schema
                         Sql
                         Sql.Transaction
                         StepAggregate
-                        StepQuery
-                        TrainQuery
                         Utils.Conduit
                         Utils.ImplTiming
                         Utils.Pair
                         Utils.Process
                         Utils.PropValue
                         Utils.Vector
-                        VariantQuery
 
   Autogen-Modules:      Paths_benchmark_analysis
   Other-Modules:        Commands
@@ -237,9 +237,9 @@ Executable Ingest
                         Commands.Set
                         Commands.Unset
                         Jobs
-                        MissingQuery
                         Parsers
                         ProcessPool
+                        Query.Missing
 
   Other-Extensions:     DeriveFoldable
                         DeriveFunctor
@@ -268,7 +268,7 @@ Executable Model
                         ModelOptions
                         Train
                         Validate
-                        QueryDump
+                        Query.Dump
 
   Other-Extensions:     BangPatterns
                         DeriveFunctor
@@ -293,11 +293,11 @@ Executable Plot
   Other-Modules:        BarPlot
                         GlobalPlotOptions
                         Heatmap
-                        LevelQuery
                         PlotOptions
-                        StepHeatmapQuery
-                        TimeQuery
-                        QueryDump
+                        Query.Dump
+                        Query.Level
+                        Query.StepHeatmap
+                        Query.Time
 
   Other-Extensions:     BangPatterns
                         FlexibleContexts

@@ -4,7 +4,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
-module VariantQuery
+module Query.Variant
     ( VariantInfo(..)
     , VariantInfoConfig(..)
     , variantInfoQuery

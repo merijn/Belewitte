@@ -62,13 +62,13 @@ import Text.Megaparsec.Char.Lexer (decimal)
 import Text.Read (readMaybe)
 
 import Core
-import FieldQuery (getDistinctAlgorithmVersionQuery)
 import Predictor.Config (PredictorConfig(..), MispredictionStrategy(..))
 import Query (runSqlQuerySingle)
+import Query.Field (getDistinctAlgorithmVersionQuery)
+import Query.Variant (VariantInfoConfig(..))
 import Schema
 import Sql (ToBackendKey, SqlBackend, (==.))
 import qualified Sql
-import VariantQuery (VariantInfoConfig(..))
 
 reflow :: String -> Doc
 reflow = Help.fillSep . map Help.text . words

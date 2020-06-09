@@ -20,7 +20,7 @@ import Model.Stats (implInUnknownSet)
 import Predictor
 import Query
 import Schema
-import StepQuery (StepInfo(..))
+import Query.Step (StepInfo(..))
 import Train
 import Utils.PropValue (propValueValue)
 

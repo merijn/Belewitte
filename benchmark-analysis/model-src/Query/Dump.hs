@@ -1,6 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
-module QueryDump (modelQueryDump) where
+module Query.Dump (modelQueryDump) where
 
 import Data.Conduit (ConduitT, Void, (.|), yield)
 import qualified Data.Conduit.Combinators as C
@@ -15,9 +15,8 @@ import Query (Query, streamQuery)
 import Schema
 import Sql (Region)
 import qualified Sql
-import StepQuery (sortStepTimings)
-import TrainQuery
-import VariantQuery
+import Query.Train
+import Query.Variant
 
 getConfigSet :: SqlM (Set (Key Algorithm, Key Platform, CommitId))
 getConfigSet = Sql.selectSource [] [] $ C.foldMap (S.singleton . toTuple)

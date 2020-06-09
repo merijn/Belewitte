@@ -5,7 +5,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
-module MissingQuery
+module Query.Missing
     ( MissingRun(..)
     , ExtraVariantInfo(..)
     , ValidationVariant(..)

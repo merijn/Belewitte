@@ -3,7 +3,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
-module TrainQuery
+module Query.Train
     ( QueryMode(..)
     , StepInfo(..)
     , StepInfoConfig(..)
@@ -20,8 +20,8 @@ import qualified Data.Vector.Storable as VS
 
 import Core
 import Query
+import Query.Step (StepInfo(..), StepInfoConfig(..), sortStepTimings)
 import Schema
-import StepQuery (StepInfo(..), StepInfoConfig(..), sortStepTimings)
 import Utils.PropValue
 import Utils.Vector (byteStringToVector)
 

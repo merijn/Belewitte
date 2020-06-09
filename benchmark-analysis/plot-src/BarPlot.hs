@@ -28,19 +28,18 @@ import qualified Data.Vector.Generic as Generic
 import System.IO (Handle, hPutStr, stdout)
 
 import Core
+import GlobalPlotOptions
 import RuntimeData (getBarPlotScript)
 import Query (streamQuery)
+import Query.Level (levelTimePlotQuery)
+import Query.Time (timePlotQuery)
+import Query.Variant (VariantInfo(..), VariantInfoConfig(..), variantInfoQuery)
 import Schema
 import Sql (Region)
 import qualified Sql
 import Utils.ImplTiming (ImplTiming(..))
 import Utils.Pair (Pair(..), mergePair, toPair)
 import Utils.Process (withStdin)
-import VariantQuery (VariantInfo(..), VariantInfoConfig(..), variantInfoQuery)
-
-import GlobalPlotOptions
-import LevelQuery (levelTimePlotQuery)
-import TimeQuery (timePlotQuery)
 
 data BarPlotType
     = Levels

@@ -2,7 +2,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
-module TimeQuery (timePlotQuery) where
+module Query.Time (timePlotQuery) where
 
 import Data.Set (Set)
 import qualified Data.Set as S

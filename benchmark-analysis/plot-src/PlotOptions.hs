@@ -29,9 +29,9 @@ import Options
 import BarPlot
 import GlobalPlotOptions
 import Heatmap
-import LevelQuery (levelTimePlotQuery)
-import QueryDump (plotQueryDump)
-import TimeQuery (timePlotQuery)
+import Query.Dump (plotQueryDump)
+import Query.Level (levelTimePlotQuery)
+import Query.Time (timePlotQuery)
 
 data PlotCommand = PlotBar BarPlot | PlotHeatmap Heatmap
 

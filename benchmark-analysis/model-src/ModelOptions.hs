@@ -29,15 +29,15 @@ import Evaluate
 import Options
 import Predictor (PredictorConfig)
 import Pretty.List (Field(..), FieldSpec(..), (=.), buildOptions)
-import QueryDump (modelQueryDump)
 import Schema
 import Sql ((==.))
 import qualified Sql
-import StepQuery (stepInfoQuery)
-import TrainQuery
+import Query.Dump (modelQueryDump)
+import Query.Step (stepInfoQuery)
+import Query.Train
     (QueryMode, StepInfoConfig(..), TrainStepConfig(..), trainStepQuery)
-import qualified TrainQuery
-import VariantQuery
+import qualified Query.Train as Train
+import Query.Variant
 
 data ModelCommand
     = Train
@@ -80,7 +80,7 @@ commands = CommandRoot
         { commandName = "train"
         , commandHeaderDesc = "train a model"
         , commandDesc = "Train a new model"
-        } (Train <$> (trainStepConfig <*> pure TrainQuery.Train))
+        } (Train <$> (trainStepConfig <*> pure Train.Train))
     , SingleCommand CommandInfo
         { commandName = "query"
         , commandHeaderDesc = "report model info"
@@ -194,7 +194,7 @@ stepPercentageParser = percentageParser
 modelQueryMap :: Map String (Parser DebugQuery)
 modelQueryMap = M.fromList
     [ nameDebugQuery "trainStepQuery" $
-        fmap TrainQuery.sortStepTimings . trainStepQuery <$> Compose (trainStepConfig <*> queryModeParser)
+        fmap Train.sortStepTimings . trainStepQuery <$> Compose (trainStepConfig <*> queryModeParser)
     , nameDebugQuery "stepInfoQuery" $
         stepInfoQuery <$> Compose stepInfoConfig <*> Compose variantIdParser
     ]
@@ -202,15 +202,15 @@ modelQueryMap = M.fromList
     queryModeParser :: Parser QueryMode
     queryModeParser =
         optionParserFromValues modeMap "QUERY-MODE" helpTxt $ mconcat
-            [ short 'q', long "query-mode", value TrainQuery.All
+            [ short 'q', long "query-mode", value Train.All
             , showDefaultWith (map toLower . show)
             ]
       where
         helpTxt = "Query mode."
         modeMap = M.fromList
-            [ ("train", TrainQuery.Train)
-            , ("validate", TrainQuery.Validate)
-            , ("all", TrainQuery.All)
+            [ ("train", Train.Train)
+            , ("validate", Train.Validate)
+            , ("all", Train.All)
             ]
 
 defaultImplParser :: Parser (Either Int Text)

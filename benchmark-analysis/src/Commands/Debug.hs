@@ -19,8 +19,8 @@ import InteractiveInput
 import OptionParsers
 import Query (Converter(Simple), Query(..))
 import qualified Query
+import Query.Variant (VariantInfo, variantInfoQuery)
 import Schema (PersistValue(..))
-import VariantQuery (VariantInfo, variantInfoQuery)
 
 data DebugQuery where
     DebugQuery :: Show v => SqlM (Query v) -> DebugQuery

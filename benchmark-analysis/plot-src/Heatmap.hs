@@ -29,16 +29,16 @@ import Predictor
     , toPredictorName
     )
 import Query
+import Query.Step
+import Query.StepHeatmap
+import Query.Variant
 import RuntimeData (getHeatmapScript)
 import Schema
 import StepAggregate (VariantAggregate(..), stepAggregator)
-import StepQuery
-import StepHeatmapQuery
 import Utils.ImplTiming
 import Utils.Pair (Pair(..))
 import Utils.Process (Inherited(..), ReadWrite(Write))
 import qualified Utils.Process as Proc
-import VariantQuery
 
 import GlobalPlotOptions
 

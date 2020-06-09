@@ -30,11 +30,11 @@ import qualified Data.Text as T
 import Data.Time.Clock (getCurrentTime)
 
 import Core
-import MissingQuery
 import Parsers
 import ProcessPool (Job, Result(..), makePropertyJob, makeTimingJob)
 import qualified ProcessPool
 import Query (streamQuery)
+import Query.Missing
 import qualified RuntimeData
 import Schema
 import Sql (MonadSql, Region, Transaction, (=.))

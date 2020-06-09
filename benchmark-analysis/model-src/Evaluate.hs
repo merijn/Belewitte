@@ -43,12 +43,12 @@ import Predictor
 import Query
 import Schema
 import StepAggregate (VariantAggregate(..), stepAggregator)
-import StepQuery
+import Query.Step
+import Query.Variant
 import qualified Sql
 import Train
 import Utils.ImplTiming
 import Utils.Pair (Pair(..), mapFirst, mergePair)
-import VariantQuery
 
 padText :: Word -> Text -> Text
 padText n t = t <> T.replicate (fromIntegral n - T.length t) " "

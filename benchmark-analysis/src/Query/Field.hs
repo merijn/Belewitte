@@ -3,7 +3,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
-module FieldQuery
+module Query.Field
     ( getDistinctFieldQuery
     , getDistinctFieldLikeQuery
     , getDistinctAlgorithmVersionQuery

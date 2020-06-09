@@ -2,7 +2,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
-module LevelQuery (levelTimePlotQuery) where
+module Query.Level (levelTimePlotQuery) where
 
 import Data.String.Interpolate.IsString (i)
 import Data.Vector.Storable (Vector)

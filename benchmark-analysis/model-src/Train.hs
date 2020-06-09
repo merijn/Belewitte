@@ -55,7 +55,7 @@ import Utils.PropValue (PropValue(..))
 import Query
 import RuntimeData (getModelScript)
 import Schema
-import TrainQuery
+import Query.Train
     ( QueryMode(..)
     , StepInfo(..)
     , StepInfoConfig(..)

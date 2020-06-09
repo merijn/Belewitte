@@ -16,7 +16,7 @@ import Core
 import Predictor
 import Schema
 import Sql (Region)
-import StepQuery (StepInfo(..))
+import Query.Step (StepInfo(..))
 import Utils.Conduit (foldGroup)
 import Utils.ImplTiming (ImplTiming(..), liftImplTiming)
 import Utils.Pair (Pair(..))

@@ -2,7 +2,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
-module StepQuery
+module Query.Step
     ( StepInfoConfig(..)
     , StepInfo(..)
     , algorithmVariantQuery

@@ -1,5 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
-module QueryDump (plotQueryDump) where
+module Query.Dump (plotQueryDump) where
 
 import Data.Conduit (ConduitT, Void, (.|))
 import qualified Data.Conduit.Combinators as C
@@ -11,12 +11,12 @@ import qualified Data.Text as T
 import qualified Data.Vector.Storable as Storable
 
 import Core
-import LevelQuery (levelTimePlotQuery)
 import Query
+import Query.Level (levelTimePlotQuery)
+import Query.Time (timePlotQuery)
 import Schema
 import Sql (SelectOpt(Asc), (==.))
 import qualified Sql
-import TimeQuery (timePlotQuery)
 import Utils.ImplTiming
 
 getConfigSet :: SqlM (Set (Key Algorithm, Key Platform, CommitId))
