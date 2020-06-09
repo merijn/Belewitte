@@ -22,6 +22,7 @@ import Query
 import Schema
 import Query.Step (StepInfo(..))
 import Train
+import TrainConfig (setTrainingConfigDatasets, setTrainingConfigPlatform)
 import Utils.PropValue (propValueValue)
 
 data ValidateStats = ValidateStats

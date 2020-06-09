@@ -47,6 +47,7 @@ import Query.Step
 import Query.Variant
 import qualified Sql
 import Train
+import TrainConfig (getStepInfoConfig)
 import Utils.ImplTiming
 import Utils.Pair (Pair(..), mapFirst, mergePair)
 

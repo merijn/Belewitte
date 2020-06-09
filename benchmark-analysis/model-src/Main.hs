@@ -26,6 +26,7 @@ import Schema
 import Sql ((==.))
 import qualified Sql
 import Train
+import TrainConfig
 import Validate
 
 reportModelStats :: ModelStats -> ConduitT () Text SqlM ()
