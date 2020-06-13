@@ -190,7 +190,6 @@ stepPercentageParser :: Parser Percentage
 stepPercentageParser = percentageParser
     [ long "step-percent"
     , help "Percentage of steps to include in training set."
-    , value ($$(validRational 0.8) :: Percentage)
     ]
 
 modelQueryMap :: Map String (Parser DebugQuery)
