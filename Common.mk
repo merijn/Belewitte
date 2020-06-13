@@ -19,7 +19,13 @@ ifndef ICC
 ICC:=$(shell command -v icc 2> /dev/null)
 endif
 ifndef PROJECTFILE
+GHC_VERSION_PARTS:=$(subst ., ,$(shell $(GHC) --numeric-version))
+GHC_VERSION:=$(word 1,$(GHC_VERSION_PARTS)).$(word 2,$(GHC_VERSION_PARTS))
+ifneq ($(wildcard $(BASE)/cabal.project.ghc-$(GHC_VERSION)),)
+PROJECTFILE:=cabal.project.ghc-$(GHC_VERSION)
+else
 PROJECTFILE:=cabal.project.ghc-8.6
+endif
 endif
 
 all:
