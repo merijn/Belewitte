@@ -119,8 +119,8 @@ commands = CommandRoot
             \full dataset"
         }
         $ ValidateModel
-            <$> predictorParser <*> (sequence <$> optional platformIdParser)
-            <*> datasetsParser
+            <$> predictorConfigParser
+            <*> (sequence <$> optional platformIdParser) <*> datasetsParser
     , SingleCommand CommandInfo
         { commandName = "evaluate"
         , commandHeaderDesc = "evaluate model performance"
@@ -129,7 +129,7 @@ commands = CommandRoot
             \against performance of other implementations"
         }
         $ EvaluatePredictor
-            <$> platformIdParser <*> (sequence <$> some predictorParser)
+            <$> platformIdParser <*> predictorConfigsParser
             <*> filterIncomplete <*> evaluateParser <*> datasetsParser
     , SingleCommand CommandInfo
         { commandName = "compare"

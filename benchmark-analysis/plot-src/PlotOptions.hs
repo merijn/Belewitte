@@ -149,7 +149,7 @@ predictHeatmapParser = do
     getGlobalOpts <- globalOptionsParser
     getVariantSelection <- variantSelectionOption
     getDatasetId <- optional datasetIdParser
-    getPredictorConfigs <- some predictorParser
+    getPredictorConfigs <- predictorConfigsParser
     getImpls <- optional $ readTextSet "implementations"
 
     pure $ do
@@ -164,7 +164,7 @@ predictHeatmapParser = do
 
         PredictHeatmap finalGlobalOpts
             <$> getVariantSelection globalPlotAlgorithm
-            <*> sequence getDatasetId <*> sequence getPredictorConfigs
+            <*> sequence getDatasetId <*> getPredictorConfigs
 
 commands :: CommandRoot (SqlM PlotCommand)
 commands = CommandRoot

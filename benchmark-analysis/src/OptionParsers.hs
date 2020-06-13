@@ -18,7 +18,8 @@ module OptionParsers
     , percentageParser
     , platformIdParser
     , platformParser
-    , predictorParser
+    , predictorConfigParser
+    , predictorConfigsParser
     , runconfigIdParser
     , runconfigParser
     , utcTimeParser
@@ -47,18 +48,20 @@ import qualified Data.IntervalSet as IS
 import Data.List (isPrefixOf)
 import Data.Map (Map)
 import qualified Data.Map as M
-import Data.Maybe (listToMaybe)
+import Data.Maybe (fromMaybe, listToMaybe)
 import qualified Data.Text as T
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.Format (defaultTimeLocale, parseTimeM)
+import Data.Void (Void)
 import Options.Applicative hiding (Completer)
 import Options.Applicative.Help (Doc, (</>))
 import qualified Options.Applicative.Help as Help
 import System.Exit (exitFailure)
 import Text.Megaparsec
-    (Parsec, eof, lookAhead, manyTill, parseMaybe, sepBy1, try)
+    (Parsec, eof, lookAhead, manyTill, parseMaybe, runParser, sepBy1, try)
 import Text.Megaparsec.Char (alphaNumChar, char, string')
 import Text.Megaparsec.Char.Lexer (decimal)
+import Text.Megaparsec.Error (errorBundlePretty)
 import Text.Read (readMaybe)
 
 import Core
@@ -181,11 +184,44 @@ platformParser = queryPlatform <$> platformOpt
     queryPlatform (Left name) = Sql.validateUniqEntity "platform" $
         UniqPlatform name
 
-predictorParser :: Parser (SqlM PredictorConfig)
-predictorParser = do
-    predictorConfig <- predictorOpt
-    pure $ do
-        let (model, defImpl, strategy) = predictorConfig
+parseMispredictionStrategy :: Parsec Void String MispredictionStrategy
+parseMispredictionStrategy = asum
+    [ None <$ string' "none"
+    , FirstInSet <$ string' "firstinset"
+    , Ranked <$> columnParser <* char '-' <*> rankParser
+    ]
+  where
+    columnParser :: Parsec Void String Column
+    columnParser = asum
+        [ MinTime <$ string' "min"
+        , AvgTime <$ string' "avg"
+        , MaxTime <$ string' "max"
+        ]
+
+    rankParser :: Parsec Void String Ranking
+    rankParser = asum
+        [ Min <$ string' "min"
+        , Avg <$ string' "avg"
+        , Total <$ string' "total"
+        ]
+
+rawPredictorConfigParser
+    :: Parser (
+        Maybe (Either Int Text)
+        -> Maybe MispredictionStrategy
+        -> SqlM PredictorConfig
+    )
+rawPredictorConfigParser = do
+    predictorTxt <- predictorOpt
+    pure $ \mDefaultImpl mStrategy -> do
+        let configParser = mkConfigParser mDefaultImpl mStrategy
+
+        (model, defImpl, strategy) <-
+            case runParser configParser "" predictorTxt of
+                Right v -> return v
+                Left e -> logThrowM . GenericInvariantViolation $
+                    "Failed to parse predictor config:\n" <>
+                    T.pack (errorBundlePretty e)
 
         Entity modelId PredictionModel{..} <-
             Sql.validateEntity "PredictionModel" model
@@ -210,45 +246,79 @@ predictorParser = do
 
         return $ PConfig modelId defaultImplId strategy
   where
-    predictorOpt :: Parser (Int64, Either Int Text, MispredictionStrategy)
-    predictorOpt = option configReader $ mconcat
+    predictorOpt :: Parser String
+    predictorOpt = strOption $ mconcat
         [ metavar "ID", short 'm', long "predictor"
         , help "Predictor to use."
         ]
 
-    configReader :: ReadM (Int64, Either Int Text, MispredictionStrategy)
-    configReader = maybeReader . parseMaybe $ do
-        modelId <- decimal <* char ':'
-        implId <- (Left <$> numericId) <|> (Right <$> textId)
-        strategy <- strategyParser
+    mkConfigParser
+        :: Maybe (Either Int Text)
+        -> Maybe MispredictionStrategy
+        -> Parsec Void String (Int64, Either Int Text, MispredictionStrategy)
+    mkConfigParser mDefImpl mStrategy = do
+        modelId <- decimal
+        implId <- implIdParser
+
+        strategy <- asum
+            [ colon *> parseMispredictionStrategy
+            , fromMaybe None mStrategy <$ eof
+            ]
+
         return (modelId, implId, strategy)
       where
-        ending = lookAhead . try $ void (char ':') <|> eof
-        numericId = decimal <* ending
-        textId = T.pack <$> manyTill (alphaNumChar <|> char '-') ending
+        colon :: Parsec Void String ()
+        colon = void $ char ':'
 
-    strategyParser :: Parsec () String MispredictionStrategy
-    strategyParser = (char ':' *> strategies) <|> (None <$ eof)
+        implIdParser :: Parsec Void String (Either Int Text)
+        implIdParser = asum
+            [ colon *> (Left <$> numericId)
+            , colon *> (Right <$> textId)
+            , maybe empty pure mDefImpl <* (colon <|> eof)
+            ]
+          where
+            ending :: Parsec Void String ()
+            ending = lookAhead . try $ colon <|> eof
+
+            numericId :: Parsec Void String Int
+            numericId = decimal <* ending
+
+            textId :: Parsec Void String Text
+            textId = T.pack <$> manyTill (alphaNumChar <|> char '-') ending
+
+predictorConfigParser :: Parser (SqlM PredictorConfig)
+predictorConfigParser =
+  rawPredictorConfigParser <*> pure Nothing <*> pure Nothing
+
+predictorConfigsParser :: Parser (SqlM [PredictorConfig])
+predictorConfigsParser = do
+    defImpl <- optional implParser
+    defStrategy <- optional mispredictionStrategyParser
+    predictorConfigMakers <- some rawPredictorConfigParser
+
+    pure $ sequence
+        [ mkPredictorConfig defImpl defStrategy
+        | mkPredictorConfig <- predictorConfigMakers
+        ]
+  where
+    implParser :: Parser (Either Int Text)
+    implParser = option (Left <$> auto <|> Right <$> str) $ mconcat
+        [ metavar "IMPLEMENTATION", short 'i', long "default-impl"
+        , help "Default implementation in case of no valid prediction. \
+            \Numeric or textual."
+        ]
+
+    mispredictionStrategyParser :: Parser MispredictionStrategy
+    mispredictionStrategyParser = option mispredictionStrategyReader $
+        mconcat
+            [ metavar "STRATEGY", long "default-strategy"
+            , help "Default strategy for handling mispredictions."
+            ]
       where
-        strategies = asum
-          [ None <$ string' "none"
-          , FirstInSet <$ string' "firstinset"
-          , Ranked <$> columnParser <* char '-' <*> rankParser
-          ]
+        mispredictionStrategyReader :: ReadM MispredictionStrategy
+        mispredictionStrategyReader =
+            maybeReader $ parseMaybe parseMispredictionStrategy
 
-    columnParser :: Parsec () String Column
-    columnParser = asum
-        [ MinTime <$ string' "min"
-        , AvgTime <$ string' "avg"
-        , MaxTime <$ string' "max"
-        ]
-
-    rankParser :: Parsec () String Ranking
-    rankParser = asum
-        [ Min <$ string' "min"
-        , Avg <$ string' "avg"
-        , Total <$ string' "total"
-        ]
 
 runconfigIdParser :: Parser (SqlM (Key RunConfig))
 runconfigIdParser = fmap entityKey <$> runconfigParser
