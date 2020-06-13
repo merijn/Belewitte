@@ -7,12 +7,14 @@ module Predictor.Config
     , PredictorConfig(..)
     , Ranking(..)
     , getMispredictionStrategy
+    , mkPredictorConfig
     ) where
 
 import Control.Monad (when)
+import qualified Data.IntMap as IM
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, listToMaybe)
 import qualified Data.Set as S
 import Data.Semigroup (Arg, Min)
 import qualified Data.Semigroup as Semi
@@ -94,3 +96,30 @@ buildRankMap implMap ImplTiming{..} = do
         "Found duplicate implementation id in input!"
 
     return $ M.insert key (Semi.Arg implTimingTiming key) implMap
+
+mkPredictorConfig
+    :: (Int64, Either Int Text, MispredictionStrategy)
+    -> SqlM PredictorConfig
+mkPredictorConfig (model, defImpl, strategy) = do
+    Entity modelId PredictionModel{..} <-
+        Sql.validateEntity "PredictionModel" model
+
+    algorithm <- Sql.getJust predictionModelAlgorithmId
+    impls <- Sql.queryImplementations predictionModelAlgorithmId
+
+    let lookupByName :: Text -> Maybe Int
+        lookupByName t = fmap fst
+                        . listToMaybe
+                        . filter ((t==) . implementationName . snd)
+                        $ IM.toList impls
+
+    defaultImpl <- fromIntegral <$> case defImpl of
+        Left i | IM.member i impls -> return i
+        Right t | Just i <- lookupByName t -> return i
+        _ -> logThrowM $ UnexpectedMissingData
+                "Default implementation not found for algorithm"
+                (getAlgoName algorithm)
+
+    defaultImplId <- Sql.validateKey "Implementation" defaultImpl
+
+    return $ PConfig modelId defaultImplId strategy

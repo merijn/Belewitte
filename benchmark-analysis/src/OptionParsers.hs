@@ -40,7 +40,6 @@ import Control.Monad (void)
 import Data.Char (toLower)
 import Data.Foldable (asum)
 import Data.Function (on)
-import qualified Data.IntMap as IM
 import Data.Interval (Extended(Finite), Interval)
 import qualified Data.Interval as I
 import Data.IntervalSet (IntervalSet)
@@ -48,7 +47,7 @@ import qualified Data.IntervalSet as IS
 import Data.List (isPrefixOf)
 import Data.Map (Map)
 import qualified Data.Map as M
-import Data.Maybe (fromMaybe, listToMaybe)
+import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.Format (defaultTimeLocale, parseTimeM)
@@ -65,7 +64,8 @@ import Text.Megaparsec.Error (errorBundlePretty)
 import Text.Read (readMaybe)
 
 import Core
-import Predictor.Config (PredictorConfig(..), MispredictionStrategy(..))
+import Predictor.Config
+    (PredictorConfig, MispredictionStrategy(..), mkPredictorConfig)
 import Query (runSqlQuerySingle)
 import Query.Field (getDistinctAlgorithmVersionQuery)
 import Query.ImplRank (Column(..), Ranking(..))
@@ -216,35 +216,11 @@ rawPredictorConfigParser = do
     pure $ \mDefaultImpl mStrategy -> do
         let configParser = mkConfigParser mDefaultImpl mStrategy
 
-        (model, defImpl, strategy) <-
-            case runParser configParser "" predictorTxt of
-                Right v -> return v
-                Left e -> logThrowM . GenericInvariantViolation $
-                    "Failed to parse predictor config:\n" <>
-                    T.pack (errorBundlePretty e)
-
-        Entity modelId PredictionModel{..} <-
-            Sql.validateEntity "PredictionModel" model
-
-        algorithm <- Sql.getJust predictionModelAlgorithmId
-        impls <- Sql.queryImplementations predictionModelAlgorithmId
-
-        let lookupByName :: Text -> Maybe Int
-            lookupByName t = fmap fst
-                            . listToMaybe
-                            . filter ((t==) . implementationName . snd)
-                            $ IM.toList impls
-
-        defaultImpl <- fromIntegral <$> case defImpl of
-            Left i | IM.member i impls -> return i
-            Right t | Just i <- lookupByName t -> return i
-            _ -> logThrowM $ UnexpectedMissingData
-                    "Default implementation not found for algorithm"
-                    (getAlgoName algorithm)
-
-        defaultImplId <- Sql.validateKey "Implementation" defaultImpl
-
-        return $ PConfig modelId defaultImplId strategy
+        case runParser configParser "" predictorTxt of
+            Right v -> mkPredictorConfig v
+            Left e -> logThrowM . GenericInvariantViolation $
+                "Failed to parse predictor config:\n" <>
+                T.pack (errorBundlePretty e)
   where
     predictorOpt :: Parser String
     predictorOpt = strOption $ mconcat
@@ -286,6 +262,40 @@ rawPredictorConfigParser = do
             textId :: Parsec Void String Text
             textId = T.pack <$> manyTill (alphaNumChar <|> char '-') ending
 
+rawPredictorConfigSetParser
+    :: Parser (
+        Maybe (Either Int Text)
+        -> Maybe MispredictionStrategy
+        -> SqlM [PredictorConfig]
+    )
+rawPredictorConfigSetParser = do
+    modelIntervals <- option intervalReader $ mconcat
+        [ metavar "ID", long "predictor-set"
+        , help "Range(s) of predictor ids to print results for. Accepts \
+               \comma-seperated ranges. A range is dash-separated inclusive \
+               \range or a single number. Example: \
+               \--report-range=5-10,13,17-20"
+        ]
+
+    pure $ \mDefImpl mStrategy -> do
+        defImpl <- case mDefImpl of
+            Just v -> return v
+            Nothing -> logThrowM . GenericInvariantViolation $
+                "--predictor-set requires --default-impl to be specified!"
+
+        defStrategy <- case mStrategy of
+            Just v -> return v
+            Nothing -> logThrowM . GenericInvariantViolation $
+                "--predictor-set requires --default-strategy to be specified!"
+
+        modelIds <- Sql.selectKeysList ([] :: [Sql.Filter PredictionModel]) []
+
+        mapM mkPredictorConfig
+            [ (modelId, defImpl, defStrategy)
+            | modelId <- map fromSqlKey modelIds
+            , modelId `IS.member` modelIntervals
+            ]
+
 predictorConfigParser :: Parser (SqlM PredictorConfig)
 predictorConfigParser =
   rawPredictorConfigParser <*> pure Nothing <*> pure Nothing
@@ -294,13 +304,18 @@ predictorConfigsParser :: Parser (SqlM [PredictorConfig])
 predictorConfigsParser = do
     defImpl <- optional implParser
     defStrategy <- optional mispredictionStrategyParser
-    predictorConfigMakers <- some rawPredictorConfigParser
+    predictorConfigMakers <- some multiConfigParser
 
-    pure $ sequence
-        [ mkPredictorConfig defImpl defStrategy
-        | mkPredictorConfig <- predictorConfigMakers
+    pure $ concat <$> sequence
+        [ makePredictorConfigs defImpl defStrategy
+        | makePredictorConfigs <- predictorConfigMakers
         ]
   where
+    multiConfigParser = asum
+        [ (\f x y -> pure <$> f x y) <$> rawPredictorConfigParser
+        , rawPredictorConfigSetParser
+        ]
+
     implParser :: Parser (Either Int Text)
     implParser = option (Left <$> auto <|> Right <$> str) $ mconcat
         [ metavar "IMPLEMENTATION", short 'i', long "default-impl"
