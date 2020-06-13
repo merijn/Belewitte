@@ -187,6 +187,7 @@ data Options a =
     , logSet :: Maybe (Set Text)
     , migrateSchema :: Bool
     , pager :: Pager
+    , bellWhenDone :: Bool
     , task :: a
     }
 
@@ -260,7 +261,7 @@ runSqlMWithOptions Options{..} work = do
     initialiseSqlite
     setUncaughtExceptionHandler topLevelHandler
     getNumProcessors >>= setNumCapabilities
-    runSqlM . wrapSqliteExceptions $ do
+    result <- runSqlM . wrapSqliteExceptions $ do
 
         didMigrate <- checkMigration migrateSchema
 
@@ -276,6 +277,8 @@ runSqlMWithOptions Options{..} work = do
         runTransaction $ executeSql "PRAGMA optimize"
 
         return workResult
+
+    result <$ when bellWhenDone (System.hPutStr System.stderr "\a")
   where
     runSqlM :: SqlM a -> IO a
     runSqlM sqlAct = do

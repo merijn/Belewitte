@@ -120,7 +120,8 @@ runCommandRoot CommandRoot{..} work progName = do
     optionParser =
       Options <$> databaseOption <*> vacuumOption <*> verbosityOption
               <*> debugOption <*> explainOption <*> queryLogOption
-              <*> migrateOption <*> pagerOption <*> (mainParser <|> debugParser)
+              <*> migrateOption <*> pagerOption <*> bellOption
+              <*> (mainParser <|> debugParser)
 
 runCommand :: CommandRoot a -> (a -> SqlM ()) -> IO ()
 runCommand root work = getProgName >>= runCommandRoot root work
@@ -136,6 +137,10 @@ runInputCommand root work = runCommand root (\act -> runInput act >>= work)
 
 runInputCommand_ :: CommandRoot (Input SqlM ()) -> IO ()
 runInputCommand_ root = runCommand root runInput
+
+bellOption :: Parser Bool
+bellOption = switch . mconcat $
+    [ long "bell", help "Play terminal bell when program completes." ]
 
 databaseOption :: Parser Text
 databaseOption = strOption . mconcat $
