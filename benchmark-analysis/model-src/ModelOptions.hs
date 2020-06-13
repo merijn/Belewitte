@@ -245,15 +245,6 @@ modelQueryMap = M.fromList
             , ("total", ImplRank.Total)
             ]
 
-defaultImplParser :: Parser (Either Int Text)
-defaultImplParser = implParser <|> pure (Right "edge-list")
-  where
-    implParser = option (Left <$> auto <|> Right <$> str) $ mconcat
-        [ metavar "IMPLEMENTATION", short 'i', long "default-impl"
-        , help "Default implementation in case of no valid prediction. \
-               \Numeric or textual."
-        ]
-
 reportParser
     :: forall a . Monoid a
     => Map String RelativeTo -> Parser a -> Parser (Report a)
