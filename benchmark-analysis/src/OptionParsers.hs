@@ -248,8 +248,8 @@ rawPredictorConfigParser = do
 
         implIdParser :: Parsec Void String (Either Int Text)
         implIdParser = asum
-            [ colon *> (Left <$> numericId)
-            , colon *> (Right <$> textId)
+            [ try $ colon *> (Left <$> numericId)
+            , try $ colon *> (Right <$> textId)
             , maybe empty pure mDefImpl <* (colon <|> eof)
             ]
           where
