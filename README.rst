@@ -2,6 +2,11 @@
 Belewitte [1]_
 ==============
 
+.. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.3902239.svg
+   :target: https://doi.org/10.5281/zenodo.3902239
+.. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.3902234.svg
+   :target: https://doi.org/10.5281/zenodo.3902234
+
 This repository is made up of 5 (mostly) independent components:
 
 `Graph Tools`_
