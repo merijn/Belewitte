@@ -114,6 +114,13 @@ commands = CommandGroup CommandInfo
             $ setPrettyName "graph" GraphPrettyName
                 <$> forceOpt <*> keyParser <*> prettyName
         , SingleCommand CommandInfo
+            { commandName = "model"
+            , commandHeaderDesc = "change model pretty name"
+            , commandDesc = "Changes the pretty name for a model."
+            }
+            $ setPrettyName "model" PredictionModelPrettyName
+                <$> forceOpt <*> keyParser <*> prettyName
+        , SingleCommand CommandInfo
             { commandName = "platform"
             , commandHeaderDesc = "change platform pretty name"
             , commandDesc = "Changes the pretty name for a platform."
