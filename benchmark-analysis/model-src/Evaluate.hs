@@ -30,7 +30,6 @@ import Data.Monoid (Any(..))
 import Data.Ord (comparing)
 import Data.Semigroup (Max, getMax)
 import qualified Data.Semigroup as Semigroup
-import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import Data.Vector.Storable (Storable, Vector)
@@ -53,12 +52,6 @@ import Utils.Pair (Pair(..), mapFirst, mergePair)
 
 padText :: Word -> Text -> Text
 padText n t = t <> T.replicate (fromIntegral n - T.length t) " "
-
-filterImpls :: Set ImplType -> IntMap Implementation -> IntMap Implementation
-filterImpls implTypes = IM.filter (implFilter . implementationType)
-  where
-    implFilter :: ImplType -> Bool
-    implFilter = getAny . foldMap (\i -> Any . (==i)) implTypes
 
 reportImplementations
     :: Int
@@ -206,23 +199,24 @@ data RelativeTo = Optimal | Predicted | BestNonSwitching
 data SortBy = Avg | Max
     deriving (Eq,Ord,Show,Read)
 
-type EvaluateReport = Report (Set ImplType)
-type CompareReport = Report (Any, Set ImplType)
+type ImplFilter = IntMap Implementation -> IntMap Implementation
+type EvaluateReport = Report (SqlM ImplFilter)
+type CompareReport = Report (Any, ImplFilter)
 
 data Report a = Report
      { reportVariants :: IntervalSet Int64
      , reportRelativeTo :: RelativeTo
      , reportSortBy :: SortBy
-     , reportImplTypes :: a
+     , reportImplFilter :: a
      , reportDetailed :: Bool
      }
 
 evaluateModel :: [RawPredictor] -> EvaluateReport -> TrainingConfig -> SqlM ()
-evaluateModel predictors reportCfg@Report{..} trainConfig =
-  renderRegionOutput $ do
-    impls <- filterImpls reportImplTypes <$>
-        Sql.queryImplementations stepInfoAlgorithm
+evaluateModel predictors reportCfg@Report{..} trainConfig = do
+  implFilter <- reportImplFilter
 
+  renderRegionOutput $ do
+    impls <- implFilter <$> Sql.queryImplementations stepInfoAlgorithm
     predictorNames <- mapM (toPredictorName . rawPredictorId) predictors
 
     let implMaps :: Pair (IntMap Text)
@@ -279,7 +273,7 @@ compareImplementations variantInfoConfig cfg@Report{..} =
                  <*> Sql.queryExternalImplementations variantInfoAlgorithm
 
     let implMaps :: Pair (IntMap Text)
-        implMaps = toImplNames filterImplTypes filterExternalImpls impls
+        implMaps = toImplNames implFilter filterExternalImpls impls
 
     stats <- streamQuery query
         .| C.map addBestNonSwitching
@@ -289,14 +283,12 @@ compareImplementations variantInfoConfig cfg@Report{..} =
   where
     VariantInfoConfig{variantInfoAlgorithm} = variantInfoConfig
 
-    filterImplTypes = filterImpls implTypes
-
     filterExternalImpls
         | compareExternal = id
         | otherwise = const mempty
 
     query = variantInfoQuery variantInfoConfig
-    (Any compareExternal, implTypes) = reportImplTypes
+    (Any compareExternal, implFilter) = reportImplFilter
 
     addBestNonSwitching :: VariantInfo -> VariantAggregate
     addBestNonSwitching VariantInfo{..} = VariantAgg

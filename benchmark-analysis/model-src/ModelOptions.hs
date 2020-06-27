@@ -10,11 +10,14 @@
 module ModelOptions (ModelCommand(..), commands, runCommand) where
 
 import Control.Monad (forM)
+import Data.Bifunctor (second)
 import Data.Char (toLower)
 import qualified Data.Conduit.Combinators as C
 import Data.Foldable (asum)
 import Data.IntervalSet (IntervalSet)
 import qualified Data.IntervalSet as IS
+import Data.IntMap (IntMap)
+import qualified Data.IntMap.Strict as IM
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Monoid (Any(..))
@@ -244,9 +247,7 @@ modelQueryMap = M.fromList
             , ("total", ImplRank.Total)
             ]
 
-reportParser
-    :: forall a . Monoid a
-    => Map String RelativeTo -> Parser a -> Parser (Report a)
+reportParser :: Map String RelativeTo -> Parser a -> Parser (Report a)
 reportParser relTo implTypes =
   Report <$> variantIntervals <*> resultsRelativeTo <*> sortResultsBy
          <*> implTypes <*> detailed
@@ -304,13 +305,42 @@ implTypesParser makeResult extraVals = mappend (makeResult Builtin) <$>
         , ("derived", makeResult Derived)
         ]
 
+filterImpls :: Set ImplType -> IntMap Implementation -> IntMap Implementation
+filterImpls implTypes = IM.filter (implFilter . implementationType)
+  where
+    implFilter :: ImplType -> Bool
+    implFilter = getAny . foldMap (\i -> Any . (==i)) implTypes
+
 evaluateParser :: Parser EvaluateReport
-evaluateParser = reportParser relToValues $ implTypesParser S.singleton M.empty
+evaluateParser = reportParser relToValues $ byImpls <|> byImplType
   where
     relToValues = M.insert "predicted" Predicted defaultRelativeToValues
 
+    byImplType :: Parser (SqlM (IntMap Implementation -> IntMap Implementation))
+    byImplType = return . filterImpls <$> implTypesParser S.singleton M.empty
+
+    byImpls :: Parser (SqlM (IntMap Implementation -> IntMap Implementation))
+    byImpls = fmap readText . strOption $ mconcat
+        [ metavar "FILE", long "implementations"
+        , help $ "File to read implementations to evaluate from"
+        ]
+
+    readText
+        :: MonadIO m
+        => FilePath -> m (IntMap Implementation -> IntMap Implementation)
+    readText = liftIO . fmap toFilter . T.readFile
+      where
+        toFilter = filterImplementations . S.fromList . T.lines
+
+        filterImplementations
+            :: Set Text -> IntMap Implementation -> IntMap Implementation
+        filterImplementations textSet = IM.filter $ getAny . mconcat
+            [ Any . (`S.member` textSet) . implementationName
+            , Any . (Builtin==) . implementationType
+            ]
+
 compareParser :: Parser CompareReport
-compareParser = reportParser defaultRelativeToValues implTypes
+compareParser = reportParser defaultRelativeToValues (second filterImpls <$> implTypes)
   where
     implTypes = implTypesParser ((mempty,) . S.singleton) extraVals
     extraVals = M.singleton "comparison" (Any True, S.empty)
