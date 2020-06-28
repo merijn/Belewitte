@@ -28,7 +28,13 @@ import qualified Data.Text.IO as T
 
 import Core
 import Evaluate
-    (CompareReport, EvaluateReport, Report(..), RelativeTo(..), SortBy(..))
+    ( CompareReport
+    , EvaluateReport
+    , Report(..)
+    , ReportOutput(..)
+    , RelativeTo(..)
+    , SortBy(..)
+    )
 import Options
 import Predictor (PredictorConfig)
 import Pretty.List (Field(..), FieldSpec(..), (=.), buildOptions)
@@ -250,7 +256,7 @@ modelQueryMap = M.fromList
 reportParser :: Map String RelativeTo -> Parser a -> Parser (Report a)
 reportParser relTo implTypes =
   Report <$> variantIntervals <*> resultsRelativeTo <*> sortResultsBy
-         <*> implTypes <*> detailed
+         <*> implTypes <*> (latexTable <|> detailed <|> pure Minimal)
   where
     variantIntervals :: Parser (IntervalSet Int64)
     variantIntervals = IS.unions <$> many intervals
@@ -282,8 +288,14 @@ reportParser relTo implTypes =
         values = M.fromList [("avg", Avg), ("max", Max)]
         helpTxt = "Time to sort results by."
 
-    detailed :: Parser Bool
-    detailed = flag False True $ mconcat
+    latexTable :: Parser ReportOutput
+    latexTable = fmap LaTeX . strOption $ mconcat
+        [ metavar "LABEL", long "latex"
+        , help "Show output as LaTeX table, using LABEL for the caption."
+        ]
+
+    detailed :: Parser ReportOutput
+    detailed = flag' Detailed $ mconcat
         [ long "detail", help "Show detailed performance stats" ]
 
 defaultRelativeToValues :: Map String RelativeTo

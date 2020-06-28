@@ -2,12 +2,14 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections #-}
 module Evaluate
     ( CompareReport
     , EvaluateReport
     , Report(..)
+    , ReportOutput(..)
     , RelativeTo(..)
     , SortBy(..)
     , evaluateModel
@@ -31,6 +33,7 @@ import Data.Ord (comparing)
 import Data.Semigroup (Max, getMax)
 import qualified Data.Semigroup as Semigroup
 import qualified Data.Set as S
+import qualified Data.String.Interpolate.IsString as Interpolate
 import qualified Data.Text as T
 import Data.Vector.Storable (Storable, Vector)
 import qualified Data.Vector.Storable as VS
@@ -54,13 +57,14 @@ padText :: Word -> Text -> Text
 padText n t = t <> T.replicate (fromIntegral n - T.length t) " "
 
 reportImplementations
-    :: Int
+    :: Text
+    -> Int
     -> Pair (IntMap Text)
     -> ((Int64, a) -> (Int64, a) -> Ordering)
     -> (a -> Text)
     -> Pair [(Int64, a)]
     -> Text
-reportImplementations pad implMaps cmp f =
+reportImplementations sep pad implMaps cmp f =
     foldMap renderEntry
         . sortBy (cmp `on` snd)
         . mergePair
@@ -79,7 +83,7 @@ reportImplementations pad implMaps cmp f =
         getLength = Semigroup.Max . fromIntegral . T.length
 
     renderEntry (name, (_, val)) = mconcat
-        [ T.replicate pad " ", padText padSize $ name <> ":", f val ]
+        [ T.replicate pad " ", padText padSize $ name <> sep, f val ]
 
 data TotalStatistics =
   TotalStats
@@ -149,7 +153,7 @@ aggregateVariants variantIntervals relTo implMaps = do
         variantReport :: Text
         variantReport = mIf shouldReportVariant $ mconcat
             [ "Variant #", showText (fromSqlKey variantid), "\n"
-            , reportImplementations 4 implMaps comparison relTiming results
+            , reportImplementations ":" 4 implMaps comparison relTiming results
             , "\n"
             ]
 
@@ -199,6 +203,9 @@ data RelativeTo = Optimal | Predicted | BestNonSwitching
 data SortBy = Avg | Max
     deriving (Eq,Ord,Show,Read)
 
+data ReportOutput = Minimal | Detailed | LaTeX Text
+    deriving (Eq,Ord,Show,Read)
+
 type ImplFilter = IntMap Implementation -> IntMap Implementation
 type EvaluateReport = Report (SqlM ImplFilter)
 type CompareReport = Report (Any, ImplFilter)
@@ -208,7 +215,7 @@ data Report a = Report
      , reportRelativeTo :: RelativeTo
      , reportSortBy :: SortBy
      , reportImplFilter :: a
-     , reportDetailed :: Bool
+     , reportOutput :: ReportOutput
      }
 
 evaluateModel :: [RawPredictor] -> EvaluateReport -> TrainingConfig -> SqlM ()
@@ -307,22 +314,74 @@ reportTotalStatistics
     -> Pair (IntMap Text)
     -> TotalStatistics
     -> ConduitT () Text m ()
-reportTotalStatistics Report{..} implMaps TotalStats{..} = do
-    C.yield "Summarising:\n"
-    C.yield $ reportImplementations 0 implMaps comparison relError reportTimings
-  where
-    relError (cumError, oneToTwo, gtFive, gtTwenty, maxError) = mconcat
-        [ T.pack $ roundedVal (cumError / fromIntegral variantCount)
-        , mIf reportDetailed $ mconcat
-                [ "\t" <> percent oneToTwo variantCount
-                , "\t" <> percent gtFive variantCount
-                , "\t" <> percent gtTwenty variantCount
+reportTotalStatistics Report{..} implMaps TotalStats{..} = case reportOutput of
+    LaTeX label -> do
+        C.yield [Interpolate.i|\\begin{longtable}{lrrrrrr}
+\\toprule
+Algorithm & 1--2${\\times}$ & ${>} 5 {\\times}$ &
+${>} 20 {\\times}$ & Average & Worst\\\\\\midrule
+\\endfirsthead%
+\\toprule
+Algorithm & 1--2${\\times}$ & ${>} 5 {\\times}$ &
+${>} 20 {\\times}$ & Average & Worst\\\\\\midrule
+\\endhead%
+\\bottomrule
+\\endfoot%
+\\bottomrule
+\\caption{\\glsdesc*{#{label}}}\\llabel{#{label}}%
+\\endlastfoot%
+|]
+
+        runReport (fmap latexEscape <$> implMaps) " &" $
+            \(cumError, oneToTwo, gtFive, gtTwenty, maxError) -> mconcat
+                [ latexPercent oneToTwo variantCount, " & "
+                , latexPercent gtFive variantCount, " & "
+                , latexPercent gtTwenty variantCount, " & $"
+                , roundVal (cumError / fromIntegral variantCount)
+                , "{\\times}$ & $"
+                , roundVal maxError
+                , "{\\times}$\\\\\n"
                 ]
-        , T.pack $ "\t" <> roundedVal maxError
-        , "\n"
-        ]
+
+        C.yield "\\end{longtable}"
+
+    Minimal -> do
+        C.yield "Summarising:\n"
+        runReport implMaps ":" $ \(cumError, _, _, _, maxError) ->
+            mconcat
+                [ roundVal (cumError / fromIntegral variantCount), "\t"
+                , roundVal maxError, "\n"
+                ]
+
+    Detailed -> do
+        C.yield "Summarising:\n"
+        runReport implMaps ":" $
+            \(cumError, oneToTwo, gtFive, gtTwenty, maxError) -> mconcat
+                [ roundVal (cumError / fromIntegral variantCount)
+                , "\t", percent oneToTwo variantCount, "\t"
+                , percent gtFive variantCount, "\t"
+                , percent gtTwenty variantCount
+                , roundVal maxError
+                , "\n"
+                ]
+  where
+    runReport
+        :: Monad m
+        => Pair (IntMap Text)
+        -> Text
+        -> ((Double, Int, Int, Int, Double) -> Text)
+        -> ConduitT () Text m ()
+    runReport names sep reportFun = C.yield $
+        reportImplementations sep 0 names comparison reportFun reportTimings
+
+    roundVal :: Double -> Text
+    roundVal val = T.pack $ showFFloat (Just 3) val ""
+
+    latexPercent :: Real n => n -> n -> Text
+    latexPercent x y = T.pack $ '$' : showFFloat (Just 2) val "\\%$"
       where
-        roundedVal val = showFFloat (Just 3) val ""
+        val :: Double
+        val = 100 * realToFrac x / realToFrac y
 
     vectorToZipList :: Storable a => Pair (Vector a) -> Compose Pair ZipList a
     vectorToZipList = Compose . fmap (ZipList . VS.toList)
@@ -348,3 +407,6 @@ reportTotalStatistics Report{..} implMaps TotalStats{..} = do
         compareTime (_, (avgTime, _, _, _, maxTime)) = case reportSortBy of
             Avg -> avgTime
             Max -> maxTime
+
+    latexEscape :: Text -> Text
+    latexEscape = T.replace "-" "--" . T.replace "%" "\\%"
