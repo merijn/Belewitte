@@ -409,4 +409,4 @@ ${>} 20 {\\times}$ & Average & Worst\\\\\\midrule
             Max -> maxTime
 
     latexEscape :: Text -> Text
-    latexEscape = T.replace "-" "--" . T.replace "%" "\\%"
+    latexEscape = T.replace "%" "\\%"
