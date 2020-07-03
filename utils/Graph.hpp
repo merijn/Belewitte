@@ -1033,10 +1033,7 @@ class MutableGraph {
                       " Edge count: ", edge_count, " Max: ",
                       std::numeric_limits<uint32_t>::max());
         } else if (vertex_size == 8) {
-          checkError(edge_count <= std::numeric_limits<uint64_t>::max(),
-                      "Number of edges larger than storable in vertex value!",
-                      " Edge count: ", edge_count, " Max: ",
-                      std::numeric_limits<uint64_t>::max());
+            // No-op: edge_count can never exceed std::numeric_limits<uint64_t>::max(),
         } else {
           reportError("Invalid graph file version or vertex/edge size!");
         }
@@ -1052,10 +1049,7 @@ class MutableGraph {
                   " Vertex count: ", vertex_count, " Max: ",
                   std::numeric_limits<uint32_t>::max());
         } else if (edge_size == 8) {
-          checkError(vertex_count <= std::numeric_limits<uint64_t>::max(),
-                  "Number of vertices larger than storable in edge value!",
-                  " Vertex count: ", vertex_count, " Max: ",
-                  std::numeric_limits<uint64_t>::max());
+            // No-op: vertex_count can never exceed std::numeric_limits<uint64_t>::max(),
         } else {
           reportError("Invalid graph file version or vertex/edge size!");
         }
