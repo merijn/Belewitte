@@ -157,7 +157,8 @@ Timing::align_timings(const vector<pair<string,Timing>> &data)
     return result;
 }
 
-Epoch::TimerData::TimerData(const string& id, StatisticalSummary<Timing> m)
+Epoch::TimerData::TimerData
+(const string& id, const StatisticalSummary<Timing>& m)
     : name(id), results(m)
 {}
 

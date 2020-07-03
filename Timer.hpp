@@ -36,7 +36,7 @@ namespace TimerRegister {
 
     struct Epoch {
         struct TimerData {
-            TimerData(const string& name, StatisticalSummary<Timing> results);
+            TimerData(const string& name, const StatisticalSummary<Timing>&);
             string name;
             StatisticalSummary<Timing> results;
         };
