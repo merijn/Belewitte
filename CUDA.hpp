@@ -194,7 +194,7 @@ class CUDABackend : public Backend {
         initKernel(off + sizeof val, args...);
     }
 
-    CUDABackend()
+    CUDABackend() : sharedMemSize(0)
     {
         cudaError_t result;
 
