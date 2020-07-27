@@ -33,14 +33,14 @@ class Options {
 
         Option
         ( char shortOpt
-        , const char *longOpt
+        , const std::string& longOpt
         , std::function<void(std::string)> act
         , std::function<void()> resetAct
         , std::string arg
         , std::string help
         ) : shortOption(shortOpt), longOption(longOpt), action(act)
           , resetAction(resetAct), argName(arg), helpString(help)
-          , defaultVal(""), hasArg(false), multiFlag(false)
+          , defaultVal(), hasArg(false), multiFlag(false)
         {}
 
         void reset()
