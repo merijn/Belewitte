@@ -262,7 +262,7 @@ Epoch::print_results(std::ostream& out, bool humanReadable)
     if (humanReadable) TimerRegister::reportPrecision(output);
 
     for (auto &timer : epoch.timers) {
-        if (timer.timings->size() != 0) {
+        if (!timer.timings->empty()) {
             StatisticalSummary<Timing> result(*timer.timings);
             if (!epoch.name.empty() && epoch.name != "") {
                 out << epoch.name << ":";
