@@ -21,6 +21,16 @@ using namespace std;
 
 static const char *execName = "reorder-graph";
 
+template<typename V>
+struct VertexDegree
+{
+    V vertexId;
+    uint64_t degree;
+
+    VertexDegree(V v, uint64_t d) : vertexId(v), degree(d)
+    {}
+};
+
 enum sort_order {
     in_degree,
     out_degree,
@@ -28,12 +38,12 @@ enum sort_order {
 };
 
 static void
-messupSort(std::vector<Edge<uint64_t>>& vertices)
+messupSort(std::vector<VertexDegree<uint64_t>>& vertices)
 {
     ssize_t numWarps = CEIL_DIV(vertices.size(), 32);
     auto start = vertices.begin();
     auto end = vertices.end();
-    std::vector<Edge<uint64_t>> tmpVector;
+    std::vector<VertexDegree<uint64_t>> tmpVector;
 
     advance(start, numWarps);
     advance(end, -numWarps);
@@ -47,16 +57,15 @@ messupSort(std::vector<Edge<uint64_t>>& vertices)
         }
     }
 
+    assert(tmpVector.size() == vertices.size());
     vertices = tmpVector;
 }
 
 static void
-sortGraph(Graph<uint64_t,uint64_t>& graph, string fileName, sort_order order, bool worst)
+sortGraph
+(Graph<uint64_t,uint64_t>& graph, string fileName, sort_order order, bool worst)
 {
-    MutableGraph<uint64_t,uint64_t> newGraph
-        {fileName, graph.undirected, graph.vertex_count, graph.edge_count};
-
-    vector<Edge<uint64_t>> newOrder;
+    vector<VertexDegree<uint64_t>> newOrder;
     newOrder.reserve(graph.vertex_count);
 
     for (uint64_t v = 0; v < graph.vertex_count; v++) {
@@ -75,36 +84,47 @@ sortGraph(Graph<uint64_t,uint64_t>& graph, string fileName, sort_order order, bo
                 break;
         }
 
-        newOrder.emplace_back(degree, v);
+        newOrder.emplace_back(v, degree);
     }
 
-    stable_sort(newOrder.begin(), newOrder.end(), greater<Edge<uint64_t>>());
+    using Degree = VertexDegree<uint64_t>;
+
+    auto cmp = [](const Degree &a, const Degree &b) {
+        if (a.degree > b.degree) return true;
+        if (a.degree == b.degree && a.vertexId < b.vertexId) return true;
+        return false;
+    };
+
+    stable_sort(newOrder.begin(), newOrder.end(), cmp);
     if (worst) messupSort(newOrder);
 
-    uint64_t edgeOffset = 0, revEdgeOffset = 0;
+    uint64_t updatedCount = 0;
+    vector<uint64_t> revLookup(newOrder.size());
 
-    for (uint64_t n = 0; n < graph.vertex_count; n++) {
-        newGraph.raw_vertices[n] = edgeOffset;
-
-        uint64_t v = newOrder[n].out;
-        uint64_t degree = graph.raw_vertices[v+1] - graph.raw_vertices[v];
-        for (uint64_t i = 0; i < degree; i++) {
-            newGraph.raw_edges[edgeOffset++] = graph.raw_edges[graph.raw_vertices[v] + i];
-        }
-
-        if (!graph.undirected) {
-            degree = graph.raw_rev_vertices[v+1] - graph.raw_rev_vertices[v];
-            newGraph.raw_rev_vertices[n] = revEdgeOffset;
-            for (uint64_t i = 0; i < degree; i++) {
-                newGraph.raw_rev_edges[revEdgeOffset++] = graph.raw_rev_edges[graph.raw_rev_vertices[v] + i];
-            }
-        }
+    for (uint64_t i = 0; i < newOrder.size(); i++) {
+        revLookup.at(newOrder.at(i).vertexId) = i;
+        updatedCount++;
     }
 
-    newGraph.raw_vertices[graph.vertex_count] = edgeOffset;
+    assert(updatedCount == newOrder.size());
+    newOrder.clear();
+
+    vector<Edge<uint64_t>> edges, rev_edges;
+    edges.reserve(graph.edge_count);
+
+    for (auto &&edge : graph.edges) {
+        edges.emplace_back(revLookup.at(edge.in), revLookup.at(edge.out));
+    }
+
     if (!graph.undirected) {
-        newGraph.raw_rev_vertices[graph.vertex_count] = revEdgeOffset;
+        rev_edges.reserve(graph.edge_count);
+
+        for (auto &&edge : graph.rev_edges) {
+            rev_edges.emplace_back(revLookup.at(edge.in), revLookup.at(edge.out));
+        }
     }
+
+    Graph<uint64_t,uint64_t>::output(fileName, edges, rev_edges);
 }
 
 static void __attribute__((noreturn))
