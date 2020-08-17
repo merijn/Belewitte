@@ -9,6 +9,7 @@ module Evaluate
     ( CompareReport
     , EvaluateReport
     , Report(..)
+    , Splittable(..)
     , ReportOutput(..)
     , RelativeTo(..)
     , SortBy(..)
@@ -203,7 +204,10 @@ data RelativeTo = Optimal | Predicted | BestNonSwitching
 data SortBy = Avg | Max
     deriving (Eq,Ord,Show,Read)
 
-data ReportOutput = Minimal | Detailed | LaTeX Text
+data Splittable = Splittable | Fixed
+    deriving (Eq,Ord,Show,Read)
+
+data ReportOutput = Minimal | Detailed | LaTeX Text Splittable
     deriving (Eq,Ord,Show,Read)
 
 type ImplFilter = IntMap Implementation -> IntMap Implementation
@@ -315,22 +319,8 @@ reportTotalStatistics
     -> TotalStatistics
     -> ConduitT () Text m ()
 reportTotalStatistics Report{..} implMaps TotalStats{..} = case reportOutput of
-    LaTeX label -> do
-        C.yield [Interpolate.i|\\begin{longtable}{lrrrrrr}
-\\toprule
-Algorithm & 1--2${\\times}$ & ${>} 5 {\\times}$ &
-${>} 20 {\\times}$ & Average & Worst\\\\\\midrule
-\\endfirsthead%
-\\toprule
-Algorithm & 1--2${\\times}$ & ${>} 5 {\\times}$ &
-${>} 20 {\\times}$ & Average & Worst\\\\\\midrule
-\\endhead%
-\\bottomrule
-\\endfoot%
-\\bottomrule
-\\caption{\\glsdesc*{#{label}}}\\llabel{#{label}}%
-\\endlastfoot%
-|]
+    LaTeX label splittable -> do
+        C.yield $ latexTableHeader label splittable
 
         runReport (fmap latexEscape <$> implMaps) " &" $
             \(cumError, oneToTwo, gtFive, gtTwenty, maxError) -> mconcat
@@ -343,7 +333,7 @@ ${>} 20 {\\times}$ & Average & Worst\\\\\\midrule
                 , "{\\times}$\\\\\n"
                 ]
 
-        C.yield "\\end{longtable}"
+        C.yield $ latexTableFooter label splittable
 
     Minimal -> do
         C.yield "Summarising:\n"
@@ -410,3 +400,44 @@ ${>} 20 {\\times}$ & Average & Worst\\\\\\midrule
 
     latexEscape :: Text -> Text
     latexEscape = T.replace "%" "\\%"
+
+latexCaption :: Text -> Text
+latexCaption label = [Interpolate.i|\\caption{\\glsdesc*{#{label}}}\\label{#{label}}%|]
+
+latexTableHeader :: Text -> Splittable -> Text
+latexTableHeader label splittable = case splittable of
+    Splittable -> [Interpolate.i|\\begin{longtable}{#{columnLayout}}
+\\toprule
+#{columnHeader}
+\\endfirsthead%
+\\toprule
+#{columnHeader}
+\\endhead%
+\\bottomrule
+\\endfoot%
+\\bottomrule
+#{latexCaption label}
+\\endlastfoot%
+|]
+
+    Fixed -> [Interpolate.i|\\begin{table}
+\\centering
+\\begin{tabular}{#{columnLayout}}
+\\toprule{}%
+#{columnHeader}
+|]
+  where
+    columnLayout :: Text
+    columnLayout = "lrrrrrr"
+
+    columnHeader :: Text
+    columnHeader = [Interpolate.i|Algorithm & 1--2${\\times}$ & ${>} 5 {\\times}$ &
+${>} 20 {\\times}$ & Average & Worst\\\\\\midrule|]
+
+latexTableFooter :: Text -> Splittable -> Text
+latexTableFooter _ Splittable = "\\end{longtable}\n"
+latexTableFooter label Fixed = [Interpolate.i|\\bottomrule{}
+\\end{tabular}
+#{latexCaption label}
+\\end{table}
+|]

@@ -31,6 +31,7 @@ import Evaluate
     ( CompareReport
     , EvaluateReport
     , Report(..)
+    , Splittable(..)
     , ReportOutput(..)
     , RelativeTo(..)
     , SortBy(..)
@@ -289,10 +290,17 @@ reportParser relTo implTypes =
         helpTxt = "Time to sort results by."
 
     latexTable :: Parser ReportOutput
-    latexTable = fmap LaTeX . strOption $ mconcat
-        [ metavar "LABEL", long "latex"
-        , help "Show output as LaTeX table, using LABEL for the caption."
-        ]
+    latexTable = LaTeX <$> tableLabel <*> splittable
+      where
+        tableLabel = strOption $ mconcat
+            [ metavar "LABEL", long "latex"
+            , help "Show output as LaTeX table, using LABEL for the caption."
+            ]
+
+        splittable = flag Fixed Splittable $ mconcat
+            [ long "splittable"
+            , help "Allows LaTeX table to be split across multiple pages."
+            ]
 
     detailed :: Parser ReportOutput
     detailed = flag' Detailed $ mconcat
@@ -332,24 +340,37 @@ evaluateParser = reportParser relToValues $ byImpls <|> byImplType
     byImplType = return . filterImpls <$> implTypesParser S.singleton M.empty
 
     byImpls :: Parser (SqlM (IntMap Implementation -> IntMap Implementation))
-    byImpls = fmap readText . strOption $ mconcat
-        [ metavar "FILE", long "implementations"
-        , help $ "File to read implementations to evaluate from"
-        ]
+    byImpls = readText <$> implementationFile <*> bestNonSwitching
+      where
+        implementationFile = strOption $ mconcat
+            [ metavar "FILE", long "implementations"
+            , help "File to read implementations to evaluate from"
+            ]
+
+        bestNonSwitching = flag True False $ mconcat
+            [ long "drop-best-non-switching"
+            , help "Drop the best non-switching implementation from the results."
+            ]
 
     readText
         :: MonadIO m
-        => FilePath -> m (IntMap Implementation -> IntMap Implementation)
-    readText = liftIO . fmap toFilter . T.readFile
+        => FilePath -> Bool -> m (IntMap Implementation -> IntMap Implementation)
+    readText path bestNonSwitching = liftIO $ toFilter <$> T.readFile path
       where
         toFilter = filterImplementations . S.fromList . T.lines
 
         filterImplementations
             :: Set Text -> IntMap Implementation -> IntMap Implementation
-        filterImplementations textSet = IM.filter $ getAny . mconcat
-            [ Any . (`S.member` textSet) . implementationName
-            , Any . (Builtin==) . implementationType
-            ]
+        filterImplementations textSet = dropBestNonSwitching . setFilter
+          where
+            setFilter = IM.filter $ getAny . mconcat
+                [ Any . (`S.member` textSet) . implementationName
+                , Any . (Builtin==) . implementationType
+                ]
+
+            dropBestNonSwitching
+                | bestNonSwitching = id
+                | otherwise = IM.delete bestNonSwitchingImplId
 
 compareParser :: Parser CompareReport
 compareParser = reportParser defaultRelativeToValues (second filterImpls <$> implTypes)
