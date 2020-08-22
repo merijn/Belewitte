@@ -6,6 +6,9 @@ PKG_CONFIG_PATH="${PKG_CONFIG_PATH%:}"
 PKG_CONFIG_PATH="${PKG_CONFIG_PATH#:}"
 export PKG_CONFIG_PATH
 
+unset MAKEFLAGS
+unset MAKELEVEL
+
 CABAL="$(make -sC "$BASEPATH/" report-cabal 2>/dev/null)"
 if [ $? -ne 0 ] || [ -z "$CABAL" ]; then
     printf "cabal-install not found, can't run Haskell code\n"
