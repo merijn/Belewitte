@@ -24,7 +24,7 @@ GHC_VERSION:=$(word 1,$(GHC_VERSION_PARTS)).$(word 2,$(GHC_VERSION_PARTS))
 ifneq ($(wildcard $(BASE)/cabal.project.ghc-$(GHC_VERSION)),)
 PROJECTFILE:=cabal.project.ghc-$(GHC_VERSION)
 else
-PROJECTFILE:=cabal.project.ghc-8.6
+PROJECTFILE:=cabal.project.ghc-8.10
 endif
 endif
 

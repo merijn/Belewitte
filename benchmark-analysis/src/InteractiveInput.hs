@@ -24,6 +24,7 @@ module InteractiveInput
     , withInteractiveLogging
     ) where
 
+import Control.Exception (IOException)
 import qualified Control.Monad.Catch as Except
 import Control.Monad.Reader (ask, local, mapReaderT)
 import Control.Monad.Trans (MonadTrans)
@@ -36,7 +37,7 @@ import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.Encoding.Error as T
 import Lens.Micro.Extras (view)
-import System.Console.Haskeline hiding (Handler)
+import System.Console.Haskeline
 import System.Directory (doesFileExist)
 import Text.Read (readMaybe)
 
@@ -139,7 +140,7 @@ withProcessCompletion args act = do
             "" <$ logWarnN "External tab-completion process failed to run"
 
 getInteractive
-    :: forall a m . (MonadException m, MonadIO m, MonadLogger m, MonadThrow m)
+    :: forall a m . (MonadIO m, MonadLogger m, MonadThrow m, MonadMask m)
     => InputQuery m a -> Text -> Input m a
 getInteractive InputQuery{..} prompt = inputCompleter $ Input go
   where
@@ -153,7 +154,7 @@ getInteractive InputQuery{..} prompt = inputCompleter $ Input go
     converter s = lift . lift $ inputConvert . T.stripEnd . T.pack $ s
 
 getManyInteractive
-    :: forall a m . (MonadException m, MonadIO m, MonadLogger m, MonadThrow m)
+    :: forall a m . (MonadIO m, MonadLogger m, MonadThrow m, MonadMask m)
     => InputQuery m a -> Text -> Input m [a]
 getManyInteractive InputQuery{..} prompt = inputCompleter . Input $ do
     outputStrLn (T.unpack prompt ++ ":")

@@ -52,7 +52,7 @@ module Core
     , withTime
     ) where
 
-import Control.Monad (guard, join, when)
+import Control.Monad (guard, when)
 import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow, SomeException)
 import Control.Monad.IO.Unlift
     (MonadIO(liftIO), MonadUnliftIO(..), UnliftIO(..), withUnliftIO)
@@ -81,7 +81,6 @@ import GHC.Conc.Sync
 import qualified Lens.Micro as Lens
 import qualified Lens.Micro.Extras as Lens
 import System.Clock (Clock(Monotonic), diffTimeSpec, getTime, toNanoSecs)
-import System.Console.Haskeline.MonadException (MonadException(..), RunIO(..))
 import System.Console.Terminal.Size (hSize, width)
 import qualified System.IO as System
 import System.Log.FastLogger (fromLogStr)
@@ -104,7 +103,7 @@ data Config = Config
 
 type SqlPool = Pool (RawSqlite SqlBackend)
 
-newtype CoreM a = CoreM (ReaderT Config (ResourceT IO) a)
+newtype CoreM a = CoreM { unCoreM :: ReaderT Config (ResourceT IO) a }
   deriving
   ( Applicative, Functor, Monad, MonadCatch, MonadIO, MonadMask
   , MonadReader Config, MonadResource, MonadThrow)
@@ -123,19 +122,13 @@ instance MonadLoggerIO CoreM where
             logFun . fromLogStr $ Log.defaultLogStr loc src lvl msg
 
 instance MonadUnliftIO CoreM where
-  askUnliftIO = CoreM $ withUnliftIO $ \u ->
-                            return (UnliftIO (\(CoreM m) -> unliftIO u m))
+    withRunInIO inner = CoreM $ withRunInIO $ \run -> inner (run. unCoreM)
+    {-# INLINE withRunInIO #-}
 
 newtype SqlM a = SqlM { unSqlM :: ReaderT SqlPool CoreM a }
   deriving
   ( Applicative, Functor, Monad, MonadCatch, MonadIO, MonadLogger
   , MonadLoggerIO, MonadMask, MonadResource, MonadThrow)
-
-instance MonadException SqlM where
-    controlIO f = join (withUnliftIO (f . unliftToRunIO))
-      where
-        unliftToRunIO :: Monad m => UnliftIO m -> RunIO m
-        unliftToRunIO (UnliftIO g) = RunIO (fmap return . g)
 
 instance MonadSql SqlM where
     getConnFromPool = SqlM $ asks Sqlite.acquireSqlConnFromPool
@@ -149,8 +142,8 @@ instance MonadSql SqlM where
             Sqlite.acquireSqlConn conn
 
 instance MonadUnliftIO SqlM where
-  askUnliftIO = SqlM $ withUnliftIO $ \u ->
-                            return (UnliftIO (\(SqlM m) -> unliftIO u m))
+    withRunInIO inner = SqlM $ withRunInIO $ \run -> inner (run. unSqlM)
+    {-# INLINE withRunInIO #-}
 
 logExplain :: MonadLogger m => Text -> Text -> m ()
 logExplain name = Log.logOtherNS name (LevelOther "Explain")

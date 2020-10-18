@@ -2,7 +2,6 @@
 module Utils.Conduit (foldGroup) where
 
 import Data.Function (fix)
-import Data.Conduit (ConduitT, Void)
 import Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
 

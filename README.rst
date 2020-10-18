@@ -56,10 +56,10 @@ SLURM Workload Manager
 Python 3.6 or 3.7
     The python 3.6/3.7 executable is expected to be in the user's ``PATH``
 
-GHC Haskell compiler 8.6
+GHC Haskell compiler 8.10.2
     https://www.haskell.org/ghc/download.html
 
-cabal-install 2.4
+cabal-install 3.2
     https://www.haskell.org/cabal/download.html
 
 Intel ICC Compiler
@@ -178,14 +178,13 @@ Benchmark Analysis Tools Prerequisites
 --------------------------------------
 
 * gmake
-* GHC 8.6
-* cabal-install 2.4
+* GHC 8.10.2
+* cabal-install 3.2
 
 Optional prerequisities:
 
 * SLURM
-* python 2.7
-* virtualenv
+* python 3.6/3.7
 
 Evolutionary Graph Generation
 =============================
@@ -247,31 +246,31 @@ clang++ 8
     tar xvf clang+llvm-8.0.0-x86_64-linux-sles11.3.tar.xz -C $INSTALL_PATH --strip-components=1
     rm clang+llvm-8.0.0-x86_64-linux-sles11.3.tar.xz
 
-GHC 8.6
--------
+GHC 8.10.2
+----------
 
 .. code:: bash
 
-    wget https://downloads.haskell.org/~ghc/8.6.5/ghc-8.6.5-x86_64-deb8-linux.tar.xz
-    tar xvf ghc-8.6.5-x86_64-deb8-linux.tar.xz
-    rm ghc-8.6.5-x86_64-deb8-linux.tar.xz
-    cd ghc-8.6.5
+    wget https://downloads.haskell.org/~ghc/8.10.2/ghc-8.10.2-x86_64-centos7-linux.tar.xz
+    tar xvf ghc-8.10.2-x86_64-centos7-linux.tar.xz
+    rm ghc-8.10.2-x86_64-centos7-linux.tar.xz
+    cd ghc-8.10.2
     ./configure --prefix=$INSTALL_PATH
     make install
     hash -r
     cd ..
-    rm -r ghc-8.6.5
+    rm -r ghc-8.10.2
 
-cabal-install 2.4
+cabal-install 3.2
 -----------------
 
 .. code:: bash
 
-    wget https://downloads.haskell.org/~cabal/cabal-install-latest/cabal-install-2.4.1.0-x86_64-unknown-linux.tar.xz
-    tar xvf cabal-install-2.4.1.0-x86_64-unknown-linux.tar.xz
+    wget https://downloads.haskell.org/~cabal/cabal-install-3.2.0.0/cabal-install-3.2.0.0-x86_64-unknown-linux.tar.xz
+    tar xvf cabal-install-3.2.0.0-x86_64-unknown-linux.tar.xz
     mkdir -p $INSTALL_PATH/bin/
     mv cabal $INSTALL_PATH/bin/
-    rm cabal.sig cabal-install-2.4.1.0-x86_64-unknown-linux.tar.xz
+    rm cabal.sig cabal-install-3.2.0.0-x86_64-unknown-linux.tar.xz
 
 -------------------------------------------------------------------------------
 
