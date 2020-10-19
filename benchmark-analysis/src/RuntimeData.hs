@@ -68,7 +68,7 @@ findPython = do
         ]
     case mResult of
         Just r -> return r
-        Nothing -> logThrowM MissingVirtualEnv
+        Nothing -> logThrowM MissingPython
   where
     tryPythonVersion :: MonadIO m => String -> MaybeT m FilePath
     tryPythonVersion python = MaybeT . liftIO $ Dir.findExecutable python

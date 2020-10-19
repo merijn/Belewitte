@@ -177,14 +177,14 @@ instance Exception MissingKernelLibPath where
     fromException = fromRuntimeError
     displayException = show . pretty
 
-data MissingVirtualEnv = MissingVirtualEnv
+data MissingPython = MissingPython
     deriving (Show, Typeable)
 
-instance Pretty MissingVirtualEnv where
-    pretty MissingVirtualEnv = Pretty.reflow
-        "Unable to locate 'virtualenv' or 'python-2.7'!"
+instance Pretty MissingPython where
+    pretty MissingPython = Pretty.reflow
+        "Unable to locate 'python3' interpreter!"
 
-instance Exception MissingVirtualEnv where
+instance Exception MissingPython where
     toException = toRuntimeError
     fromException = fromRuntimeError
     displayException = show . pretty
