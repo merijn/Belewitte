@@ -227,6 +227,7 @@ SLURM, OpenCL, and CUDA 10 can all be loaded via modulefiles, using:
     module load cuda10.0/toolkit/10.0.130
     module load opencl-nvidia/10.0
     module load slurm
+    module load python/3.6.0
 
 The remaining bits can be installed from binary distributions, the install
 location isn't very relevant, as long as they're on your ``PATH`` or the
