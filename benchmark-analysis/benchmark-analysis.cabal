@@ -81,7 +81,6 @@ Library
   Exposed-Modules:      Core
                         FormattedOutput
                         InteractiveInput
-                        Model
                         Model.Stats
                         Options
                         Predictor
@@ -111,9 +110,11 @@ Library
                         Commands.Debug
                         Exceptions
                         Migration
+                        Model
                         OptionParsers
                         Paths_benchmark_analysis
                         Predictor.Config
+                        Predictor.Raw
                         Pretty
                         Schema.Algorithm
                         Schema.Dataset

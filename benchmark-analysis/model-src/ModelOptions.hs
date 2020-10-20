@@ -81,8 +81,8 @@ data ModelCommand
       { getVariantInfoConfig :: SqlM VariantInfoConfig
       , compareConfig :: CompareReport
       }
-    | ExportModel
-      { getModel :: SqlM (Entity PredictionModel)
+    | ExportPredictor
+      { getPredictorConfig :: SqlM PredictorConfig
       , exportOutput :: PredictorExport
       }
 
@@ -158,12 +158,12 @@ commands = CommandRoot
         { commandName = "export"
         , commandHeaderDesc = "export model"
         , commandDesc = "Export BDT model"
-        } (ExportModel <$> modelParser <*> (SharedLib <$> soFile))
+        } (ExportPredictor <$> predictorConfigParser <*> (SharedLib <$> soFile))
     , SingleCommand CommandInfo
         { commandName = "export-source"
         , commandHeaderDesc = "export model C++ source"
         , commandDesc = "Export BDT model to C++ source"
-        } (ExportModel <$> modelParser <*> (CppFile <$> cppFile))
+        } (ExportPredictor <$> predictorConfigParser <*> (CppFile <$> cppFile))
     ]
   }
   where

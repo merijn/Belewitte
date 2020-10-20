@@ -7,10 +7,13 @@
 module Predictor
     ( CookedPredictor(predictorId)
     , MispredictionStrategy
+    , Model.Model
     , PredictorConfig
     , RawPredictor(rawPredictorId)
     , RawPrediction(..)
+    , Model.byteStringToModel
     , cookPredictor
+    , predictorToCxx
     , loadPredictor
     , predict
     , predictCooked
@@ -28,6 +31,7 @@ import Core
 import qualified Model
 import Model.Stats (ModelStats(..), UnknownSet(..), getModelStats)
 import Predictor.Config
+import Predictor.Raw (RawPredictor(..), predictorToCxx)
 import Schema
 import Sql (MonadSql, SqlBackend, SqlRecord, ToBackendKey)
 import qualified Sql
@@ -38,14 +42,6 @@ toPredictorName :: MonadSql m => Key PredictionModel -> m (Int, Text)
 toPredictorName modelId = do
     predName <- getModelName <$> Sql.getJust modelId
     return (predictedImplId - fromIntegral (fromSqlKey modelId), predName)
-
-data RawPredictor = RawPredictor
-    { rawPredictorId :: Key PredictionModel
-    , rawPredictorModel :: Model
-    , rawPredictorUnknownSets :: Map Int64 UnknownSet
-    , rawPredictorDefaultImpl :: Int
-    , rawPredictorMispredictionStrategy :: Int -> Int
-    }
 
 data RawPrediction
     = ImplPrediction Int

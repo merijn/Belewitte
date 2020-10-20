@@ -40,8 +40,8 @@ import Text.Megaparsec.Char.Lexer (decimal)
 import Text.Megaparsec.Error (errorBundlePretty)
 
 import Core
-import Model (byteStringToModel)
 import Model.Stats (UnknownSet(..), ModelStats(..))
+import Predictor (byteStringToModel)
 import Utils.Process
     (ReadWrite(..), runProcessCreation_, withPipe, withProcess)
 import Utils.PropValue (PropValue(..))
