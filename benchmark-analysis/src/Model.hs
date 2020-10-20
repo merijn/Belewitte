@@ -14,7 +14,6 @@ module Model
     , byteStringToModel
     ) where
 
-import Control.Monad.IO.Class (MonadIO(liftIO))
 import Data.ByteString (ByteString)
 import Data.Int (Int32)
 import Data.IntMap (IntMap)
@@ -26,10 +25,10 @@ import qualified Data.Set as S
 import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
 import qualified Data.Text as T
+import qualified Data.Text.Lazy as LT
 import Data.Text.Lazy.Builder (Builder, fromText, toLazyText)
 import Data.Text.Lazy.Builder.Int (decimal)
 import Data.Text.Lazy.Builder.RealFloat (realFloat)
-import qualified Data.Text.Lazy.IO as LT
 import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as VS
 import Database.Persist.Class (PersistField(..))
@@ -95,21 +94,13 @@ mapImplementations f = mapModel changeNode
         | leftNode node /= -1 = pure node
         | otherwise = (\v -> node{ rightNode = v }) <$> f (rightNode node)
 
-dumpCppModel
-    :: MonadIO m
-    => FilePath
-    -> Model
-    -> Set (Int, Text)
-    -> IntMap Text
-    -> m ()
-dumpCppModel name (Model tree) modelProps implNames =
-    liftIO . LT.writeFile name . toLazyText $ [i|#include <functional>
+dumpCppModel :: Model -> Set (Int, Text) -> IntMap Text -> LT.Text
+dumpCppModel (Model tree) modelProps implNames =
+  toLazyText $ [i|#include <functional>
 #include <map>
 #include <string>
 #include <vector>
 #include <sys/types.h>
-
-using namespace std;
 
 struct tree_t {
     double threshold;
@@ -121,7 +112,7 @@ static tree_t tree[] = {
 
 static double properties[#{numProps}];
 
-extern "C" const vector<tuple<string,size_t,size_t,size_t>>
+extern "C" const std::vector<std::tuple<std::string,size_t,size_t,size_t>>
 implNames = {
 |] <> nameTable newLabels <> [i|};
 
@@ -178,8 +169,8 @@ extern "C" int32_t lookup()
 
         lookupName :: (Int, Int) -> Builder
         lookupName (new, original) = mconcat
-                [ "    { \"" , kernelName , "\", " , decimal new
-                , ", ", warpConfig, " },\n" ]
+                [ "    std::make_tuple( \"" , kernelName , "\", " , decimal new
+                , ", ", warpConfig, " ),\n" ]
           where
             implName = implNames IM.! original
             (kernelName, warpConfig) = kernelConfig implName

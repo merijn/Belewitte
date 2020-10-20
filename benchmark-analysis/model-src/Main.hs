@@ -13,6 +13,7 @@ import Data.Ord (comparing)
 import qualified Data.Map as M
 import qualified Data.Set as S
 import qualified Data.Text as T
+import qualified Data.Text.Lazy.IO as LT
 
 import Core
 import Evaluate (evaluateModel, compareImplementations)
@@ -144,8 +145,9 @@ main = runCommand commands $ \case
         modelProps <- Sql.selectSource [ModelPropertyModelId ==. modelId] [] $
             C.mapM (mkPropIdx . entityVal) .| C.foldMap S.singleton
 
-        dumpCppModel cppFile predictionModelModel modelProps
-            (implementationName <$> impls)
+        liftIO . LT.writeFile cppFile $
+            dumpCppModel predictionModelModel modelProps
+                (implementationName <$> impls)
   where
     mkPropIdx ModelProperty{..} = do
         name <- propertyNameProperty <$> Sql.getJust modelPropertyPropId
