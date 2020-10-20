@@ -7,6 +7,7 @@ module RuntimeData
     , getKernelExecutable
     , getKernelLibPathMaybe
     , getKernelLibPath
+    , getCxxCompilerWrapper
     , getBarPlotScript
     , getHeatmapScript
     , getModelScript
@@ -124,6 +125,11 @@ getPythonScript script args = do
         pythonPath <- getDataFileName $ "runtime-data/virtualenv/bin/python"
         scriptPath <- getDataFileName $ "runtime-data/scripts" </> script
         return $ proc pythonPath (scriptPath : args)
+
+getCxxCompilerWrapper :: MonadIO m => FilePath -> m CreateProcess
+getCxxCompilerWrapper outputFile = liftIO $ do
+    exePath <- getDataFileName "runtime-data/cxx-run.sh"
+    return $ proc exePath [outputFile]
 
 getBarPlotScript
     :: (MonadIO m, MonadLogger m, MonadMask m) => [String] -> m CreateProcess

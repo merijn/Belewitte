@@ -196,6 +196,10 @@ endif
 report-cabal:
 	$(PRINTF) "$(CABAL)"
 
+.PHONY: report-cxx
+report-cxx:
+	$(PRINTF) "$(CXX)"
+
 .PHONY: freeze
 freeze:
 	$(PRINTF) "Generating frozen config.\n"
