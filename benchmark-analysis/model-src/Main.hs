@@ -23,11 +23,13 @@ import Model
 import Model.Stats (ModelStats(..), UnknownSet(..), getModelStats)
 import ModelOptions
 import Predictor
+import RuntimeData (getCxxCompilerWrapper)
 import Schema
 import Sql ((==.))
 import qualified Sql
 import Train
 import TrainConfig
+import Utils.Process (withStdin)
 import Validate
 
 reportModelStats :: ModelStats -> ConduitT () Text SqlM ()
@@ -138,16 +140,21 @@ main = runCommand commands $ \case
         variantInfoConfig <- getVariantInfoConfig
         compareImplementations variantInfoConfig compareConfig
 
-    ExportModel{getModel,cppFile} -> do
+    ExportModel{getModel,exportOutput} -> do
         Entity modelId PredictionModel{..} <- getModel
 
         impls <- Sql.queryImplementations predictionModelAlgorithmId
         modelProps <- Sql.selectSource [ModelPropertyModelId ==. modelId] [] $
             C.mapM (mkPropIdx . entityVal) .| C.foldMap S.singleton
 
-        liftIO . LT.writeFile cppFile $
-            dumpCppModel predictionModelModel modelProps
-                (implementationName <$> impls)
+        let modelSrc = dumpCppModel predictionModelModel modelProps
+                        (implementationName <$> impls)
+
+        case exportOutput of
+            CppFile outFile -> liftIO $ LT.writeFile outFile modelSrc
+            SharedLib outFile -> do
+                cxxWrapper <- getCxxCompilerWrapper outFile
+                withStdin cxxWrapper $ \hnd -> liftIO $ LT.hPutStr hnd modelSrc
   where
     mkPropIdx ModelProperty{..} = do
         name <- propertyNameProperty <$> Sql.getJust modelPropertyPropId

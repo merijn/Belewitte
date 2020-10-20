@@ -7,7 +7,12 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE TypeFamilies #-}
-module ModelOptions (ModelCommand(..), commands, runCommand) where
+module ModelOptions
+    ( ModelCommand(..)
+    , PredictorExport(..)
+    , commands
+    , runCommand
+    ) where
 
 import Control.Monad (forM)
 import Data.Bifunctor (second)
@@ -51,6 +56,8 @@ import Query.Train
 import qualified Query.Train as Train
 import Query.Variant
 
+data PredictorExport = CppFile FilePath | SharedLib FilePath
+
 data ModelCommand
     = Train
       { getConfig :: SqlM TrainStepConfig }
@@ -76,7 +83,7 @@ data ModelCommand
       }
     | ExportModel
       { getModel :: SqlM (Entity PredictionModel)
-      , cppFile :: FilePath
+      , exportOutput :: PredictorExport
       }
 
 commands :: CommandRoot ModelCommand
@@ -149,15 +156,25 @@ commands = CommandRoot
         $ Compare <$> variantInfoConfigParser <*> compareParser
     , SingleCommand CommandInfo
         { commandName = "export"
-        , commandHeaderDesc = "export model to C++"
-        , commandDesc = "Export BDT model to C++ file"
-        } (ExportModel <$> modelParser <*> cppFile)
+        , commandHeaderDesc = "export model"
+        , commandDesc = "Export BDT model"
+        } (ExportModel <$> modelParser <*> (SharedLib <$> soFile))
+    , SingleCommand CommandInfo
+        { commandName = "export-source"
+        , commandHeaderDesc = "export model C++ source"
+        , commandDesc = "Export BDT model to C++ source"
+        } (ExportModel <$> modelParser <*> (CppFile <$> cppFile))
     ]
   }
   where
+    soFile :: Parser FilePath
+    soFile = strArgument . mconcat $
+        [ metavar "FILE", value "model.so"
+        , showDefaultWith id, help "Shared library file to create." ]
+
     cppFile :: Parser FilePath
-    cppFile = strOption . mconcat $
-        [ metavar "FILE", short 'e', long "export", value "test.cpp"
+    cppFile = strArgument . mconcat $
+        [ metavar "FILE", value "model.cpp"
         , showDefaultWith id, help "C++ file to write predictor to." ]
 
 getGraphProps :: SqlM (Map Text (Key PropertyName))
