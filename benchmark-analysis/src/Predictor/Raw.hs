@@ -38,7 +38,10 @@ data RawPredictor = RawPredictor
 predictorToCxx :: RawPredictor -> SqlM LT.Text
 predictorToCxx RawPredictor{..} = toLazyText <$> do
     propEntries <- mkPropertyMapping rawPredictorId
+
     let (decisionTree, newLabels) = relabelDecisionTree rawPredictorModel
+                                        rawPredictorMispredictionStrategy
+
     implEntries <- mkImplMapping newLabels rawPredictorDefaultImpl
 
     return . mconcat $ intersperse "\n"
@@ -78,7 +81,8 @@ mkPropertyMapping modelId = do
     (Sum numProps, propEntries) <-
         Sql.selectSource propFilter [] $ C.foldMapM (mkPropIdx . entityVal)
 
-    return $ [i|static double properties[#{numProps}];
+    return $ [i|
+static double properties[#{numProps}];
 
 extern "C" const std::map<std::string,std::reference_wrapper<double>>
 propNames = {
@@ -110,8 +114,7 @@ extern "C" const int32_t default_impl = #{defaultImpl};
 
 extern "C" const std::vector<std::tuple<std::string,size_t,size_t,size_t>>
 implNames = {
-|] <> implEntries <> [i|};
-|]
+|] <> implEntries <> [i|};|]
   where
     lookupName :: Key Implementation -> Int -> SqlM Builder
     lookupName implId idx = do
@@ -139,8 +142,10 @@ implNames = {
 
         newName = T.intercalate "-" . reverse $ revRemainder
 
-relabelDecisionTree :: Model -> (Builder, Map (Key Implementation) Int)
-relabelDecisionTree (Model tree) = (decisionTree, newLabels)
+relabelDecisionTree
+    :: Model -> (Int -> Int) -> (Builder, Map (Key Implementation) Int)
+relabelDecisionTree (Model tree) mispredictionStrategy =
+    (decisionTree, newLabels)
   where
     (array, newLabels) = VS.foldl' relabel (mempty, M.empty) tree
 
@@ -151,8 +156,8 @@ relabelDecisionTree (Model tree) = (decisionTree, newLabels)
         -> TreeNode
         -> (Builder, Map (Key Implementation) Int)
     relabel (!out, !imap) Node{..}
-      | leftNode /= -1 = (treeRow rightNode, imap)
-      | rightNode < 0 = (treeRow (-1), imap)
+      | leftNode /= -1 || rightNode == -1 = (treeRow rightNode, imap)
+      | actualImpl < 0 = (treeRow (-1), imap)
       | otherwise = (treeRow newVal, newMap)
       where
         treeRow :: Int -> Builder
@@ -168,12 +173,16 @@ relabelDecisionTree (Model tree) = (decisionTree, newLabels)
             , " },\n"
             ]
 
+        actualImpl :: Int
+        actualImpl | rightNode < 0 = mispredictionStrategy rightNode
+                   | otherwise = rightNode
+
+        implKey :: Key Implementation
+        implKey = toSqlKey (fromIntegral actualImpl)
+
         update :: Maybe Int -> (Int, Maybe Int)
         update val = case val of
             Just v -> (v, val)
             Nothing -> let v = M.size imap in (v, Just v)
-
-        implKey :: Key Implementation
-        implKey = toSqlKey (fromIntegral rightNode)
 
         (newVal, newMap) = M.alterF update implKey imap
