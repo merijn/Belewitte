@@ -39,7 +39,7 @@ predictorToCxx :: RawPredictor -> SqlM LT.Text
 predictorToCxx RawPredictor{..} = toLazyText <$> do
     propEntries <- mkPropertyMapping rawPredictorId
     let (decisionTree, newLabels) = relabelDecisionTree rawPredictorModel
-    implEntries <- mkImplMapping newLabels
+    implEntries <- mkImplMapping newLabels rawPredictorDefaultImpl
 
     return . mconcat $ intersperse "\n"
         [ preamble, propEntries, implEntries, decisionTree, finale ]
@@ -99,11 +99,15 @@ propNames = {
             , "]) },\n"
             ]
 
-mkImplMapping :: Map (Key Implementation) Int -> SqlM Builder
-mkImplMapping implIndices = do
+mkImplMapping :: Map (Key Implementation) Int -> Int -> SqlM Builder
+mkImplMapping implIndices defImpl = do
     implEntries <- fold <$> M.traverseWithKey lookupName implIndices
 
+    let defaultImpl = implIndices M.! toSqlKey (fromIntegral defImpl)
+
     return $ [i|
+extern "C" const int32_t default_impl = #{defaultImpl};
+
 extern "C" const std::vector<std::tuple<std::string,size_t,size_t,size_t>>
 implNames = {
 |] <> implEntries <> [i|};
