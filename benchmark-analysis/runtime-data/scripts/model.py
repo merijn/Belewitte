@@ -105,7 +105,7 @@ while queue:
             pred = -unknown[key]['id']
         translation[node] = count
         count += 1
-        arrayTree.append((threshold, featureIdx, -1, pred))
+        arrayTree.append((-1, -1, -1, pred))
     else:
         translation[node] = count
         count += 1
