@@ -42,7 +42,8 @@ import Evaluate
     , SortBy(..)
     )
 import Options
-import Predictor (PredictorConfig)
+import Predictor (PredictorConfig, getPredictorConfigAlgorithmId)
+import PredictorResults (PredictionConfig(..))
 import Pretty.List (Field(..), FieldSpec(..), (=.), buildOptions)
 import Schema
 import Sql ((==.))
@@ -77,6 +78,8 @@ data ModelCommand
       , evaluateConfig :: EvaluateReport
       , getDatasetIds :: SqlM (Maybe (Set (Key Dataset)))
       }
+    | PredictionResults
+      { getPredictionConfig :: SqlM PredictionConfig }
     | Compare
       { getVariantInfoConfig :: SqlM VariantInfoConfig
       , compareConfig :: CompareReport
@@ -148,6 +151,12 @@ commands = CommandRoot
         $ EvaluatePredictor
             <$> platformIdParser <*> predictorConfigsParser
             <*> filterIncomplete <*> evaluateParser <*> datasetsParser
+    , SingleCommand CommandInfo
+        { commandName = "show"
+        , commandHeaderDesc = ""
+        , commandDesc = ""
+        }
+        $ PredictionResults <$> predictionConfig
     , SingleCommand CommandInfo
         { commandName = "compare"
         , commandHeaderDesc = "compare implementation performance"
@@ -424,6 +433,19 @@ stepInfoConfig = do
         StepInfoConfig algoId
             <$> getPlatformId <*> getCommitId algoId <*> pure shouldFilter
             <*> getUtcTime
+
+predictionConfig :: Parser (SqlM PredictionConfig)
+predictionConfig = do
+    getPredConfig <- predictorConfigParser
+    getStepInfoConfig <- stepInfoConfig
+    getVariantId <- variantIdParser
+
+    pure $ do
+        predictorCfg <- getPredConfig
+        algoId <- getPredictorConfigAlgorithmId predictorCfg
+
+        PredictionConfig predictorCfg
+            <$> getStepInfoConfig algoId <*> getVariantId algoId
 
 trainStepConfig :: Parser (QueryMode -> SqlM TrainStepConfig)
 trainStepConfig = do

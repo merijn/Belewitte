@@ -13,6 +13,7 @@ module Predictor
     , RawPrediction(..)
     , Model.byteStringToModel
     , cookPredictor
+    , getPredictorConfigAlgorithmId
     , predictorToCxx
     , loadPredictor
     , predict

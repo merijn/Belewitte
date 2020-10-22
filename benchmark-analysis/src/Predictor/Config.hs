@@ -7,6 +7,7 @@ module Predictor.Config
     , PredictorConfig(..)
     , Ranking(..)
     , getMispredictionStrategy
+    , getPredictorConfigAlgorithmId
     , mkPredictorConfig
     ) where
 
@@ -39,6 +40,10 @@ data PredictorConfig = PConfig
     , pConfigDefaultImpl :: Key Implementation
     , pConfigStrategy :: MispredictionStrategy
     }
+
+getPredictorConfigAlgorithmId :: PredictorConfig -> SqlM (Key Algorithm)
+getPredictorConfigAlgorithmId PConfig{..} = do
+    predictionModelAlgorithmId <$> Sql.getJust pConfigModelId
 
 getMispredictionStrategy
     :: Key PredictionModel

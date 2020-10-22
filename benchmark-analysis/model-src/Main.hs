@@ -22,6 +22,7 @@ import InteractiveInput
 import Model.Stats (ModelStats(..), UnknownSet(..), getModelStats)
 import ModelOptions
 import Predictor
+import PredictorResults (outputPredictorResults)
 import RuntimeData (getCxxCompilerWrapper)
 import Schema
 import qualified Sql
@@ -133,6 +134,9 @@ main = runCommand commands $ \case
             getModelTrainingConfig (rawPredictorId basePred)
 
         evaluateModel predictors evaluateConfig evalConfig
+
+    PredictionResults{getPredictionConfig} -> do
+        getPredictionConfig >>= outputPredictorResults
 
     Compare{getVariantInfoConfig,compareConfig} -> do
         variantInfoConfig <- getVariantInfoConfig

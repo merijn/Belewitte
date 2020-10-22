@@ -269,6 +269,7 @@ Executable Model
   Main-Is:              Main.hs
   Other-Modules:        Evaluate
                         ModelOptions
+                        PredictorResults
                         Train
                         Validate
                         Query.Dump
