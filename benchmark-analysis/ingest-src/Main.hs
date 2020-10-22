@@ -278,4 +278,5 @@ ingestQueryMap = M.fromList
         pure $ do
             algoId <- getAlgoId
             ValidationVariant algoId
-                <$> getVariantId <*> getCommitId algoId <*> pure 0 <*> pure []
+                <$> getVariantId algoId <*> getCommitId algoId <*> pure 0
+                <*> pure []

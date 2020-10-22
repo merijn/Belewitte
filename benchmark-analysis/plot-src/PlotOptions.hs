@@ -141,8 +141,8 @@ levelsHeatmapParser = do
     getVariantId <- variantIdParser
 
     pure $ do
-        globalOpts <- getGlobalOpts
-        LevelHeatmap globalOpts <$> getVariantId
+        globalOpts@GlobalPlotOptions{..} <- getGlobalOpts
+        LevelHeatmap globalOpts <$> getVariantId globalPlotAlgorithm
 
 predictHeatmapParser :: Parser (SqlM Heatmap)
 predictHeatmapParser = do
@@ -239,7 +239,7 @@ plotQueryMap = M.fromList
         pure $ do
             algoId <- getAlgorithmId
             timePlotQuery algoId
-                <$> getPlatformId <*> getCommit algoId <*> getVariants
+                <$> getPlatformId <*> getCommit algoId <*> getVariants algoId
     , nameDebugQuery "levelTimePlotQuery" . Compose $ do
         getAlgorithmId <- algorithmIdParser
         getPlatformId <- platformIdParser
@@ -249,8 +249,10 @@ plotQueryMap = M.fromList
         pure $ do
             algoId <- getAlgorithmId
             levelTimePlotQuery
-                <$> getPlatformId <*> getCommit algoId <*> getVariantId
+                <$> getPlatformId <*> getCommit algoId <*> getVariantId algoId
     ]
   where
-    variantsParser :: Parser (SqlM (Set (Key Variant)))
-    variantsParser = fmap S.fromList . sequence <$> some variantIdParser
+    variantsParser :: Parser (Key Algorithm -> SqlM (Set (Key Variant)))
+    variantsParser = do
+        variants <- some variantIdParser
+        pure $ \algoId -> S.fromList <$> traverse ($algoId) variants

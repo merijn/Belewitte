@@ -387,18 +387,19 @@ variantConfigParser = queryVariantConfig <$> variantConfigOpt
                 , VariantConfigIsDefault ==. True
                 ]
 
-variantIdParser :: Parser (SqlM (Key Variant))
-variantIdParser = fmap entityKey <$> variantParser
+variantIdParser :: Parser (Key Algorithm -> SqlM (Key Variant))
+variantIdParser = fmap (fmap entityKey) <$> variantParser
 
-variantParser :: Parser (SqlM (Entity Variant))
+variantParser :: Parser (Key Algorithm -> SqlM (Entity Variant))
 variantParser = queryVariant <$> variantOpt
   where
     variantOpt :: Parser Int64
     variantOpt = option auto $ mconcat
         [ metavar "ID", long "variant", help "Numeric id of variant to use" ]
 
-    queryVariant :: Int64 -> SqlM (Entity Variant)
-    queryVariant n = Sql.validateEntity "Variant" n
+    queryVariant :: Int64 -> Key Algorithm -> SqlM (Entity Variant)
+    queryVariant n algoId = Sql.selectSingle
+        [ VariantId ==. toSqlKey n, VariantAlgorithmId ==. algoId ]
 
 variantInfoConfigParser :: Parser (SqlM VariantInfoConfig)
 variantInfoConfigParser = do

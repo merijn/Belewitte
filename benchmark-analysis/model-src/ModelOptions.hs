@@ -224,11 +224,24 @@ modelQueryMap = M.fromList
     [ nameDebugQuery "trainStepQuery" $
         fmap Train.sortStepTimings . trainStepQuery <$> Compose (trainStepConfig <*> queryModeParser)
     , nameDebugQuery "stepInfoQuery" $
-        stepInfoQuery <$> Compose stepInfoConfig <*> Compose variantIdParser
+        fmap (uncurry stepInfoQuery) . Compose $ do
+            getAlgoId <- algorithmIdParser
+            getStepInfoConfig <- stepInfoConfig
+            getVariantId <- variantIdParser
+            pure $ do
+                algoId <- getAlgoId
+                (,) <$> getStepInfoConfig algoId <*> getVariantId algoId
+
     , nameDebugQuery "implRankQuery" $
-        implRankQuery <$> Compose stepInfoConfig <*> columnParser <*> rankParser
+        implRankQuery <$> fullStepInfoConfig <*> columnParser <*> rankParser
     ]
   where
+    fullStepInfoConfig :: Compose Parser SqlM StepInfoConfig
+    fullStepInfoConfig = Compose $ do
+        getAlgoId <- algorithmIdParser
+        getStepInfoConfig <- stepInfoConfig
+        pure $ getAlgoId >>= getStepInfoConfig
+
     queryModeParser :: Parser QueryMode
     queryModeParser =
         optionParserFromValues modeMap "QUERY-MODE" helpTxt $ mconcat
@@ -400,22 +413,21 @@ trainSeedParser = option auto . mconcat $
     [ metavar "N", short 's', long "seed", value 42, showDefault
     , help "Seed for training set randomisation" ]
 
-stepInfoConfig :: Parser (SqlM StepInfoConfig)
+stepInfoConfig :: Parser (Key Algorithm -> SqlM StepInfoConfig)
 stepInfoConfig = do
-    getAlgoId <- algorithmIdParser
     getPlatformId <- platformIdParser
     getCommitId <- commitIdParser
     getUtcTime <- utcTimeParser
     shouldFilter <- filterIncomplete
 
-    pure $ do
-        algoId <- getAlgoId
+    pure $ \algoId ->
         StepInfoConfig algoId
             <$> getPlatformId <*> getCommitId algoId <*> pure shouldFilter
             <*> getUtcTime
 
 trainStepConfig :: Parser (QueryMode -> SqlM TrainStepConfig)
 trainStepConfig = do
+    getAlgoId <- algorithmIdParser
     getStepInfoConfig <- stepInfoConfig
     getDatasets <- datasetsParser
     trainSeed <- trainSeedParser
@@ -426,16 +438,16 @@ trainStepConfig = do
     stepPercent <- stepPercentageParser
 
     pure $ \queryMode -> do
-        cfg@StepInfoConfig{..} <- getStepInfoConfig
-
+        algoId <- getAlgoId
+        stepConfig <- getStepInfoConfig algoId
         datasets <- getDatasets
 
         stepProps <- S.union
             <$> (filterGraphProps <*> getGraphProps)
-            <*> (filterStepProps <*> getStepProps stepInfoAlgorithm)
+            <*> (filterStepProps <*> getStepProps algoId)
 
         return $ TrainStepConfig
-            { trainStepInfoConfig = cfg
+            { trainStepInfoConfig = stepConfig
             , trainStepQueryMode = queryMode
             , trainStepDatasets = datasets
             , trainStepProps = stepProps
