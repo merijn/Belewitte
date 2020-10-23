@@ -18,6 +18,7 @@ import Query (streamQuery)
 import Query.Step
 import Schema
 import Sql (MonadSql)
+import qualified Sql
 import Utils.ImplTiming (ImplTiming(..))
 
 data PredictionConfig = PredictionConfig
@@ -28,7 +29,7 @@ data PredictionConfig = PredictionConfig
 
 predictSteps
     :: (MonadLogger m, MonadSql m, MonadThrow m)
-    => RawPredictor -> ConduitT StepInfo (ImplTiming, StepInfo) m ()
+    => RawPredictor -> ConduitT StepInfo (StepInfo, ImplTiming) m ()
 predictSteps rawPredictor = do
     StepInfo{stepProps,stepTimings} <- C.peek >>= \case
         Just info -> return info
@@ -43,15 +44,28 @@ predictSteps rawPredictor = do
         :: CookedPredictor
         -> StepInfo
         -> Maybe Int
-        -> (Maybe Int, (ImplTiming, StepInfo))
+        -> (Maybe Int, (StepInfo, ImplTiming))
     predictStep predictor step@StepInfo{..} lastPred = result
       where
-        result = (Just newImpl, (newPrediction, step))
+        result = (Just newImpl, (step, newPrediction))
 
         predictedIdx = predictCooked predictor stepProps lastPred
 
         newPrediction = stepTimings `VS.unsafeIndex` predictedIdx
         newImpl = fromIntegral $ implTimingImpl newPrediction
+
+formatStep
+    :: (MonadLogger m, MonadSql m, MonadThrow m)
+    => (StepInfo, ImplTiming) -> m Text
+formatStep (StepInfo{..}, (ImplTiming predImplId predTime)) = do
+    Entity _ predImpl@Implementation{} <-
+        Sql.validateEntity "Implementation" predImplId
+
+    return $ mconcat
+        [ "Variant #", showSqlKey stepVariantId, " step #", showText stepId
+        , ": ", showText predImplId, "\t", implementationName predImpl, "\t("
+        , showText predTime, ")\n"
+        ]
 
 outputPredictorResults :: PredictionConfig -> SqlM ()
 outputPredictorResults PredictionConfig{..} = do
@@ -59,6 +73,6 @@ outputPredictorResults PredictionConfig{..} = do
     renderRegionOutput $
         streamQuery stepQuery
         .| predictSteps rawPredictor
-        .| C.map (T.pack . show)
+        .| C.mapM formatStep
   where
     stepQuery = stepInfoQuery predConfigStepInfoConfig predConfigVariantId
