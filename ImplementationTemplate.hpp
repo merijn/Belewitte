@@ -691,6 +691,7 @@ struct SwitchImplementation : public AlgorithmBase
             missingAlgoProps.insert(name);
         }
 
+        lastKernel = -1;
         if (!model.empty()) {
             setupPredictor(model.c_str(), missingGraphProps, missingAlgoProps);
         } else {
@@ -701,6 +702,8 @@ struct SwitchImplementation : public AlgorithmBase
             } catch (const std::out_of_range&) {
             }
 
+            defaultKernel = 0;
+            implNames.emplace_back("edge-list");
             implementations.emplace_back(kernels);
         }
 
@@ -724,6 +727,9 @@ struct SwitchImplementation : public AlgorithmBase
 
     virtual void cleanupRun() override final
     {
+        defaultKernel = -1;
+        lastKernel = -1;
+        implNames.clear();
         implementations.clear();
 
         if (modelHandle) {
@@ -761,8 +767,9 @@ struct SwitchImplementation : public AlgorithmBase
         }
 
         lookup = safe_dlsym<int32_t()>(modelHandle, "lookup");
-        auto& impls = *safe_dlsym<implementations_t>(modelHandle, "implNames");
-        auto& params = *safe_dlsym<properties>(modelHandle, "propNames");
+        const auto& impls = *safe_dlsym<implementations_t>(modelHandle, "implNames");
+        const auto& params = *safe_dlsym<properties>(modelHandle, "propNames");
+        defaultKernel = *safe_dlsym<int32_t>(modelHandle, "default_impl");
 
         bool missing = false;
         for (auto& pair : params) {
@@ -781,10 +788,12 @@ struct SwitchImplementation : public AlgorithmBase
             }
         }
 
+        implNames.resize(impls.size());
         implementations.resize(impls.size());
         for (auto& data : impls) {
             auto& [ name, idx, warpRef, chunkRef ] = data;
             try {
+                implNames[idx] = name;
                 implementations[idx] = { kernelMap.at(name) };
 
                 auto warp = warpRef;
@@ -794,15 +803,13 @@ struct SwitchImplementation : public AlgorithmBase
                 };
 
                 mapKernels(setWarpReferences, implementations[idx]);
-                if (name == "edge-list") {
-                    kernels = implementations[idx];
-                    defaultKernel = static_cast<int32_t>(idx);
-                }
             } catch (const std::out_of_range&) {
                 std::cerr << "Missing implementation: " << name << std::endl;
                 missing = true;
             }
         }
+
+        kernels = implementations[static_cast<size_t>(defaultKernel)];
 
         if (missing) reportError("Missing properties/implementations!");
     }
@@ -813,7 +820,13 @@ struct SwitchImplementation : public AlgorithmBase
         propLog.imbue(std::locale("C"));
         lookup = [this,oldPredictor{lookup}]() {
             int32_t result = oldPredictor();
-            propLog << "prediction:" << stepNum << ":" << result
+            if (result == -1) {
+                if (lastKernel == -1) result = defaultKernel;
+                else result = lastKernel;
+            }
+
+            propLog << "prediction:" << stepNum << ":" << result << " ("
+                    << implNames[static_cast<size_t>(result)] << ")"
                     << std::endl;
             return result;
         };
@@ -874,6 +887,7 @@ struct SwitchImplementation : public AlgorithmBase
     int32_t lastKernel;
     int32_t defaultKernel;
 
+    std::vector<std::string> implNames;
     std::vector<std::tuple<Kernels...>> implementations;
     std::map<std::string,std::tuple<Kernels...>> kernelMap;
 
