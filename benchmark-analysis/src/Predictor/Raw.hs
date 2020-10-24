@@ -74,7 +74,8 @@ extern "C" int32_t lookup()
         }
     }
     return tree[node].right;
-}|]
+}
+|]
 
 mkPropertyMapping :: Key PredictionModel -> SqlM Builder
 mkPropertyMapping modelId = do
@@ -84,6 +85,7 @@ mkPropertyMapping modelId = do
     return $ [i|
 static double properties[#{numProps}];
 
+extern "C" const std::map<std::string,std::reference_wrapper<double>> propNames;
 extern "C" const std::map<std::string,std::reference_wrapper<double>>
 propNames = {
 |] <> propEntries <> [i|};|]
@@ -110,8 +112,10 @@ mkImplMapping implIndices defImpl = do
     let defaultImpl = implIndices M.! toSqlKey (fromIntegral defImpl)
 
     return $ [i|
+extern "C" const int32_t default_impl;
 extern "C" const int32_t default_impl = #{defaultImpl};
 
+extern "C" const std::vector<std::tuple<std::string,size_t,size_t,size_t>> implNames;
 extern "C" const std::vector<std::tuple<std::string,size_t,size_t,size_t>>
 implNames = {
 |] <> implEntries <> [i|};|]
