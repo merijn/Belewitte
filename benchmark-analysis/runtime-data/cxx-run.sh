@@ -10,4 +10,4 @@ if [ $? -ne 0 ] || [ -z "$CXX" ]; then
     exit 1
 fi
 
-exec $CXX -std=c++17 -shared -fPIC -x c++ /dev/stdin -o "$@"
+exec $CXX -shared -fPIC -x c++ /dev/stdin -o "$@"

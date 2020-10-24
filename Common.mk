@@ -198,7 +198,7 @@ report-cabal:
 
 .PHONY: report-cxx
 report-cxx:
-	$(PRINTF) "$(CXX)"
+	$(PRINTF) "$(CXX) $(filter-out -MMD -MP,$(CXXFLAGS))"
 
 .PHONY: freeze
 freeze:
