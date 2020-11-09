@@ -439,6 +439,7 @@ predictionConfig = do
     getPredConfig <- predictorConfigParser
     getStepInfoConfig <- stepInfoConfig
     getVariantId <- variantIdParser
+    showProps <- showPropFlag
 
     pure $ do
         predictorCfg <- getPredConfig
@@ -446,6 +447,12 @@ predictionConfig = do
 
         PredictionConfig predictorCfg
             <$> getStepInfoConfig algoId <*> getVariantId algoId
+            <*> pure showProps
+  where
+    showPropFlag = switch $ mconcat
+        [ long "show-props"
+        , help "Print graph properties alongside predictions."
+        ]
 
 trainStepConfig :: Parser (QueryMode -> SqlM TrainStepConfig)
 trainStepConfig = do
