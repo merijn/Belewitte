@@ -8,7 +8,6 @@ import Control.Monad (void)
 import Data.Conduit (ConduitT, (.|))
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.List as C (mapAccum)
-import qualified Data.Text as T
 import qualified Data.Vector.Storable as VS
 
 import Core
@@ -43,16 +42,15 @@ predictSteps rawPredictor = do
     predictStep
         :: CookedPredictor
         -> StepInfo
-        -> Maybe Int
-        -> (Maybe Int, (StepInfo, ImplTiming))
+        -> Maybe Index
+        -> (Maybe Index, (StepInfo, ImplTiming))
     predictStep predictor step@StepInfo{..} lastPred = result
       where
-        result = (Just newImpl, (step, newPrediction))
+        result = (Just predictedIdx, (step, newPrediction))
 
         predictedIdx = predictCooked predictor stepProps lastPred
 
-        newPrediction = stepTimings `VS.unsafeIndex` predictedIdx
-        newImpl = fromIntegral $ implTimingImpl newPrediction
+        newPrediction = stepTimings `VS.unsafeIndex` getIdx predictedIdx
 
 formatStep
     :: (MonadLogger m, MonadSql m, MonadThrow m)

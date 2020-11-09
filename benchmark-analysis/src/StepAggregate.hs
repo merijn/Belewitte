@@ -71,7 +71,7 @@ aggregateSteps predictors zeroTimeVec = do
         Nothing -> logThrowM . PatternFailed $
             "Expected at least one step input"
 
-    let initial :: (Maybe (Vector Int), StepVariantAggregate)
+    let initial :: (Maybe (Vector Index), StepVariantAggregate)
         initial = (Nothing, StepVariantAgg
             { stepVariantid = variantId
             , stepOptimalTime = 0
@@ -88,14 +88,14 @@ aggregateSteps predictors zeroTimeVec = do
         }
 
     aggregate
-        :: (Maybe (Vector Int), StepVariantAggregate)
+        :: (Maybe (Vector Index), StepVariantAggregate)
         -> StepInfo
-        -> (Maybe (Vector Int), StepVariantAggregate)
+        -> (Maybe (Vector Index), StepVariantAggregate)
     aggregate (!lastImpls, !StepVariantAgg{..}) !StepInfo{..} =
       (Just predictedImpls, StepVariantAgg
             { stepVariantid = stepVariantId
             , stepOptimalTime =
-                stepOptimalTime + getTime (fromIntegral stepBestIdx)
+                stepOptimalTime + getTime (Index $ fromIntegral stepBestIdx)
             , stepImplTimes = VS.zipWith (liftImplTiming (+)) stepImplTimes
                     (newPredictions <> stepTimings)
             })
@@ -103,19 +103,19 @@ aggregateSteps predictors zeroTimeVec = do
         newPredictions :: Vector ImplTiming
         newPredictions = VS.imap wrapImpl predictedImpls
           where
-            wrapImpl :: Int -> Int -> ImplTiming
+            wrapImpl :: Int -> Index -> ImplTiming
             wrapImpl idx n
-                | n == -1 = ImplTiming implId (0/0)
+                | getIdx n == -1 = ImplTiming implId (0/0)
                 | otherwise = ImplTiming implId (getTime n)
               where
                 modelId = predictorId $ V.unsafeIndex predictors idx
                 implId = predictedImplId - fromIntegral (fromSqlKey modelId)
 
-        predictedImpls :: Vector Int
+        predictedImpls :: Vector Index
         predictedImpls = VS.generate (V.length predictors) doPredict
           where
             doPredict n = predictCooked (V.unsafeIndex predictors n) stepProps
                 ((`VS.unsafeIndex` n) <$> lastImpls)
 
-        getTime :: Int -> Double
-        getTime ix = implTimingTiming $ stepTimings `VS.unsafeIndex` ix
+        getTime :: Index -> Double
+        getTime (Index ix) = implTimingTiming $ stepTimings `VS.unsafeIndex` ix

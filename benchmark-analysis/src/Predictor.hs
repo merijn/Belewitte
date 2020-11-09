@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GeneralisedNewtypeDeriving #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -6,6 +7,7 @@
 {-# LANGUAGE TypeFamilies #-}
 module Predictor
     ( CookedPredictor(predictorId)
+    , Index(..)
     , MispredictionStrategy
     , Model.Model
     , PredictorConfig
@@ -26,7 +28,7 @@ import Control.Monad (when)
 import Data.Map.Strict (Map, (!?))
 import qualified Data.Map.Strict as M
 import qualified Data.Vector.Generic as V
-import Data.Vector.Storable (Vector)
+import Data.Vector.Storable (Storable, Vector)
 
 import Core
 import qualified Model
@@ -38,6 +40,8 @@ import Sql (MonadSql, SqlBackend, SqlRecord, ToBackendKey)
 import qualified Sql
 import Utils.ImplTiming (ImplTiming(..))
 import Utils.PropValue (PropValue(..))
+
+newtype Index = Index { getIdx :: Int } deriving (Eq, Storable)
 
 toPredictorName :: MonadSql m => Key PredictionModel -> m (Int, Text)
 toPredictorName modelId = do
@@ -160,7 +164,7 @@ cookPredictor propVec implVec RawPredictor{..} = do
         Nothing -> logThrowM . GenericInvariantViolation $
             "Unable to lookup implementation index: "
             <> showText rawPredictorDefaultImpl
-        Just v -> return v
+        Just v -> return (Index v)
 
     propModel <- Model.mapPropIndices translateProp rawPredictorModel
     newModel <- Model.mapImplementations translateImplementations propModel
@@ -203,12 +207,12 @@ cookPredictor propVec implVec RawPredictor{..} = do
 data CookedPredictor = CookedPredictor
      { predictorId :: Key PredictionModel
      , cookedPredictorModel :: Model
-     , cookedPredictorDefaultImpl :: Int
+     , cookedPredictorDefaultImpl :: Index
      }
 
-predictCooked :: CookedPredictor -> Vector PropValue -> Maybe Int -> Int
+predictCooked :: CookedPredictor -> Vector PropValue -> Maybe Index -> Index
 predictCooked CookedPredictor{..} props old
-    | prediction >= 0 = prediction
+    | prediction >= 0 = Index prediction
     | otherwise = case old of
         Nothing -> cookedPredictorDefaultImpl
         Just v -> v
