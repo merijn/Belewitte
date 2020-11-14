@@ -47,6 +47,7 @@ static map<string, Algorithm> algorithms;
 static bool debug = false;
 static bool verbose = false;
 static bool warnings = false;
+static bool noOutput = false;
 static bool printStdOut = false;
 static bool fromStdin = false;
 static framework fw = framework::cuda;
@@ -238,6 +239,10 @@ runJob
         auto basePath = outputDir / path(label);
         auto timeFile = basePath.replace_extension("timings");
         auto outputFile = basePath.replace_extension("output");
+        if (noOutput) {
+            timeFile = "/dev/null";
+            outputFile = "/dev/null";
+        }
 
         {
             Epoch epoch(printStdOut ? "/dev/stdout" : timeFile.string(), verbose);
@@ -289,7 +294,9 @@ int main(int argc, char * const *argv)
            .add('g', "debug", debug, true, "Use debug kernels.")
            .add('v', "verbose", verbose, true, "Verbose output.")
            .add('W', "warn", warnings, true, "Verbose/debug warnings.")
-           .add('S', "stdin", fromStdin, true, "Read work from stdin.");
+           .add('S', "stdin", fromStdin, true, "Read work from stdin.")
+           .add('q', "quiet", noOutput, true,
+                "Inhibit creation of output and timing files.");
 
     Options kernelParser(options);
 
