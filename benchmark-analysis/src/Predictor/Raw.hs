@@ -29,6 +29,7 @@ import qualified Sql
 
 data RawPredictor = RawPredictor
     { rawPredictorId :: Key PredictionModel
+    , rawPredictorName :: Text
     , rawPredictorModel :: Model
     , rawPredictorUnknownSets :: Map Int64 UnknownSet
     , rawPredictorDefaultImpl :: Int
@@ -45,14 +46,22 @@ predictorToCxx RawPredictor{..} = toLazyText <$> do
     implEntries <- mkImplMapping newLabels rawPredictorDefaultImpl
 
     return . mconcat $ intersperse "\n"
-        [ preamble, propEntries, implEntries, decisionTree, finale ]
+        [ preamble rawPredictorName
+        , propEntries
+        , implEntries
+        , decisionTree
+        , finale
+        ]
 
-preamble :: Builder
-preamble = [i|#include <functional>
+preamble :: Text -> Builder
+preamble predictorName = [i|#include <functional>
 #include <map>
 #include <string>
 #include <vector>
 #include <sys/types.h>
+
+extern "C" const char *predictorName;
+extern "C" const char *predictorName = "#{predictorName}";
 
 struct tree_t {
     double threshold;

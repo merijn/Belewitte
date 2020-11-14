@@ -36,7 +36,8 @@ data MispredictionStrategy
     | Ranked Column Ranking
 
 data PredictorConfig = PConfig
-    { pConfigModelId :: Key PredictionModel
+    { pConfigModelName :: Text
+    , pConfigModelId :: Key PredictionModel
     , pConfigDefaultImpl :: Key Implementation
     , pConfigStrategy :: MispredictionStrategy
     }
@@ -127,4 +128,28 @@ mkPredictorConfig (model, defImpl, strategy) = do
 
     defaultImplId <- Sql.validateKey "Implementation" defaultImpl
 
-    return $ PConfig modelId defaultImplId strategy
+    return $ PConfig predictorName modelId defaultImplId strategy
+  where
+    predictorName :: Text
+    predictorName = mconcat [showText model, ":", implName, ":", strategyName]
+
+    implName :: Text
+    implName = case defImpl of
+        Left i -> showText i
+        Right t -> t
+
+    strategyName :: Text
+    strategyName = case strategy of
+        None -> "none"
+        FirstInSet -> "firstinset"
+        Ranked column rank -> renderColumn column <> "-" <> renderRank rank
+
+    renderColumn col = case col of
+        MinTime -> "min"
+        AvgTime -> "avg"
+        MaxTime -> "max"
+
+    renderRank rank = case rank of
+        Min -> "min"
+        Avg -> "avg"
+        Total -> "total"

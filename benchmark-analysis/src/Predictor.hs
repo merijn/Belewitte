@@ -79,11 +79,12 @@ predict RawPredictor{..} props lastImpl
     disambiguatedPrediction = rawPredictorMispredictionStrategy modelPrediction
 
 rawLoad
-    :: Int
+    :: Text
+    -> Int
     -> (Map Int64 UnknownSet -> Int -> Int)
     -> Key PredictionModel
     -> SqlM RawPredictor
-rawLoad defaultImpl strategy rawPredictorId = do
+rawLoad rawPredictorName defaultImpl strategy rawPredictorId = do
     PredictionModel{..} <- Sql.getJust rawPredictorId
     ModelStats{modelUnknownPreds} <- getModelStats rawPredictorId
 
@@ -107,7 +108,7 @@ loadPredictor PConfig{..} = do
     lookupMisprediction <-
         getMispredictionStrategy pConfigModelId pConfigStrategy
 
-    rawLoad defaultImpl lookupMisprediction pConfigModelId
+    rawLoad pConfigModelName defaultImpl lookupMisprediction pConfigModelId
   where
     defaultImpl :: Int
     defaultImpl = fromIntegral $ fromSqlKey pConfigDefaultImpl
