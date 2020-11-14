@@ -583,6 +583,18 @@ struct SwitchImplementation : public AlgorithmBase
         }
     };
 
+    struct impl_id
+    {
+        int64_t id;
+        std::string name;
+
+        impl_id() : id(-1), name("")
+        {}
+
+        impl_id(int64_t i, std::string s) : id(i), name(s)
+        {}
+    };
+
     SwitchImplementation(KernelMap ks)
       : SwitchImplementation(ks, std::index_sequence_for<Kernels...>())
     {}
@@ -703,7 +715,7 @@ struct SwitchImplementation : public AlgorithmBase
             }
 
             defaultKernel = 0;
-            implNames.emplace_back("edge-list");
+            implIds.emplace_back(-1, "edge-list");
             implementations.emplace_back(kernels);
         }
 
@@ -729,7 +741,7 @@ struct SwitchImplementation : public AlgorithmBase
     {
         defaultKernel = -1;
         lastKernel = -1;
-        implNames.clear();
+        implIds.clear();
         implementations.clear();
 
         if (modelHandle) {
@@ -756,7 +768,7 @@ struct SwitchImplementation : public AlgorithmBase
     setupPredictor
     (const char * const lib, prop_set& graphProps, prop_set& algoProps)
     {
-        typedef std::tuple<std::string,size_t,size_t,size_t> impl_tuple;
+        typedef std::tuple<std::string,int64_t,size_t,size_t,size_t> impl_tuple;
         typedef std::reference_wrapper<double> double_ref;
         typedef const std::vector<impl_tuple> implementations_t;
         typedef const std::map<std::string,double_ref> properties;
@@ -788,12 +800,12 @@ struct SwitchImplementation : public AlgorithmBase
             }
         }
 
-        implNames.resize(impls.size());
+        implIds.resize(impls.size());
         implementations.resize(impls.size());
         for (auto& data : impls) {
-            auto& [ name, idx, warpRef, chunkRef ] = data;
+            auto& [ name, implId, idx, warpRef, chunkRef ] = data;
             try {
-                implNames[idx] = name;
+                implIds[idx] = impl_id(implId, name);
                 implementations[idx] = { kernelMap.at(name) };
 
                 auto warp = warpRef;
@@ -825,9 +837,8 @@ struct SwitchImplementation : public AlgorithmBase
                 else result = lastKernel;
             }
 
-            propLog << "prediction:" << stepNum << ":" << result << " ("
-                    << implNames[static_cast<size_t>(result)] << ")"
-                    << std::endl;
+            propLog << "prediction:" << stepNum << ":"
+                    << implIds[static_cast<size_t>(result)].id << std::endl;
             return result;
         };
 
@@ -887,7 +898,7 @@ struct SwitchImplementation : public AlgorithmBase
     int32_t lastKernel;
     int32_t defaultKernel;
 
-    std::vector<std::string> implNames;
+    std::vector<struct impl_id> implIds;
     std::vector<std::tuple<Kernels...>> implementations;
     std::map<std::string,std::tuple<Kernels...>> kernelMap;
 

@@ -124,8 +124,8 @@ mkImplMapping implIndices defImpl = do
 extern "C" const int32_t default_impl;
 extern "C" const int32_t default_impl = #{defaultImpl};
 
-extern "C" const std::vector<std::tuple<std::string,size_t,size_t,size_t>> implNames;
-extern "C" const std::vector<std::tuple<std::string,size_t,size_t,size_t>>
+extern "C" const std::vector<std::tuple<std::string,int64_t,size_t,size_t,size_t>> implNames;
+extern "C" const std::vector<std::tuple<std::string,int64_t,size_t,size_t,size_t>>
 implNames = {
 |] <> implEntries <> [i|};|]
   where
@@ -134,7 +134,8 @@ implNames = {
         implName <- implementationName <$> Sql.getJust implId
         let (kernelName, warpConfig) = kernelConfig implName
         return $ mconcat
-            [ "    std::make_tuple( \"" , kernelName , "\", " , decimal idx
+            [ "    std::make_tuple( \"" , kernelName , "\", " 
+            , fromText (showSqlKey implId), ", ", decimal idx
             , ", ", warpConfig, " ),\n" ]
 
     kernelConfig :: Text -> (Builder, Builder)
