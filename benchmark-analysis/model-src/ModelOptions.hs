@@ -9,7 +9,7 @@
 {-# LANGUAGE TypeFamilies #-}
 module ModelOptions
     ( ModelCommand(..)
-    , PredictorExport(..)
+    , ExportType(..)
     , commands
     , runCommand
     ) where
@@ -57,7 +57,7 @@ import Query.Train
 import qualified Query.Train as Train
 import Query.Variant
 
-data PredictorExport = CppFile FilePath | SharedLib FilePath
+data ExportType = CppFile | SharedLib
 
 data ModelCommand
     = Train
@@ -85,8 +85,9 @@ data ModelCommand
       , compareConfig :: CompareReport
       }
     | ExportPredictor
-      { getPredictorConfig :: SqlM PredictorConfig
-      , exportOutput :: PredictorExport
+      { exportType :: ExportType
+      , getPredictorConfig :: SqlM PredictorConfig
+      , exportOutput :: Maybe FilePath
       }
 
 commands :: CommandRoot ModelCommand
@@ -167,24 +168,26 @@ commands = CommandRoot
         { commandName = "export"
         , commandHeaderDesc = "export model"
         , commandDesc = "Export BDT model"
-        } (ExportPredictor <$> predictorConfigParser <*> (SharedLib <$> soFile))
+        }
+        $ ExportPredictor SharedLib <$> predictorConfigParser
+                                    <*> optional soFile
     , SingleCommand CommandInfo
         { commandName = "export-source"
         , commandHeaderDesc = "export model C++ source"
         , commandDesc = "Export BDT model to C++ source"
-        } (ExportPredictor <$> predictorConfigParser <*> (CppFile <$> cppFile))
+        }
+        $ ExportPredictor CppFile <$> predictorConfigParser
+                                  <*> optional cppFile
     ]
   }
   where
     soFile :: Parser FilePath
     soFile = strArgument . mconcat $
-        [ metavar "FILE", value "model.so"
-        , showDefaultWith id, help "Shared library file to create." ]
+        [ metavar "FILE", help "Shared library file to create." ]
 
     cppFile :: Parser FilePath
     cppFile = strArgument . mconcat $
-        [ metavar "FILE", value "model.cpp"
-        , showDefaultWith id, help "C++ file to write predictor to." ]
+        [ metavar "FILE", help "C++ file to write predictor to." ]
 
 getGraphProps :: SqlM (Map Text (Key PropertyName))
 getGraphProps = Sql.selectSource [PropertyNameIsStepProp ==. False] [] $

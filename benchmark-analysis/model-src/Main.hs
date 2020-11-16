@@ -142,12 +142,21 @@ main = runCommand commands $ \case
         variantInfoConfig <- getVariantInfoConfig
         compareImplementations variantInfoConfig compareConfig
 
-    ExportPredictor{getPredictorConfig,exportOutput} -> do
+    ExportPredictor{exportType,getPredictorConfig,exportOutput} -> do
         predictor <- getPredictorConfig >>= loadPredictor
         modelSrc <- predictorToCxx predictor
 
-        case exportOutput of
-            CppFile outFile -> liftIO $ LT.writeFile outFile modelSrc
-            SharedLib outFile -> do
+        let fileSuffix = case exportType of
+                SharedLib -> ".so"
+                CppFile -> ".cpp"
+
+            outFile = case exportOutput of
+                Nothing -> T.unpack . T.replace ":" "." $
+                    rawPredictorName predictor <> fileSuffix
+                Just s -> s
+
+        case exportType of
+            CppFile -> liftIO $ LT.writeFile outFile modelSrc
+            SharedLib -> do
                 cxxWrapper <- getCxxCompilerWrapper outFile
                 withStdin cxxWrapper $ \hnd -> liftIO $ LT.hPutStr hnd modelSrc

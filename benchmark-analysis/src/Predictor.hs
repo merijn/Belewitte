@@ -11,7 +11,7 @@ module Predictor
     , MispredictionStrategy
     , Model.Model
     , PredictorConfig
-    , RawPredictor(rawPredictorId)
+    , RawPredictor(rawPredictorId,rawPredictorName)
     , RawPrediction(..)
     , Model.byteStringToModel
     , cookPredictor
