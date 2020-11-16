@@ -84,10 +84,14 @@ data ModelCommand
       { getVariantInfoConfig :: SqlM VariantInfoConfig
       , compareConfig :: CompareReport
       }
-    | ExportPredictor
+    | PredictorExport
       { exportType :: ExportType
       , getPredictorConfig :: SqlM PredictorConfig
       , exportOutput :: Maybe FilePath
+      }
+    | MultiPredictorExport
+      { exportType :: ExportType
+      , getPredictorConfigs :: SqlM [PredictorConfig]
       }
 
 commands :: CommandRoot ModelCommand
@@ -169,15 +173,27 @@ commands = CommandRoot
         , commandHeaderDesc = "export model"
         , commandDesc = "Export BDT model"
         }
-        $ ExportPredictor SharedLib <$> predictorConfigParser
+        $ PredictorExport SharedLib <$> predictorConfigParser
                                     <*> optional soFile
     , SingleCommand CommandInfo
         { commandName = "export-source"
         , commandHeaderDesc = "export model C++ source"
         , commandDesc = "Export BDT model to C++ source"
         }
-        $ ExportPredictor CppFile <$> predictorConfigParser
+        $ PredictorExport CppFile <$> predictorConfigParser
                                   <*> optional cppFile
+    , SingleCommand CommandInfo
+        { commandName = "multi-export"
+        , commandHeaderDesc = "export multiple models"
+        , commandDesc = "Export multiple BDT models"
+        }
+        $ MultiPredictorExport SharedLib <$> predictorConfigsParser
+    , SingleCommand CommandInfo
+        { commandName = "multi-export-source"
+        , commandHeaderDesc = "export multiple models to C++ source"
+        , commandDesc = "Export multiple BDT models to C++ source"
+        }
+        $ MultiPredictorExport CppFile <$> predictorConfigsParser
     ]
   }
   where

@@ -77,6 +77,29 @@ reportModelStats ModelStats{..} = do
     sortedUnknown = sortBy (flip (comparing unknownSetOccurence))
                   $ M.elems modelUnknownPreds
 
+exportPredictor :: ExportType -> Maybe FilePath -> PredictorConfig -> SqlM ()
+exportPredictor exportType exportOutput predConfig = do
+    predictor <- loadPredictor predConfig
+    modelSrc <- predictorToCxx predictor
+
+    let predName = rawPredictorName predictor
+
+    case exportType of
+        CppFile -> liftIO $ LT.writeFile (outputFile predName) modelSrc
+        SharedLib -> do
+            cxxWrapper <- getCxxCompilerWrapper (outputFile predName)
+            withStdin cxxWrapper $ \hnd -> liftIO $ LT.hPutStr hnd modelSrc
+  where
+    outputFile :: Text -> FilePath
+    outputFile modelName = case exportOutput of
+        Just s -> s
+        Nothing -> T.unpack . T.replace ":" "." $ modelName <> fileSuffix
+
+    fileSuffix :: Text
+    fileSuffix = case exportType of
+        SharedLib -> ".so"
+        CppFile -> ".cpp"
+
 main :: IO ()
 main = runCommand commands $ \case
     Train{getConfig} -> runInput $ do
@@ -142,21 +165,10 @@ main = runCommand commands $ \case
         variantInfoConfig <- getVariantInfoConfig
         compareImplementations variantInfoConfig compareConfig
 
-    ExportPredictor{exportType,getPredictorConfig,exportOutput} -> do
-        predictor <- getPredictorConfig >>= loadPredictor
-        modelSrc <- predictorToCxx predictor
+    PredictorExport{exportType,getPredictorConfig,exportOutput} -> do
+        predictorConfig <- getPredictorConfig
+        exportPredictor exportType exportOutput predictorConfig
 
-        let fileSuffix = case exportType of
-                SharedLib -> ".so"
-                CppFile -> ".cpp"
-
-            outFile = case exportOutput of
-                Nothing -> T.unpack . T.replace ":" "." $
-                    rawPredictorName predictor <> fileSuffix
-                Just s -> s
-
-        case exportType of
-            CppFile -> liftIO $ LT.writeFile outFile modelSrc
-            SharedLib -> do
-                cxxWrapper <- getCxxCompilerWrapper outFile
-                withStdin cxxWrapper $ \hnd -> liftIO $ LT.hPutStr hnd modelSrc
+    MultiPredictorExport{exportType,getPredictorConfigs} -> do
+        predictorConfigs <- getPredictorConfigs
+        mapM_ (exportPredictor exportType Nothing) predictorConfigs
