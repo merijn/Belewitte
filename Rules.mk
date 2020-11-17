@@ -1,21 +1,22 @@
 $(DEST)/:
 	$(AT)mkdir -p $@
 
-$(DEST)/%.o: $(SRCDIR)/%.cpp | $(DEST)/
+.SECONDEXPANSION:
+$(DEST)/%.o: $(SRCDIR)/%.cpp | $$(dir $(DEST)/%.o)
 	$(PRINTF) " CXX\t$*.cpp\n"
 	$(AT)$(CXX) $(CXXFLAGS) -O3 -I. $< -c -o $@
 
-define make-static =
+define make-static
 $(PRINTF) " AR\t$(subst ../$(BUILD)/,,$@)\n"
 $(AT)$(AR) rcs $@ $^
 endef
 
-define make-dynamic =
+define make-dynamic
 $(PRINTF) " LD\t$@\n"
 $(AT)$(LD) $(DYLIBLDFLAGS) -shared -o $@ $^
 endef
 
-define make-cuda-lib =
+define make-cuda-lib
 $(PRINTF) " NVLINK\t$@\n"
 $(AT)$(NVLINK) $(NVCCXXFLAGS) --device-link $^ --output-file $@
 endef
