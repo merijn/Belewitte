@@ -224,7 +224,7 @@ processTiming
     -> Result (Key Algorithm, Key Implementation, Hash, Int)
     -> m ()
 processTiming runConfigId commit result@Result{..} = do
-    logDebugNS "Timing#Start " resultLabel
+    logDebugNS "Timing#Start" resultLabel
     time <- liftIO getCurrentTime
     resultHash <- computeHash outputFile
     ProcessPool.cleanupProperties result
