@@ -1,9 +1,0 @@
--isystem/home/mverstra/opt/include/
--I/home/mverstra/opt/include/
--isystem/cm/shared/apps/cuda90/toolkit/9.0.176/targets/x86_64-linux/include/
--Wno-exit-time-destructors
--Wno-global-constructors
--Wno-reserved-id-macro
--I.
--I..
--std=c++17
