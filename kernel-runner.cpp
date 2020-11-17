@@ -237,8 +237,10 @@ runJob
     for (auto graph : graphs) {
         auto label = tag.empty() ? path(graph).stem().string() : tag;
         auto basePath = outputDir / path(label);
-        auto timeFile = basePath.replace_extension("timings");
-        auto outputFile = basePath.replace_extension("output");
+        basePath += ".timings";
+
+        auto timeFile = basePath;
+        auto outputFile = basePath.replace_extension(".output");
         if (noOutput) {
             timeFile = "/dev/null";
             outputFile = "/dev/null";
