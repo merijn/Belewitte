@@ -7,14 +7,14 @@ Bug-Reports:
 
 Author:              Merijn Verstraaten
 Maintainer:          Merijn Verstraaten <merijn@inconsistent.nl>
-Copyright:           Copyright © 2017-2019 Merijn Verstraaten
+Copyright:           Copyright © 2017-2020 Merijn Verstraaten
 
 License:             GPL-3.0-or-later
 License-File:        LICENSE
 
 Category:            System
 Build-Type:          Simple
-Tested-With:         GHC == 8.6
+Tested-With:         GHC == 8.10
 
 Synopsis:            
 
