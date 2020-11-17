@@ -150,7 +150,7 @@ endif
                    -Wno-deprecated-gpu-targets
 endif
 
-$(BUILD)/kernels/ $(DOWNLOAD)/ $(PREFIX)/:
+$(BUILD)/kernels/ $(DOWNLOAD)/ $(PREFIX)/ $(TARGET)/:
 	$(PRINTF) " MKDIR\t$@\n"
 	$(AT)mkdir -p $@
 
@@ -212,6 +212,17 @@ haskell-%: $(CABALCONFIG) $(CABALFREEZE)
 	$(PRINTF) " CABAL\t$@\n"
 	$(AT)$(CABAL) --builddir="$(abspath $(BUILD)/haskell/)" \
 	    v2-build $* $(if $(AT),2>/dev/null >/dev/null,)
+
+.PHONY: install-%
+install-%: $(CABALCONFIG) $(CABALFREEZE) | $(TARGET)/
+ifdef TARGET
+	$(PRINTF) " CABAL\t$@\n"
+	$(AT)cp $$($(CABAL) --builddir="$(abspath $(BUILD)/haskell/)" \
+	    v2-exec -- command -v $*) $(TARGET)/ \
+	    $(if $(AT),2>/dev/null >/dev/null,)
+else
+	$(PRINTF) "TARGET is not set.\n"
+endif
 endif
 
 BOOST_VERSION:=1.70.0
