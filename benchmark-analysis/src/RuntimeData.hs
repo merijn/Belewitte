@@ -101,6 +101,7 @@ checkVirtualEnv virtualEnv requirements = do
         logInfoN $ "Initialising virtualenv"
         pipExe <- liftIO $ getDataFileName "runtime-data/virtualenv/bin/pip3"
         runProcess_ pipExe ["install", "--upgrade", "pip"]
+        runProcess_ pipExe ["install", "wheel"]
         runProcess_ pipExe ["install", "-r", requirements]
         liftIO $ BS.writeFile initialisedFile (ByteArray.convert reqHash)
             `Catch.onError` tryRemoveFile initialisedFile
