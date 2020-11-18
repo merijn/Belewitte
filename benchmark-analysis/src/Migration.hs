@@ -22,6 +22,8 @@ import Schema
 import Sql.Core (Migration, MonadSql, Transaction)
 import qualified Sql.Core as Sql
 
+data MigrationSafety = MigrateSafe | MigrateUnsafe
+
 showText :: Show a => a -> Text
 showText = T.pack . show
 
@@ -66,30 +68,37 @@ validateSchema _ v
 
 validateSchema migrateSchema version
     | not migrateSchema = logThrowM $ MigrationNeeded version
-    | otherwise = True <$ do
-      Sql.runTransaction checkForeignKeys
+    | otherwise = True <$ migrateFromTo MigrateSafe version schemaVersion
 
-      Log.logInfoN $ "Migrating schema."
-      forM_ [version..schemaVersion - 1] $ \n -> do
-          Log.logInfoN $ mconcat
-              [ "Migrating file from schema version ", showText n
-              , " to version " , showText (n+1), "." ]
+migrateFromTo
+    :: (MonadLogger m, MonadMask m, MonadSql m)
+    => MigrationSafety -> Int64 -> Int64 -> m ()
+migrateFromTo safety originalVersion finalVersion = do
+    case safety of
+        MigrateUnsafe -> return ()
+        MigrateSafe -> Sql.runTransaction checkForeignKeys
 
-          reportMigrationFailure n . Sql.runTransactionWithoutForeignKeys $ do
-              migration <- updateSchemaToVersion (n+1)
-              Sql.runMigrationUnsafeQuiet migration
-              updateIndicesToVersion (n+1)
+    Log.logInfoN $ "Migrating schema."
+    forM_ [originalVersion..finalVersion - 1] $ \n -> do
+        Log.logInfoN $ mconcat
+            [ "Migrating file from schema version ", showText n
+            , " to version " , showText (n+1), "." ]
 
-              checkSchema migration `catch` migrationFailed
+        reportMigrationFailure n . Sql.runTransactionWithoutForeignKeys $ do
+            migration <- updateSchemaToVersion (n+1)
+            Sql.runMigrationUnsafeQuiet migration
+            updateIndicesToVersion (n+1)
 
-              checkForeignKeys
+            checkSchema migration `catch` migrationFailed
 
-              Sql.setPragma "user_version" (n + 1 :: Int64)
+            checkForeignKeys
 
-          Log.logInfoN $ mconcat
-              [ "Succesfully migrated to version ", showText (n+1), "!"]
+            Sql.setPragma "user_version" (n + 1 :: Int64)
 
-      Log.logInfoN $ "Migration complete!"
+        Log.logInfoN $ mconcat
+            [ "Succesfully migrated to version ", showText (n+1), "!"]
+
+    Log.logInfoN $ "Migration complete!"
   where
     reportMigrationFailure
         :: (MonadLogger m, MonadMask m) => Int64 -> m a -> m a
