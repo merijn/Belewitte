@@ -2,7 +2,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-module Migration (checkMigration) where
+module Migration (MigrationSafety(..), checkMigration, migrateTo) where
 
 import Control.Monad (forM_, unless, when)
 import Control.Monad.Catch (MonadMask, MonadThrow, catch, onError)
@@ -69,6 +69,23 @@ validateSchema _ v
 validateSchema migrateSchema version
     | not migrateSchema = logThrowM $ MigrationNeeded version
     | otherwise = True <$ migrateFromTo MigrateSafe version schemaVersion
+
+migrateTo
+    :: (MonadLogger m, MonadMask m, MonadSql m)
+    => MigrationSafety -> Int64 -> m ()
+migrateTo safety targetVersion
+  | targetVersion > schemaVersion = logThrowM $ TooNew targetVersion
+  | otherwise = do
+    tableCount <- Sql.querySingleValue "SELECT COUNT(*) FROM sqlite_master" []
+    when (tableCount == (0 :: Int)) $ do
+        Log.logErrorN "Cannot migrate freshly initialised database!"
+        logThrowM AbortMigration
+
+    version <- Sql.querySingleValue "PRAGMA user_version" []
+    case compare version targetVersion of
+        GT -> Log.logErrorN "Schema newer than requested!"
+        EQ -> Log.logInfoN "Schema already at requested version!"
+        LT -> migrateFromTo safety version targetVersion
 
 migrateFromTo
     :: (MonadLogger m, MonadMask m, MonadSql m)

@@ -11,16 +11,18 @@ import Data.Map (Map)
 import qualified Data.Map as M
 import qualified Data.Text as T
 import Numeric (showGFloat)
+import Text.Read (readMaybe)
 
 import Commands
 import Core
 import FormattedOutput (renderOutput, renderRegionOutput)
 import InteractiveInput
+import Migration (MigrationSafety(..))
 import OptionParsers
 import Query (Converter(Simple), Query(..))
 import qualified Query
 import Query.Variant (VariantInfo, variantInfoQuery)
-import Schema (PersistValue(..))
+import Schema (PersistValue(..), schemaVersion)
 
 data DebugQuery where
     DebugQuery :: Show v => SqlM (Query v) -> DebugQuery
@@ -28,7 +30,7 @@ data DebugQuery where
 commands
     :: (FilePath -> SqlM ())
     -> Map String (Parser DebugQuery)
-    -> Command (SqlM ())
+    -> Command (WorkInput a)
 commands dumpCommand queryMap = HiddenGroup CommandInfo
     { commandName = "debug"
     , commandHeaderDesc = "debug and testing commands"
@@ -41,12 +43,19 @@ commands dumpCommand queryMap = HiddenGroup CommandInfo
             , commandHeaderDesc = "dump query results to file"
             , commandDesc = "Dump the query results to files"
             }
-            $ dumpCommand <$> suffixParser
+            $ BuiltInCommand . dumpCommand <$> suffixParser
+        , SingleCommand CommandInfo
+            { commandName = "migrate"
+            , commandHeaderDesc = "migrate to a specific schema version"
+            , commandDesc =
+                "Migrate the database to a specific version of the schema"
+            } migrationParser
         , CommandGroup CommandInfo
             { commandName = "interactive"
             , commandHeaderDesc = "interactive queries from commandline"
             , commandDesc = "Interactively read queries from commandline"
             }
+            $ map (fmap BuiltInCommand)
             [ SingleCommand CommandInfo
                 { commandName = "count"
                 , commandHeaderDesc = "print query result count to stdout"
@@ -77,7 +86,7 @@ commands dumpCommand queryMap = HiddenGroup CommandInfo
                 }
                 $ pure (runInput timeQuery)
             ]
-        ] ++ buildQueryList debugQueryCommand
+        ] ++ map (fmap BuiltInCommand) (buildQueryList debugQueryCommand)
 
     completeQueryMap :: Map String (Parser DebugQuery)
     completeQueryMap =
@@ -98,6 +107,35 @@ commands dumpCommand queryMap = HiddenGroup CommandInfo
     suffixParser :: Parser String
     suffixParser = argument (maybeReader suffixReader) . mconcat $
         [ metavar "SUFFIX" ]
+
+migrationParser :: Parser (WorkInput a)
+migrationParser = ManualMigration <$> safetyFlag <*> targetVersion
+  where
+    safetyFlag :: Parser MigrationSafety
+    safetyFlag = flag MigrateSafe MigrateUnsafe $ mconcat
+        [ long "unsafe", help "Perform migration without checking foreign key\
+        \ constraints first."
+        ]
+
+    targetVersion :: Parser Int64
+    targetVersion = argument (eitherReader idReader) $ mconcat
+        [ metavar "ID", help "Version to migrate the database to." ]
+      where
+        idReader :: String -> Either String Int64
+        idReader s = case readMaybe s of
+            Nothing -> Left "Schema version must be numeric."
+            Just i -> checkVersion i
+
+        checkVersion :: Int64 -> Either String Int64
+        checkVersion i | i <= 0 = Left $ mconcat
+            [ "Schema version must be between 1 and ", show schemaVersion ]
+
+        checkVersion i | i > schemaVersion = Left $ mconcat
+            [ "Target version ", show i
+            , " is newer than latest schema version ", show schemaVersion
+            ]
+
+        checkVersion i = Right i
 
 debugQueryCommand :: String -> Parser DebugQuery -> Command (SqlM ())
 debugQueryCommand name flags = CommandGroupWithFlags CommandInfo

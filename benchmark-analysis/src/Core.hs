@@ -16,6 +16,7 @@ module Core
     , fromSqlKey
     , toSqlKey
     , showSqlKey
+    , WorkInput(..)
     , MonadIO(liftIO)
     , lift
     , MonadLogger
@@ -170,6 +171,11 @@ withTime act = do
 
 data Pager = Never | Auto | Always deriving (Show)
 
+data WorkInput a
+    = ManualMigration MigrationSafety Int64
+    | BuiltInCommand (SqlM ())
+    | WorkInput a
+
 data Options a =
   Options
     { database :: Text
@@ -181,7 +187,7 @@ data Options a =
     , migrateSchema :: Bool
     , pager :: Pager
     , bellWhenDone :: Bool
-    , task :: a
+    , workInput :: WorkInput a
     }
 
 pagerSetting :: SqlM Pager
@@ -249,13 +255,22 @@ topLevelHandler exc
     renderError p =
         Pretty.renderIO System.stderr . Pretty.layoutPretty (LayoutOptions p)
 
-runSqlMWithOptions :: Options a -> (a -> SqlM b) -> IO b
+runSqlMWithOptions :: forall a . Options a -> (a -> SqlM ()) -> IO ()
 runSqlMWithOptions Options{..} work = do
     initialiseSqlite
     setUncaughtExceptionHandler topLevelHandler
     getNumProcessors >>= setNumCapabilities
-    result <- runSqlM . wrapSqliteExceptions $ do
+    runSqlM . wrapSqliteExceptions $ runWork workInput
 
+    when bellWhenDone (System.hPutStr System.stderr "\a")
+  where
+    runWork :: WorkInput a -> SqlM ()
+    runWork (ManualMigration safety version) = migrateTo safety version
+    runWork (WorkInput input) = withMigration $ work input
+    runWork (BuiltInCommand act) = withMigration act
+
+    withMigration :: SqlM () -> SqlM ()
+    withMigration act = do
         didMigrate <- checkMigration migrateSchema
 
         -- Compacts and reindexes the database when request
@@ -264,21 +279,17 @@ runSqlMWithOptions Options{..} work = do
             let conn = Sqlite.unsafeAcquireSqlConnFromPool pool
             withAcquire conn $ runReaderT (Sqlite.rawExecute "VACUUM" [])
 
-        workResult <- work task
+        act
 
         -- Runs the ANALYZE command and updates query planner
         runTransaction $ executeSql "PRAGMA optimize"
 
-        return workResult
-
-    result <$ when bellWhenDone (System.hPutStr System.stderr "\a")
-  where
-    runSqlM :: SqlM a -> IO a
+    runSqlM :: SqlM () -> IO ()
     runSqlM sqlAct = do
         ref <- newIORef $ BS.hPutStr System.stderr
         runStack ref . runPool $ runReaderT (unSqlM sqlAct)
       where
-        runStack :: IORef (ByteString -> IO ()) -> CoreM a -> IO a
+        runStack :: IORef (ByteString -> IO ()) -> CoreM r -> IO r
         runStack ref (CoreM act) = runResourceT . runReaderT act $ config ref
 
         config :: IORef (ByteString -> IO ()) -> Config
@@ -286,7 +297,7 @@ runSqlMWithOptions Options{..} work = do
 
         runPool
             :: (MonadLogger m, MonadUnliftIO m, MonadThrow m)
-            => (SqlPool -> m a) -> m a
+            => (SqlPool -> m r) -> m r
         runPool = Sqlite.withRawSqlitePoolInfo connInfo setup 20
 
         setup

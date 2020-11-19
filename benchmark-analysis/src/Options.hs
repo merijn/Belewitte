@@ -79,7 +79,7 @@ runCommandRoot CommandRoot{..} work progName = do
     let parsePrefs = prefs $ columns cols
 
     config <- customExecParser parsePrefs parseInfo
-    runSqlMWithOptions config (either id work)
+    runSqlMWithOptions config work
   where
     mainCommand :: Command a
     mainCommand = case mainCommands of
@@ -99,7 +99,7 @@ runCommandRoot CommandRoot{..} work progName = do
                 } parser
                 $ map (fmap (&)) cmds
 
-    debugCommand :: Command (SqlM ())
+    debugCommand :: Command (WorkInput a)
     debugCommand = CommandGroup CommandInfo
         { commandName = progName
         , commandHeaderDesc = mainHeaderDesc
@@ -107,16 +107,16 @@ runCommandRoot CommandRoot{..} work progName = do
         }
         $ [Debug.commands mainQueryDump mainQueryMap]
 
-    parseInfo :: ParserInfo (Options (Either (SqlM ()) a))
+    parseInfo :: ParserInfo (Options a)
     parseInfo = info (optionParser <**> helper) helpInfo
 
-    mainParser :: Parser (Either (SqlM ()) a)
-    (mainParser, helpInfo) = buildCommand $ Right <$> mainCommand
+    mainParser :: Parser (WorkInput a)
+    (mainParser, helpInfo) = buildCommand $ WorkInput <$> mainCommand
 
-    debugParser :: Parser (Either (SqlM ()) a)
-    (debugParser, _) = buildCommand $ Left <$> debugCommand
+    debugParser :: Parser (WorkInput a)
+    (debugParser, _) = buildCommand debugCommand
 
-    optionParser :: Parser (Options (Either (SqlM ()) a))
+    optionParser :: Parser (Options a)
     optionParser =
       Options <$> databaseOption <*> vacuumOption <*> verbosityOption
               <*> debugOption <*> explainOption <*> queryLogOption
