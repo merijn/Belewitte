@@ -13,13 +13,14 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Schema.UnknownPredictions where
 
+import Control.Monad (unless)
+import Data.Maybe (fromMaybe)
 import Data.String.Interpolate.IsString (i)
 import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Schema.Utils
-    (EntityDef, ForeignDef, Int64, MonadSql, Transaction, (.=), (.>))
+import Schema.Utils (EntityDef, ForeignDef, Int64, MonadSql, Transaction, (.>))
 import qualified Schema.Utils as Utils
 
 import Schema.Algorithm (AlgorithmId)
@@ -61,7 +62,30 @@ schema = Utils.addForeignRef "UnknownPrediction" model
 
 migrations :: MonadSql m => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup
-    [ 0 .= V0.schema
+    [ 0 .> V0.schema $ do
+        isRenamed <- fromMaybe False <$> Utils.executeSqlSingleValue [i|
+SELECT 1
+FROM "sqlite_master"
+WHERE type = 'table' AND name = 'UnknownPrediction'
+|]
+        unless isRenamed $ do
+            Utils.executeSql [i|
+ALTER TABLE "ModelUnknown"
+RENAME COLUMN "unknownCount" TO "count"
+|]
+
+            Utils.executeSql [i|
+ALTER TABLE "ModelUnknown"
+RENAME TO "UnknownPrediction"
+|]
+
+            Utils.executeSql [i|
+ALTER TABLE "UnknownSet"
+RENAME COLUMN "modelUnknownId" TO "unknownPredId"
+|]
+
+        return ()
+
     , 9 .> V1.schema $ do
         Utils.executeSql [i|
 ALTER TABLE "UnknownPrediction"

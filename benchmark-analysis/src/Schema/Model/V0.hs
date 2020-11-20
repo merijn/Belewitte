@@ -23,8 +23,8 @@ TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
 PredictionModel
     platformId PlatformId
     model Model
-    trainFraction Double
-    trainSeed Int
+    trainFraction Double default=0
+    trainSeed Int default=42
     totalUnknownCount Int
-    timestamp UTCTime
+    timestamp UTCTime default="(strftime('%Y-%m-%dT%H:%M:%f',1,'unixepoch'))"
 |]

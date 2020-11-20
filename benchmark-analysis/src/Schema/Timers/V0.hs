@@ -30,7 +30,7 @@ TotalTimer
     avgTime Double
     maxTime Double
     stdDev Double
-    timestamp UTCTime
+    timestamp UTCTime default="(strftime('%Y-%m-%dT%H:%M:%f',0,'unixepoch'))"
     wrongResult Hash Maybe
     Primary platformId variantId implId name
     deriving Eq Show
@@ -45,7 +45,7 @@ StepTimer
     avgTime Double
     maxTime Double
     stdDev Double
-    timestamp UTCTime
+    timestamp UTCTime default="(strftime('%Y-%m-%dT%H:%M:%f',0,'unixepoch'))"
     wrongResult Hash Maybe
     Primary platformId variantId stepId implId name
     deriving Eq Show

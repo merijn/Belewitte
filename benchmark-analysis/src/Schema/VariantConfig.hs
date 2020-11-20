@@ -48,7 +48,7 @@ instance PrettyFields VariantConfig where
 migrations :: MonadSql m => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup
     [ 7 .> V0.schema $ do
-        Utils.createTableFromSchema schema
+        Utils.createTableFromSchema V0.schema
 
         Utils.executeSql [i|
 INSERT INTO "VariantConfig"

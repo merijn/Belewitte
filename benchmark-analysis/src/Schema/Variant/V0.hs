@@ -25,8 +25,8 @@ Variant
     name Text
     flags Text Maybe
     result Hash Maybe
-    propsStored Bool
-    retryCount Int
+    propsStored Bool default=0
+    retryCount Int default=0
     UniqVariant graphId algorithmId name
     deriving Eq Show
 |]
