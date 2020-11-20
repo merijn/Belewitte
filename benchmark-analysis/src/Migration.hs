@@ -96,33 +96,38 @@ migrateFromTo safety originalVersion finalVersion = do
         MigrateSafe -> Sql.runTransaction checkForeignKeys
 
     Log.logInfoN $ "Migrating schema."
-    forM_ [originalVersion..finalVersion - 1] $ \n -> do
+    forM_ [startVersion..finalVersion - 1] $ \n -> do
         Log.logInfoN $ mconcat
-            [ "Migrating file from schema version ", showText n
-            , " to version " , showText (n+1), "." ]
+            [ "Migrating file from schema version ", showText (n-1)
+            , " to version " , showText n, "." ]
 
         reportMigrationFailure n . Sql.runTransactionWithoutForeignKeys $ do
-            migration <- updateSchemaToVersion (n+1)
+            migration <- updateSchemaToVersion n
             Sql.runMigrationUnsafeQuiet migration
-            updateIndicesToVersion (n+1)
+            updateIndicesToVersion n
 
             checkSchema migration `catch` migrationFailed
 
             checkForeignKeys
 
-            Sql.setPragma "user_version" (n + 1 :: Int64)
+            Sql.setPragma "user_version" n
 
         Log.logInfoN $ mconcat
-            [ "Succesfully migrated to version ", showText (n+1), "!"]
+            [ "Succesfully migrated to version ", showText n, "!"]
 
     Log.logInfoN $ "Migration complete!"
   where
+    startVersion :: Int64
+    startVersion
+        | originalVersion == 0 = 0
+        | otherwise = originalVersion + 1
+
     reportMigrationFailure
         :: (MonadLogger m, MonadMask m) => Int64 -> m a -> m a
     reportMigrationFailure n act = onError act $ do
         Log.logErrorN $ mconcat
-            [ "Migration failed while migrating to version ", showText (n+1)
-            , ".\nRolling back to version ", showText n
+            [ "Migration failed while migrating to version ", showText n
+            , ".\nRolling back to version ", showText (n - 1)
             ]
 
     migrationFailed :: (MonadLogger m, MonadThrow m) => SchemaWrong -> m a
