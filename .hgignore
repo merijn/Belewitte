@@ -13,3 +13,4 @@ plotting/graph-edges
 cabal.project.local
 cabal.project
 cabal.project.freeze
+dist-newstyle/
