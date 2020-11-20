@@ -21,6 +21,7 @@ module Sql.Core
     , runRegionConduit
     , conduitQuery
     , executeSql
+    , executeSqlSingleValue
     , getMigration
     , querySingleValue
     , runMigrationQuiet
@@ -64,7 +65,6 @@ module Sql.Core
 
 import Control.Monad (join, void)
 import Control.Monad.Catch (MonadThrow, MonadCatch, MonadMask, handle, throwM)
-import Control.Monad.Fail (MonadFail)
 import Control.Monad.IO.Unlift (MonadIO(liftIO))
 import Control.Monad.Logger (MonadLogger, MonadLoggerIO, logErrorN)
 import Control.Monad.Reader (ReaderT, asks, runReaderT, withReaderT)
@@ -235,6 +235,14 @@ setPragmaConn pragma val = runReaderT (Sqlite.rawExecute query [])
 executeSql :: MonadSql m => Text -> Transaction m ()
 executeSql query = Transaction $ Sqlite.rawExecute query []
 
+executeSqlSingleValue
+    :: (MonadSql m, PersistField a) => Text -> Transaction m (Maybe a)
+executeSqlSingleValue query = Transaction $ do
+    result <- Sqlite.rawSql query []
+    case result of
+        [Single v] -> return $ Just v
+        _ -> return Nothing
+
 sinkQuery
     :: MonadResource m
     => Text
@@ -319,6 +327,7 @@ querySingleValue
 querySingleValue query args = runTransaction . Transaction $ do
     result <- Sqlite.rawSql query args
     case result of
+        [] -> logThrowM QueryReturnedZeroResults
         [Single v] -> return v
         _ -> logThrowM $ ExpectedSingleValue query
 

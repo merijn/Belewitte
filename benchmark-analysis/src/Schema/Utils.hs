@@ -12,7 +12,8 @@ module Schema.Utils
     , Int64
     , (.=)
     , (.>)
-    , executeSql
+    , Sql.executeSql
+    , Sql.executeSqlSingleValue
     , createTableFromSchema
     , mkForeignRef
     , addForeignRef
@@ -29,7 +30,8 @@ import Database.Persist.TH (embedEntityDefs)
 import Database.Persist.Types
     (DBName(..), EntityDef(..), ForeignDef(..), HaskellName(..))
 
-import Sql.Core (MonadSql, Transaction, executeSql, runMigrationQuiet)
+import Sql.Core (MonadSql, Transaction)
+import qualified Sql.Core as Sql
 
 (.=) :: Applicative f => a -> b -> (a, (b, f ()))
 (.=) i schema = (i, (schema, pure ()))
@@ -43,7 +45,7 @@ mkMigration ents = mapM_ (migrate embeddedEnts) embeddedEnts
     embeddedEnts = embedEntityDefs . concat $ ents
 
 createTableFromSchema :: MonadSql m => [EntityDef] -> Transaction m ()
-createTableFromSchema = void . runMigrationQuiet . mkMigration . pure
+createTableFromSchema = void . Sql.runMigrationQuiet . mkMigration . pure
 
 mkForeignRef :: Text -> [(Text, Text)] -> ForeignDef
 mkForeignRef foreignTable refs = ForeignDef
@@ -67,7 +69,7 @@ addForeignRef name fk (ent:ents)
     | otherwise = ent { entityForeigns = fk : entityForeigns ent } : ents
 
 mkMigrationLookup
-    :: (MonadSql m)
+    :: MonadSql m
     => [(Int64, ([EntityDef], Transaction m ()))]
     -> Int64
     -> Transaction m [EntityDef]
