@@ -66,7 +66,7 @@ module Sql.Core
 import Control.Monad (join, void)
 import Control.Monad.Catch (MonadThrow, MonadCatch, MonadMask, handle, throwM)
 import Control.Monad.IO.Unlift (MonadIO(liftIO))
-import Control.Monad.Logger (MonadLogger, MonadLoggerIO, logErrorN)
+import Control.Monad.Logger (LoggingT, MonadLogger, MonadLoggerIO, logErrorN)
 import Control.Monad.Reader (ReaderT, asks, runReaderT, withReaderT)
 import Control.Monad.State.Strict (StateT, modify', runStateT)
 import Control.Monad.Trans (MonadTrans, lift)
@@ -128,8 +128,8 @@ instance MonadSql m => MonadSql (ResourceT m) where
     getConnWithoutForeignKeysFromPool = lift getConnWithoutForeignKeysFromPool
 
 newtype DummySql a =
-  DummySql (ReaderT (Pool (RawSqlite SqlBackend)) (ResourceT IO) a)
-  deriving (Functor, Applicative, Monad, MonadIO, MonadResource)
+  DummySql (ReaderT (Pool (RawSqlite SqlBackend)) (LoggingT (ResourceT IO)) a)
+  deriving (Functor, Applicative, Monad, MonadIO, MonadLogger, MonadResource, MonadThrow)
 
 instance MonadSql DummySql where
     getConnFromPool = DummySql $ asks Sqlite.acquireSqlConnFromPool
