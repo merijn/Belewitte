@@ -20,7 +20,16 @@ import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Schema.Utils (EntityDef, ForeignDef, Int64, MonadSql, Transaction, (.>))
+import Schema.Utils
+    ( EntityDef
+    , ForeignDef
+    , Int64
+    , MonadLogger
+    , MonadSql
+    , MonadThrow
+    , Transaction
+    , (.>)
+    )
 import qualified Schema.Utils as Utils
 
 import Schema.Algorithm (AlgorithmId)
@@ -60,10 +69,12 @@ schema = Utils.addForeignRef "UnknownPrediction" model
     unknownPred = Utils.mkForeignRef "UnknownPrediction"
         [ ("unknownPredId", "id"), ("algorithmId", "algorithmId") ]
 
-migrations :: MonadSql m => Int64 -> Transaction m [EntityDef]
+migrations
+    :: (MonadLogger m, MonadSql m, MonadThrow m)
+    => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup
     [ 0 .> V0.schema $ do
-        isRenamed <- fromMaybe False <$> Utils.executeSqlSingleValue [i|
+        isRenamed <- fromMaybe False <$> Utils.executeSqlSingleValueMaybe [i|
 SELECT 1
 FROM "sqlite_master"
 WHERE type = 'table' AND name = 'UnknownPrediction'

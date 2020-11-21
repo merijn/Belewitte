@@ -3,7 +3,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns #-}
 module Schema.Utils
-    ( MonadSql
+    ( MonadLogger
+    , MonadSql
+    , MonadThrow
     , Transaction
     , DBName(..)
     , EntityDef
@@ -14,6 +16,7 @@ module Schema.Utils
     , (.>)
     , Sql.executeSql
     , Sql.executeSqlSingleValue
+    , Sql.executeSqlSingleValueMaybe
     , createTableFromSchema
     , mkForeignRef
     , addForeignRef
@@ -30,7 +33,7 @@ import Database.Persist.TH (embedEntityDefs)
 import Database.Persist.Types
     (DBName(..), EntityDef(..), ForeignDef(..), HaskellName(..))
 
-import Sql.Core (MonadSql, Transaction)
+import Sql.Core (MonadLogger, MonadSql, MonadThrow, Transaction)
 import qualified Sql.Core as Sql
 
 (.=) :: Applicative f => a -> b -> (a, (b, f ()))

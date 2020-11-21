@@ -9,8 +9,6 @@
 module Sql.Transaction (module Sql, module Sql.Transaction) where
 
 import Control.Monad ((>=>))
-import Control.Monad.Catch (MonadThrow)
-import Control.Monad.Logger (MonadLogger)
 import Control.Monad.Trans.Resource (MonadResource)
 import Data.Conduit (await)
 import qualified Data.Conduit.Combinators as C

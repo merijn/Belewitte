@@ -21,6 +21,7 @@ module Sql.Core
     , runRegionConduit
     , conduitQuery
     , executeSql
+    , executeSqlSingleValueMaybe
     , executeSqlSingleValue
     , getMigration
     , querySingleValue
@@ -41,6 +42,8 @@ module Sql.Core
     , Filter
     , Key
     , Migration
+    , MonadLogger
+    , MonadThrow
     , PersistEntity
     , PersistField
     , PersistFieldSql
@@ -235,13 +238,24 @@ setPragmaConn pragma val = runReaderT (Sqlite.rawExecute query [])
 executeSql :: MonadSql m => Text -> Transaction m ()
 executeSql query = Transaction $ Sqlite.rawExecute query []
 
-executeSqlSingleValue
-    :: (MonadSql m, PersistField a) => Text -> Transaction m (Maybe a)
-executeSqlSingleValue query = Transaction $ do
+executeSqlSingleValueMaybe
+    :: (MonadLogger m, MonadSql m, MonadThrow m, PersistField a)
+    => Text -> Transaction m (Maybe a)
+executeSqlSingleValueMaybe query = Transaction $ do
     result <- Sqlite.rawSql query []
     case result of
+        [] -> return Nothing
         [Single v] -> return $ Just v
-        _ -> return Nothing
+        _ -> logThrowM $ ExpectedSingleValue query
+
+executeSqlSingleValue
+    :: (MonadLogger m, MonadSql m, MonadThrow m, PersistField a)
+    => Text -> Transaction m a
+executeSqlSingleValue query = do
+    result <- executeSqlSingleValueMaybe query
+    case result of
+        Just v -> return v
+        Nothing -> logThrowM QueryReturnedZeroResults
 
 sinkQuery
     :: MonadResource m

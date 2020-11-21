@@ -54,11 +54,10 @@ module Core
     ) where
 
 import Control.Monad (guard, when)
-import Control.Monad.Catch (MonadCatch, MonadMask, MonadThrow, SomeException)
+import Control.Monad.Catch (MonadCatch, MonadMask, SomeException)
 import Control.Monad.IO.Unlift
     (MonadIO(liftIO), MonadUnliftIO(..), UnliftIO(..), withUnliftIO)
-import Control.Monad.Logger
-    (LogLevel(..), LogSource, MonadLogger, MonadLoggerIO)
+import Control.Monad.Logger (LogLevel(..), LogSource, MonadLoggerIO)
 import qualified Control.Monad.Logger as Log
 import Control.Monad.Reader (MonadReader(..), ReaderT(..), asks)
 import Control.Monad.Trans (lift)
