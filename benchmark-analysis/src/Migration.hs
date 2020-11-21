@@ -84,7 +84,8 @@ migrateTo safety targetVersion
     version <- Sql.querySingleValue "PRAGMA user_version" []
     case compare version targetVersion of
         GT -> Log.logErrorN "Schema newer than requested!"
-        EQ -> Log.logInfoN "Schema already at requested version!"
+        EQ | targetVersion == 0 -> migrateFromTo safety version targetVersion
+           | otherwise -> Log.logInfoN "Schema already at requested version!"
         LT -> migrateFromTo safety version targetVersion
 
 migrateFromTo
@@ -96,9 +97,10 @@ migrateFromTo safety originalVersion finalVersion = do
         MigrateSafe -> Sql.runTransaction checkForeignKeys
 
     Log.logInfoN $ "Migrating schema."
-    forM_ [startVersion..finalVersion - 1] $ \n -> do
+    forM_ [startVersion..finalVersion] $ \n -> do
         Log.logInfoN $ mconcat
-            [ "Migrating file from schema version ", showText (n-1)
+            [ "Migrating file from schema version "
+            , if n == 0 then "??" else showText (n-1)
             , " to version " , showText n, "." ]
 
         reportMigrationFailure n . Sql.runTransactionWithoutForeignKeys $ do

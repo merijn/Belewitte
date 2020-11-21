@@ -127,8 +127,8 @@ migrationParser = ManualMigration <$> safetyFlag <*> targetVersion
             Just i -> checkVersion i
 
         checkVersion :: Int64 -> Either String Int64
-        checkVersion i | i <= 0 = Left $ mconcat
-            [ "Schema version must be between 1 and ", show schemaVersion ]
+        checkVersion i | i < 0 = Left $ mconcat
+            [ "Schema version must be between 0 and ", show schemaVersion ]
 
         checkVersion i | i > schemaVersion = Left $ mconcat
             [ "Target version ", show i
