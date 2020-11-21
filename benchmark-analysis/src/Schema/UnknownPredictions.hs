@@ -13,13 +13,15 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Schema.UnknownPredictions where
 
-import Control.Monad (unless)
+import Control.Monad (when)
+import Control.Monad.Logger (logErrorN)
 import Data.Maybe (fromMaybe)
 import Data.String.Interpolate.IsString (i)
 import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
+import Exceptions (AbortMigration(..), logThrowM)
 import Schema.Utils
     ( EntityDef
     , ForeignDef
@@ -69,33 +71,74 @@ schema = Utils.addForeignRef "UnknownPrediction" model
     unknownPred = Utils.mkForeignRef "UnknownPrediction"
         [ ("unknownPredId", "id"), ("algorithmId", "algorithmId") ]
 
+reconcileTables
+    :: (MonadLogger m, MonadSql m, MonadThrow m) => Transaction m ()
+reconcileTables = do
+    n <- Utils.executeSqlSingleValue [i|
+WITH
+    SetUnion AS (
+        SELECT * FROM ModelUnknown
+        UNION
+        SELECT * FROM UnknownPrediction
+    ),
+    SetIntersect AS (
+        SELECT * FROM UnknownPrediction
+        INTERSECT
+        SELECT * FROM ModelUnknown
+    )
+SELECT COUNT(*)
+FROM (
+    SELECT * FROM SetUnion
+    EXCEPT
+    SELECT * FROM SetIntersect
+)|]
+
+    when (n > (0 :: Int)) $ do
+        logErrorN "Conflicting data found in \"ModelUnknown\" and\
+                  \ \"UnknownPrediction\" tables!"
+        logThrowM AbortMigration
+
+updateModelUnknownTable
+    :: (MonadLogger m, MonadSql m, MonadThrow m) => Transaction m ()
+updateModelUnknownTable = do
+    Utils.executeSql [i|
+ALTER TABLE "ModelUnknown"
+RENAME COLUMN "unknownCount" TO "count"
+|]
+
+    Utils.executeSql [i|
+ALTER TABLE "ModelUnknown"
+RENAME TO "UnknownPrediction"
+|]
+
+    Utils.executeSql [i|
+ALTER TABLE "UnknownSet"
+RENAME COLUMN "modelUnknownId" TO "unknownPredId"
+|]
+
 migrations
     :: (MonadLogger m, MonadSql m, MonadThrow m)
     => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup
     [ 0 .> V0.schema $ do
-        isRenamed <- fromMaybe False <$> Utils.executeSqlSingleValueMaybe [i|
+        modelUnknownExists <- fromMaybe False <$>
+            Utils.executeSqlSingleValueMaybe [i|
+SELECT 1
+FROM "sqlite_master"
+WHERE type = 'table' AND name = 'ModelUnknown'
+|]
+
+        unknownPredExists <- fromMaybe False <$>
+            Utils.executeSqlSingleValueMaybe [i|
 SELECT 1
 FROM "sqlite_master"
 WHERE type = 'table' AND name = 'UnknownPrediction'
 |]
-        unless isRenamed $ do
-            Utils.executeSql [i|
-ALTER TABLE "ModelUnknown"
-RENAME COLUMN "unknownCount" TO "count"
-|]
 
-            Utils.executeSql [i|
-ALTER TABLE "ModelUnknown"
-RENAME TO "UnknownPrediction"
-|]
-
-            Utils.executeSql [i|
-ALTER TABLE "UnknownSet"
-RENAME COLUMN "modelUnknownId" TO "unknownPredId"
-|]
-
-        return ()
+        when modelUnknownExists $ do
+            if unknownPredExists
+               then reconcileTables
+               else updateModelUnknownTable
 
     , 9 .> V1.schema $ do
         Utils.executeSql [i|
