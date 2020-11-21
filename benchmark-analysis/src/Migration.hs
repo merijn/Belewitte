@@ -129,7 +129,8 @@ migrateFromTo safety originalVersion finalVersion = do
     reportMigrationFailure n act = onError act $ do
         Log.logErrorN $ mconcat
             [ "Migration failed while migrating to version ", showText n
-            , ".\nRolling back to version ", showText (n - 1)
+            , ".\nRolling back to version "
+            , if n == 0 then "??" else showText (n - 1)
             ]
 
     migrationFailed :: (MonadLogger m, MonadThrow m) => SchemaWrong -> m a
