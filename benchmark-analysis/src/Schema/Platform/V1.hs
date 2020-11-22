@@ -7,27 +7,17 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-module Schema.Model.V2 where
+module Schema.Platform.V1 where
 
 import Data.Text (Text)
-import Data.Time.Clock (UTCTime)
+import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Model (Model)
-
-import Schema.Platform (PlatformId)
-
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
-PredictionModel
-    platformId PlatformId
+Platform
     name Text
     prettyName Text Maybe
-    description Text Maybe
-    model Model
-    trainFraction Double
-    trainSeed Int
-    totalUnknownCount Int
-    UniqModel name
-    timestamp UTCTime
+    UniqPlatform name
+    deriving Eq Show
 |]

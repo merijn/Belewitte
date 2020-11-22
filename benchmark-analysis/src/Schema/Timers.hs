@@ -18,10 +18,12 @@ import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
 import Pretty.Fields
-import Schema.Utils (EntityDef, ForeignDef, Int64, MonadSql, Transaction, (.>))
+import Schema.Utils
+    (EntityDef, ForeignDef, Int64, MonadSql, Transaction, (.>), (.=))
 import qualified Schema.Utils as Utils
 import qualified Schema.Timers.V0 as V0
 import qualified Schema.Timers.V1 as V1
+import qualified Schema.Timers.V2 as V2
 
 import Schema.Run (RunId)
 import Schema.Variant (VariantId)
@@ -79,14 +81,15 @@ schema = Utils.addForeignRef "StepTimer" run $ schema'
 
 migrations :: MonadSql m => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup
-    [ 1 .> V0.schema $ do
+    [ 0 .= V0.schema
+    , 1 .> V1.schema $ do
         Utils.executeSql [i|
 ALTER TABLE "TotalTimer" RENAME COLUMN "gpuId" TO "platformId"
 |]
         Utils.executeSql [i|
 ALTER TABLE "StepTimer" RENAME COLUMN "gpuId" TO "platformId"
 |]
-    , 6 .> V1.schema $ do
+    , 6 .> V2.schema $ do
         Utils.executeSql [i|
 ALTER TABLE "TotalTimer"
 ADD COLUMN "runId" INTEGER REFERENCES "Run"

@@ -132,12 +132,14 @@ Library
                         Schema.Model.V2
                         Schema.Model.V3
                         Schema.Model.V4
+                        Schema.Model.V5
                         Schema.ModelMetadata
                         Schema.ModelMetadata.V0
                         Schema.ModelMetadata.V1
                         Schema.ModelMetadata.V2
                         Schema.Platform
                         Schema.Platform.V0
+                        Schema.Platform.V1
                         Schema.Properties
                         Schema.Properties.V0
                         Schema.Properties.V1
@@ -148,6 +150,7 @@ Library
                         Schema.Timers
                         Schema.Timers.V0
                         Schema.Timers.V1
+                        Schema.Timers.V2
                         Schema.UnknownPredictions
                         Schema.UnknownPredictions.V0
                         Schema.UnknownPredictions.V1

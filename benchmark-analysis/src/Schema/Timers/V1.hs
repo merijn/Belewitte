@@ -11,30 +11,42 @@
 module Schema.Timers.V1 where
 
 import Data.Text (Text)
+import Data.Time.Clock (UTCTime)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Schema.Run (RunId)
+import Schema.Implementation (ImplementationId)
+import Schema.Platform (PlatformId)
+import Schema.Variant (VariantId)
+import Types
 
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
 TotalTimer
-    runId RunId
+    platformId PlatformId
+    variantId VariantId
+    implId ImplementationId
     name Text
     minTime Double
     avgTime Double
     maxTime Double
     stdDev Double
-    Primary runId name
+    timestamp UTCTime
+    wrongResult Hash Maybe
+    Primary platformId variantId implId name
     deriving Eq Show
 
 StepTimer
-    runId RunId
+    platformId PlatformId
+    variantId VariantId
     stepId Int
+    implId ImplementationId
     name Text
     minTime Double
     avgTime Double
     maxTime Double
     stdDev Double
-    Primary runId stepId name
+    timestamp UTCTime
+    wrongResult Hash Maybe
+    Primary platformId variantId stepId implId name
     deriving Eq Show
 |]

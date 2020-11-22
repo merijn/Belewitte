@@ -20,7 +20,7 @@ import qualified Database.Persist.TH as TH
 
 import Model (Model)
 import Pretty.Fields
-import Schema.Utils (EntityDef, Int64, MonadSql, Transaction, (.>))
+import Schema.Utils (EntityDef, Int64, MonadSql, Transaction, (.>), (.=))
 import qualified Schema.Utils as Utils
 import Types
 
@@ -31,6 +31,7 @@ import qualified Schema.Model.V1 as V1
 import qualified Schema.Model.V2 as V2
 import qualified Schema.Model.V3 as V3
 import qualified Schema.Model.V4 as V4
+import qualified Schema.Model.V5 as V5
 
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
 PredictionModel
@@ -70,17 +71,18 @@ instance PrettyFields PredictionModel where
 
 migrations :: MonadSql m => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup
-    [ 1 .> V0.schema $ do
+    [ 0 .= V0.schema
+    , 1 .> V1.schema $ do
         Utils.executeSql [i|
 ALTER TABLE "PredictionModel" RENAME COLUMN "gpuId" TO "platformId" |]
-    , 2 .> V1.schema $ do
+    , 2 .> V2.schema $ do
         Utils.executeSql [i|
 ALTER TABLE "PredictionModel" ADD COLUMN "name" VARCHAR
 |]
         Utils.executeSql [i|
 UPDATE 'PredictionModel' SET 'name' = "Model-" || id
 |]
-    , 9 .> V2.schema $ do
+    , 9 .> V3.schema $ do
         Utils.executeSql [i|
 ALTER TABLE "PredictionModel"
 ADD COLUMN "algorithmId" INTEGER REFERENCES "Algorithm"
@@ -115,7 +117,7 @@ INNER JOIN
 ) AS AlgorithmMapping
 ON PredictionModel.id = AlgorithmMapping.modelId
 |]
-    , 17 .> V3.schema $ do
+    , 17 .> V4.schema $ do
         Utils.executeSql [i|
 ALTER TABLE "PredictionModel"
 ADD COLUMN "algorithmVersion" TEXT
@@ -157,7 +159,7 @@ INNER JOIN (
 ) AS Derived
 ON Derived.id = PredictionModel.id
 |]
-    , 19 .> V4.schema $ do
+    , 19 .> V5.schema $ do
         Utils.executeSql [i|
 ALTER TABLE "PredictionModel"
 RENAME COLUMN "trainFraction" TO "legacyTrainFraction"

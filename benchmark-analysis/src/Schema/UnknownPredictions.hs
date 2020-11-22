@@ -98,6 +98,8 @@ FROM (
                   \ \"UnknownPrediction\" tables!"
         logThrowM AbortMigration
 
+    Utils.executeSql [i|DROP TABLE 'ModelUnknown'|]
+
 updateModelUnknownTable
     :: (MonadLogger m, MonadSql m, MonadThrow m) => Transaction m ()
 updateModelUnknownTable = do

@@ -1,33 +1,40 @@
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-module Schema.Model.V2 where
+module Schema.Timers.V2 where
 
 import Data.Text (Text)
-import Data.Time.Clock (UTCTime)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Model (Model)
-
-import Schema.Platform (PlatformId)
+import Schema.Run (RunId)
 
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
-PredictionModel
-    platformId PlatformId
+TotalTimer
+    runId RunId
     name Text
-    prettyName Text Maybe
-    description Text Maybe
-    model Model
-    trainFraction Double
-    trainSeed Int
-    totalUnknownCount Int
-    UniqModel name
-    timestamp UTCTime
+    minTime Double
+    avgTime Double
+    maxTime Double
+    stdDev Double
+    Primary runId name
+    deriving Eq Show
+
+StepTimer
+    runId RunId
+    stepId Int
+    name Text
+    minTime Double
+    avgTime Double
+    maxTime Double
+    stdDev Double
+    Primary runId stepId name
+    deriving Eq Show
 |]

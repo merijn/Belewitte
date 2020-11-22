@@ -16,13 +16,13 @@ import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
 import Schema.Implementation (ImplementationId)
-import Schema.Platform (PlatformId)
+import Schema.Platform.V0 (GPUId)
 import Schema.Variant (VariantId)
 import Types
 
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
 TotalTimer
-    platformId PlatformId
+    gpuId GPUId
     variantId VariantId
     implId ImplementationId
     name Text
@@ -32,11 +32,11 @@ TotalTimer
     stdDev Double
     timestamp UTCTime default="(strftime('%Y-%m-%dT%H:%M:%f',0,'unixepoch'))"
     wrongResult Hash Maybe
-    Primary platformId variantId implId name
+    Primary gpuId variantId implId name
     deriving Eq Show
 
 StepTimer
-    platformId PlatformId
+    gpuId GPUId
     variantId VariantId
     stepId Int
     implId ImplementationId
@@ -47,6 +47,6 @@ StepTimer
     stdDev Double
     timestamp UTCTime default="(strftime('%Y-%m-%dT%H:%M:%f',0,'unixepoch'))"
     wrongResult Hash Maybe
-    Primary platformId variantId stepId implId name
+    Primary gpuId variantId stepId implId name
     deriving Eq Show
 |]

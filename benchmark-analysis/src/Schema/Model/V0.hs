@@ -17,11 +17,11 @@ import qualified Database.Persist.TH as TH
 
 import Model (Model)
 
-import Schema.Platform (PlatformId)
+import Schema.Platform.V0 (GPUId)
 
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
 PredictionModel
-    platformId PlatformId
+    gpuId GPUId
     model Model
     trainFraction Double default=0
     trainSeed Int default=42

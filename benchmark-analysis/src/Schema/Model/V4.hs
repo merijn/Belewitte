@@ -30,10 +30,7 @@ PredictionModel
     prettyName Text Maybe
     description Text Maybe
     model Model
-    legacyTrainFraction Double
-    trainGraphs Percentage
-    trainVariants Percentage
-    trainSteps Percentage
+    trainFraction Double
     trainSeed Int64
     totalUnknownCount Int
     timestamp UTCTime

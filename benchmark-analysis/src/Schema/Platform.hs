@@ -22,6 +22,7 @@ import Schema.Utils (EntityDef, Int64, MonadSql, Transaction, (.>), (.=))
 import qualified Schema.Utils as Utils
 
 import qualified Schema.Platform.V0 as V0
+import qualified Schema.Platform.V1 as V1
 
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
 Platform
@@ -45,7 +46,8 @@ instance PrettyFields Platform where
 
 migrations :: MonadSql m => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup
-    [ 1 .> V0.schema $ do
+    [ 0 .= V0.schema
+    , 1 .> V1.schema $ do
         Utils.executeSql [i|
 ALTER TABLE 'GPU' RENAME TO 'Platform'
 |]

@@ -15,9 +15,9 @@ import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
-Platform
+GPU
     name Text
     prettyName Text Maybe
-    UniqPlatform name
+    UniqGPU name
     deriving Eq Show
 |]

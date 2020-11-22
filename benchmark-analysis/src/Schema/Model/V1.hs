@@ -1,4 +1,5 @@
 {-# LANGUAGE DerivingStrategies #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -9,8 +10,8 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Schema.Model.V1 where
 
-import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
+import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
@@ -21,13 +22,9 @@ import Schema.Platform (PlatformId)
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
 PredictionModel
     platformId PlatformId
-    name Text
-    prettyName Text Maybe
-    description Text Maybe
     model Model
     trainFraction Double
     trainSeed Int
     totalUnknownCount Int
-    UniqModel name
     timestamp UTCTime
 |]
