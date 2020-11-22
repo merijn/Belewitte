@@ -110,7 +110,9 @@ migrateFromTo safety originalVersion finalVersion = do
 
             checkSchema migration `catch` migrationFailed
 
-            checkForeignKeys
+            case safety of
+                MigrateUnsafe -> return ()
+                MigrateSafe -> checkForeignKeys
 
             Sql.setPragma "user_version" n
 
