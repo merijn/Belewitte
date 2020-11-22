@@ -12,6 +12,7 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Schema.Timers where
 
+import Control.Monad (when)
 import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
 import Database.Persist.TH (persistUpperCase)
@@ -19,7 +20,15 @@ import qualified Database.Persist.TH as TH
 
 import Pretty.Fields
 import Schema.Utils
-    (EntityDef, ForeignDef, Int64, MonadSql, Transaction, (.>), (.=))
+    ( EntityDef
+    , ForeignDef
+    , Int64
+    , MonadLogger
+    , MonadSql
+    , MonadThrow
+    , Transaction
+    , (.>)
+    )
 import qualified Schema.Utils as Utils
 import qualified Schema.Timers.V0 as V0
 import qualified Schema.Timers.V1 as V1
@@ -79,9 +88,34 @@ schema = Utils.addForeignRef "StepTimer" run $ schema'
     run = Utils.mkForeignRef "Run"
         [ ("runId", "id"), ("variantId", "variantId") ]
 
-migrations :: MonadSql m => Int64 -> Transaction m [EntityDef]
+migrations
+    :: (MonadLogger m, MonadSql m, MonadThrow m)
+    => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup
-    [ 0 .= V0.schema
+    [ 0 .> V0.schema $ do
+        stepTimeStamp <- (/= (0 :: Int)) <$> Utils.executeSqlSingleValue [i|
+SELECT COUNT(*)
+FROM pragma_table_info('StepTimer')
+WHERE name = 'timestamp'
+|]
+        when stepTimeStamp $ do
+            Utils.executeSql [i|
+UPDATE "StepTimer"
+SET timestamp = strftime('%Y-%m-%dT%H:%M:%f',replace(timestamp,' UTC',''))
+|]
+
+        totalTimeStamp <- (/= (0 :: Int)) <$> Utils.executeSqlSingleValue [i|
+SELECT COUNT(*)
+FROM pragma_table_info('TotalTimer')
+WHERE name = 'timestamp'
+|]
+
+        when totalTimeStamp $ do
+            Utils.executeSql [i|
+UPDATE "TotalTimer"
+SET timestamp = strftime('%Y-%m-%dT%H:%M:%f',replace(timestamp,' UTC',''))
+|]
+
     , 1 .> V1.schema $ do
         Utils.executeSql [i|
 ALTER TABLE "TotalTimer" RENAME COLUMN "gpuId" TO "platformId"
