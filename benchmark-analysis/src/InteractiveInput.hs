@@ -72,6 +72,7 @@ instance MonadSql m => MonadSql (Input m) where
     getConnFromPool = Input . lift $ getConnFromPool
     getConnWithoutForeignKeysFromPool = Input $
         lift getConnWithoutForeignKeysFromPool
+    getConnWithoutTransaction = Input $ lift getConnWithoutTransaction
 
 instance MonadThrow m => MonadThrow (Input m) where
     throwM = Input . lift . Except.throwM

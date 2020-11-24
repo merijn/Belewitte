@@ -5,12 +5,14 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 module Sql.Core
-    ( DummySql
-    , MonadRegion(..)
+    ( MonadRegion(..)
     , MonadSql(..)
     , Region
     , SqlField
+    , SqlPool
     , SqlRecord
+    , SqlT
+    , runSqlT
     , Transaction(Transaction)
     , abortTransaction
     , runTransaction
@@ -68,15 +70,16 @@ module Sql.Core
 
 import Control.Monad (join, void)
 import Control.Monad.Catch (MonadThrow, MonadCatch, MonadMask, handle, throwM)
-import Control.Monad.IO.Unlift (MonadIO(liftIO))
-import Control.Monad.Logger (LoggingT, MonadLogger, MonadLoggerIO, logErrorN)
-import Control.Monad.Reader (ReaderT, asks, runReaderT, withReaderT)
+import Control.Monad.IO.Unlift (MonadIO(liftIO), MonadUnliftIO(..))
+import Control.Monad.Logger (MonadLogger, MonadLoggerIO, logErrorN)
+import Control.Monad.Reader (ReaderT, ask, asks, runReaderT, withReaderT)
 import Control.Monad.State.Strict (StateT, modify', runStateT)
 import Control.Monad.Trans (MonadTrans, lift)
 import Control.Monad.Trans.Resource
     (MonadResource, ReleaseKey, ResourceT, release)
 import Data.Acquire (Acquire, allocateAcquire, mkAcquire)
 import Data.Conduit (ConduitT, Void, (.|), runConduit, toProducer, transPipe)
+import Data.Int (Int64)
 import Data.Pool (Pool)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -111,32 +114,33 @@ import Database.Persist.Sqlite
     , toSqlKey
     )
 import qualified Database.Persist.Sqlite as Sqlite
+import Database.Sqlite.Internal (Connection(..), Connection'(..))
+import Foreign (Ptr)
+import qualified Lens.Micro as Lens
+import qualified Lens.Micro.Extras as Lens
 
 import Exceptions
+import SQLiteExts
 
 class MonadResource m => MonadSql m where
     getConnFromPool :: m (Acquire (RawSqlite SqlBackend))
     getConnWithoutForeignKeysFromPool :: m (Acquire (RawSqlite SqlBackend))
+    getConnWithoutTransaction :: m (Acquire (RawSqlite SqlBackend))
 
 instance MonadSql m => MonadSql (ConduitT a b m) where
     getConnFromPool = lift getConnFromPool
     getConnWithoutForeignKeysFromPool = lift getConnWithoutForeignKeysFromPool
+    getConnWithoutTransaction = lift getConnWithoutTransaction
 
 instance MonadSql m => MonadSql (ReaderT r m) where
     getConnFromPool = lift getConnFromPool
     getConnWithoutForeignKeysFromPool = lift getConnWithoutForeignKeysFromPool
+    getConnWithoutTransaction = lift getConnWithoutTransaction
 
 instance MonadSql m => MonadSql (ResourceT m) where
     getConnFromPool = lift getConnFromPool
     getConnWithoutForeignKeysFromPool = lift getConnWithoutForeignKeysFromPool
-
-newtype DummySql a =
-  DummySql (ReaderT (Pool (RawSqlite SqlBackend)) (LoggingT (ResourceT IO)) a)
-  deriving (Functor, Applicative, Monad, MonadIO, MonadLogger, MonadResource, MonadThrow)
-
-instance MonadSql DummySql where
-    getConnFromPool = DummySql $ asks Sqlite.acquireSqlConnFromPool
-    getConnWithoutForeignKeysFromPool = getConnFromPool
+    getConnWithoutTransaction = lift getConnWithoutTransaction
 
 newtype Transaction m r = Transaction (ReaderT (RawSqlite SqlBackend) m r)
   deriving
@@ -205,6 +209,7 @@ instance MonadResource m => MonadRegion (ConduitT a b (Region m)) where
 instance MonadSql m => MonadSql (Region m) where
     getConnFromPool = lift getConnFromPool
     getConnWithoutForeignKeysFromPool = lift getConnWithoutForeignKeysFromPool
+    getConnWithoutTransaction = lift getConnWithoutTransaction
 
 runRegion :: MonadIO m => Region m r -> m r
 runRegion (Region act) = do
@@ -357,3 +362,58 @@ runMigrationUnsafeQuiet =
 
 showSqlKey :: ToBackendKey SqlBackend record => Key record -> Text
 showSqlKey = T.pack . show . Sqlite.fromSqlKey
+
+type SqlPool = Pool (RawSqlite SqlBackend)
+
+newtype SqlT m a = SqlT { unSqlT :: ReaderT SqlPool m a }
+  deriving
+  ( Applicative, Functor, Monad, MonadCatch, MonadIO, MonadLogger
+  , MonadLoggerIO, MonadMask, MonadResource, MonadThrow)
+
+instance MonadResource m => MonadSql (SqlT m) where
+    getConnFromPool = SqlT $ asks Sqlite.acquireSqlConnFromPool
+    getConnWithoutForeignKeysFromPool = do
+        pool <- SqlT $ ask
+        return $ do
+            conn <- Sqlite.unsafeAcquireSqlConnFromPool pool
+            let foreignOff = setPragmaConn "foreign_keys" (0 :: Int64)
+                foreignOn _ = setPragmaConn "foreign_keys" (1 :: Int64) conn
+            () <- mkAcquire (foreignOff conn) foreignOn
+            Sqlite.acquireSqlConn conn
+
+    getConnWithoutTransaction = SqlT $ asks Sqlite.unsafeAcquireSqlConnFromPool
+
+instance MonadTrans SqlT where
+    lift = SqlT . lift
+
+instance MonadUnliftIO m => MonadUnliftIO (SqlT m) where
+    withRunInIO inner = SqlT $ withRunInIO $ \run -> inner (run . unSqlT)
+    {-# INLINE withRunInIO #-}
+
+runSqlT
+    :: (MonadLogger m, MonadThrow m, MonadUnliftIO m)
+    => Text -> SqlT m r -> m r
+runSqlT database (SqlT sqlAct) = runPool $ runReaderT sqlAct
+  where
+    runPool
+        :: (MonadLogger m, MonadUnliftIO m, MonadThrow m)
+        => (SqlPool -> m r) -> m r
+    runPool = Sqlite.withRawSqlitePoolInfo connInfo setup 20
+
+    setup
+        :: (MonadIO m, MonadLogger m, MonadThrow m)
+        => RawSqlite SqlBackend -> m ()
+    setup conn = do
+        registerSqlFunctions ptr
+        -- Wait longer before timing out query steps
+        setPragmaConn "threads" (4 :: Int64) conn
+        setPragmaConn "busy_timeout" (5000 :: Int64) conn
+      where
+        ptr = getSqlitePtr $ Lens.view Sqlite.rawSqliteConnection conn
+
+    connInfo :: SqliteConnectionInfo
+    connInfo =
+        Lens.set Sqlite.fkEnabled True $ Sqlite.mkSqliteConnectionInfo database
+
+    getSqlitePtr :: Connection -> Ptr ()
+    getSqlitePtr (Connection _ (Connection' ptr)) = ptr

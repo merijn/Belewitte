@@ -46,6 +46,8 @@ module Schema
     , validRational
     ) where
 
+import Control.Monad.Logger (LoggingT, MonadLogger)
+import Control.Monad.Trans.Resource (ResourceT)
 import Data.ByteString (ByteString)
 import Data.Int (Int64)
 import Data.IntMap (IntMap)
@@ -55,8 +57,8 @@ import Database.Persist.Sql
     (EntityDef, Migration, PersistValue(..), toPersistValue)
 
 import Model (Model)
-import Schema.Utils (MonadLogger, MonadThrow, mkMigration)
-import Sql.Core (DummySql, MonadSql, Transaction)
+import Schema.Utils (MonadThrow, mkMigration)
+import Sql.Core (MonadSql, SqlT, Transaction)
 import Types
 import Utils.Pair (Pair, toPair)
 
@@ -148,7 +150,7 @@ migrations =
     , (GlobalVars.schema, GlobalVars.migrations)
     ]
 
-type MigrationAction = Transaction DummySql [EntityDef]
+type MigrationAction = Transaction (SqlT (ResourceT (LoggingT IO))) [EntityDef]
 
 currentSchema :: Migration
 currentSchema = mkMigration $ map fst
