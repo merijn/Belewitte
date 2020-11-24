@@ -85,7 +85,7 @@ validateEntity
        , ToBackendKey SqlBackend r
        )
     => Text -> Int64 -> m (Entity r)
-validateEntity name k = runTransaction $ SqlTrans.validateEntity name k
+validateEntity name k = runReadOnlyTransaction $ SqlTrans.validateEntity name k
 
 validateKey
     :: ( MonadLogger m
@@ -106,7 +106,7 @@ validateUniqEntity
        )
     => Text -> Unique r -> m (Entity r)
 validateUniqEntity name uniq =
-    runTransaction $ SqlTrans.validateUniqEntity name uniq
+    runReadOnlyTransaction $ SqlTrans.validateUniqEntity name uniq
 
 validateUniqKey
     :: ( MonadLogger m
@@ -133,16 +133,16 @@ getJustKeyBy
 getJustKeyBy k = entityKey <$> getJustBy k
 
 getBy :: (MonadSql m, SqlRecord rec) => Unique rec -> m (Maybe (Entity rec))
-getBy = runTransaction . SqlTrans.getBy
+getBy = runReadOnlyTransaction . SqlTrans.getBy
 
 getEntity :: (MonadSql m, SqlRecord rec) => Key rec -> m (Maybe (Entity rec))
-getEntity = runTransaction . SqlTrans.getEntity
+getEntity = runReadOnlyTransaction . SqlTrans.getEntity
 
 getJust :: (MonadSql m, SqlRecord rec) => Key rec -> m rec
-getJust = runTransaction . SqlTrans.getJust
+getJust = runReadOnlyTransaction . SqlTrans.getJust
 
 getJustEntity :: (MonadSql m, SqlRecord rec) => Key rec -> m (Entity rec)
-getJustEntity = runTransaction . SqlTrans.getJustEntity
+getJustEntity = runReadOnlyTransaction . SqlTrans.getJustEntity
 
 insert :: (MonadSql m, SqlRecord rec) => rec -> m (Key rec)
 insert = runTransaction . SqlTrans.insert
@@ -153,18 +153,18 @@ insert_ = runTransaction . SqlTrans.insert_
 selectSingleMaybe
     :: (MonadLogger m, MonadSql m, MonadThrow m, SqlRecord rec)
     => [Filter rec] -> m (Maybe (Entity rec))
-selectSingleMaybe = runTransaction . SqlTrans.selectSingleMaybe
+selectSingleMaybe = runReadOnlyTransaction . SqlTrans.selectSingleMaybe
 
 selectSingle
     :: (MonadLogger m, MonadSql m, MonadThrow m, SqlRecord rec)
     => [Filter rec] -> m (Entity rec)
-selectSingle = runTransaction . SqlTrans.selectSingle
+selectSingle = runReadOnlyTransaction . SqlTrans.selectSingle
 
 selectFirst
     :: (MonadSql m, SqlRecord rec)
     => [Filter rec] -> [SelectOpt rec] -> m (Maybe (Entity rec))
 selectFirst filters select =
-    runTransaction $ SqlTrans.selectFirst filters select
+    runReadOnlyTransaction $ SqlTrans.selectFirst filters select
 
 selectKeys
     :: (MonadSql m, SqlRecord rec)
@@ -172,18 +172,20 @@ selectKeys
     -> [SelectOpt rec]
     -> ConduitT (Key rec) Void m r
     -> m r
-selectKeys filters select sink = runTransaction $
+selectKeys filters select sink = runReadOnlyTransaction $
     SqlTrans.selectKeys filters select (transPipe lift sink)
 
 selectKeysList
     :: (MonadSql m, SqlRecord rec)
     => [Filter rec] -> [SelectOpt rec] -> m [Key rec]
-selectKeysList filters = runTransaction . SqlTrans.selectKeysList filters
+selectKeysList filters =
+  runReadOnlyTransaction . SqlTrans.selectKeysList filters
 
 selectList
     :: (MonadSql m, SqlRecord rec)
     => [Filter rec] -> [SelectOpt rec] -> m [Entity rec]
-selectList filters select = runTransaction $ SqlTrans.selectList filters select
+selectList filters select =
+  runReadOnlyTransaction $ SqlTrans.selectList filters select
 
 selectSource
     :: (MonadSql m, SqlRecord rec)
@@ -191,7 +193,7 @@ selectSource
     -> [SelectOpt rec]
     -> ConduitT (Entity rec) Void m r
     -> m r
-selectSource filters select sink = runTransaction $
+selectSource filters select sink = runReadOnlyTransaction $
     SqlTrans.selectSource filters select (transPipe lift sink)
 
 update :: (MonadSql m, SqlRecord rec) => Key rec -> [Update rec] -> m ()
@@ -204,9 +206,9 @@ updateWhere filts = runTransaction . SqlTrans.updateWhere filts
 queryExternalImplementations
     :: MonadSql m => Key Algorithm -> m (IntMap ExternalImpl)
 queryExternalImplementations algoId =
-    runTransaction $ SqlTrans.queryExternalImplementations algoId
+    runReadOnlyTransaction $ SqlTrans.queryExternalImplementations algoId
 
 queryImplementations
     :: MonadSql m => Key Algorithm -> m (IntMap Implementation)
 queryImplementations algoId =
-    runTransaction $ SqlTrans.queryImplementations algoId
+    runReadOnlyTransaction $ SqlTrans.queryImplementations algoId
