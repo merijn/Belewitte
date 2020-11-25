@@ -1,19 +1,27 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE TypeFamilies #-}
 module Sql.Import
     ( Import
     , runImport
+    , runRegionConduit
     , importSql
     , importSqlTransaction
+    , selectKeysImport
+    , selectSourceImport
     ) where
 
+import Control.Monad (join)
 import Control.Monad.Catch (MonadCatch, MonadMask)
 import Control.Monad.IO.Unlift (MonadIO, MonadUnliftIO)
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.Trans (MonadTrans(..))
-import Control.Monad.Trans.Resource (MonadResource)
+import Control.Monad.Trans.Reader (runReaderT)
+import Control.Monad.Trans.Resource (MonadResource, release)
+import Data.Conduit (ConduitT, toProducer)
 import Data.Text (Text)
+import qualified Database.Persist.Sqlite as Sqlite
 
 import Migration (checkMigration)
 import Sql.Core
@@ -30,6 +38,32 @@ instance MonadSql m => MonadSql (Import m) where
     getConnFromPool = lift getConnFromPool
     getConnWithoutForeignKeysFromPool = lift getConnWithoutForeignKeysFromPool
     getConnWithoutTransaction = lift getConnWithoutTransaction
+
+selectKeysImport
+    :: (MonadResource m, SqlRecord record)
+    => [Filter record]
+    -> [SelectOpt record]
+    -> ConduitT a (Key record) (Region (Import m)) ()
+selectKeysImport filts order = do
+    acquireConn <- lift . lift $ Import getConnFromPool
+    (key, source) <- allocRegion $ do
+        conn <- acquireConn >>= readOnlyConnection
+        join $ runReaderT (Sqlite.selectKeysRes filts order) conn
+
+    toProducer source <* release key
+
+selectSourceImport
+    :: (MonadResource m, SqlRecord record)
+    => [Filter record]
+    -> [SelectOpt record]
+    -> ConduitT a (Entity record) (Region (Import m)) ()
+selectSourceImport filts order = do
+    acquireConn <- lift . lift $ Import getConnFromPool
+    (key, source) <- allocRegion $ do
+        conn <- acquireConn >>= readOnlyConnection
+        join $ runReaderT (Sqlite.selectSourceRes filts order) conn
+
+    toProducer source <* release key
 
 runImport
     :: ( MonadLogger m
