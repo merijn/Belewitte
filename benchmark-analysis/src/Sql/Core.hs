@@ -19,6 +19,7 @@ module Sql.Core
     , runReadOnlyTransaction
     , runTransactionWithoutForeignKeys
     , tryAbortableTransaction
+    , readOnlyConnection
     , runRegionSource
     , runRegionConduit
     , conduitQuery

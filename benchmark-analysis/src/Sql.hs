@@ -19,7 +19,7 @@ import Data.Conduit (ConduitT, Void, transPipe)
 import Data.IntMap (IntMap)
 import Data.Proxy (Proxy(Proxy))
 import Data.String.Interpolate.IsString (i)
-import Database.Persist.Sqlite (sqlType)
+import Database.Persist.Sqlite (AtLeastOneUniqueKey, OnlyOneUniqueKey, sqlType)
 
 import Core
 import Query (CTE, Converter(Simple), MonadConvert, MonadQuery, Query(..))
@@ -149,6 +149,18 @@ insert = runTransaction . SqlTrans.insert
 
 insert_ :: (MonadSql m, SqlRecord rec) => rec -> m ()
 insert_ = runTransaction . SqlTrans.insert_
+
+onlyUnique
+    :: (MonadSql m, OnlyOneUniqueKey rec, SqlRecord rec)
+    => rec -> m (Unique rec)
+onlyUnique = runReadOnlyTransaction . SqlTrans.onlyUnique
+
+insertUniq
+    :: ( MonadLogger m, MonadSql m, MonadThrow m, SqlRecord record
+       , AtLeastOneUniqueKey record, Eq record, Show record
+       )
+    => record -> m (Key record)
+insertUniq = runTransaction . SqlTrans.insertUniq
 
 selectSingleMaybe
     :: (MonadLogger m, MonadSql m, MonadThrow m, SqlRecord rec)
