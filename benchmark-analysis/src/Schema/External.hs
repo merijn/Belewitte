@@ -87,18 +87,23 @@ migrations = Utils.mkMigrationLookup
         Utils.createTableFromSchema V0.schema
 
         Utils.executeSql [i|
-INSERT INTO "ExternalImpl" SELECT id, algorithmId, name, prettyName
+ALTER TABLE "ExternalImpl"
+ADD COLUMN "oldImplId" INTEGER REFERENCES "Implementation"
+|]
+
+        Utils.executeSql [i|
+INSERT INTO "ExternalImpl"
+SELECT ROW_NUMBER() OVER (ORDER BY id), algorithmId, name, prettyName, id
 FROM Implementation WHERE type = "Comparison"
 |]
 
         Utils.executeSql [i|
 INSERT INTO "ExternalTimer"
-SELECT TotalTimer.platformId, TotalTimer.variantId, TotalTimer.implId
+SELECT TotalTimer.platformId, TotalTimer.variantId, ExternalImpl.id
      , TotalTimer.name, TotalTimer.minTime, TotalTimer.avgTime
      , TotalTimer.maxTime, TotalTimer.stdDev
 FROM TotalTimer
-INNER JOIN Implementation ON TotalTimer.implId = Implementation.id
-WHERE Implementation.type = "Comparison"
+INNER JOIN ExternalImpl ON TotalTimer.implId = ExternalImpl.oldImplId
 |]
 
         Utils.executeSql [i|
