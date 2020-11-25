@@ -23,6 +23,7 @@ import qualified Data.Text as T
 import System.Exit (exitFailure)
 
 import qualified Commands.Add as Add
+import qualified Commands.Import as Import
 import qualified Commands.List as List
 import qualified Commands.Query as Query
 import qualified Commands.Reset as Reset
@@ -72,6 +73,7 @@ main = runInputCommand_ CommandRoot
             "Validate result mismatches for non-deterministic algorithms"
         }
         $ pure validate
+    , lift <$> Import.commands
     , SingleCommand CommandInfo
         { commandName = "import-results"
         , commandHeaderDesc = "import results of external tools"
