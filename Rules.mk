@@ -62,23 +62,26 @@ $(DEST)/%.tsan.o: $(SRCDIR)/%.cpp | $(DEST)/
 	$(AT)$(CXX) $(CXXFLAGS) -I. $< -c -o $@
 endif
 
+$(DEST)/%.obj: SRCDIR:=$(SRCDIR)
 $(DEST)/%.obj: $(SRCDIR)/%.cu | $(DEST)/
 	$(PRINTF) " NVCC\t$*.cu\n"
 	$(AT)$(NVCC) $(NVCCXXFLAGS) -M -I. $< -o $(@:.obj=.d)
-	$(AT)$(SED) -i.bak "s#$(notdir $*).o#$(@) $*.ptx#" $(@:.obj=.d)
+	$(AT)$(SED) -i.bak "s#$(notdir $*).o#$(@) $(SRCDIR)/$*.ptx#" $(@:.obj=.d)
 	$(AT)rm -f $(@:.obj=.d).bak
 	$(AT)$(NVCC) $(NVCCXXFLAGS) $(NVCCARCHFLAGS) -lineinfo -I. --device-c $< -o $@
 
+$(DEST)/%.debug.obj: SRCDIR:=$(SRCDIR)
 $(DEST)/%.debug.obj: $(SRCDIR)/%.cu | $(DEST)/
 	$(PRINTF) " NVCC\t$*.cu\n"
 	$(AT)$(NVCC) $(NVCCXXFLAGS) -M -I. $< -o $(@:.obj=.d)
-	$(AT)$(SED) -i.bak "s#$(notdir $*).o#$(@) $*.ptx#" $(@:.obj=.d)
+	$(AT)$(SED) -i.bak "s#$(notdir $*).o#$(@) $(SRCDIR)/$*.ptx#" $(@:.obj=.d)
 	$(AT)rm -f $(@:.obj=.d).bak
 	$(AT)$(NVCC) $(NVCCXXFLAGS) $(NVCCARCHFLAGS) --device-debug -I. --device-c $< -o $@
 
+$(SRCDIR)/%.ptx: SRCDIR:=$(SRCDIR)
 $(SRCDIR)/%.ptx: $(SRCDIR)/%.cu
 	$(PRINTF) " PTX\t$*.cu\n"
 	$(AT)$(NVCC) $(NVCCXXFLAGS) -M -I. $< -o $(BUILD)/$(@:.ptx=.d)
-	$(AT)$(SED) -i.bak "s#$(notdir $*).o#$(@) $*.ptx#" $(BUILD)/$(@:.ptx=.d)
+	$(AT)$(SED) -i.bak "s#$(notdir $*).o#$(@) $(SRCDIR)/$*.ptx#" $(BUILD)/$(@:.ptx=.d)
 	$(AT)rm -f $(BUILD)/$(@:.ptx=.d).bak
 	$(AT)$(NVCC) $(NVCCXXFLAGS) -arch $(PTXARCH) -I. -lineinfo -src-in-ptx --ptx $< -o $@
