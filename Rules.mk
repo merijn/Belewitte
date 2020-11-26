@@ -76,7 +76,7 @@ $(DEST)/%.debug.obj: $(SRCDIR)/%.cu | $(DEST)/
 	$(AT)rm -f $(@:.obj=.d).bak
 	$(AT)$(NVCC) $(NVCCXXFLAGS) $(NVCCARCHFLAGS) --device-debug -I. --device-c $< -o $@
 
-%.ptx: $(SRCDIR)/%.cu
+$(SRCDIR)/%.ptx: $(SRCDIR)/%.cu
 	$(PRINTF) " PTX\t$*.cu\n"
 	$(AT)$(NVCC) $(NVCCXXFLAGS) -M -I. $< -o $(BUILD)/$(@:.ptx=.d)
 	$(AT)$(SED) -i.bak "s#$(notdir $*).o#$(@) $*.ptx#" $(BUILD)/$(@:.ptx=.d)
