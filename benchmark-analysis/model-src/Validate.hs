@@ -33,7 +33,6 @@ data ValidateStats = ValidateStats
     , rightRefinements :: !Int
     , partialRefinements :: !Int
     , wrongRefinements :: !Int
-    , unknownRefinements :: !Int
     } deriving (Show)
 
 validateModel
@@ -70,7 +69,7 @@ validateModel predictor config mPlatform mDatasets = renderOutput $
         result <- runSqlQueryConduit predictions $ C.foldl aggregate initial
         C.yield $ report name result
       where
-        initial = ValidateStats 0 0 0 0 0 0 0 0
+        initial = ValidateStats 0 0 0 0 0 0 0
         predictions = first (rawPredict predictor) <$> query
 
     aggregate :: ValidateStats -> (RawPrediction, Int64) -> ValidateStats
@@ -98,7 +97,6 @@ validateModel predictor config mPlatform mDatasets = renderOutput $
 
             | otherwise -> stats
                 { wrongPreds = 1 + wrongPreds
-                , unknownRefinements = 1 + unknownRefinements
                 }
 
         MisPredictionSet unknowns
@@ -124,7 +122,6 @@ report name ValidateStats{..} = T.unlines $
     , "Right refinements (" <> name <> "): " <> showText rightRefinements
     , "Partial refinements (" <> name <> "): " <> showText partialRefinements
     , "Wrong refinements (" <> name <> "): " <> showText wrongRefinements
-    , "Unknown refinements (" <> name <> "): " <> showText unknownRefinements
     , "Hard refinements error rate (" <> name <> "): "
         <> percent wrongRefinements totalRefinements
     , "Soft refinements error rate (" <> name <> "): "
@@ -133,4 +130,3 @@ report name ValidateStats{..} = T.unlines $
   where
     totalPreds = rightPreds + partialPreds + wrongPreds + unknownPreds
     totalRefinements = rightRefinements + partialRefinements + wrongRefinements
-                     + unknownRefinements
