@@ -158,8 +158,11 @@ commands = CommandRoot
             <*> filterIncomplete <*> evaluateParser <*> datasetsParser
     , SingleCommand CommandInfo
         { commandName = "show"
-        , commandHeaderDesc = ""
-        , commandDesc = ""
+        , commandHeaderDesc = "show predictions for every step of a variant"
+        , commandDesc =
+            "Evaluate BDT model against every step of a variant, reporting \
+            \the predicted implementation, expected time, and (optionall) the \
+            \properties for the graph and every step."
         }
         $ PredictionResults <$> predictionConfig
     , SingleCommand CommandInfo
