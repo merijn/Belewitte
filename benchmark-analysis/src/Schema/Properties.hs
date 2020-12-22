@@ -237,6 +237,4 @@ INNER JOIN PropertyName
 ON StepProp.propId = PropertyName.id
 AND PropertyName.isStepProp
 |]
-        Utils.executeSql [i|DROP TABLE ModelGraphProperty|]
-        Utils.executeSql [i|DROP TABLE ModelStepProperty|]
     ]

@@ -58,4 +58,8 @@ SELECT modelId, propId, importance
      , ROW_NUMBER() OVER (PARTITION BY modelId ORDER BY propId) - 1
 FROM ModelProperty
 |]
+    , 26 .> schema $ do
+        -- Cleanup leftover tables from earlier migrations
+        Utils.executeSql [i|DROP TABLE IF EXISTS ModelGraphProperty|]
+        Utils.executeSql [i|DROP TABLE IF EXISTS ModelStepProperty|]
     ]

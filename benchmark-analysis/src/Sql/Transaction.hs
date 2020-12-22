@@ -17,6 +17,8 @@ import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 import Data.String.Interpolate.IsString (i)
 import qualified Data.Text as T
+import Data.Time.Clock (UTCTime)
+import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Database.Persist.Sqlite
     ( AtLeastOneUniqueKey
     , Filter(..)
@@ -34,6 +36,9 @@ import Query (CTE, Converter(Simple), MonadConvert, MonadQuery, Query(..))
 import qualified Query
 import Schema
 import Sql.Core as Sql hiding (selectKeysRegion, selectSourceRegion)
+
+epoch :: UTCTime
+epoch = posixSecondsToUTCTime 0
 
 validateEntity
     :: ( MonadLogger m
@@ -242,7 +247,8 @@ queryImplementations algoId = IM.union builtinImpls <$>
     toIntMap (Entity k val) = IM.singleton (fromIntegral $ fromSqlKey k) val
 
     mkImpl :: Text -> Text -> Implementation
-    mkImpl short long = Implementation algoId short (Just long) Nothing Builtin
+    mkImpl short long =
+        Implementation algoId short (Just long) Nothing Builtin epoch
 
     builtinImpls :: IntMap Implementation
     builtinImpls = IM.fromList

@@ -160,7 +160,8 @@ addImplementation = withInteractiveLogging $ do
     flags <- getInteractive optionalInput "Flags"
     implType <- getInteractive typeInput "Implementation type"
 
-    Sql.insert_ $ Implementation algoId implName prettyName flags implType
+    ts <- liftIO getCurrentTime
+    Sql.insert_ $ Implementation algoId implName prettyName flags implType ts
   where
     algoInput = sqlInput AlgorithmName UniqAlgorithm
     implInput algorithmName = processCompleterText
