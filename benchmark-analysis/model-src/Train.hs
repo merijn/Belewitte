@@ -30,7 +30,6 @@ import Data.Maybe (fromMaybe)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
-import Data.Time.Clock (getCurrentTime)
 import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as VS
 import System.IO (hClose)
@@ -118,7 +117,6 @@ trainModel ModelDesc{..} = do
         Nothing -> logThrowM . PatternFailed $
             "Unable to compute property count for model"
 
-    timestamp <- liftIO getCurrentTime
     (model, ModelStats{..}) <- runProcessCreation_ $ do
         (resultsFd, resultsHnd) <- withPipe Write
         (unknownsFd, unknownsHnd) <- withPipe Read
@@ -183,7 +181,8 @@ trainModel ModelDesc{..} = do
             , predictionModelTrainSteps = trainStepSteps
             , predictionModelTrainSeed = trainStepSeed
             , predictionModelTotalUnknownCount = modelUnknownCount
-            , predictionModelTimestamp = timestamp
+            , predictionModelTimestamp = stepInfoTimestamp
+            , predictionModelAllowNewer = stepInfoAllowNewer
             }
 
         forM_ (fromMaybe mempty trainStepDatasets) $

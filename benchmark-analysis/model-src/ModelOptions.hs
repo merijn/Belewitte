@@ -449,12 +449,13 @@ stepInfoConfig = do
     getPlatformId <- platformIdParser
     getCommitId <- commitIdParser
     getUtcTime <- utcTimeParser
+    allowNewer <- allowNewerParser
     shouldFilter <- filterIncomplete
 
     pure $ \algoId ->
         StepInfoConfig algoId
             <$> getPlatformId <*> getCommitId algoId <*> pure shouldFilter
-            <*> getUtcTime
+            <*> getUtcTime <*> pure allowNewer
 
 predictionConfig :: Parser (SqlM PredictionConfig)
 predictionConfig = do

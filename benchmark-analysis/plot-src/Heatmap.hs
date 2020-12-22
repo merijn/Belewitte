@@ -111,6 +111,7 @@ plotHeatmap PredictHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
             , stepInfoPlatform = globalPlotPlatform
             , stepInfoCommit = globalPlotCommit
             , stepInfoFilterIncomplete = True
+            , stepInfoAllowNewer = NoNewer
             , ..
             }
 

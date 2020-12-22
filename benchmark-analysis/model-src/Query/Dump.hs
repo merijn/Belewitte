@@ -12,11 +12,11 @@ import Data.Time.Clock (getCurrentTime)
 
 import Core
 import Query (Query, streamQuery)
+import Query.Train
+import Query.Variant
 import Schema
 import Sql (Region)
 import qualified Sql
-import Query.Train
-import Query.Variant
 
 getConfigSet :: SqlM (Set (Key Algorithm, Key Platform, CommitId))
 getConfigSet = Sql.selectSource [] [] $ C.foldMap (S.singleton . toTuple)
@@ -57,6 +57,7 @@ toStepInfoQueries (stepInfoAlgorithm, stepInfoPlatform, stepInfoCommit) = do
     trainStepSeed = 42
     trainStepDatasets = mempty
     stepInfoFilterIncomplete = False
+    stepInfoAllowNewer = AllNewer
 
     trainStepGraphs, trainStepVariants, trainStepSteps :: Percentage
     trainStepGraphs = $$(validRational 0.5)

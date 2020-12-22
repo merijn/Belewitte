@@ -8,6 +8,7 @@ module OptionParsers
     ( reflow
     , algorithmIdParser
     , algorithmParser
+    , allowNewerParser
     , commitIdParser
     , datasetIdParser
     , datasetParser
@@ -92,6 +93,17 @@ algorithmParser = queryAlgorithm <$> algorithmOpt
     queryAlgorithm (Right n) = Sql.validateEntity "Algorithm" n
     queryAlgorithm (Left name) = Sql.validateUniqEntity "Algorithm" $
         UniqAlgorithm name
+
+allowNewerParser :: Parser AllowNewer
+allowNewerParser = optionParserFromValues vals "OPT" helpTxt $ mconcat
+        [ long "allow-newer", value NoNewer, showDefaultWith (const "no") ]
+  where
+    helpTxt = "Whether to include results newer than specified timestamp. "
+    vals = M.fromList
+        [ ("no", NoNewer)
+        , ("results", NewerResults)
+        , ("all", AllNewer)
+        ]
 
 commitIdParser :: Parser (Key Algorithm -> SqlM CommitId)
 commitIdParser = checkUniqueCommitId <$> commitIdOpt

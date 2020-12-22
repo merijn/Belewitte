@@ -98,6 +98,7 @@ getModelTrainingConfig modelId = SqlTrans.runTransaction $ do
                   , stepInfoCommit = predictionModelAlgorithmVersion
                   , stepInfoFilterIncomplete = False
                   , stepInfoTimestamp = predictionModelTimestamp
+                  , stepInfoAllowNewer = predictionModelAllowNewer
                   }
                 , legacyProps = props
                 , legacyFraction = predictionModelLegacyTrainFraction
@@ -111,6 +112,7 @@ getModelTrainingConfig modelId = SqlTrans.runTransaction $ do
                   , stepInfoCommit = predictionModelAlgorithmVersion
                   , stepInfoFilterIncomplete = predictionModelSkipIncomplete
                   , stepInfoTimestamp = predictionModelTimestamp
+                  , stepInfoAllowNewer = predictionModelAllowNewer
                   }
                 , trainStepQueryMode = All
                 , trainStepDatasets = Just trainingDatasets

@@ -41,6 +41,7 @@ import qualified Schema.Model.V2 as V2
 import qualified Schema.Model.V3 as V3
 import qualified Schema.Model.V4 as V4
 import qualified Schema.Model.V5 as V5
+import qualified Schema.Model.V6 as V6
 
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
 PredictionModel
@@ -52,6 +53,7 @@ PredictionModel
     description Text Maybe
     model Model
     skipIncomplete Bool
+    allowNewer AllowNewer
     legacyTrainFraction Double
     trainGraphs Percentage
     trainVariants Percentage
@@ -69,6 +71,8 @@ instance PrettyFields PredictionModel where
         , ("Description", multilineTextField PredictionModelDescription)
         , ("Algorithm", idField PredictionModelAlgorithmId)
         , ("Platform", idField PredictionModelPlatformId)
+        , ("Skip", PredictionModelSkipIncomplete `fieldVia` prettyShow)
+        , ("Newer", PredictionModelAllowNewer `fieldVia` prettyShow)
         , ("Seed", PredictionModelTrainSeed `fieldVia` prettyShow)
         , ("Legacy", PredictionModelLegacyTrainFraction `fieldVia` flip percent 1)
         , ("Graphs", PredictionModelTrainGraphs `fieldVia` renderPercentage)
@@ -231,10 +235,14 @@ SELECT PredictionModel.id
        END
 FROM PredictionModel
 |]
-    , 23 .> schema $ do
-
+    , 23 .> V6.schema $ do
         Utils.executeSql [i|
 ALTER TABLE "PredictionModel"
 ADD COLUMN "skipIncomplete" BOOLEAN NOT NULL DEFAULT 0
+|]
+    , 27 .> schema $ do
+        Utils.executeSql [i|
+ALTER TABLE "PredictionModel"
+ADD COLUMN "allowNewer" VARCHAR NOT NULL DEFAULT 'NoNewer'
 |]
     ]

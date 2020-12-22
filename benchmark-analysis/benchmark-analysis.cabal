@@ -135,6 +135,7 @@ Library
                         Schema.Model.V3
                         Schema.Model.V4
                         Schema.Model.V5
+                        Schema.Model.V6
                         Schema.ModelMetadata
                         Schema.ModelMetadata.V0
                         Schema.ModelMetadata.V1

@@ -2,7 +2,8 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE OverloadedStrings #-}
 module Schema
-    ( ByteString
+    ( AllowNewer(..)
+    , ByteString
     , CommitId(..)
     , GlobalVars.GlobalVar(..)
     , Hash(..)

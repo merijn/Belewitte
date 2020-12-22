@@ -31,6 +31,7 @@ data StepInfoConfig = StepInfoConfig
     , stepInfoCommit :: CommitId
     , stepInfoFilterIncomplete :: Bool
     , stepInfoTimestamp :: UTCTime
+    , stepInfoAllowNewer :: AllowNewer
     } deriving (Show)
 
 data StepInfo =

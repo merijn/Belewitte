@@ -7,7 +7,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 module Types
-    ( CommitId(..)
+    ( AllowNewer(..)
+    , CommitId(..)
     , HashDigest
     , Hash(..)
     , ImplType(..)
@@ -34,6 +35,10 @@ import ValidLiterals
 data ImplType = Builtin | Core | Derived
     deriving (Bounded, Enum, Eq, Ord, Read, Show)
 derivePersistField "ImplType"
+
+data AllowNewer = NoNewer | NewerResults | AllNewer
+    deriving (Bounded, Enum, Eq, Ord, Read, Show)
+derivePersistField "AllowNewer"
 
 type HashDigest = Digest MD5
 
