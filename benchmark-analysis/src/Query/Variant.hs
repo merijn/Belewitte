@@ -71,12 +71,14 @@ variantInfoQuery VariantInfoConfig
     newerResults :: Bool
     newerResults = case variantInfoAllowNewer of
         NoNewer -> False
+        NewerImpls -> False
         NewerResults -> True
         AllNewer -> True
 
     newerImpls :: Bool
     newerImpls = case variantInfoAllowNewer of
         NoNewer -> False
+        NewerImpls -> True
         NewerResults -> False
         AllNewer -> True
 
@@ -113,10 +115,11 @@ variantInfoQuery VariantInfoConfig
             , toPersistValue variantInfoTimestamp
             ]
         , cteQuery = [i|
-IndexedImpls(idx, implId, type, count) AS (
+IndexedImpls(idx, implId, type, timestamp, count) AS (
     SELECT ROW_NUMBER() OVER ()
          , id
          , type
+         , timestamp
          , COUNT() OVER ()
     FROM Implementation
     WHERE algorithmId = ? AND (? OR Implementation.timestamp <= ?)
@@ -146,6 +149,8 @@ ExternalImplVector(implTiming) AS (
         { cteParams =
             [ toPersistValue newerResults
             , toPersistValue variantInfoTimestamp
+            , toPersistValue newerImpls
+            , toPersistValue variantInfoTimestamp
             , toPersistValue variantInfoAlgorithm
             , toPersistValue variantInfoPlatform
             , toPersistValue variantInfoCommit
@@ -165,7 +170,8 @@ VariantTiming(variantId, bestNonSwitching, timings) AS (
 
     INNER JOIN Run
     ON Run.runConfigId = RunConfig.id
-    AND Run.validated AND (? OR Run.timestamp < ?)
+    AND Run.validated AND
+    ((? OR Run.timestamp < ?) OR (? AND Impls.timestamp > ?))
 
     INNER JOIN IndexedImpls AS Impls
     ON Impls.implId = Run.implId

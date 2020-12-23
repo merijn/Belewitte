@@ -103,6 +103,7 @@ allowNewerParser = optionParserFromValues vals "OPT" helpTxt $ mconcat
     vals = M.fromList
         [ ("no", NoNewer)
         , ("results", NewerResults)
+        , ("impls", NewerImpls)
         , ("all", AllNewer)
         ]
 

@@ -36,7 +36,7 @@ data ImplType = Builtin | Core | Derived
     deriving (Bounded, Enum, Eq, Ord, Read, Show)
 derivePersistField "ImplType"
 
-data AllowNewer = NoNewer | NewerResults | AllNewer
+data AllowNewer = NoNewer | NewerResults | NewerImpls | AllNewer
     deriving (Bounded, Enum, Eq, Ord, Read, Show)
 derivePersistField "AllowNewer"
 

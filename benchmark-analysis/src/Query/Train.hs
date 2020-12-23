@@ -60,6 +60,7 @@ trainStepQuery TrainStepConfig
     newerResults :: Bool
     newerResults = case stepInfoAllowNewer of
         NoNewer -> False
+        NewerImpls -> False
         NewerResults -> True
         AllNewer -> True
 
@@ -67,6 +68,7 @@ trainStepQuery TrainStepConfig
     newerImpls = case stepInfoAllowNewer of
         NoNewer -> False
         NewerResults -> False
+        NewerImpls -> True
         AllNewer -> True
 
     datasets :: Set Text
@@ -204,10 +206,11 @@ StepPropVectors(variantId, stepId, stepProps) AS (
             , toPersistValue stepInfoTimestamp
             ]
         , cteQuery = [i|
-IndexedImpls(idx, implId, type, count) AS (
+IndexedImpls(idx, implId, type, timestamp, count) AS (
     SELECT ROW_NUMBER() OVER ()
          , id
          , type
+         , timestamp
          , COUNT() OVER ()
     FROM Implementation
     WHERE algorithmId = ? AND (? OR Implementation.timestamp <= ?)
@@ -225,6 +228,8 @@ ImplVector(implTiming) AS (
       [ toPersistValue trainStepSeed
       , toPersistValue trainStepSteps
       , toPersistValue newerResults
+      , toPersistValue stepInfoTimestamp
+      , toPersistValue newerImpls
       , toPersistValue stepInfoTimestamp
       , toPersistValue stepInfoAlgorithm
       , toPersistValue stepInfoAlgorithm
@@ -258,7 +263,7 @@ ON Run.runConfigId = RunConfig.id
 INNER JOIN IndexedImpls AS Impls USING (implId)
 
 WHERE Run.validated = 1
-AND (? OR Run.timestamp < ?)
+AND ((? OR Run.timestamp < ?) OR (? AND Impls.timestamp > ?))
 AND Run.algorithmId = ?
 AND RunConfig.algorithmId = ?
 AND RunConfig.platformId = ?

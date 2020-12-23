@@ -113,12 +113,14 @@ stepInfoQuery StepInfoConfig{..} variantId =
     newerResults :: Bool
     newerResults = case stepInfoAllowNewer of
         NoNewer -> False
+        NewerImpls -> False
         NewerResults -> True
         AllNewer -> True
 
     newerImpls :: Bool
     newerImpls = case stepInfoAllowNewer of
         NoNewer -> False
+        NewerImpls -> True
         NewerResults -> False
         AllNewer -> True
 
@@ -192,10 +194,11 @@ StepProps(variantId, stepId, stepProps) AS (
             , toPersistValue stepInfoTimestamp
             ]
         , cteQuery = [i|
-IndexedImpls(idx, implId, type, count) AS (
+IndexedImpls(idx, implId, type, timestamp, count) AS (
     SELECT ROW_NUMBER() OVER ()
          , Implementation.id
          , type
+         , timestamp
          , COUNT() OVER ()
     FROM Implementation
     WHERE algorithmId = ? AND (? OR Implementation.timestamp <= ?)
@@ -211,6 +214,8 @@ ImplVector(implTiming) AS (
     params :: [PersistValue]
     params =
         [ toPersistValue newerResults
+        , toPersistValue stepInfoTimestamp
+        , toPersistValue newerImpls
         , toPersistValue stepInfoTimestamp
         , toPersistValue stepInfoAlgorithm
         , toPersistValue stepInfoAlgorithm
@@ -241,7 +246,7 @@ ON RunConfig.id = Run.runConfigId
 INNER JOIN IndexedImpls AS Impls USING (implId)
 
 WHERE Run.validated = 1
-AND (? OR Run.timestamp < ?)
+AND ((? OR Run.timestamp < ?) OR (? AND Impls.timestamp > ?))
 AND Run.algorithmId = ?
 AND RunConfig.algorithmId = ?
 AND RunConfig.platformId = ?
