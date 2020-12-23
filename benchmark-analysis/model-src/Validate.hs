@@ -22,7 +22,11 @@ import Query
 import Schema
 import Query.Step (StepInfo(..))
 import Train
-import TrainConfig (setTrainingConfigDatasets, setTrainingConfigPlatform)
+import TrainConfig
+    ( setTrainingConfigDatasets
+    , setTrainingConfigPlatform
+    , setTrainingConfigTimestamp
+    )
 import Utils.PropValue (propValueValue)
 
 data ValidateStats = ValidateStats
@@ -38,10 +42,11 @@ data ValidateStats = ValidateStats
 validateModel
     :: RawPredictor
     -> TrainingConfig
+    -> Maybe UTCTime
     -> Maybe (Key Platform)
     -> Maybe (Set (Key Dataset))
     -> SqlM ()
-validateModel predictor config mPlatform mDatasets = renderOutput $
+validateModel predictor config mTime mPlatform mDatasets = renderOutput $
     case (mPlatform, mDatasets) of
         (Nothing, Nothing) -> do
             validation <- getValidationQuery config
@@ -51,8 +56,9 @@ validateModel predictor config mPlatform mDatasets = renderOutput $
         _ -> do
             let setPlatform = maybe id setTrainingConfigPlatform mPlatform
                 setDatasets = setTrainingConfigDatasets mDatasets
+                setTimestamp = setTrainingConfigTimestamp mTime
 
-                newConfig = setPlatform . setDatasets $ config
+                newConfig = setTimestamp . setPlatform . setDatasets $ config
                 comparisonQuery = getTotalQuery newConfig
 
             computeResults "comparison" $ reduceInfo <$> comparisonQuery

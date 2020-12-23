@@ -46,6 +46,7 @@ trainStepQuery TrainStepConfig
     , stepInfoCommit
     , stepInfoFilterIncomplete
     , stepInfoTimestamp
+    , stepInfoAllowNewer
     }
   , trainStepQueryMode
   , trainStepDatasets
@@ -56,6 +57,18 @@ trainStepQuery TrainStepConfig
   , trainStepSteps
   } = Query{convert = Filter converter, ..}
   where
+    newerResults :: Bool
+    newerResults = case stepInfoAllowNewer of
+        NoNewer -> False
+        NewerResults -> True
+        AllNewer -> True
+
+    newerImpls :: Bool
+    newerImpls = case stepInfoAllowNewer of
+        NoNewer -> False
+        NewerResults -> False
+        AllNewer -> True
+
     datasets :: Set Text
     datasets = maybe mempty (S.map showSqlKey) trainStepDatasets
 
@@ -184,26 +197,34 @@ StepPropVectors(variantId, stepId, stepProps) AS (
     GROUP BY variantId, stepId
 )|]
 
-      , [toPersistValue stepInfoAlgorithm] `inCTE` [i|
+      , CTE
+        { cteParams =
+            [ toPersistValue stepInfoAlgorithm
+            , toPersistValue newerImpls
+            , toPersistValue stepInfoTimestamp
+            ]
+        , cteQuery = [i|
 IndexedImpls(idx, implId, type, count) AS (
     SELECT ROW_NUMBER() OVER ()
          , id
          , type
          , COUNT() OVER ()
     FROM Implementation
-    WHERE algorithmId = ?
+    WHERE algorithmId = ? AND (? OR Implementation.timestamp <= ?)
 ),
 
 ImplVector(implTiming) AS (
     SELECT init_key_value_vector(implId, idx, count)
     FROM IndexedImpls
 )|]
+        }
       ]
 
     params :: [PersistValue]
     params =
       [ toPersistValue trainStepSeed
       , toPersistValue trainStepSteps
+      , toPersistValue newerResults
       , toPersistValue stepInfoTimestamp
       , toPersistValue stepInfoAlgorithm
       , toPersistValue stepInfoAlgorithm
@@ -237,7 +258,7 @@ ON Run.runConfigId = RunConfig.id
 INNER JOIN IndexedImpls AS Impls USING (implId)
 
 WHERE Run.validated = 1
-AND Run.timestamp < ?
+AND (? OR Run.timestamp < ?)
 AND Run.algorithmId = ?
 AND RunConfig.algorithmId = ?
 AND RunConfig.platformId = ?

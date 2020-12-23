@@ -23,6 +23,7 @@ module OptionParsers
     , predictorConfigsParser
     , runconfigIdParser
     , runconfigParser
+    , requiredUtcTimeParser
     , utcTimeParser
     , variantConfigIdParser
     , variantConfigParser
@@ -361,14 +362,16 @@ runconfigParser = queryRunConfig <$> runConfigOpt
     queryRunConfig :: Int64 -> SqlM (Entity RunConfig)
     queryRunConfig n = Sql.validateEntity "RunConfig" n
 
-utcTimeParser :: Parser (SqlM UTCTime)
-utcTimeParser = maybe (liftIO getCurrentTime) return <$> optional timeParser
+requiredUtcTimeParser :: Parser (SqlM UTCTime)
+requiredUtcTimeParser =
+    maybe (liftIO getCurrentTime) return <$> optional utcTimeParser
   where
-    timeParser :: Parser UTCTime
-    timeParser = option utcReader . mconcat $
-        [ metavar "TIME", short 't', long "time"
-        , help "Timestamp controlling query output." ]
 
+utcTimeParser :: Parser UTCTime
+utcTimeParser = option utcReader . mconcat $
+    [ metavar "TIME", short 't', long "time"
+    , help "Timestamp controlling query output." ]
+  where
     utcReader :: ReadM UTCTime
     utcReader = maybeReader $
         parseTimeM False defaultTimeLocale "%Y-%-m-%-d %T"

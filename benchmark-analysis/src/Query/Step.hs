@@ -110,8 +110,20 @@ stepInfoQuery :: StepInfoConfig -> Key Variant -> Query StepInfo
 stepInfoQuery StepInfoConfig{..} variantId =
     Query{convert = Simple converter, ..}
   where
+    newerResults :: Bool
+    newerResults = case stepInfoAllowNewer of
+        NoNewer -> False
+        NewerResults -> True
+        AllNewer -> True
+
+    newerImpls :: Bool
+    newerImpls = case stepInfoAllowNewer of
+        NoNewer -> False
+        NewerResults -> False
+        AllNewer -> True
+
     queryName :: Text
-    queryName = "infoStepQuery"
+    queryName = "stepInfoQuery"
 
     converter :: MonadConvert m => [PersistValue] -> m StepInfo
     converter
@@ -173,25 +185,33 @@ StepProps(variantId, stepId, stepProps) AS (
 )|]
         }
 
-      , [toPersistValue stepInfoAlgorithm] `inCTE` [i|
+      , CTE
+        { cteParams =
+            [ toPersistValue stepInfoAlgorithm
+            , toPersistValue newerImpls
+            , toPersistValue stepInfoTimestamp
+            ]
+        , cteQuery = [i|
 IndexedImpls(idx, implId, type, count) AS (
     SELECT ROW_NUMBER() OVER ()
          , Implementation.id
          , type
          , COUNT() OVER ()
     FROM Implementation
-    WHERE algorithmId = ?
+    WHERE algorithmId = ? AND (? OR Implementation.timestamp <= ?)
 ),
 
 ImplVector(implTiming) AS (
     SELECT init_key_value_vector(implId, idx, count)
     FROM IndexedImpls
 )|]
+        }
       ]
 
     params :: [PersistValue]
     params =
-        [ toPersistValue stepInfoTimestamp
+        [ toPersistValue newerResults
+        , toPersistValue stepInfoTimestamp
         , toPersistValue stepInfoAlgorithm
         , toPersistValue stepInfoAlgorithm
         , toPersistValue stepInfoPlatform
@@ -221,7 +241,7 @@ ON RunConfig.id = Run.runConfigId
 INNER JOIN IndexedImpls AS Impls USING (implId)
 
 WHERE Run.validated = 1
-AND Run.timestamp < ?
+AND (? OR Run.timestamp < ?)
 AND Run.algorithmId = ?
 AND RunConfig.algorithmId = ?
 AND RunConfig.platformId = ?

@@ -9,6 +9,7 @@ module TrainConfig
     , setTrainingConfigDatasets
     , setTrainingConfigPlatform
     , setTrainingConfigSkipIncomplete
+    , setTrainingConfigTimestamp
     ) where
 
 import Data.Conduit ((.|))
@@ -71,6 +72,15 @@ setTrainingConfigSkipIncomplete val trainConfig = case trainConfig of
     TrainConfig{} -> mapStepInfoConfig go trainConfig
   where
     go cfg = cfg{ stepInfoFilterIncomplete = val }
+
+setTrainingConfigTimestamp :: Maybe UTCTime -> TrainingConfig -> TrainingConfig
+setTrainingConfigTimestamp val trainConfig = case trainConfig of
+    LegacyTrainConfig{} -> trainConfig
+    TrainConfig{} -> mapStepInfoConfig go trainConfig
+  where
+    go cfg = case val of
+        Nothing -> cfg
+        Just v -> cfg{ stepInfoTimestamp = v }
 
 getModelTrainingConfig :: MonadSql m => Key PredictionModel -> m TrainingConfig
 getModelTrainingConfig modelId = SqlTrans.runTransaction $ do

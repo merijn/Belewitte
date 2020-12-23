@@ -70,6 +70,7 @@ data ModelCommand
       { getPredictorConfig :: SqlM PredictorConfig
       , getOptionalPlatformId :: SqlM (Maybe (Key Platform))
       , getOptionalDatasetIds :: SqlM (Maybe (Set (Key Dataset)))
+      , optionalUTCTime :: Maybe UTCTime
       }
     | EvaluatePredictor
       { getPlatformId :: SqlM (Key Platform)
@@ -77,6 +78,7 @@ data ModelCommand
       , shouldFilterIncomplete :: Bool
       , evaluateConfig :: EvaluateReport
       , getDatasetIds :: SqlM (Maybe (Set (Key Dataset)))
+      , optionalUTCTime :: Maybe UTCTime
       }
     | PredictionResults
       { getPredictionConfig :: SqlM PredictionConfig }
@@ -146,6 +148,7 @@ commands = CommandRoot
         $ ValidateModel
             <$> predictorConfigParser
             <*> (sequence <$> optional platformIdParser) <*> datasetsParser
+            <*> optional utcTimeParser
     , SingleCommand CommandInfo
         { commandName = "evaluate"
         , commandHeaderDesc = "evaluate model performance"
@@ -156,6 +159,7 @@ commands = CommandRoot
         $ EvaluatePredictor
             <$> platformIdParser <*> predictorConfigsParser
             <*> filterIncomplete <*> evaluateParser <*> datasetsParser
+            <*> optional utcTimeParser
     , SingleCommand CommandInfo
         { commandName = "show"
         , commandHeaderDesc = "show predictions for every step of a variant"
@@ -448,7 +452,7 @@ stepInfoConfig :: Parser (Key Algorithm -> SqlM StepInfoConfig)
 stepInfoConfig = do
     getPlatformId <- platformIdParser
     getCommitId <- commitIdParser
-    getUtcTime <- utcTimeParser
+    getUtcTime <- requiredUtcTimeParser
     allowNewer <- allowNewerParser
     shouldFilter <- filterIncomplete
 

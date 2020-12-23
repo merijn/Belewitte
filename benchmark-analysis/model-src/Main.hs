@@ -131,6 +131,7 @@ main = runCommand commands $ \case
       { getPredictorConfig
       , getOptionalPlatformId
       , getOptionalDatasetIds
+      , optionalUTCTime
       } -> do
         predictor <- getPredictorConfig >>= loadPredictor
         platformId <- getOptionalPlatformId
@@ -138,7 +139,7 @@ main = runCommand commands $ \case
 
         validationConfig <- getModelTrainingConfig (rawPredictorId predictor)
 
-        validateModel predictor validationConfig platformId datasets
+        validateModel predictor validationConfig optionalUTCTime platformId datasets
 
     EvaluatePredictor
       { getPlatformId
@@ -146,14 +147,16 @@ main = runCommand commands $ \case
       , shouldFilterIncomplete
       , evaluateConfig
       , getDatasetIds
+      , optionalUTCTime
       } -> do
         let setSkip = setTrainingConfigSkipIncomplete shouldFilterIncomplete
+            setTimestamp = setTrainingConfigTimestamp optionalUTCTime
 
         ~predictors@(basePred:_) <- getPredictorConfigs >>= mapM loadPredictor
 
         setPlatformId <- setTrainingConfigPlatform <$> getPlatformId
         setDatasets <- setTrainingConfigDatasets <$> getDatasetIds
-        evalConfig <- setSkip . setPlatformId . setDatasets <$>
+        evalConfig <- setTimestamp . setSkip . setPlatformId . setDatasets <$>
             getModelTrainingConfig (rawPredictorId basePred)
 
         evaluateModel predictors evaluateConfig evalConfig
