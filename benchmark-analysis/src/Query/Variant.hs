@@ -30,6 +30,8 @@ data VariantInfoConfig = VariantInfoConfig
     , variantInfoCommit :: CommitId
     , variantInfoVariantConfig :: Maybe (Key VariantConfig)
     , variantInfoDataset :: Maybe (Key Dataset)
+    , variantInfoTimestamp :: UTCTime
+    , variantInfoAllowNewer :: AllowNewer
     , variantInfoFilterIncomplete :: Bool
     } deriving (Show)
 
@@ -61,9 +63,23 @@ variantInfoQuery VariantInfoConfig
   , variantInfoCommit
   , variantInfoDataset
   , variantInfoVariantConfig
+  , variantInfoTimestamp
+  , variantInfoAllowNewer
   , variantInfoFilterIncomplete
   } = Query{convert = Simple converter, ..}
   where
+    newerResults :: Bool
+    newerResults = case variantInfoAllowNewer of
+        NoNewer -> False
+        NewerResults -> True
+        AllNewer -> True
+
+    newerImpls :: Bool
+    newerImpls = case variantInfoAllowNewer of
+        NoNewer -> False
+        NewerResults -> False
+        AllNewer -> True
+
     queryName :: Text
     queryName = "variantInfoQuery"
 
@@ -90,20 +106,27 @@ variantInfoQuery VariantInfoConfig
 
     commonTableExpressions :: [CTE]
     commonTableExpressions =
-      [ [toPersistValue variantInfoAlgorithm] `inCTE` [i|
+      [ CTE
+        { cteParams =
+            [ toPersistValue variantInfoAlgorithm
+            , toPersistValue newerImpls
+            , toPersistValue variantInfoTimestamp
+            ]
+        , cteQuery = [i|
 IndexedImpls(idx, implId, type, count) AS (
     SELECT ROW_NUMBER() OVER ()
          , id
          , type
          , COUNT() OVER ()
     FROM Implementation
-    WHERE algorithmId = ?
+    WHERE algorithmId = ? AND (? OR Implementation.timestamp <= ?)
 ),
 
 ImplVector(implTiming) AS (
     SELECT init_key_value_vector(implId, idx, count)
     FROM IndexedImpls
 )|]
+        }
 
       , [toPersistValue variantInfoAlgorithm] `inCTE` [i|
 IndexedExternalImpls(idx, implId, count) AS (
@@ -121,7 +144,9 @@ ExternalImplVector(implTiming) AS (
 
       , CTE
         { cteParams =
-            [ toPersistValue variantInfoAlgorithm
+            [ toPersistValue newerResults
+            , toPersistValue variantInfoTimestamp
+            , toPersistValue variantInfoAlgorithm
             , toPersistValue variantInfoPlatform
             , toPersistValue variantInfoCommit
             , toPersistValue variantInfoDataset
@@ -140,7 +165,7 @@ VariantTiming(variantId, bestNonSwitching, timings) AS (
 
     INNER JOIN Run
     ON Run.runConfigId = RunConfig.id
-    AND Run.validated
+    AND Run.validated AND (? OR Run.timestamp < ?)
 
     INNER JOIN IndexedImpls AS Impls
     ON Impls.implId = Run.implId

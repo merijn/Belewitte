@@ -423,12 +423,15 @@ variantInfoConfigParser = do
     getPlatformId <- platformIdParser
     getDatasetId <- optional datasetIdParser
     filterFlag <- filterIncomplete
+    allowNewer <- allowNewerParser
+    getUtcTime <- requiredUtcTimeParser
 
     pure $ do
         algoId <- getAlgoId
         VariantInfoConfig algoId
             <$> getPlatformId <*> getCommit algoId <*> pure Nothing
-            <*> sequence getDatasetId <*> pure filterFlag
+            <*> sequence getDatasetId <*> getUtcTime <*> pure allowNewer
+            <*> pure filterFlag
 
 intervalReader :: ReadM (IntervalSet Int64)
 intervalReader = maybeReader . parseMaybe $

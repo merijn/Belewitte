@@ -84,6 +84,8 @@ plotHeatmap TotalHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
             Everything -> Nothing
             ConfigSelection n -> Just n
         , variantInfoDataset = heatmapDataset
+        , variantInfoTimestamp = globalPlotTimestamp
+        , variantInfoAllowNewer = globalPlotAllowNewer
         , variantInfoFilterIncomplete = False
         }
 

@@ -13,6 +13,8 @@ data GlobalPlotOptions
     { globalPlotAlgorithm :: Key Algorithm
     , globalPlotPlatform :: Key Platform
     , globalPlotCommit :: CommitId
+    , globalPlotTimestamp :: UTCTime
+    , globalPlotAllowNewer :: AllowNewer
     , globalPlotImpls :: (IntMap Implementation, IntMap ExternalImpl)
     }
 
@@ -21,6 +23,8 @@ globalOptionsParser = do
     getAlgoId <- algorithmIdParser
     getPlatformId <- platformIdParser
     getCommit <- commitIdParser
+    getUtcTime <- requiredUtcTimeParser
+    allowNewer <- allowNewerParser
 
     pure $ do
         algoId <- getAlgoId
@@ -28,4 +32,5 @@ globalOptionsParser = do
                      <*> Sql.queryExternalImplementations algoId
 
         GlobalPlotOptions algoId
-            <$> getPlatformId <*> getCommit algoId <*> pure impls
+            <$> getPlatformId <*> getCommit algoId <*> getUtcTime
+            <*> pure allowNewer <*> pure impls

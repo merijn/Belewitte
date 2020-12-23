@@ -26,9 +26,9 @@ getConfigSet = Sql.selectSource [] [] $ C.foldMap (S.singleton . toTuple)
         (runConfigAlgorithmId, runConfigPlatformId, runConfigAlgorithmVersion)
 
 toVariantInfoQuery
-    :: (Key Algorithm, Key Platform, CommitId) -> Query VariantInfo
-toVariantInfoQuery (algoId, platformId, commitId) = variantInfoQuery $
-    VariantInfoConfig algoId platformId commitId Nothing Nothing False
+    :: UTCTime -> (Key Algorithm, Key Platform, CommitId) -> Query VariantInfo
+toVariantInfoQuery ts (algoId, platformId, commitId) = variantInfoQuery $
+    VariantInfoConfig algoId platformId commitId Nothing Nothing ts AllNewer False
 
 toStepInfoQueries
     :: (Key Algorithm, Key Platform, CommitId)
@@ -67,10 +67,11 @@ toStepInfoQueries (stepInfoAlgorithm, stepInfoPlatform, stepInfoCommit) = do
 modelQueryDump :: FilePath -> SqlM ()
 modelQueryDump outputSuffix = do
     configSet <- getConfigSet
+    utcTime <- liftIO $ getCurrentTime
 
     Sql.runRegionConduit $
         C.yieldMany configSet
-        .| C.map toVariantInfoQuery
+        .| C.map (toVariantInfoQuery utcTime)
         .> streamQuery
         .| C.map sortVariantTimings
         .| querySink "variantInfoQuery-"
