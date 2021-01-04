@@ -185,6 +185,7 @@ Library
   Other-Extensions:     BangPatterns
                         CApiFFI
                         ConstraintKinds
+                        DefaultSignatures
                         DeriveFunctor
                         DeriveGeneric
                         DeriveLift
