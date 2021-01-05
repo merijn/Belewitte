@@ -1,5 +1,7 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -15,7 +17,7 @@ import Control.Monad (when)
 import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
-import qualified Database.Persist.Sql as Sql
+import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
@@ -63,6 +65,8 @@ PredictionModel
     timestamp UTCTime
     UniqModel name
 |]
+
+deriving instance Show (Unique PredictionModel)
 
 instance PrettyFields PredictionModel where
     prettyFieldInfo = ("Id", idField PredictionModelId) :|

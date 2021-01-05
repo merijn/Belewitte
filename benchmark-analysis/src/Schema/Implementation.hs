@@ -1,5 +1,7 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -14,6 +16,7 @@ module Schema.Implementation where
 import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
+import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
@@ -36,6 +39,8 @@ Implementation
     UniqImpl algorithmId name
     deriving Eq Show
 |]
+
+deriving instance Show (Unique Implementation)
 
 instance PrettyFields Implementation where
     prettyFieldInfo = ("Id", idField ImplementationId) :|

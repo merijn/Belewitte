@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -15,7 +16,7 @@ module Schema.Run where
 
 import Data.String.Interpolate.IsString (i)
 import Data.Time.Clock (UTCTime)
-import qualified Database.Persist.Sql as Sql
+import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
@@ -40,6 +41,8 @@ Run
     UniqRun runConfigId variantId implId algorithmId
     deriving Eq Show
 |]
+
+deriving instance Show (Unique Run)
 
 instance PrettyFields Run where
     prettyFieldInfo = ("Id", idField RunId) :|

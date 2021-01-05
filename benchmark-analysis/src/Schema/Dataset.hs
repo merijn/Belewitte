@@ -1,5 +1,7 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralisedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -13,7 +15,7 @@ module Schema.Dataset where
 
 import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
-import qualified Database.Persist.Sql as Sql
+import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
@@ -31,6 +33,8 @@ Dataset
 instance PrettyFields Dataset where
     prettyFieldInfo = ("Id", idField DatasetId) :|
         [ ("Name", textField DatasetName) ]
+
+deriving instance Show (Unique Dataset)
 
 migrations :: MonadSql m => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup

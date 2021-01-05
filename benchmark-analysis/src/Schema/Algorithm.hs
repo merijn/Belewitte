@@ -1,5 +1,7 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -12,6 +14,7 @@
 module Schema.Algorithm where
 
 import Data.Text (Text)
+import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
@@ -26,6 +29,8 @@ Algorithm
     UniqAlgorithm name
     deriving Eq Show
 |]
+
+deriving instance Show (Unique Algorithm)
 
 instance PrettyFields Algorithm where
     prettyFieldInfo = ("Id", idField AlgorithmId) :|

@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -16,6 +17,7 @@ module Schema.Properties where
 
 import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
+import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
@@ -62,6 +64,11 @@ StepPropValue
     UniqStepPropValue variantId stepId propId
     deriving Eq Show
 |]
+
+deriving instance Show (Unique PropertyName)
+deriving instance Show (Unique GraphPropValue)
+deriving instance Show (Unique StepProp)
+deriving instance Show (Unique StepPropValue)
 
 schema :: [EntityDef]
 schema = Utils.addForeignRef "StepPropValue" stepProp

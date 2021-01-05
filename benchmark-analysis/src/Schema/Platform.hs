@@ -1,5 +1,7 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -13,7 +15,7 @@ module Schema.Platform where
 
 import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
-import qualified Database.Persist.Sql as Sql
+import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
@@ -34,6 +36,8 @@ Platform
     UniqPlatform name
     deriving Eq Show
 |]
+
+deriving instance Show (Unique Platform)
 
 instance PrettyFields Platform where
     prettyFieldInfo = ("Id", idField PlatformId) :|

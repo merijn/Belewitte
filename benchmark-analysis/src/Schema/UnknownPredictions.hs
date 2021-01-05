@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -17,7 +18,7 @@ import Control.Monad (when)
 import Control.Monad.Logger (logErrorN)
 import Data.Maybe (fromMaybe)
 import Data.String.Interpolate.IsString (i)
-import qualified Database.Persist.Sql as Sql
+import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
@@ -57,6 +58,8 @@ UnknownPredictionSet
     Primary unknownPredId implId
     deriving Eq Show
 |]
+
+deriving instance Show (Unique UnknownPrediction)
 
 schema :: [EntityDef]
 schema = Utils.addForeignRef "UnknownPrediction" model

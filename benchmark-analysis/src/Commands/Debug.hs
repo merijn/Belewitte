@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -Wno-deprecations #-}
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -272,6 +273,8 @@ testQuery = do
         PersistObjectId bs -> encodeBase64 bs
         PersistArray l -> renderSeparatedList ", " persistValueToText l
         PersistDbSpecific bs -> encodeBase64 bs
+        PersistLiteral bs -> encodeBase64 bs
+        PersistLiteralEscaped bs -> encodeBase64 bs
 
 countQuery :: Input SqlM ()
 countQuery = do

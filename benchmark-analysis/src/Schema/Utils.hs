@@ -31,7 +31,7 @@ import Data.Text (Text)
 import Database.Persist.Sql (Migration, migrate)
 import Database.Persist.TH (embedEntityDefs)
 import Database.Persist.Types
-    (DBName(..), EntityDef(..), ForeignDef(..), HaskellName(..))
+    (DBName(..), EntityDef(..), ForeignDef(..), HaskellName(..), noCascade)
 
 import Sql.Core (MonadLogger, MonadSql, MonadThrow, Transaction)
 import qualified Sql.Core as Sql
@@ -57,6 +57,8 @@ mkForeignRef foreignTable refs = ForeignDef
     , foreignConstraintNameHaskell = HaskellName $ "Foreign" <> foreignTable
     , foreignConstraintNameDBName = DBName $ "Foreign" <> foreignTable
     , foreignFields = map wrapNames refs
+    , foreignFieldCascade = noCascade
+    , foreignToPrimary = False
     , foreignAttrs = []
     , foreignNullable = False
     }

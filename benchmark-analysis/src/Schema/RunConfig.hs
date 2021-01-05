@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -14,7 +15,7 @@
 module Schema.RunConfig where
 
 import Data.String.Interpolate.IsString (i)
-import qualified Database.Persist.Sql as Sql
+import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
@@ -38,6 +39,8 @@ RunConfig
     UniqRunConfig algorithmId platformId datasetId algorithmVersion
     deriving Eq Show
 |]
+
+deriving instance Show (Unique RunConfig)
 
 instance PrettyFields RunConfig where
     prettyFieldInfo = ("Id", idField RunConfigId) :|

@@ -1,5 +1,7 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -14,7 +16,7 @@ module Schema.Graph where
 import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
-import qualified Database.Persist.Sql as Sql
+import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
@@ -37,6 +39,8 @@ Graph
     UniqGraphName name datasetId
     deriving Eq Show
 |]
+
+deriving instance Show (Unique Graph)
 
 instance PrettyFields Graph where
     prettyFieldInfo = ("Id", idField GraphId) :|

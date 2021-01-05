@@ -1,3 +1,4 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -15,6 +16,7 @@ module Schema.External where
 
 import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
+import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
@@ -48,6 +50,8 @@ ExternalTimer
     Primary platformId variantId implId algorithmId name
     deriving Eq Show
 |]
+
+deriving instance Show (Unique ExternalImpl)
 
 instance PrettyFields ExternalImpl where
     prettyFieldInfo = ("Id", idField ExternalImplId) :|

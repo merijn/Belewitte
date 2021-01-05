@@ -1,5 +1,7 @@
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE DerivingStrategies #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -12,6 +14,7 @@
 module Schema.Variant where
 
 import Data.String.Interpolate.IsString (i)
+import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 import Database.Persist.Types
@@ -40,6 +43,8 @@ Variant
     UniqVariant graphId variantConfigId
     deriving Eq Show
 |]
+
+deriving instance Show (Unique Variant)
 
 instance PrettyFields Variant where
     prettyFieldInfo = ("Id", idField VariantId) :|
