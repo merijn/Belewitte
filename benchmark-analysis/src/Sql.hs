@@ -150,6 +150,9 @@ insert = runTransaction . SqlTrans.insert
 insert_ :: (MonadSql m, SqlRecord rec) => rec -> m ()
 insert_ = runTransaction . SqlTrans.insert_
 
+insertKey :: (MonadSql m, SqlRecord rec) => Key rec -> rec -> m ()
+insertKey k = runTransaction . SqlTrans.insertKey k
+
 onlyUnique
     :: (MonadSql m, OnlyOneUniqueKey rec, SqlRecord rec)
     => rec -> m (Unique rec)

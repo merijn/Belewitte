@@ -160,6 +160,11 @@ insertBy
     => rec -> Transaction m (Either (Entity rec) (Key rec))
 insertBy = Transaction . Sqlite.insertBy
 
+insertKey
+    :: (MonadSql m, SqlRecord rec)
+    => Key rec -> rec -> Transaction m ()
+insertKey k = Transaction . Sqlite.insertKey k
+
 onlyUnique
     :: (MonadSql m, OnlyOneUniqueKey rec, SqlRecord rec)
     => rec -> Transaction m (Unique rec)
