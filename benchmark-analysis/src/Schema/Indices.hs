@@ -76,7 +76,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS "ForeignUniqueRun"
 ON "Run"("id", "variantId")
 |]
 
-        , 21 <=..<= currentVersion .= [i|
+        , 22 <=..<= currentVersion .= [i|
 CREATE INDEX IF NOT EXISTS "StepInfoQueryIndex"
 ON "StepTimer"("variantId", "stepId")
 |]
