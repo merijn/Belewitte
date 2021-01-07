@@ -20,6 +20,7 @@ import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
 import Pretty.Fields
+import Schema.Import
 import Schema.Utils (EntityDef, Int64, MonadSql, Transaction, (.>))
 import qualified Schema.Utils as Utils
 
@@ -35,6 +36,9 @@ instance PrettyFields Dataset where
         [ ("Name", textField DatasetName) ]
 
 deriving instance Show (Unique Dataset)
+
+instance Importable Dataset where
+    updateFields = []
 
 migrations :: MonadSql m => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup

@@ -20,6 +20,7 @@ import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
 import Pretty.Fields
+import Schema.Import
 import Schema.Utils (EntityDef, Int64, MonadSql, Transaction, (.>), (.=))
 import qualified Schema.Utils as Utils
 
@@ -47,6 +48,9 @@ instance PrettyFields Platform where
         , ("Num. Available", PlatformAvailable `fieldVia` prettyShow)
         , ("Default Platform", PlatformIsDefault `fieldVia` prettyShow)
         ]
+
+instance Importable Platform where
+    updateFields = []
 
 migrations :: MonadSql m => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup

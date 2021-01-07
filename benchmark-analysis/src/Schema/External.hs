@@ -21,6 +21,7 @@ import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
 import Pretty.Fields
+import Schema.Import
 import Schema.Utils (EntityDef, ForeignDef, Int64, MonadSql, Transaction, (.>))
 import qualified Schema.Utils as Utils
 
@@ -70,6 +71,18 @@ instance PrettyFields ExternalTimer where
         , ("Avg. Time", ExternalTimerAvgTime `fieldVia` prettyDouble)
         , ("Max Time", ExternalTimerMaxTime `fieldVia` prettyDouble)
         , ("Std. Dev.", ExternalTimerStdDev `fieldVia` prettyDouble)
+        ]
+
+instance Importable ExternalImpl where
+    updateFields = [ForeignKeyField ExternalImplAlgorithmId]
+
+instance Importable ExternalTimer where
+    importType _ = PrimaryImport
+    updateFields =
+        [ ForeignKeyField ExternalTimerPlatformId
+        , ForeignKeyField ExternalTimerVariantId
+        , ForeignKeyField ExternalTimerImplId
+        , ForeignKeyField ExternalTimerAlgorithmId
         ]
 
 schema :: [EntityDef]

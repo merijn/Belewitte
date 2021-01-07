@@ -20,6 +20,7 @@ import qualified Database.Persist.TH as TH
 import Database.Persist.Types
 
 import Pretty.Fields
+import Schema.Import
 import Schema.Utils (Int64, MonadSql, Transaction, (.>), (.=))
 import qualified Schema.Utils as Utils
 import Types
@@ -54,6 +55,12 @@ instance PrettyFields Variant where
         , ("Properties Stored", VariantPropsStored `fieldVia` prettyShow)
         , ("Retries", VariantRetryCount `fieldVia` prettyShow)
         , ("Result Hash", VariantResult `maybeFieldVia` prettyShow)
+        ]
+
+instance Importable Variant where
+    updateFields =
+        [ ForeignKeyField VariantGraphId
+        , ForeignKeyField VariantAlgorithmId
         ]
 
 schema :: [EntityDef]
