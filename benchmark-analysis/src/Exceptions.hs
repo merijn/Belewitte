@@ -65,6 +65,18 @@ fromBenchmarkException exc = do
     BenchmarkException e <- fromException exc
     cast e
 
+data MissingPrimaryKey = MissingPrimaryKey Text
+    deriving (Show, Typeable)
+
+instance Pretty MissingPrimaryKey where
+    pretty (MissingPrimaryKey name) = Pretty.reflow $ mconcat
+        [ "Missing primary key definition for '", name, "'" ]
+
+instance Exception MissingPrimaryKey where
+    toException = toBenchmarkException
+    fromException = fromBenchmarkException
+    displayException = show . pretty
+
 data ViolatedInvariant where
     ViolatedInvariant :: (Exception e, Pretty e) => e -> ViolatedInvariant
     deriving (Typeable)

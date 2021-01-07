@@ -3,18 +3,21 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE Rank2Types #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeFamilies #-}
 module Sql.Import
     ( MonadImport(importSql, importSqlTransaction)
     , Import
+    , Importable(..)
+    , UpdateField(..)
     , runImport
     , runRegionConduit
     , selectKeysImport
     , selectSourceImport
-    , translateImportKey
+    , importEntity
     ) where
 
-import Control.Monad (join)
+import Control.Monad ((>=>), join)
 import Control.Monad.Catch (MonadCatch, MonadMask)
 import Control.Monad.IO.Unlift (MonadIO, MonadUnliftIO)
 import Control.Monad.Logger (MonadLoggerIO)
@@ -23,12 +26,17 @@ import Control.Monad.Trans.Reader (runReaderT)
 import Control.Monad.Trans.Resource (MonadResource, release)
 import Data.Acquire (Acquire)
 import Data.Conduit (ConduitT, toProducer)
+import Data.List.NonEmpty (NonEmpty(..))
+import Data.Proxy (Proxy(Proxy))
 import Data.Text (Text)
+import Database.Persist.Class (keyFromRecordM)
 import qualified Database.Persist.Sqlite as Sqlite
 
+import Exceptions (MissingPrimaryKey(..), logThrowM)
 import Migration (checkMigration)
+import Schema.Import (ImportType(..), Importable(..), UpdateField(..))
 import Sql.Core
-import qualified Sql
+import qualified Sql.Transaction as SqlTrans
 
 type ImportConstraint m = (MonadLogger m, MonadResource m, MonadThrow m)
 type SqlConstraint m = (MonadSql m, MonadLogger m, MonadThrow m)
@@ -63,12 +71,17 @@ instance ImportConstraint m => MonadImport (Import m) where
     importSql query = Import query
     importSqlTransaction t = Import $ runReadOnlyTransaction t
 
+instance MonadImport m => MonadImport (ConduitT i o m) where
+    importConnection = lift importConnection
+    importSql query = lift $ importSql query
+    importSqlTransaction t = lift $ importSqlTransaction t
+
 instance MonadImport m => MonadImport (Region m) where
     importConnection = lift importConnection
     importSql query = lift $ importSql query
     importSqlTransaction t = lift $ importSqlTransaction t
 
-instance MonadImport m => MonadImport (ConduitT i o m) where
+instance MonadImport m => MonadImport (Transaction m) where
     importConnection = lift importConnection
     importSql query = lift $ importSql query
     importSqlTransaction t = lift $ importSqlTransaction t
@@ -110,15 +123,56 @@ runImport
 runImport database act = runSqlT database $
     checkMigration False >> unImport act
 
-translateImportKey
-    :: ( MonadImport m
+importEntity
+    :: (Importable rec, MonadImport m, MonadSql m)
+    => Entity rec -> Transaction m ()
+importEntity ent = do
+    val <- entityVal <$> updateEntity ent
+    case importType val of
+        UniqueImport -> () <$ SqlTrans.insertUniq val
+
+        PrimaryImport -> do
+            key <- primaryLookup val
+            () <$ SqlTrans.insertKey key val
+
+updateEntity
+    :: (Importable rec, MonadImport m, MonadSql m)
+    => Entity rec -> Transaction m (Entity rec)
+updateEntity = foldr (>=>) return $ map updateFromField updateFields
+  where
+    updateFromField
+        :: (MonadImport m, MonadSql m, SqlRecord rec)
+        => UpdateField rec -> Entity rec -> Transaction m (Entity rec)
+    updateFromField (ForeignKeyField field) =
+        fieldLens field translateImportKey
+
+uniqueLookup
+    :: ( AtLeastOneUniqueKey rec
+       , Importable rec
+       , MonadLogger m
        , MonadSql m
        , MonadThrow m
        , Show (Unique rec)
-       , Sqlite.OnlyOneUniqueKey rec
-       , SqlRecord rec
        )
-    => Key rec -> m (Key rec)
+    => rec -> Transaction m (Key rec)
+uniqueLookup val = SqlTrans.getJustKeyBy uniqFromVal
+  where
+    uniqFromVal :| _ = Sqlite.requireUniquesP val
+
+primaryLookup
+    :: forall rec m . (MonadLogger m, MonadSql m, MonadThrow m, SqlRecord rec)
+    => rec -> Transaction m (Key rec)
+primaryLookup val = case keyFromRecordM <*> pure val of
+    Just key -> key <$ SqlTrans.getJust key
+    Nothing -> logThrowM . MissingPrimaryKey . Sqlite.unHaskellName
+        . Sqlite.entityHaskell $ Sqlite.entityDef (Proxy :: Proxy rec)
+
+translateImportKey
+    :: (Importable rec, MonadImport m, MonadSql m)
+    => Key rec -> Transaction m (Key rec)
 translateImportKey k = do
-    originalVal <- importSql $ Sql.getJust k >>= Sql.onlyUnique
-    Sql.getJustKeyBy originalVal
+    originalVal <- importSqlTransaction $ SqlTrans.getJustEntity k
+    updatedVal <- entityVal <$> updateEntity originalVal
+    case importType updatedVal of
+        UniqueImport -> uniqueLookup updatedVal
+        PrimaryImport -> primaryLookup updatedVal

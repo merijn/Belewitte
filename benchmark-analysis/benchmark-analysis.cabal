@@ -127,6 +127,7 @@ Library
                         Schema.Graph.V1
                         Schema.Implementation
                         Schema.Implementation.V0
+                        Schema.Import
                         Schema.Indices
                         Schema.Model
                         Schema.Model.V0

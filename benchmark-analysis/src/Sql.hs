@@ -19,7 +19,7 @@ import Data.Conduit (ConduitT, Void, transPipe)
 import Data.IntMap (IntMap)
 import Data.Proxy (Proxy(Proxy))
 import Data.String.Interpolate.IsString (i)
-import Database.Persist.Sqlite (AtLeastOneUniqueKey, OnlyOneUniqueKey, sqlType)
+import Database.Persist.Sqlite (OnlyOneUniqueKey, sqlType)
 
 import Core
 import Query (CTE, Converter(Simple), MonadConvert, MonadQuery, Query(..))

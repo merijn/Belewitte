@@ -19,6 +19,7 @@ module Schema
     , module Schema.External
     , module Schema.Graph
     , module Schema.Implementation
+    , module Schema.Import
     , module Schema.Model
     , module Schema.ModelMetadata
     , module Schema.Platform
@@ -74,6 +75,7 @@ import Schema.Graph hiding (migrations, schema)
 import qualified Schema.Graph as Graph
 import Schema.Implementation hiding (migrations, schema)
 import qualified Schema.Implementation as Implementation
+import Schema.Import
 import Schema.Indices (updateIndicesToVersion)
 import Schema.Model hiding (migrations, schema)
 import qualified Schema.Model as Model

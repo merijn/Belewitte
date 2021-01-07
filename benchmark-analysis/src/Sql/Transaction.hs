@@ -20,8 +20,7 @@ import qualified Data.Text as T
 import Data.Time.Clock (UTCTime)
 import Data.Time.Clock.POSIX (posixSecondsToUTCTime)
 import Database.Persist.Sqlite
-    ( AtLeastOneUniqueKey
-    , Filter(..)
+    ( Filter(..)
     , FilterValue(..)
     , OnlyOneUniqueKey
     , PersistFilter(..)

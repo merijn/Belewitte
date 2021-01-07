@@ -30,6 +30,7 @@ module Sql.Core
     , querySingleValue
     , runMigrationQuiet
     , runMigrationUnsafeQuiet
+    , runRegion
     , selectKeys
     , selectKeysRegion
     , selectSource
@@ -40,6 +41,7 @@ module Sql.Core
     , sinkQuery
 
     -- Re-exports
+    , AtLeastOneUniqueKey
     , Entity(..)
     , EntityField
     , Filter
@@ -85,7 +87,8 @@ import Data.Pool (Pool)
 import Data.Text (Text)
 import qualified Data.Text as T
 import Database.Persist.Sqlite
-    ( BackendCompatible
+    ( AtLeastOneUniqueKey
+    , BackendCompatible
     , Entity(..)
     , EntityField
     , Filter
