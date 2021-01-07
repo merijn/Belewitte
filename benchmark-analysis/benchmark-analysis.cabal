@@ -73,7 +73,7 @@ Library SQLiteExts
   Default-Language:     Haskell2010
   C-Sources:            sqlite3exts/series.c
   CC-Options:           -Wall -pedantic -std=c11 -g -O3 -DSQLITE_CORE
-  Build-Depends:        persistent-sqlite ^>= 2.11.0.0
+  Build-Depends:        persistent-sqlite ^>= 2.11.1.0
 
 Library
   Import:               all, sqlite3exts
@@ -223,7 +223,7 @@ Library
                ,        microlens ^>= 0.4.8
                ,        persistent ^>= 2.11.0.2
                ,        persistent-template ^>= 2.9.1.0
-               ,        persistent-sqlite ^>= 2.11.0.0
+               ,        persistent-sqlite ^>= 2.11.1.0
                ,        prettyprinter ^>= 1.6.0
                ,        prettyprinter-ansi-terminal ^>= 1.1.1
                ,        process ^>= 1.6.0
