@@ -397,7 +397,7 @@ variantConfigParser = queryVariantConfig <$> variantConfigOpt
         Just n -> Sql.validateEntity n
         Nothing -> Sql.selectSingle
                 [ VariantConfigAlgorithmId ==. algoId
-                , VariantConfigIsDefault ==. True
+                , VariantConfigIsDefault ==. Active
                 ]
 
 variantIdParser :: Parser (Key Algorithm -> SqlM (Key Variant))

@@ -125,9 +125,9 @@ unsetChecked name f key = SqlTrans.runTransaction $ do
 
 unsetDefault
     :: (SqlRecord r, ToBackendKey SqlBackend r)
-    => String -> EntityField r Bool -> Key r -> SqlM ()
+    => String -> EntityField r Checkmark -> Key r -> SqlM ()
 unsetDefault name field = unsetChecked name $ \key ->
-    SqlTrans.update key [field =. False]
+    SqlTrans.update key [field =. Inactive]
 
 unsetFlags
     :: (SqlRecord r, ToBackendKey SqlBackend r)

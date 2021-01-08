@@ -13,29 +13,35 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Schema.VariantConfig where
 
+import Control.Monad (when)
 import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
-import Database.Persist.Sql (Unique)
+import Database.Persist.Sql (Checkmark, Unique)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
+import Exceptions (DBConstraintViolation(..), logThrowM)
 import Pretty.Fields
 import Schema.Import
-import Schema.Utils (EntityDef, Int64, MonadSql, Transaction, (.>))
+import Schema.Utils
+    (EntityDef, Int64, MonadLogger, MonadSql, MonadThrow, Transaction, (.>))
 import qualified Schema.Utils as Utils
 
 import Schema.Algorithm (AlgorithmId)
-import qualified Schema.VariantConfig.V0 as V0 
+import qualified Schema.VariantConfig.V0 as V0
+import qualified Schema.VariantConfig.V1 as V1
 
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
 VariantConfig
     algorithmId AlgorithmId
     name Text
     flags Text Maybe
-    isDefault Bool
+    isDefault Checkmark nullable
     timestamp UTCTime
-    UniqVariantConfig algorithmId name
+    UniqVariantConfig algorithmId flags !force
+    UniqVariantConfigName algorithmId name
+    UniqVariantConfigDefault algorithmId isDefault !force
     deriving Eq Show
 |]
 
@@ -54,7 +60,9 @@ instance PrettyFields VariantConfig where
 instance Importable VariantConfig where
     updateFields = [ForeignKeyField VariantConfigAlgorithmId]
 
-migrations :: MonadSql m => Int64 -> Transaction m [EntityDef]
+migrations
+    :: (MonadLogger m, MonadSql m, MonadThrow m)
+    => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup
     [ 7 .> V0.schema $ do
         Utils.createTableFromSchema V0.schema
@@ -95,7 +103,7 @@ ON  Variant.algorithmId = VariantConfig.algorithmId
 AND Variant.name = VariantConfig.name
 AND Variant.flags IS VariantConfig.flags
 |]
-    , 20 .> schema $ do
+    , 20 .> V1.schema $ do
         Utils.executeSql [i|
 ALTER TABLE "VariantConfig"
 ADD COLUMN "timestamp" TIMESTAMP
@@ -125,4 +133,33 @@ LEFT JOIN
 ) AS TimeStamp
 ON VariantConfig.id = TimeStamp.id
 |]
+    , 29 .> schema $ do
+        Utils.executeSql [i|
+ALTER TABLE "VariantConfig"
+RENAME COLUMN "isDefault" TO "oldIsDefault"
+|]
+
+        Utils.executeSql [i|
+ALTER TABLE "VariantConfig"
+ADD COLUMN "isDefault" BOOLEAN
+|]
+
+        Utils.executeSql [i|
+UPDATE "VariantConfig"
+SET "isDefault" =
+  CASE WHEN "oldIsDefault" THEN 1
+    ELSE NULL
+  END
+|]
+
+        violated <- (/= (0 :: Int)) <$> Utils.executeSqlSingleValue [i|
+SELECT COUNT(*) FROM (
+    SELECT "algorithmId", "flags", COUNT(*) AS "count"
+    FROM "VariantConfig"
+    GROUP BY "algorithmId", "flags"
+    HAVING "count" > 1
+)
+|]
+        when violated $ do
+            logThrowM $ DBConstraintViolation "Duplicate variant configs!"
     ]

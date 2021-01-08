@@ -15,7 +15,7 @@ module Schema.Platform where
 
 import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
-import Database.Persist.Sql (Unique)
+import Database.Persist.Sql (Checkmark, Unique)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
@@ -26,6 +26,7 @@ import qualified Schema.Utils as Utils
 
 import qualified Schema.Platform.V0 as V0
 import qualified Schema.Platform.V1 as V1
+import qualified Schema.Platform.V2 as V2
 
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
 Platform
@@ -33,8 +34,9 @@ Platform
     prettyName Text Maybe
     flags Text Maybe
     available Int default=1
-    isDefault Bool default=0
+    isDefault Checkmark nullable
     UniqPlatform name
+    UniqPlatformDefault name isDefault !force
     deriving Eq Show
 |]
 
@@ -59,5 +61,23 @@ migrations = Utils.mkMigrationLookup
         Utils.executeSql [i|
 ALTER TABLE 'GPU' RENAME TO 'Platform'
 |]
-    , 10 .= schema
+    , 10 .= V2.schema
+    , 29 .> schema $ do
+        Utils.executeSql [i|
+ALTER TABLE "Platform"
+RENAME COLUMN "isDefault" TO "oldIsDefault"
+|]
+
+        Utils.executeSql [i|
+ALTER TABLE "Platform"
+ADD COLUMN "isDefault" BOOLEAN
+|]
+
+        Utils.executeSql [i|
+UPDATE "Platform"
+SET "isDefault" =
+  CASE WHEN "oldIsDefault" THEN 1
+    ELSE NULL
+  END
+|]
     ]

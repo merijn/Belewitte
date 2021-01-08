@@ -70,15 +70,15 @@ commands = CommandGroup CommandInfo
 checkSetDefault
     :: (SqlRecord rec)
     => Key rec
-    -> EntityField rec Bool
+    -> EntityField rec Checkmark
     -> Text
     -> [Filter rec]
     -> Transaction (Input SqlM) ()
 checkSetDefault key field prompt filters = do
-    n <- SqlTrans.count $ [field ==. True] ++ filters
+    n <- SqlTrans.count $ [field ==. Active] ++ filters
     when (n == 0) $ do
         isDefault <- lift $ getInteractive readInput prompt
-        when isDefault $ SqlTrans.update key [field =. True]
+        when isDefault $ SqlTrans.update key [field =. Active]
 
 addPlatform :: Input SqlM ()
 addPlatform = withInteractiveLogging $ do
@@ -89,7 +89,7 @@ addPlatform = withInteractiveLogging $ do
 
     SqlTrans.runTransaction $ do
         platformId <- SqlTrans.insert $
-            Platform platformName prettyName runFlags platformCount False
+            Platform platformName prettyName runFlags platformCount Inactive
 
         checkSetDefault platformId PlatformIsDefault defaultPrompt []
   where
@@ -176,7 +176,7 @@ addVariant = do
         Entity algoId _ <- getInteractive algoInput "Algorithm Name"
         variantName <- getInteractive textInput "Variant Name"
         flags <- getInteractive optionalInput "Flags"
-        return $ (algoId, VariantConfig algoId variantName flags False ts)
+        return $ (algoId, VariantConfig algoId variantName flags Inactive ts)
 
     SqlTrans.runTransaction $ do
         varCfgId <- SqlTrans.insert $ variantConfig

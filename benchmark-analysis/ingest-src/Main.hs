@@ -106,7 +106,7 @@ runBenchmarks = lift $ do
     checkCxxCompiled
 
     Entity _ defaultPlatform <- tryAlternatives
-        [ MaybeT $ Sql.selectFirst [PlatformIsDefault ==. True] []
+        [ MaybeT $ Sql.selectFirst [PlatformIsDefault ==. Active] []
         , MaybeT $ do
             logWarnN "No default platform specified!"
             Sql.selectFirst [] []
@@ -212,7 +212,7 @@ importResults = do
             _ -> logThrowM . PatternFailed $
                 "More than one graph found for \"" <> gname <> "\""
 
-        let uniqVariantConfig = UniqVariantConfig algoId varName
+        let uniqVariantConfig = UniqVariantConfigName algoId varName
 
         varCfgId <- SqlTrans.getBy uniqVariantConfig >>= \case
             Just (Entity key _) -> return key

@@ -80,4 +80,25 @@ ON "Run"("id", "variantId")
 CREATE INDEX IF NOT EXISTS "StepInfoQueryIndex"
 ON "StepTimer"("variantId", "stepId")
 |]
+        , 29 <=..<= currentVersion .= [i|
+CREATE TRIGGER IF NOT EXISTS "VariantConfigInsertUniqueness"
+BEFORE INSERT ON "VariantConfig"
+WHEN NEW."flags" IS NULL
+BEGIN
+SELECT RAISE(ROLLBACK, "There can be only one default variant config.")
+FROM "VariantConfig"
+WHERE "algorithmId" = NEW."algorithmId" AND "flags" IS NULL;
+END
+|]
+
+        , 29 <=..<= currentVersion .= [i|
+CREATE TRIGGER IF NOT EXISTS "VariantConfigUpdateUniqueness"
+BEFORE UPDATE ON "VariantConfig"
+WHEN NEW."flags" IS NULL
+BEGIN
+SELECT RAISE(ROLLBACK, "There can be only one default variant config.")
+FROM "VariantConfig"
+WHERE "algorithmId" = NEW."algorithmId" AND "flags" IS NULL;
+END
+|]
         ]

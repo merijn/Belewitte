@@ -140,6 +140,20 @@ instance Exception GenericInvariantViolation where
     fromException = fromViolatedInvariant
     displayException = show . pretty
 
+data DBConstraintViolation = DBConstraintViolation Text
+    deriving (Show, Typeable)
+
+instance Pretty DBConstraintViolation where
+    pretty (DBConstraintViolation txt) = Pretty.group $ mconcat
+        [ Pretty.reflow "Database constraint violated:", Pretty.line
+        , Pretty.reflow txt, Pretty.hardline
+        ]
+
+instance Exception DBConstraintViolation where
+    toException = toViolatedInvariant
+    fromException = fromViolatedInvariant
+    displayException = show . pretty
+
 data RuntimeError where
     RuntimeError :: (Exception e, Pretty e) => e -> RuntimeError
     deriving (Typeable)

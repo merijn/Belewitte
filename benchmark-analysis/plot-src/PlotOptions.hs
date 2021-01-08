@@ -43,7 +43,7 @@ queryVariants algoId graphs = do
         .| C.foldMap S.singleton
 
     variantConfigId <- Sql.selectKeysList
-        [VariantConfigAlgorithmId ==. algoId, VariantConfigIsDefault ==. True]
+        [VariantConfigAlgorithmId ==. algoId, VariantConfigIsDefault ==. Active]
         [] >>= \case
             [key] -> return key
             [] -> logThrowM . PatternFailed $

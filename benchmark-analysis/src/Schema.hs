@@ -4,6 +4,7 @@
 module Schema
     ( AllowNewer(..)
     , ByteString
+    , Checkmark(..)
     , CommitId(..)
     , GlobalVars.GlobalVar(..)
     , Hash(..)
@@ -57,7 +58,7 @@ import Data.IntMap (IntMap)
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import Database.Persist.Sql
-    (EntityDef, Migration, PersistValue(..), toPersistValue)
+    (Checkmark(..), EntityDef, Migration, PersistValue(..), toPersistValue)
 
 import Model (Model)
 import Schema.Utils (MonadThrow, mkMigration, getTypeName)

@@ -226,14 +226,14 @@ setFlags name field force key val = withCheckedKey name key $ \ent -> do
 
 setDefault
     :: (SqlRecord r, ToBackendKey SqlBackend r)
-    => String -> EntityField r Bool -> Force -> Key r -> SqlM ()
+    => String -> EntityField r Checkmark -> Force -> Key r -> SqlM ()
 setDefault name field force key = withCheckedKey name key $ \ent -> do
-    numDefault <- SqlTrans.count [field ==. True]
+    numDefault <- SqlTrans.count [field ==. Active]
     case (numDefault, force) of
-        (0, _) -> SqlTrans.update (entityKey ent) [field =. True]
+        (0, _) -> SqlTrans.update (entityKey ent) [field =. Active]
         (_, Force) -> do
-            SqlTrans.updateWhere [] [field =. False]
-            SqlTrans.update (entityKey ent) [field =. True]
+            SqlTrans.updateWhere [] [field =. Inactive]
+            SqlTrans.update (entityKey ent) [field =. Active]
         _ -> liftIO $ do
             putStrLn $ "Default " <> name <> " is already set!"
             putStrLn "Use --force to overwrite."
