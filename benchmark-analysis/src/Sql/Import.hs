@@ -9,7 +9,6 @@ module Sql.Import
     ( MonadImport(importSql, importSqlTransaction)
     , Import
     , Importable(..)
-    , UpdateField(..)
     , runImport
     , runRegionConduit
     , selectKeysImport
@@ -18,7 +17,7 @@ module Sql.Import
     ) where
 
 import Control.Monad ((>=>), join)
-import Control.Monad.Catch (MonadCatch, MonadMask)
+import Control.Monad.Catch (MonadCatch, MonadMask, throwM, try)
 import Control.Monad.IO.Unlift (MonadIO, MonadUnliftIO)
 import Control.Monad.Logger (MonadLoggerIO)
 import Control.Monad.Trans (MonadTrans(..))
@@ -26,13 +25,13 @@ import Control.Monad.Trans.Reader (runReaderT)
 import Control.Monad.Trans.Resource (MonadResource, release)
 import Data.Acquire (Acquire)
 import Data.Conduit (ConduitT, toProducer)
-import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NonEmpty
 import Data.Proxy (Proxy(Proxy))
 import Data.Text (Text)
 import Database.Persist.Class (keyFromRecordM)
 import qualified Database.Persist.Sqlite as Sqlite
 
-import Exceptions (MissingPrimaryKey(..), logThrowM)
+import Exceptions (MissingPrimaryKey(..), MissingUniqEntity(..), logThrowM)
 import Migration (checkMigration)
 import Schema.Import (ImportType(..), Importable(..), UpdateField(..))
 import Schema.Utils (getTypeName)
@@ -125,54 +124,66 @@ runImport database act = runSqlT database $
     checkMigration False >> unImport act
 
 importEntity
-    :: (Importable rec, MonadImport m, MonadSql m)
+    :: (Importable rec, MonadCatch m, MonadImport m, MonadSql m)
     => Entity rec -> Transaction m ()
 importEntity ent = do
-    val <- entityVal <$> updateEntity ent
+    val <- entityVal <$> updateEntity False ent
     case importType val of
         UniqueImport -> () <$ SqlTrans.insertUniq val
+        ExplicitUniqueImport{} -> () <$ SqlTrans.insertUniq val
 
         PrimaryImport -> do
-            key <- primaryLookup val
+            key <- case keyFromRecordM <*> pure val of
+                Just key -> return key
+                Nothing -> logThrowM . MissingPrimaryKey $ getTypeName ent
+
             () <$ SqlTrans.insertKey key val
 
 updateEntity
-    :: (Importable rec, MonadImport m, MonadSql m)
-    => Entity rec -> Transaction m (Entity rec)
-updateEntity = foldr (>=>) return $ map updateFromField updateFields
+    :: (Importable rec, MonadCatch m, MonadImport m, MonadSql m)
+    => Bool -> Entity rec -> Transaction m (Entity rec)
+updateEntity allowMissing = foldr (>=>) return $
+    map updateFromField updateFields
   where
     updateFromField
-        :: (MonadImport m, MonadSql m, SqlRecord rec)
+        :: (MonadCatch m, MonadImport m, MonadSql m, SqlRecord rec)
         => UpdateField rec -> Entity rec -> Transaction m (Entity rec)
-    updateFromField (ForeignKeyField field) =
-        fieldLens field translateImportKey
+    updateFromField updateField val = case updateField of
+        ForeignKeyField field ->
+            fieldLens field (translateImportKey False) val
+
+        ForeignKeyFieldAllowMissing field ->
+            fieldLens field (translateImportKey (True && allowMissing)) val
 
 uniqueLookup
-    :: ( AtLeastOneUniqueKey rec
+    :: forall rec m .
+       ( AtLeastOneUniqueKey rec
        , Importable rec
        , MonadLogger m
        , MonadSql m
        , MonadThrow m
        , Show (Unique rec)
        )
-    => rec -> Transaction m (Key rec)
-uniqueLookup val = SqlTrans.getJustKeyBy uniqFromVal
-  where
-    uniqFromVal :| _ = Sqlite.requireUniquesP val
-
-primaryLookup
-    :: forall rec m . (MonadLogger m, MonadSql m, MonadThrow m, SqlRecord rec)
-    => rec -> Transaction m (Key rec)
-primaryLookup val = case keyFromRecordM <*> pure val of
-    Just key -> key <$ SqlTrans.getJust key
-    Nothing -> logThrowM . MissingPrimaryKey $ getTypeName (Proxy :: Proxy rec)
+    => (Unique rec -> Bool) -> rec -> Transaction m (Key rec)
+uniqueLookup f val = case NonEmpty.filter f (Sqlite.requireUniquesP val) of
+    (uniqFromVal : _) -> SqlTrans.getJustKeyBy uniqFromVal
+    [] -> logThrowM . MissingPrimaryKey $ getTypeName (Proxy :: Proxy rec)
 
 translateImportKey
-    :: (Importable rec, MonadImport m, MonadSql m)
-    => Key rec -> Transaction m (Key rec)
-translateImportKey k = do
+    :: forall rec m . (Importable rec, MonadCatch m, MonadImport m, MonadSql m)
+    => Bool -> Key rec -> Transaction m (Key rec)
+translateImportKey allowMissing k = do
     originalVal <- importSqlTransaction $ SqlTrans.getJustEntity k
-    updatedVal <- entityVal <$> updateEntity originalVal
-    case importType updatedVal of
-        UniqueImport -> uniqueLookup updatedVal
-        PrimaryImport -> primaryLookup updatedVal
+    updatedVal <- entityVal <$> updateEntity True originalVal
+    result <- try $ case importType updatedVal of
+        UniqueImport -> uniqueLookup (const True) updatedVal
+        ExplicitUniqueImport f -> uniqueLookup f updatedVal
+        PrimaryImport -> case keyFromRecordM <*> pure updatedVal of
+            Just key -> key <$ SqlTrans.getJust key
+            Nothing -> logThrowM . MissingPrimaryKey $
+                getTypeName (Proxy :: Proxy rec)
+
+    case result of
+        Right v -> return v
+        Left MissingUniqEntity{} | allowMissing -> return k
+        Left exc -> throwM exc

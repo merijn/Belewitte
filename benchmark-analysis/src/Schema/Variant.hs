@@ -61,6 +61,7 @@ instance Importable Variant where
     updateFields =
         [ ForeignKeyField VariantGraphId
         , ForeignKeyField VariantAlgorithmId
+        , ForeignKeyField VariantVariantConfigId
         ]
 
 schema :: [EntityDef]

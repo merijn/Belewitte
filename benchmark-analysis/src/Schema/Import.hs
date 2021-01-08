@@ -9,10 +9,17 @@ data UpdateField rec where
     ForeignKeyField
         :: Importable r => EntityField rec (Key r) -> UpdateField rec
 
+    ForeignKeyFieldAllowMissing
+        :: Importable r => EntityField rec (Key r) -> UpdateField rec
+
 data ImportType rec where
     PrimaryImport :: ImportType rec
     UniqueImport
         :: (AtLeastOneUniqueKey rec, Show (Unique rec)) => ImportType rec
+
+    ExplicitUniqueImport
+        :: (AtLeastOneUniqueKey rec, Show (Unique rec))
+        => (Unique rec -> Bool) -> ImportType rec
 
 class (Eq v, Show v, SqlRecord v) => Importable v where
     updateFields :: [UpdateField v]

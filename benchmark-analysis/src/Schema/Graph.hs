@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
@@ -52,7 +53,11 @@ instance PrettyFields Graph where
         ]
 
 instance Importable Graph where
-    updateFields = [ForeignKeyField GraphDatasetId]
+    importType _ = ExplicitUniqueImport $ \case
+        UniqGraph{} -> True
+        _ -> False
+
+    updateFields = [ForeignKeyFieldAllowMissing GraphDatasetId]
 
 migrations :: MonadSql m => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup

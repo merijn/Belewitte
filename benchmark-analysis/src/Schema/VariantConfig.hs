@@ -4,6 +4,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
@@ -58,6 +59,10 @@ instance PrettyFields VariantConfig where
         ]
 
 instance Importable VariantConfig where
+    importType _ = ExplicitUniqueImport $ \case
+        UniqVariantConfig{} -> True
+        _ -> False
+
     updateFields = [ForeignKeyField VariantConfigAlgorithmId]
 
 migrations
