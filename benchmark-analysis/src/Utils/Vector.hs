@@ -1,16 +1,11 @@
-{-# LANGUAGE MagicHash #-}
 module Utils.Vector(byteStringToVector, vectorToByteString) where
 
 import Data.ByteString (ByteString)
 import qualified Data.ByteString.Internal as BS
 import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as VS
+import Foreign.ForeignPtr (castForeignPtr, plusForeignPtr)
 import Foreign.Storable (Storable, sizeOf)
-import GHC.Exts (Int(I#), plusAddr#)
-import GHC.ForeignPtr (ForeignPtr(..), castForeignPtr)
-
-plusForeignPtr :: ForeignPtr a -> Int -> ForeignPtr b
-plusForeignPtr (ForeignPtr addr c) (I# d) = ForeignPtr (plusAddr# addr d) c
 
 byteStringToVector :: Storable a => ByteString -> Vector a
 byteStringToVector bs = v
