@@ -1,6 +1,7 @@
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE ViewPatterns #-}
 module Schema.Utils
     ( MonadLogger
@@ -22,18 +23,19 @@ module Schema.Utils
     , addForeignRef
     , mkMigration
     , mkMigrationLookup
+    , getTypeName
     ) where
 
 import Control.Monad (void)
 import Data.Int (Int64)
 import qualified Data.Map as M
 import Data.Text (Text)
-import Database.Persist.Sql (Migration, migrate)
+import Database.Persist.Sql (Migration, entityDef, migrate)
 import Database.Persist.TH (embedEntityDefs)
 import Database.Persist.Types
     (DBName(..), EntityDef(..), ForeignDef(..), HaskellName(..), noCascade)
 
-import Sql.Core (MonadLogger, MonadSql, MonadThrow, Transaction)
+import Sql.Core (MonadLogger, MonadSql, MonadThrow, SqlRecord, Transaction)
 import qualified Sql.Core as Sql
 
 (.=) :: Applicative f => a -> b -> (a, (b, f ()))
@@ -84,3 +86,6 @@ mkMigrationLookup (M.fromList -> migrationMap) = \i ->
         Just (key, (schema, migration))
             | key == i -> schema <$ migration
             | otherwise -> return schema
+
+getTypeName :: SqlRecord rec => proxy rec -> Text
+getTypeName = unHaskellName . entityHaskell . entityDef

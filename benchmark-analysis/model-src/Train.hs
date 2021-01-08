@@ -196,7 +196,7 @@ trainModel ModelDesc{..} = do
                 UnknownPrediction modelId stepInfoAlgorithm setId unknownSetOccurence
 
             forM_ (S.toList unknownSetImpls) $ \i -> do
-                implKey <- SqlTrans.validateKey "Implementation" (fromSqlKey i)
+                implKey <- SqlTrans.validateKey (fromSqlKey i)
                 SqlTrans.insert_ $
                     UnknownPredictionSet unknownId implKey stepInfoAlgorithm
 

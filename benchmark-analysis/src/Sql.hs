@@ -84,8 +84,8 @@ validateEntity
        , SqlRecord r
        , ToBackendKey SqlBackend r
        )
-    => Text -> Int64 -> m (Entity r)
-validateEntity name k = runReadOnlyTransaction $ SqlTrans.validateEntity name k
+    => Int64 -> m (Entity r)
+validateEntity k = runReadOnlyTransaction $ SqlTrans.validateEntity k
 
 validateKey
     :: ( MonadLogger m
@@ -94,8 +94,8 @@ validateKey
        , SqlRecord r
        , ToBackendKey SqlBackend r
        )
-    => Text -> Int64 -> m (Key r)
-validateKey name = fmap entityKey . validateEntity name
+    => Int64 -> m (Key r)
+validateKey = fmap entityKey . validateEntity
 
 validateUniqEntity
     :: ( MonadLogger m
@@ -104,9 +104,8 @@ validateUniqEntity
        , Show (Unique r)
        , SqlRecord r
        )
-    => Text -> Unique r -> m (Entity r)
-validateUniqEntity name uniq =
-    runReadOnlyTransaction $ SqlTrans.validateUniqEntity name uniq
+    => Unique r -> m (Entity r)
+validateUniqEntity = runReadOnlyTransaction . SqlTrans.validateUniqEntity
 
 validateUniqKey
     :: ( MonadLogger m
@@ -115,8 +114,8 @@ validateUniqKey
        , Show (Unique r)
        , SqlRecord r
        )
-    => Text -> Unique r -> m (Key r)
-validateUniqKey name = fmap entityKey . validateUniqEntity name
+    => Unique r -> m (Key r)
+validateUniqKey = fmap entityKey . validateUniqEntity
 
 getJustBy
     :: (MonadLogger m, MonadSql m, MonadThrow m, Show (Unique rec), SqlRecord rec)
@@ -125,7 +124,7 @@ getJustBy k = do
     mVal <- getBy k
     case mVal of
         Just v -> return v
-        Nothing -> logThrowM $ MissingUniqEntity "value" k
+        Nothing -> logThrowM $ MissingUniqEntity (getTypeName k) k
 
 getJustKeyBy
     :: (MonadLogger m, MonadSql m, MonadThrow m, Show (Unique rec), SqlRecord rec)

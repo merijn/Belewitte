@@ -102,8 +102,7 @@ formatStep
     :: (MonadLogger m, MonadSql m, MonadThrow m)
     => Map Int64 PropertyName -> (StepInfo, ImplTiming) -> m Text
 formatStep propMap (StepInfo{..}, (ImplTiming predImplId predTime)) = do
-    Entity _ predImpl@Implementation{} <-
-        Sql.validateEntity "Implementation" predImplId
+    Entity _ predImpl@Implementation{} <- Sql.validateEntity predImplId
 
     return $ mconcat
         [ renderProps "step" propMap (Just stepId) stepProps

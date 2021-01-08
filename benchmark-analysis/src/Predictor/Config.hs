@@ -96,7 +96,7 @@ buildRankMap
     -> ImplTiming
     -> SqlM (Map (Key Implementation) (Arg Double (Key Implementation)))
 buildRankMap implMap ImplTiming{..} = do
-    key <- Sql.validateKey "Implementation" implTimingImpl
+    key <- Sql.validateKey implTimingImpl
 
     when (key `M.member` implMap) . logThrowM $ GenericInvariantViolation
         "Found duplicate implementation id in input!"
@@ -108,7 +108,7 @@ mkPredictorConfig
     -> SqlM PredictorConfig
 mkPredictorConfig (model, defImpl, strategy) = do
     Entity modelId PredictionModel{..} <-
-        Sql.validateEntity "PredictionModel" model
+        Sql.validateEntity model
 
     algorithm <- Sql.getJust predictionModelAlgorithmId
     impls <- Sql.queryImplementations predictionModelAlgorithmId
@@ -126,7 +126,7 @@ mkPredictorConfig (model, defImpl, strategy) = do
                 "Default implementation not found for algorithm"
                 (getAlgoName algorithm)
 
-    defaultImplId <- Sql.validateKey "Implementation" defaultImpl
+    defaultImplId <- Sql.validateKey defaultImpl
 
     return $ PConfig predictorName modelId defaultImplId strategy
   where

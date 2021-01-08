@@ -122,10 +122,10 @@ cookPredictor
 cookPredictor propVec implVec RawPredictor{..} = do
     ModelStats{..} <- getModelStats rawPredictorId
     idxForPropMap <-
-        V.ifoldM' (buildLookup "PropertyName" propValuePropId) M.empty propVec
+        V.ifoldM' (buildLookup propValuePropId) M.empty propVec
 
     (idxForImplMap :: Map (Key Implementation) Int) <-
-        V.ifoldM' (buildLookup "Implementation" implTimingImpl) M.empty implVec
+        V.ifoldM' (buildLookup implTimingImpl) M.empty implVec
 
     propIdxMap <- case swapMap modelPropImportance of
         Just lut -> return lut
@@ -148,7 +148,7 @@ cookPredictor propVec implVec RawPredictor{..} = do
         translateImplementations i
             | impl == -1 = return impl
             | otherwise = do
-                implId <- Sql.validateKey "Implementation" $ fromIntegral impl
+                implId <- Sql.validateKey $ fromIntegral impl
 
                 case M.lookup implId idxForImplMap of
                     Nothing -> logThrowM . GenericInvariantViolation $
@@ -158,7 +158,7 @@ cookPredictor propVec implVec RawPredictor{..} = do
             impl | i >= -1 = i
                  | otherwise = rawPredictorMispredictionStrategy i
 
-    defaultImpl <- Sql.validateKey "Implementation" $
+    defaultImpl <- Sql.validateKey $
         fromIntegral rawPredictorDefaultImpl
 
     newDefaultImpl <- case M.lookup defaultImpl idxForImplMap of
@@ -178,14 +178,13 @@ cookPredictor propVec implVec RawPredictor{..} = do
   where
     buildLookup
         :: (Ord (Key k), SqlRecord k, ToBackendKey SqlBackend k)
-        => Text
-        -> (v -> Int64)
+        => (v -> Int64)
         -> Map (Key k) Int
         -> Int
         -> v
         -> m (Map (Key k) Int)
-    buildLookup name f lut i val = do
-        key <- Sql.validateKey name $ f val
+    buildLookup f lut i val = do
+        key <- Sql.validateKey $ f val
 
         when (key `M.member` lut) . logThrowM $ GenericInvariantViolation
             "Found duplicate property id in input!"

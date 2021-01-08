@@ -91,9 +91,8 @@ algorithmParser = queryAlgorithm <$> algorithmOpt
         , help "Algorithm to use, numeric or textual id" ]
 
     queryAlgorithm :: Either Text Int64 -> SqlM (Entity Algorithm)
-    queryAlgorithm (Right n) = Sql.validateEntity "Algorithm" n
-    queryAlgorithm (Left name) = Sql.validateUniqEntity "Algorithm" $
-        UniqAlgorithm name
+    queryAlgorithm (Right n) = Sql.validateEntity n
+    queryAlgorithm (Left name) = Sql.validateUniqEntity $ UniqAlgorithm name
 
 allowNewerParser :: Parser AllowNewer
 allowNewerParser = optionParserFromValues vals "OPT" helpTxt $ mconcat
@@ -131,9 +130,8 @@ datasetParser = queryDataset <$> datasetOpt
         , help "Dataset results to use, numeric or textual" ]
 
     queryDataset :: Either Text Int64 -> SqlM (Entity Dataset)
-    queryDataset (Right n) = Sql.validateEntity "Dataset" n
-    queryDataset (Left name) = Sql.validateUniqEntity "Dataset" $
-        UniqDataset name
+    queryDataset (Right n) = Sql.validateEntity n
+    queryDataset (Left name) = Sql.validateUniqEntity $ UniqDataset name
 
 entityParser :: ToBackendKey SqlBackend a => Parser (SqlM (Entity a))
 entityParser = checkKey <$> keyParser
@@ -171,7 +169,7 @@ modelParser = queryModel <$> modelOpt
         ]
 
     queryModel :: Int64 -> SqlM (Entity PredictionModel)
-    queryModel n = Sql.validateEntity "PredictionModel" n
+    queryModel n = Sql.validateEntity n
 
 percentageParser :: [Mod OptionFields Percentage] -> Parser Percentage
 percentageParser opts = option (maybeReader percentReader) . mconcat $
@@ -194,9 +192,8 @@ platformParser = queryPlatform <$> platformOpt
         , help "Platform results to use, numeric or textual" ]
 
     queryPlatform :: Either Text Int64 -> SqlM (Entity Platform)
-    queryPlatform (Right n) = Sql.validateEntity "Platform" n
-    queryPlatform (Left name) = Sql.validateUniqEntity "platform" $
-        UniqPlatform name
+    queryPlatform (Right n) = Sql.validateEntity n
+    queryPlatform (Left name) = Sql.validateUniqEntity $ UniqPlatform name
 
 parseMispredictionStrategy :: Parsec Void String MispredictionStrategy
 parseMispredictionStrategy = asum
@@ -361,7 +358,7 @@ runconfigParser = queryRunConfig <$> runConfigOpt
         , help "Numeric id of runconfig to use" ]
 
     queryRunConfig :: Int64 -> SqlM (Entity RunConfig)
-    queryRunConfig n = Sql.validateEntity "RunConfig" n
+    queryRunConfig n = Sql.validateEntity n
 
 requiredUtcTimeParser :: Parser (SqlM UTCTime)
 requiredUtcTimeParser =
@@ -397,7 +394,7 @@ variantConfigParser = queryVariantConfig <$> variantConfigOpt
     queryVariantConfig
         :: Maybe Int64 -> Key Algorithm -> SqlM (Entity VariantConfig)
     queryVariantConfig key algoId = case key of
-        Just n -> Sql.validateEntity "VariantConfig" n
+        Just n -> Sql.validateEntity n
         Nothing -> Sql.selectSingle
                 [ VariantConfigAlgorithmId ==. algoId
                 , VariantConfigIsDefault ==. True

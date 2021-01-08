@@ -46,10 +46,12 @@ validateEntity
        , SqlRecord r
        , ToBackendKey SqlBackend r
        )
-    => Text -> Int64 -> Transaction m (Entity r)
-validateEntity name k = getEntity (toSqlKey k) >>= \case
-    Nothing -> logThrowM $ MissingEntity name k
+    => Int64 -> Transaction m (Entity r)
+validateEntity k = getEntity key >>= \case
+    Nothing -> logThrowM $ MissingEntity (getTypeName key) k
     Just ent -> return ent
+  where
+    key = toSqlKey k
 
 validateKey
     :: ( MonadLogger m
@@ -58,8 +60,8 @@ validateKey
        , SqlRecord r
        , ToBackendKey SqlBackend r
        )
-    => Text -> Int64 -> Transaction m (Key r)
-validateKey name = fmap entityKey . validateEntity name
+    => Int64 -> Transaction m (Key r)
+validateKey = fmap entityKey . validateEntity
 
 validateUniqEntity
     :: ( MonadLogger m
@@ -68,9 +70,9 @@ validateUniqEntity
        , Show (Unique r)
        , SqlRecord r
        )
-    => Text -> Unique r -> Transaction m (Entity r)
-validateUniqEntity name uniq = getBy uniq >>= \case
-    Nothing -> logThrowM $ MissingUniqEntity name uniq
+    => Unique r -> Transaction m (Entity r)
+validateUniqEntity uniq = getBy uniq >>= \case
+    Nothing -> logThrowM $ MissingUniqEntity (getTypeName uniq) uniq
     Just ent -> return ent
 
 validateUniqKey
@@ -80,8 +82,8 @@ validateUniqKey
        , Show (Unique r)
        , SqlRecord r
        )
-    => Text -> Unique r -> Transaction m (Key r)
-validateUniqKey name = fmap entityKey . validateUniqEntity name
+    => Unique r -> Transaction m (Key r)
+validateUniqKey = fmap entityKey . validateUniqEntity
 
 getUniq
     :: (MonadSql m, SqlRecord record, OnlyOneUniqueKey record)
@@ -93,7 +95,14 @@ getUniq record = do
         Just (Entity k _) -> return k
 
 insertUniq
-    :: (MonadLogger m, MonadSql m, MonadThrow m, SqlRecord record, AtLeastOneUniqueKey record, Eq record, Show record)
+    :: ( MonadLogger m
+       , MonadSql m
+       , MonadThrow m
+       , SqlRecord record
+       , AtLeastOneUniqueKey record
+       , Eq record
+       , Show record
+       )
     => record -> Transaction m (Key record)
 insertUniq record = do
     result <- insertBy record
@@ -108,16 +117,26 @@ fieldFromEntity :: PersistEntity r => EntityField r v -> Entity r -> v
 fieldFromEntity field = view (Sqlite.fieldLens field)
 
 getJustBy
-    :: (MonadLogger m, MonadSql m, MonadThrow m, Show (Unique rec), SqlRecord rec)
+    :: ( MonadLogger m
+       , MonadSql m
+       , MonadThrow m
+       , Show (Unique rec)
+       , SqlRecord rec
+       )
     => Unique rec -> Transaction m (Entity rec)
 getJustBy k = do
     mVal <- getBy k
     case mVal of
         Just v -> return v
-        Nothing -> logThrowM $ MissingUniqEntity "value" k
+        Nothing -> logThrowM $ MissingUniqEntity (getTypeName k) k
 
 getJustKeyBy
-    :: (MonadLogger m, MonadSql m, MonadThrow m, Show (Unique rec), SqlRecord rec)
+    :: ( MonadLogger m
+       , MonadSql m
+       , MonadThrow m
+       , Show (Unique rec)
+       , SqlRecord rec
+       )
     => Unique rec -> Transaction m (Key rec)
 getJustKeyBy k = entityKey <$> getJustBy k
 

@@ -35,6 +35,7 @@ import qualified Database.Persist.Sqlite as Sqlite
 import Exceptions (MissingPrimaryKey(..), logThrowM)
 import Migration (checkMigration)
 import Schema.Import (ImportType(..), Importable(..), UpdateField(..))
+import Schema.Utils (getTypeName)
 import Sql.Core
 import qualified Sql.Transaction as SqlTrans
 
@@ -164,8 +165,7 @@ primaryLookup
     => rec -> Transaction m (Key rec)
 primaryLookup val = case keyFromRecordM <*> pure val of
     Just key -> key <$ SqlTrans.getJust key
-    Nothing -> logThrowM . MissingPrimaryKey . Sqlite.unHaskellName
-        . Sqlite.entityHaskell $ Sqlite.entityDef (Proxy :: Proxy rec)
+    Nothing -> logThrowM . MissingPrimaryKey $ getTypeName (Proxy :: Proxy rec)
 
 translateImportKey
     :: (Importable rec, MonadImport m, MonadSql m)

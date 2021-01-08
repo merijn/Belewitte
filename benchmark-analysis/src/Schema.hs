@@ -37,6 +37,7 @@ module Schema
     , getImplName
     , getExternalName
     , getModelName
+    , getTypeName
     , mkPercentage
     , percent
     , renderPercentage
@@ -59,7 +60,7 @@ import Database.Persist.Sql
     (EntityDef, Migration, PersistValue(..), toPersistValue)
 
 import Model (Model)
-import Schema.Utils (MonadThrow, mkMigration)
+import Schema.Utils (MonadThrow, mkMigration, getTypeName)
 import Sql.Core (MonadSql, SqlT, Transaction)
 import Types
 import Utils.Pair (Pair, toPair)
