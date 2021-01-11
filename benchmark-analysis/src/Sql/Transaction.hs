@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
@@ -10,6 +11,7 @@ module Sql.Transaction (module Sql, module Sql.Transaction) where
 
 import Control.Monad ((>=>))
 import Control.Monad.Trans.Resource (MonadResource)
+import Data.Bifunctor (bimap)
 import Data.Conduit (await)
 import qualified Data.Conduit.Combinators as C
 import Data.Int (Int64)
@@ -283,29 +285,45 @@ queryImplementations algoId = IM.union builtinImpls <$>
 newtype Avg = Avg { getAvg :: Int } deriving (Show, Eq, Ord)
 newtype Max = Max { getMax :: Int } deriving (Show, Eq, Ord)
 
-getFieldLength
+data ColumnFilter rec where
+    ColumnEq :: PersistField a => EntityField rec a -> a -> ColumnFilter rec
+
+getFieldLengthWhere
     :: forall a m rec
      . (MonadQuery m, SqlRecord rec)
-    => EntityField rec a -> m (Avg, Max)
-getFieldLength entityField = do
-    queryText <- runTransaction $ do
+    => EntityField rec a -> [ColumnFilter rec] -> m (Avg, Max)
+getFieldLengthWhere entityField filts = do
+    (params, queryText) <- runTransaction $ do
         table <- Transaction $ getTableName (undefined :: rec)
         field <- Transaction $ getFieldName entityField
-        return [i|
+        (filters, params) <- toFilter table filts
+
+        let filterClause = case filters of
+                [] -> ""
+                l -> "\nWHERE " <> T.intercalate " AND " l
+
+        return (params, [i|
 SELECT IFNULL(ROUND(AVG(length(#{table}.#{field}))), 0)
      , IFNULL(MAX(length(#{table}.#{field})), 0)
-FROM #{table}
-|]
+FROM #{table}#{filterClause}
+|])
     Query.runSqlQuerySingle Query{convert = Simple converter, ..}
   where
+    toFilter
+        :: Text
+        -> [ColumnFilter rec]
+        -> Transaction m ([Text], [PersistValue])
+    toFilter _ [] = return ([], [])
+    toFilter table (ColumnEq field val : rest) = do
+        fieldName <- Transaction $ getFieldName field
+        let colFilter = table <> "." <> fieldName <> "=?"
+        bimap (colFilter:) (toPersistValue val:) <$> toFilter table rest
+
     queryName :: Text
     queryName = "getMaxFieldQuery"
 
     commonTableExpressions :: [CTE]
     commonTableExpressions = []
-
-    params :: [PersistValue]
-    params = []
 
     converter :: MonadConvert n => [PersistValue] -> n (Avg, Max)
     converter [avgPersistVal, maxPersistVal]
@@ -314,3 +332,7 @@ FROM #{table}
         = return (Avg avgVal, Max maxVal)
     converter actualValues = logThrowM $ QueryResultUnparseable actualValues
         [SqlInt64, SqlInt64]
+
+getFieldLength
+    :: (MonadQuery m, SqlRecord rec) => EntityField rec a -> m (Avg, Max)
+getFieldLength entityField = getFieldLengthWhere entityField []

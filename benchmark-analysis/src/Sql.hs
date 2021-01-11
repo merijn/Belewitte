@@ -7,8 +7,10 @@
 {-# LANGUAGE TypeFamilies #-}
 module Sql
     ( SqlTrans.Avg(..)
+    , SqlTrans.ColumnFilter(..)
     , SqlTrans.Max(..)
     , SqlTrans.getFieldLength
+    , SqlTrans.getFieldLengthWhere
     , SqlTrans.likeFilter
     , SqlTrans.prefixFilter
     , module SqlCore
