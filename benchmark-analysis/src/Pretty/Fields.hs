@@ -57,7 +57,9 @@ namedIdField f = VerboseFieldInfo f showKey (Just prettyName) False
     showKey = T.pack . show . fromSqlKey
 
     prettyName :: MonadSql m => Key k -> m Text
-    prettyName = fmap entityName . getJust
+    prettyName k = do
+        value <- getJust k
+        return $ entityName value <> " (#" <> showKey k <> ")"
 
 textField :: EntityField v Text -> FieldInfo v
 textField f = FieldInfo f id False
