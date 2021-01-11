@@ -39,6 +39,9 @@ instance PrettyFields Algorithm where
         , ("Pretty Name", maybeTextField AlgorithmPrettyName)
         ]
 
+instance NamedEntity Algorithm where
+    entityName = optionalPrettyName algorithmPrettyName algorithmName
+
 instance Importable Algorithm where
     updateFields = []
 

@@ -93,22 +93,25 @@ instance PrettyFields PropertyName where
         [ ("Property", textField PropertyNameProperty)
         ]
 
+instance NamedEntity PropertyName where
+    entityName = propertyNameProperty
+
 instance PrettyFields GraphPropValue where
     prettyFieldInfo = ("Graph", idField GraphPropValueGraphId) :|
-        [ ("Property", idField GraphPropValuePropId)
+        [ ("Property", namedIdField GraphPropValuePropId)
         , ("Value", GraphPropValueValue `fieldVia` prettyDouble)
         ]
 
 instance PrettyFields StepProp where
     prettyFieldInfo = ("Property", idField StepPropPropId) :|
-        [ ("Algorithm", idField StepPropAlgorithmId)
+        [ ("Algorithm", namedIdField StepPropAlgorithmId)
         ]
 
 instance PrettyFields StepPropValue where
-    prettyFieldInfo = ("Algorithm", idField StepPropValueAlgorithmId) :|
+    prettyFieldInfo = ("Algorithm", namedIdField StepPropValueAlgorithmId) :|
         [ ("Variant", idField StepPropValueVariantId)
         , ("Step", StepPropValueStepId `fieldVia` prettyShow)
-        , ("Property", idField StepPropValuePropId)
+        , ("Property", namedIdField StepPropValuePropId)
         , ("Value", StepPropValueValue `fieldVia` prettyDouble)
         ]
 

@@ -121,7 +121,7 @@ main = runCommand commands $ \case
         modelEnt@(Entity modelId _) <- getModelEntity
         modelStats <- getModelStats modelId
         renderOutput $ do
-            C.yield $ renderEntity modelEnt
+            renderEntity modelEnt >>= C.yield
             C.yield "\n"
             reportModelStats modelStats
 

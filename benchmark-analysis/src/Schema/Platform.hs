@@ -51,6 +51,9 @@ instance PrettyFields Platform where
         , ("Default Platform", PlatformIsDefault `fieldVia` prettyShow)
         ]
 
+instance NamedEntity Platform where
+    entityName = optionalPrettyName platformPrettyName platformName
+
 instance Importable Platform where
     updateFields = []
 

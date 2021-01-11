@@ -49,9 +49,9 @@ deriving instance Show (Unique Variant)
 
 instance PrettyFields Variant where
     prettyFieldInfo = ("Id", idField VariantId) :|
-        [ ("Variant Config", idField VariantVariantConfigId)
-        , ("Algorithm", idField VariantAlgorithmId)
-        , ("Graph", idField VariantGraphId)
+        [ ("Variant Config", namedIdField VariantVariantConfigId)
+        , ("Algorithm", namedIdField VariantAlgorithmId)
+        , ("Graph", namedIdField VariantGraphId)
         , ("Properties Stored", VariantPropsStored `fieldVia` prettyShow)
         , ("Retries", VariantRetryCount `fieldVia` prettyShow)
         , ("Result Hash", VariantResult `maybeFieldVia` prettyShow)

@@ -26,7 +26,7 @@ import Query (CTE, Converter(Simple), MonadConvert, MonadQuery, Query(..))
 import qualified Query
 import Schema
 import Schema.GlobalVars (Unique(UniqGlobal))
-import Sql.Core as SqlCore hiding (selectKeys, selectSource)
+import Sql.Core as SqlCore hiding (getJust, selectKeys, selectSource)
 import qualified Sql.Transaction as SqlTrans
 
 rawGetGlobalVar

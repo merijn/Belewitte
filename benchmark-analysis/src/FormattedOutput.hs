@@ -22,7 +22,8 @@ import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.List as C (isolate)
 import Data.Conduit.Process (CreateProcess, Inherited(..))
 import qualified Data.Conduit.Process as Process
-import Data.Foldable (asum)
+import Data.Foldable (asum, fold)
+import Data.Maybe (fromMaybe)
 import qualified Data.Text as T
 import GHC.IO.Exception (IOException, IOErrorType(ResourceVanished))
 import Lens.Micro.Extras (view)
@@ -39,7 +40,15 @@ import Sql
 import Utils.Process (unexpectedTermination)
 
 fieldToText :: PersistEntity a => FieldInfo a -> Entity a -> Text
-fieldToText (FieldInfo field toText _) = toText . view (Sql.fieldLens field)
+fieldToText (VerboseFieldInfo field toText _ _) =
+    toText . view (Sql.fieldLens field)
+
+fieldToVerboseText
+    :: MonadSql m => PersistEntity a => FieldInfo a -> Entity a -> m Text
+fieldToVerboseText (VerboseFieldInfo field toText toTextM _) =
+    renderText . view (Sql.fieldLens field)
+  where
+    renderText = fromMaybe (return . toText) toTextM
 
 padText :: Int -> Text -> Text
 padText n input = input <> T.replicate (n - T.length input) " "
@@ -47,10 +56,10 @@ padText n input = input <> T.replicate (n - T.length input) " "
 queryFieldInfo
     :: (PrettyFields a, MonadQuery m)
     => (Text, FieldInfo a) -> m (Text, FieldInfo a, (Avg, Max))
-queryFieldInfo (name, col@(FieldInfo _ _ True)) =
+queryFieldInfo (name, col@(VerboseFieldInfo _ _ _ True)) =
     return (name, col, (Avg 0, Max 0))
 
-queryFieldInfo (name, col@(FieldInfo field _ False)) =
+queryFieldInfo (name, col@(VerboseFieldInfo field _ _ False)) =
     annotateField <$> Sql.getFieldLength field
   where
     fieldSize = Max . T.length $ name
@@ -58,12 +67,14 @@ queryFieldInfo (name, col@(FieldInfo field _ False)) =
         | maxVal > Max 0 = (name, col, (avgVal, max fieldSize maxVal))
         | otherwise = (name, col, (avgVal, maxVal))
 
-renderEntity :: forall a . PrettyFields a => Entity a -> Text
-renderEntity ent = foldMap formatLine fieldInfos
+renderEntity
+    :: forall a m . (MonadSql m, PrettyFields a) => Entity a -> m Text
+renderEntity ent = fold <$> traverse formatLine fieldInfos
   where
-    formatLine :: (Text, FieldInfo a) -> Text
-    formatLine (name, field) = mconcat
-        [paddedName, "   ", fieldToText field ent, "\n"]
+    formatLine :: (Text, FieldInfo a) -> m Text
+    formatLine (name, field) = do
+        fieldTxt <- fieldToVerboseText field ent
+        return $ mconcat [paddedName, "   ", fieldTxt , "\n"]
       where
         paddedName = padText (1 + maxLength) $ name <> ":"
 
@@ -74,7 +85,7 @@ renderEntity ent = foldMap formatLine fieldInfos
     fieldInfos = prettyFieldInfo
 
 printProxyEntity :: PrettyFields a => proxy a -> Entity a -> SqlM ()
-printProxyEntity _ ent = renderOutput $ C.yield (renderEntity ent)
+printProxyEntity _ ent = renderOutput $ renderEntity ent >>= C.yield
 
 columnFormatter
     :: (MonadQuery m, PrettyFields a) => m (Text, Entity a -> Text)

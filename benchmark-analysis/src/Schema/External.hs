@@ -56,22 +56,25 @@ deriving instance Show (Unique ExternalImpl)
 
 instance PrettyFields ExternalImpl where
     prettyFieldInfo = ("Id", idField ExternalImplId) :|
-        [ ("Algorithm", idField ExternalImplAlgorithmId)
+        [ ("Algorithm", namedIdField ExternalImplAlgorithmId)
         , ("Name", textField ExternalImplName)
         , ("Pretty Name", maybeTextField ExternalImplPrettyName)
         ]
 
 instance PrettyFields ExternalTimer where
-    prettyFieldInfo = ("Id", idField ExternalTimerPlatformId) :|
+    prettyFieldInfo = ("Platform", namedIdField ExternalTimerPlatformId) :|
         [ ("Variant", idField ExternalTimerVariantId)
-        , ("Algorithm", idField ExternalTimerAlgorithmId)
-        , ("Implementation", idField ExternalTimerImplId)
+        , ("Algorithm", namedIdField ExternalTimerAlgorithmId)
+        , ("Implementation", namedIdField ExternalTimerImplId)
         , ("Name", textField ExternalTimerName)
         , ("Min. Time", ExternalTimerMinTime `fieldVia` prettyDouble)
         , ("Avg. Time", ExternalTimerAvgTime `fieldVia` prettyDouble)
         , ("Max Time", ExternalTimerMaxTime `fieldVia` prettyDouble)
         , ("Std. Dev.", ExternalTimerStdDev `fieldVia` prettyDouble)
         ]
+
+instance NamedEntity ExternalImpl where
+    entityName = optionalPrettyName externalImplPrettyName externalImplName
 
 instance Importable ExternalImpl where
     updateFields = [ForeignKeyField ExternalImplAlgorithmId]

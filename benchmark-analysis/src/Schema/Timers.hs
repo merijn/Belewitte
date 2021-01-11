@@ -72,6 +72,9 @@ instance PrettyFields TotalTimer where
         , ("Std. Dev.", TotalTimerStdDev `fieldVia` prettyDouble)
         ]
 
+instance NamedEntity TotalTimer where
+    entityName = totalTimerName
+
 instance PrettyFields StepTimer where
     prettyFieldInfo = ("Run", idField StepTimerRunId) :|
         [ ("Variant", idField StepTimerVariantId)
@@ -82,6 +85,9 @@ instance PrettyFields StepTimer where
         , ("Max Time", StepTimerMaxTime `fieldVia` prettyDouble)
         , ("Std. Dev.", StepTimerStdDev `fieldVia` prettyDouble)
         ]
+
+instance NamedEntity StepTimer where
+    entityName = stepTimerName
 
 schema :: [EntityDef]
 schema = Utils.addForeignRef "StepTimer" run $ schema'

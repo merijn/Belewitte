@@ -26,6 +26,7 @@ module Sql.Core
     , executeSql
     , executeSqlSingleValueMaybe
     , executeSqlSingleValue
+    , getJust
     , getMigration
     , querySingleValue
     , runMigrationQuiet
@@ -343,6 +344,9 @@ conduitQuery query args = do
         join $ runReaderT (Sqlite.rawQueryRes query args) conn
 
     toProducer querySource <* release key
+
+getJust :: (MonadSql m, SqlRecord rec) => Key rec -> m rec
+getJust = runReadOnlyTransaction . Transaction . Sqlite.getJust
 
 querySingleValue
     :: (MonadLogger m, MonadSql m, MonadThrow m, PersistField a)

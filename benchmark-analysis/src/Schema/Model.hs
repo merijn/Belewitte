@@ -73,8 +73,8 @@ instance PrettyFields PredictionModel where
         [ ("Name", textField PredictionModelName)
         , ("Pretty Name", maybeTextField PredictionModelPrettyName)
         , ("Description", multilineTextField PredictionModelDescription)
-        , ("Algorithm", idField PredictionModelAlgorithmId)
-        , ("Platform", idField PredictionModelPlatformId)
+        , ("Algorithm", namedIdField PredictionModelAlgorithmId)
+        , ("Platform", namedIdField PredictionModelPlatformId)
         , ("Skip", PredictionModelSkipIncomplete `fieldVia` prettyShow)
         , ("Newer", PredictionModelAllowNewer `fieldVia` prettyShow)
         , ("Seed", PredictionModelTrainSeed `fieldVia` prettyShow)
@@ -85,6 +85,10 @@ instance PrettyFields PredictionModel where
         , ("Unknown", PredictionModelTotalUnknownCount `fieldVia` prettyShow)
         , ("Algorithm Commit", PredictionModelAlgorithmVersion `fieldVia` getCommitId)
         ]
+
+instance NamedEntity PredictionModel where
+    entityName =
+        optionalPrettyName predictionModelPrettyName predictionModelName
 
 migrations
     :: (MonadLogger m, MonadSql m, MonadThrow m)

@@ -1,16 +1,23 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Pretty.Fields
     ( NonEmpty(..)
     , PrettyFields(prettyFieldInfo)
+    , NamedEntity(entityName)
     , FieldInfo(..)
+    , pattern FieldInfo
     , idField
+    , namedIdField
     , textField
     , fieldVia
     , maybeTextField
     , maybeFieldVia
     , multilineTextField
+    , optionalPrettyName
     , prettyDouble
     , prettyShow
     , queryOnlyField
@@ -20,15 +27,37 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
 import qualified Data.Text as T
-import Database.Persist.Class (EntityField, PersistEntity)
+import Database.Persist.Class (EntityField)
 
-import Sql.Core (Key, SqlBackend, SqlRecord, ToBackendKey, fromSqlKey)
+import Sql.Core
+    (Key, MonadSql, SqlBackend, SqlRecord, ToBackendKey, fromSqlKey, getJust)
+
+pattern FieldInfo :: EntityField rec v -> (v -> Text) -> Bool -> FieldInfo rec
+pattern FieldInfo field conv b <- VerboseFieldInfo field conv _ b where
+    FieldInfo field conv b = VerboseFieldInfo field conv Nothing b
 
 data FieldInfo rec where
-    FieldInfo :: EntityField rec v -> (v -> Text) -> Bool -> FieldInfo rec
+    VerboseFieldInfo
+        :: EntityField rec v
+        -> (v -> Text)
+        -> (forall m . MonadSql m => Maybe (v -> m Text))
+        -> Bool
+        -> FieldInfo rec
 
 idField :: ToBackendKey SqlBackend k => EntityField v (Key k) -> FieldInfo v
 idField f = FieldInfo f (T.pack . show . fromSqlKey) False
+
+namedIdField
+    :: forall k v
+     . (ToBackendKey SqlBackend k, NamedEntity k)
+     => EntityField v (Key k) -> FieldInfo v
+namedIdField f = VerboseFieldInfo f showKey (Just prettyName) False
+  where
+    showKey :: Key k -> Text
+    showKey = T.pack . show . fromSqlKey
+
+    prettyName :: MonadSql m => Key k -> m Text
+    prettyName = fmap entityName . getJust
 
 textField :: EntityField v Text -> FieldInfo v
 textField f = FieldInfo f id False
@@ -48,8 +77,14 @@ multilineTextField f = FieldInfo f (maybe "" format) True
 maybeFieldVia :: EntityField v (Maybe r) -> (r -> Text) -> FieldInfo v
 maybeFieldVia f conv = FieldInfo f (maybe "" conv) False
 
-class (PersistEntity a, SqlRecord a) => PrettyFields a where
+class SqlRecord a => PrettyFields a where
     prettyFieldInfo :: NonEmpty (Text, FieldInfo a)
+
+optionalPrettyName :: (a -> Maybe Text) -> (a -> Text) -> a -> Text
+optionalPrettyName prettyName name v = fromMaybe (name v) $ prettyName v
+
+class PrettyFields a => NamedEntity a where
+    entityName :: a -> Text
 
 prettyDouble :: Double -> Text
 prettyDouble = T.pack . show
@@ -58,4 +93,5 @@ prettyShow :: Show a => a -> Text
 prettyShow = T.pack . show
 
 queryOnlyField :: FieldInfo rec -> FieldInfo rec
-queryOnlyField (FieldInfo f conv _) = FieldInfo f conv True
+queryOnlyField (VerboseFieldInfo f conv convM _) =
+  VerboseFieldInfo f conv convM True

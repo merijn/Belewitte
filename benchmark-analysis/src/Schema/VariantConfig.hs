@@ -51,12 +51,15 @@ deriving instance Show (Unique VariantConfig)
 instance PrettyFields VariantConfig where
     prettyFieldInfo = ("Id", idField VariantConfigId) :|
         [ ("Name", textField VariantConfigName)
-        , ("Algorithm", idField VariantConfigAlgorithmId)
+        , ("Algorithm", namedIdField VariantConfigAlgorithmId)
         , ("Flags", maybeTextField VariantConfigFlags)
         , ( "Default Variant Config"
           , VariantConfigIsDefault `fieldVia` prettyShow
           )
         ]
+
+instance NamedEntity VariantConfig where
+    entityName = variantConfigName
 
 instance Importable VariantConfig where
     importType _ = ExplicitUniqueImport $ \case

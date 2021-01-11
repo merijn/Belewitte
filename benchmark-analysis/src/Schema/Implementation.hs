@@ -44,13 +44,16 @@ deriving instance Show (Unique Implementation)
 
 instance PrettyFields Implementation where
     prettyFieldInfo = ("Id", idField ImplementationId) :|
-        [ ("Algorithm", idField ImplementationAlgorithmId)
+        [ ("Algorithm", namedIdField ImplementationAlgorithmId)
         , ("Name", textField ImplementationName)
         , ("Type", ImplementationType `fieldVia` prettyShow)
         , ("Pretty Name", maybeTextField ImplementationPrettyName)
         , ("Flags", maybeTextField ImplementationFlags)
         , ("Timestamp", ImplementationTimestamp `fieldVia` prettyShow)
         ]
+
+instance NamedEntity Implementation where
+    entityName = optionalPrettyName implementationPrettyName implementationName
 
 migrations :: MonadSql m => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup

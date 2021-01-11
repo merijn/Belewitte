@@ -47,9 +47,9 @@ deriving instance Show (Unique Run)
 instance PrettyFields Run where
     prettyFieldInfo = ("Id", idField RunId) :|
         [ ("Run Config", idField RunRunConfigId)
-        , ("Algorithm", idField RunAlgorithmId)
+        , ("Algorithm", namedIdField RunAlgorithmId)
         , ("Variant", idField RunVariantId)
-        , ("Implementation", idField RunImplId)
+        , ("Implementation", namedIdField RunImplId)
         , ("Validated", RunValidated `fieldVia` prettyShow)
         , ("Timestamp", RunTimestamp `fieldVia` prettyShow)
         ]

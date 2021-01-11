@@ -47,10 +47,13 @@ deriving instance Show (Unique Graph)
 instance PrettyFields Graph where
     prettyFieldInfo = ("Id", idField GraphId) :|
         [ ("Name", textField GraphName)
-        , ("Dataset", idField GraphDatasetId)
+        , ("Dataset", namedIdField GraphDatasetId)
         , ("Pretty Name", maybeTextField GraphPrettyName)
         , ("Filepath", textField GraphPath)
         ]
+
+instance NamedEntity Graph where
+    entityName = optionalPrettyName graphPrettyName graphName
 
 instance Importable Graph where
     importType _ = ExplicitUniqueImport $ \case

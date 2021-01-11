@@ -34,7 +34,7 @@ import Exceptions
 import Query (CTE, Converter(Simple), MonadConvert, MonadQuery, Query(..))
 import qualified Query
 import Schema
-import Sql.Core as Sql hiding (selectKeysRegion, selectSourceRegion)
+import Sql.Core as Sql hiding (getJust, selectKeysRegion, selectSourceRegion)
 
 epoch :: UTCTime
 epoch = posixSecondsToUTCTime 0

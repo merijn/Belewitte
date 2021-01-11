@@ -31,11 +31,14 @@ Dataset
     deriving Eq Show
 |]
 
+deriving instance Show (Unique Dataset)
+
 instance PrettyFields Dataset where
     prettyFieldInfo = ("Id", idField DatasetId) :|
         [ ("Name", textField DatasetName) ]
 
-deriving instance Show (Unique Dataset)
+instance NamedEntity Dataset where
+    entityName = datasetName
 
 instance Importable Dataset where
     updateFields = []
