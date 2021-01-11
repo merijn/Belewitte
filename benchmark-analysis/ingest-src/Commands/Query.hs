@@ -1,9 +1,13 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Commands.Query (commands) where
 
+import Data.Conduit ((.|), yield)
+import qualified Data.Conduit.Combinators as C
 import Data.Proxy (Proxy(..))
+import qualified Data.Text as T
 import qualified Data.Text.IO as T
 
 import Core
@@ -11,7 +15,8 @@ import FormattedOutput
 import Options
 import Pretty.Fields (PrettyFields)
 import Schema
-import Sql (SqlBackend, ToBackendKey)
+import Sql
+    (ColumnFilter(..), Max(..), MonadSql, SqlBackend, ToBackendKey, (==.))
 import qualified Sql
 
 commands :: Command (SqlM ())
@@ -51,7 +56,7 @@ commands = CommandGroup CommandInfo
         , commandHeaderDesc = "list graph information"
         , commandDesc = "Show information about a registered graph."
         }
-        $ renderEntityParser (Proxy :: Proxy Graph)
+        $ (>>= renderGraph) <$> entityParser
     , SingleCommand CommandInfo
         { commandName = "implementation"
         , commandHeaderDesc = "list implementation information"
@@ -94,6 +99,22 @@ commands = CommandGroup CommandInfo
         :: (PrettyFields v, ToBackendKey SqlBackend v)
         => proxy v -> Parser (SqlM ())
     renderEntityParser proxy = (>>= printProxyEntity proxy) <$> entityParser
+
+    renderGraph :: Entity Graph -> SqlM ()
+    renderGraph graph = renderRegionOutput $ do
+        renderEntity graph >>= yield
+        (_, Max maxLen) <- Sql.getFieldLengthWhere PropertyNameProperty
+                [ Sql.ColumnEq PropertyNameIsStepProp False]
+
+        Sql.selectSourceRegion [GraphPropValueGraphId ==. entityKey graph] []
+            .| C.mapM (renderProperty maxLen)
+
+    renderProperty :: MonadSql m => Int -> Entity GraphPropValue -> m Text
+    renderProperty maxLen (Entity _ GraphPropValue{..}) = do
+        name <- propertyNameProperty <$> Sql.getJust graphPropValuePropId
+        return $ padText (name <> ":") <> showText graphPropValueValue <> "\n"
+      where
+        padText t = t <> T.replicate (maxLen + 2 - T.length t) " "
 
 showRunCommand :: SqlM ()
 showRunCommand = do
