@@ -308,6 +308,7 @@ Executable Plot
   Other-Modules:        BarPlot
                         GlobalPlotOptions
                         Heatmap
+                        Interesting
                         PlotOptions
                         Query.Dump
                         Query.Level
@@ -315,10 +316,13 @@ Executable Plot
                         Query.Time
 
   Other-Extensions:     BangPatterns
+                        DerivingVia
                         FlexibleContexts
 
   Build-Depends:        benchmark-analysis
                ,        binary ^>= 0.8.7
+               ,        data-interval ^>= 1.3.0
+               ,        semigroups ^>= 0.19.1
                ,        vector ^>= 0.12.0.1
 
 Source-Repository head

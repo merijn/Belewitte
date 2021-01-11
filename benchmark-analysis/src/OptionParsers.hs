@@ -431,16 +431,20 @@ variantInfoConfigParser = do
             <*> sequence getDatasetId <*> getUtcTime <*> pure allowNewer
             <*> pure filterFlag
 
-intervalReader :: ReadM (IntervalSet Int64)
+intervalReader :: Integral a => ReadM (IntervalSet a)
 intervalReader = maybeReader . parseMaybe $
     IS.fromList <$> sepBy1 interval (char ',')
   where
-    interval :: Parsec () String (Interval Int64)
+    interval :: Integral a => Parsec () String (Interval a)
     interval = range <|> singleValue
 
+    singleValue :: Integral a => Parsec () String (Interval a)
     singleValue = I.singleton <$> decimal
+
+    range :: Integral a => Parsec () String (Interval a)
     range = toInterval <$> try (decimal <* char '-') <*> decimal
 
+    toInterval :: Integral a => a -> a -> Interval a
     toInterval = I.interval `on` (,True) . Finite
 
 readCI :: (Foldable f, Show a) => f a -> ReadM a
