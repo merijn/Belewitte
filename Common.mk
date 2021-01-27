@@ -121,6 +121,7 @@ UNAME := $(shell uname -s)
 ifeq ($(UNAME),Darwin)
     CXXFLAGS += -isystem$(CUDA_PATH)/include/ -Wno-undefined-func-template
 
+    CLANGWFLAGS += -Wno-poison-system-directories
     DYLIBLDFLAGS += -flat_namespace -undefined suppress
 
     NVWFLAGS = $(CLANGWFLAGS) -Wno-unused-macros -Wno-c++11-long-long \
