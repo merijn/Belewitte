@@ -66,10 +66,10 @@ StepTimer
 instance PrettyFields TotalTimer where
     prettyFieldInfo = ("Run", idField TotalTimerRunId) :|
         [ ("Name", textField TotalTimerName)
-        , ("Min. Time", TotalTimerMinTime `fieldVia` prettyDouble)
-        , ("Avg. Time", TotalTimerAvgTime `fieldVia` prettyDouble)
-        , ("Max Time", TotalTimerMaxTime `fieldVia` prettyDouble)
-        , ("Std. Dev.", TotalTimerStdDev `fieldVia` prettyDouble)
+        , ("Min. Time", doubleField 0 TotalTimerMinTime)
+        , ("Avg. Time", doubleField 0 TotalTimerAvgTime)
+        , ("Max Time", doubleField 0 TotalTimerMaxTime)
+        , ("Std. Dev.", doubleField_ TotalTimerStdDev)
         ]
 
 instance NamedEntity TotalTimer where
@@ -80,10 +80,10 @@ instance PrettyFields StepTimer where
         [ ("Variant", idField StepTimerVariantId)
         , ("Step", StepTimerStepId `fieldVia` prettyShow)
         , ("Name", textField StepTimerName)
-        , ("Min. Time", StepTimerMinTime `fieldVia` prettyDouble)
-        , ("Avg. Time", StepTimerAvgTime `fieldVia` prettyDouble)
-        , ("Max Time", StepTimerMaxTime `fieldVia` prettyDouble)
-        , ("Std. Dev.", StepTimerStdDev `fieldVia` prettyDouble)
+        , ("Min. Time", doubleField 0 StepTimerMinTime)
+        , ("Avg. Time", doubleField 0 StepTimerAvgTime)
+        , ("Max Time", doubleField 0 StepTimerMaxTime)
+        , ("Std. Dev.", doubleField_ StepTimerStdDev)
         ]
 
 instance NamedEntity StepTimer where

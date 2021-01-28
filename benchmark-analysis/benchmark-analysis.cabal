@@ -220,6 +220,7 @@ Library
                ,        directory ^>= 1.3.4.0
                ,        fast-logger ^>= 3.0.0
                ,        filepath ^>= 1.4.0
+               ,        format-numbers ^>= 0.1.0.1
                ,        haskeline ^>= 0.8.1.0
                ,        megaparsec ^>= 7.0.0
                ,        memory ^>= 0.15

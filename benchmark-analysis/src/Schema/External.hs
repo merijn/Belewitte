@@ -67,10 +67,10 @@ instance PrettyFields ExternalTimer where
         , ("Algorithm", namedIdField ExternalTimerAlgorithmId)
         , ("Implementation", namedIdField ExternalTimerImplId)
         , ("Name", textField ExternalTimerName)
-        , ("Min. Time", ExternalTimerMinTime `fieldVia` prettyDouble)
-        , ("Avg. Time", ExternalTimerAvgTime `fieldVia` prettyDouble)
-        , ("Max Time", ExternalTimerMaxTime `fieldVia` prettyDouble)
-        , ("Std. Dev.", ExternalTimerStdDev `fieldVia` prettyDouble)
+        , ("Min. Time", doubleField 0 ExternalTimerMinTime)
+        , ("Avg. Time", doubleField 0 ExternalTimerAvgTime)
+        , ("Max Time", doubleField 0 ExternalTimerMaxTime)
+        , ("Std. Dev.", doubleField_ ExternalTimerStdDev)
         ]
 
 instance NamedEntity ExternalImpl where

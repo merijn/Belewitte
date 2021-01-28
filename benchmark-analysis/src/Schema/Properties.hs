@@ -99,7 +99,7 @@ instance NamedEntity PropertyName where
 instance PrettyFields GraphPropValue where
     prettyFieldInfo = ("Graph", idField GraphPropValueGraphId) :|
         [ ("Property", namedIdField GraphPropValuePropId)
-        , ("Value", GraphPropValueValue `fieldVia` prettyDouble)
+        , ("Value", doubleField_ GraphPropValueValue)
         ]
 
 instance PrettyFields StepProp where
@@ -112,7 +112,7 @@ instance PrettyFields StepPropValue where
         [ ("Variant", idField StepPropValueVariantId)
         , ("Step", StepPropValueStepId `fieldVia` prettyShow)
         , ("Property", namedIdField StepPropValuePropId)
-        , ("Value", StepPropValueValue `fieldVia` prettyDouble)
+        , ("Value", doubleField_ StepPropValueValue)
         ]
 
 migrations :: MonadSql m => Int64 -> Transaction m [EntityDef]

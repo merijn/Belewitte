@@ -13,7 +13,7 @@ import qualified Data.Text.IO as T
 import Core
 import FormattedOutput
 import Options
-import Pretty.Fields (PrettyFields)
+import Pretty.Fields (PrettyFields, prettyDouble_)
 import Schema
 import Sql
     (ColumnFilter(..), Max(..), MonadSql, SqlBackend, ToBackendKey, (==.))
@@ -112,7 +112,8 @@ commands = CommandGroup CommandInfo
     renderProperty :: MonadSql m => Int -> Entity GraphPropValue -> m Text
     renderProperty maxLen (Entity _ GraphPropValue{..}) = do
         name <- propertyNameProperty <$> Sql.getJust graphPropValuePropId
-        return $ padText (name <> ":") <> showText graphPropValueValue <> "\n"
+        return $
+            padText (name <> ":") <> prettyDouble_ graphPropValueValue <> "\n"
       where
         padText t = t <> T.replicate (maxLen + 2 - T.length t) " "
 

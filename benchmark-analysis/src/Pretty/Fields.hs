@@ -13,16 +13,20 @@ module Pretty.Fields
     , idField
     , namedIdField
     , textField
+    , doubleField
+    , doubleField_
     , fieldVia
     , maybeTextField
     , maybeFieldVia
     , multilineTextField
     , optionalPrettyName
     , prettyDouble
+    , prettyDouble_
     , prettyShow
     , queryOnlyField
     ) where
 
+import Data.Text.Format.Numbers (PrettyCfg(..), prettyF)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.Maybe (fromMaybe)
 import Data.Text (Text)
@@ -64,6 +68,15 @@ namedIdField f = VerboseFieldInfo f showKey (Just prettyName) False
 textField :: EntityField v Text -> FieldInfo v
 textField f = FieldInfo f id False
 
+doubleField :: Int -> EntityField v Double -> FieldInfo v
+doubleField n f = VerboseFieldInfo f prettyShow (Just mkPretty) False
+  where
+    mkPretty :: Monad m => Double -> m Text
+    mkPretty = return . prettyDouble n
+
+doubleField_ :: EntityField v Double -> FieldInfo v
+doubleField_ = doubleField 2
+
 fieldVia :: EntityField v r -> (r -> Text) -> FieldInfo v
 fieldVia f conv = FieldInfo f conv False
 
@@ -88,11 +101,18 @@ optionalPrettyName prettyName name v = fromMaybe (name v) $ prettyName v
 class PrettyFields a => NamedEntity a where
     entityName :: a -> Text
 
-prettyDouble :: Double -> Text
-prettyDouble = T.pack . show
-
 prettyShow :: Show a => a -> Text
 prettyShow = T.pack . show
+
+prettyDouble :: Int -> Double -> Text
+prettyDouble n = prettyF PrettyCfg
+    { pc_decimals = n
+    , pc_thousandsSep = Just ','
+    , pc_decimalSep = '.'
+    }
+
+prettyDouble_ :: Double -> Text
+prettyDouble_ = prettyDouble 2
 
 queryOnlyField :: FieldInfo rec -> FieldInfo rec
 queryOnlyField (VerboseFieldInfo f conv convM _) =
