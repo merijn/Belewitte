@@ -59,7 +59,7 @@ propertiesFromVariant implNames VariantInfo{..} = Just Interest
     lookupName (ImplTiming implId timing) =
         mkArg <$> IM.lookup (fromIntegral implId) implNames
       where
-        mkArg txt = Arg timing (txt, variantId)
+        mkArg txt = Arg (timing / variantOptimal) (txt, variantId)
 
 printInteresting
     :: Monad m => Int -> InterestingVariants -> ConduitT () Text m ()
