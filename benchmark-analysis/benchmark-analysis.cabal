@@ -317,6 +317,8 @@ Executable Plot
                         Query.Time
 
   Other-Extensions:     BangPatterns
+                        DeriveFoldable
+                        DeriveGeneric
                         DerivingVia
                         FlexibleContexts
 
@@ -324,6 +326,7 @@ Executable Plot
                ,        binary ^>= 0.8.7
                ,        data-interval ^>= 1.3.0
                ,        semigroups ^>= 0.19.1
+               ,        statistics ^>= 0.15.2.0
                ,        vector ^>= 0.12.2.0
 
 Source-Repository head

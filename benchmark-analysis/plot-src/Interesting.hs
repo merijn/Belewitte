@@ -1,3 +1,4 @@
+{-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DerivingVia #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -11,6 +12,7 @@ import Data.Bifunctor (bimap, second)
 import Data.Coerce (coerce)
 import Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
+import Data.Foldable (foldMap')
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 import Data.List (sortBy)
@@ -23,6 +25,7 @@ import qualified Data.Text as T
 import Data.Vector (Vector)
 import qualified Data.Vector as V
 import GHC.Generics (Generic)
+import Statistics.Sample (stdDev, mean, skewness, kurtosis)
 
 import Core
 import FormattedOutput (renderOutput)
@@ -54,13 +57,22 @@ instance Functor ZipVector where
 instance Semigroup a => Semigroup (ZipVector a) where
     ZipVector v1 <> ZipVector v2 = ZipVector $ V.zipWith (<>) v1 v2
 
+data MinMaxPair a = MMPair { minVal :: !(Min a), maxVal :: !(Max a) }
+    deriving (Foldable, Generic, Show)
+    deriving Semigroup via (GenericSemigroupMonoid (MinMaxPair a))
+
+type VariantVector f = ZipVector (f (Arg Double (Text, Key Variant)))
+type VariantPair = MinMaxPair (Arg Double (Key Variant))
+
 data InterestingVariants = Interest
-    { bestVariantsOptimal :: ZipVector (ArgMin Double (Text, Key Variant))
-    , worstVariantsOptimal :: ZipVector (ArgMax Double (Text, Key Variant))
-    , bestVariants :: ZipVector (ArgMin Double (Text, Key Variant))
-    , worstVariants :: ZipVector (ArgMax Double (Text, Key Variant))
-    , smallestDifference :: ArgMin Double (Key Variant)
-    , largestDifference :: ArgMax Double (Key Variant)
+    { bestVariantsOptimal :: {-# UNPACK #-} !(VariantVector Min)
+    , worstVariantsOptimal :: {-# UNPACK #-} !(VariantVector Max)
+    , bestVariants :: {-# UNPACK #-} !(VariantVector Min)
+    , worstVariants :: {-# UNPACK #-} !(VariantVector Max)
+    , difference :: {-# UNPACK #-} !VariantPair
+    , normalisedSpread :: {-# UNPACK #-} !VariantPair
+    , skewnessVal :: {-# UNPACK #-} !VariantPair
+    , kurtosisVal :: {-# UNPACK #-} !VariantPair
     }
     deriving (Generic, Show)
     deriving Semigroup via (GenericSemigroupMonoid InterestingVariants)
@@ -78,12 +90,22 @@ propertiesFromVariant implNames VariantInfo{..} = Just Interest
     , worstVariantsOptimal = coerce relativeToOptimal
     , bestVariants = coerce relativeToBest
     , worstVariants = coerce relativeToBest
-    , smallestDifference = Min $ Arg maxDifference variantId
-    , largestDifference = Max $ Arg maxDifference variantId
+    , difference = mkPair maxDifference
+    , normalisedSpread = mkPair normalisedSpread
+    , skewnessVal = mkPair $ skewness rawTimings
+    , kurtosisVal = mkPair $ kurtosis rawTimings
     }
   where
+    mkPair :: Double -> MinMaxPair (Arg Double (Key Variant))
+    mkPair x = MMPair (Min arg) (Max arg)
+      where
+        arg = Arg x variantId
+
     maxDifference :: Double
     maxDifference = getOrd (V.maximum timings) / getOrd (V.minimum timings)
+
+    normalisedSpread :: Double
+    normalisedSpread = stdDev rawTimings / mean rawTimings
 
     relativeToOptimal :: Vector (Arg Double (Text, Key Variant))
     relativeToOptimal = V.map (normaliseArg variantOptimal) timings
@@ -93,6 +115,9 @@ propertiesFromVariant implNames VariantInfo{..} = Just Interest
 
     timings :: Vector (Arg Double Text)
     timings = V.mapMaybe lookupName $ V.convert variantTimings
+
+    rawTimings :: Vector Double
+    rawTimings = V.map getOrd timings
 
     normaliseArg :: Double -> Arg Double v -> Arg Double (v, Key Variant)
     normaliseArg d = bimap (/ d) (, variantId)
@@ -115,14 +140,21 @@ printSummary Interest{..} = forM_ variantCounts $ \(variantId, count) -> do
         -> MonoidMap (Key Variant) (Sum Int)
     vectorToMap f = V.foldMap' (mkMap . second snd . f) . coerce
 
+    pairToMap
+        :: MinMaxPair (Arg Double (Key Variant))
+        -> MonoidMap (Key Variant) (Sum Int)
+    pairToMap = foldMap' mkMap
+
     variantCounts :: [(Key Variant, Int)]
     variantCounts = sortBy (flip (comparing snd)) . M.toList . coerce $ mconcat
         [ vectorToMap getMin bestVariantsOptimal
         , vectorToMap getMax worstVariantsOptimal
         , vectorToMap getMin bestVariants
         , vectorToMap getMax worstVariants
-        , mkMap . getMin $ smallestDifference
-        , mkMap . getMax $ largestDifference
+        , pairToMap $ difference
+        , pairToMap $ normalisedSpread
+        , pairToMap $ skewnessVal
+        , pairToMap $ kurtosisVal
         ]
 
 printInteresting
@@ -140,8 +172,10 @@ printInteresting maxLen Interest{..} = do
     reportData "Worst variant (non-switching)" . getZipVector $
         getMax <$> worstVariants
 
-    reportVariant "Smallest difference" $ getMin smallestDifference
-    reportVariant "Largest difference" $ getMax largestDifference
+    reportPair "difference" $ difference
+    reportPair "spread" $ normalisedSpread
+    reportPair "skewness" $ skewnessVal
+    reportPair "kurtosis" $ kurtosisVal
   where
     reportData
         :: Monad m
@@ -159,10 +193,22 @@ printInteresting maxLen Interest{..} = do
                 ]
         C.yield "\n"
 
-    reportVariant
-        :: Monad m => Text -> Arg a (Key Variant) -> ConduitT () Text m ()
-    reportVariant label (Arg _ variantId) = C.yield $
-        padName (label <> ":") <> "    " <> showSqlKey variantId <> "\n"
+    reportPair
+        :: Monad m
+        => Text
+        -> MinMaxPair (Arg a (Key Variant))
+        -> ConduitT () Text m ()
+    reportPair label (MMPair (Min minArg) (Max maxArg)) = do
+        C.yield $ render "Smallest" (getVal minArg)
+        C.yield $ render "Largest" (getVal maxArg)
+      where
+        render :: Text -> Key Variant -> Text
+        render t k = mconcat
+            [ padName (t <> " " <> label <> ":")
+            , "    "
+            , showSqlKey k
+            , "\n"
+            ]
 
     padName :: Text -> Text
     padName t = t <> T.replicate (maxLen + 2 - T.length t) " "
