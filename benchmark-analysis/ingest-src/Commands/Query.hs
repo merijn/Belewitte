@@ -4,6 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Commands.Query (commands) where
 
+import Control.Monad ((>=>))
 import Data.Conduit ((.|), yield)
 import qualified Data.Conduit.Combinators as C
 import Data.Proxy (Proxy(..))
@@ -93,6 +94,12 @@ commands = CommandGroup CommandInfo
         , commandDesc = "Show information about a registered variant."
         }
         $ renderEntityParser (Proxy :: Proxy Variant)
+    , SingleCommand CommandInfo
+        { commandName = "variant-properties"
+        , commandHeaderDesc = "list graph properties for variant"
+        , commandDesc = "Show information about a registered variant."
+        }
+        $ (>>= renderVariant) <$> entityParser
     ]
   where
     renderEntityParser
@@ -100,15 +107,21 @@ commands = CommandGroup CommandInfo
         => proxy v -> Parser (SqlM ())
     renderEntityParser proxy = (>>= printProxyEntity proxy) <$> entityParser
 
-    renderGraph :: Entity Graph -> SqlM ()
-    renderGraph graph = renderRegionOutput $ do
-        renderEntity graph >>= yield
-        (_, Max maxLen) <- Sql.getFieldLengthWhere PropertyNameProperty
-                [ Sql.ColumnEq PropertyNameIsStepProp False]
+    renderVariant :: Entity Variant -> SqlM ()
+    renderVariant = graphFromVariant >=> renderGraph
 
-        Sql.selectSourceRegion [GraphPropValueGraphId ==. entityKey graph] []
-            .| C.mapM (renderProperty maxLen)
+    graphFromVariant :: Entity Variant -> SqlM (Entity Graph)
+    graphFromVariant = Sql.getJustEntity . variantGraphId . entityVal
 
+renderGraph :: Entity Graph -> SqlM ()
+renderGraph graph = renderRegionOutput $ do
+    renderEntity graph >>= yield
+    (_, Max maxLen) <- Sql.getFieldLengthWhere PropertyNameProperty
+            [ Sql.ColumnEq PropertyNameIsStepProp False]
+
+    Sql.selectSourceRegion [GraphPropValueGraphId ==. entityKey graph] []
+        .| C.mapM (renderProperty maxLen)
+  where
     renderProperty :: MonadSql m => Int -> Entity GraphPropValue -> m Text
     renderProperty maxLen (Entity _ GraphPropValue{..}) = do
         name <- propertyNameProperty <$> Sql.getJust graphPropValuePropId
