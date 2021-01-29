@@ -40,7 +40,12 @@ import Query.Variant (VariantInfoConfig(..))
 data PlotCommand
     = PlotBar BarPlot
     | PlotHeatmap Heatmap
-    | ReportInteresting (Maybe (Key VariantConfig)) VariantInfoConfig ImplFilter
+    | ReportInteresting
+        { optVariantConfig :: Maybe (Key VariantConfig)
+        , variantConfigInfo :: VariantInfoConfig
+        , implFilter :: ImplFilter
+        , shortSummary :: Bool
+        }
 
 queryVariants :: Key Algorithm -> Set Text -> SqlM (Set (Key Variant))
 queryVariants algoId graphs = do
@@ -256,18 +261,25 @@ commands = CommandRoot
         mkFilter :: IntervalSet Int -> ImplFilter
         mkFilter intervals = IM.filterWithKey (\k _ -> k `IS.member` intervals)
 
+    summaryFlag :: Parser Bool
+    summaryFlag = switch $ mconcat
+        [ long "summary"
+        , help "Print only a short summary of the interesting variants."
+        ]
+
     reportParser :: Parser (SqlM PlotCommand)
     reportParser = do
         getVariantInfoConfig <- variantInfoConfigParser
         getVariantConfigId <- optional variantConfigIdParser
         filterFun <- implFilter
+        summary <- summaryFlag
 
         pure $ do
             cfg <- getVariantInfoConfig
             variantConfigId <- sequence $
                 getVariantConfigId <*> pure (variantInfoAlgorithm cfg)
 
-            return $ ReportInteresting variantConfigId cfg filterFun
+            return $ ReportInteresting variantConfigId cfg filterFun summary
 
 plotQueryMap :: Map String (Parser DebugQuery)
 plotQueryMap = M.fromList

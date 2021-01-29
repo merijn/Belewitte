@@ -12,5 +12,5 @@ main :: IO ()
 main = runSqlMCommand commands $ \case
     PlotBar config -> barPlot config
     PlotHeatmap config -> plotHeatmap config
-    ReportInteresting variantConfigId variantInfoConfig implFilter ->
-        findInterestingVariants variantConfigId variantInfoConfig implFilter
+    ReportInteresting vCfgId vInfoCfg implFilters summary ->
+        findInterestingVariants vCfgId vInfoCfg implFilters summary
