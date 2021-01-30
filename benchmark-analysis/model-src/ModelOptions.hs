@@ -349,9 +349,13 @@ reportParser relTo implTypes =
 
     sortResultsBy :: Parser SortBy
     sortResultsBy = optionParserFromValues values "SORT-BY" helpTxt $ mconcat
-        [ long "sort-by", value Avg, showDefaultWith (map toLower . show) ]
+        [ long "sort-by", value AbsTime
+        , showDefaultWith (const "abs")
+        ]
       where
-        values = M.fromList [("avg", Avg), ("max", Max)]
+        values =
+            M.fromList [("avg", AvgError), ("max", MaxError), ("abs", AbsTime)]
+
         helpTxt = "Time to sort results by."
 
     latexTable :: Parser ReportOutput

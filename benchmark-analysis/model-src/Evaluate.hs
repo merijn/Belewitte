@@ -89,7 +89,9 @@ reportImplementations sep pad implMaps cmp f =
 data TotalStatistics =
   TotalStats
   { variantCount :: {-# UNPACK #-} !Int
-  , timesCumRelError :: {-# UNPACK #-} !(Pair (Vector ImplTiming))
+  , aggregateOptimalTime :: {-# UNPACK #-} !Double
+  , aggregateTimes :: {-# UNPACK #-} !(Pair (Vector ImplTiming))
+  , timesCumRelError :: {-# UNPACK #-} !(Pair (Vector Double))
   , relErrorOneToTwo :: {-# UNPACK #-} !(Pair (Vector Int))
   , relErrorMoreThanFive :: {-# UNPACK #-} !(Pair (Vector Int))
   , relErrorMoreThanTwenty :: {-# UNPACK #-} !(Pair (Vector Int))
@@ -112,7 +114,9 @@ aggregateVariants variantIntervals relTo implMaps = do
     initial :: Pair (Vector ImplTiming) -> TotalStatistics
     initial v = TotalStats
         { variantCount = 0
-        , timesCumRelError = VS.map zerooutTiming <$> v
+        , aggregateOptimalTime = 0
+        , aggregateTimes = VS.map zerooutTiming <$> v
+        , timesCumRelError = zeroDoubleVector
         , relErrorOneToTwo = zeroIntVector
         , relErrorMoreThanFive = zeroIntVector
         , relErrorMoreThanTwenty = zeroIntVector
@@ -129,9 +133,12 @@ aggregateVariants variantIntervals relTo implMaps = do
         :: VariantAggregate -> TotalStatistics -> (TotalStatistics, Text)
     aggregate VariantAgg{..} TotalStats{..} = (, variantReport) TotalStats
           { variantCount = variantCount + 1
+          , aggregateOptimalTime = aggregateOptimalTime + optimalTime
+          , aggregateTimes =
+                VS.zipWith (liftImplTiming (+)) <$> aggregateTimes
+                                                <*> implTimes
           , timesCumRelError =
-                VS.zipWith (liftImplTiming (+)) <$> timesCumRelError
-                                                <*> relTimings
+                VS.zipWith add <$> timesCumRelError <*> relTimings
 
           , relErrorOneToTwo =
                 VS.zipWith (lessThan 2) <$> relTimings <*> relErrorOneToTwo
@@ -158,6 +165,9 @@ aggregateVariants variantIntervals relTo implMaps = do
             , "\n"
             ]
 
+        add :: Double -> ImplTiming -> Double
+        add x (ImplTiming _ v) = x + v
+
         lessThan :: Double -> ImplTiming -> Int -> Int
         lessThan x (ImplTiming _ val) count
             | val < x = count + 1
@@ -175,7 +185,7 @@ aggregateVariants variantIntervals relTo implMaps = do
 
         findImplTime :: Int64 -> Maybe Double
         findImplTime i =
-            implTimingTiming <$> VS.find compareImpl (regular timesCumRelError)
+            implTimingTiming <$> VS.find compareImpl (regular implTimes)
           where
             compareImpl (ImplTiming impl _) = impl == i
 
@@ -201,7 +211,7 @@ aggregateVariants variantIntervals relTo implMaps = do
 data RelativeTo = Optimal | Predicted | BestNonSwitching
     deriving (Eq,Ord,Show,Read)
 
-data SortBy = Avg | Max
+data SortBy = AvgError | MaxError | AbsTime
     deriving (Eq,Ord,Show,Read)
 
 data Splittable = Splittable | Fixed
@@ -323,43 +333,47 @@ reportTotalStatistics Report{..} implMaps TotalStats{..} = case reportOutput of
         C.yield $ latexTableHeader label splittable
 
         runReport (fmap latexEscape <$> implMaps) " &" $
-            \(cumError, oneToTwo, gtFive, gtTwenty, maxError) -> mconcat
-                [ latexPercent oneToTwo variantCount, " & "
-                , latexPercent gtFive variantCount, " & "
-                , latexPercent gtTwenty variantCount, " & $"
-                , roundVal (cumError / fromIntegral variantCount)
-                , "{\\times}$ & $"
-                , roundVal maxError
-                , "{\\times}$\\\\\n"
-                ]
+            \(absTime, cumError, oneToTwo, gtFive, gtTwenty, maxError) ->
+                mconcat
+                    [ latexPercent oneToTwo variantCount, " & "
+                    , latexPercent gtFive variantCount, " & "
+                    , latexPercent gtTwenty variantCount, " & $"
+                    , roundVal (cumError / fromIntegral variantCount)
+                    , "{\\times}$ & $"
+                    , roundVal maxError
+                    , "{\\times}$\\\\\n"
+                    ]
 
         C.yield $ latexTableFooter label splittable
 
     Minimal -> do
         C.yield "Summarising:\n"
-        runReport implMaps ":" $ \(cumError, _, _, _, maxError) ->
+        runReport implMaps ":" $ \(absTime, cumError, _, _, _, maxError) ->
             mconcat
-                [ roundVal (cumError / fromIntegral variantCount), "\t"
+                [ roundVal (absTime / aggregateOptimalTime), "\t"
+                , roundVal (cumError / fromIntegral variantCount), "\t"
                 , roundVal maxError, "\n"
                 ]
 
     Detailed -> do
         C.yield "Summarising:\n"
         runReport implMaps ":" $
-            \(cumError, oneToTwo, gtFive, gtTwenty, maxError) -> mconcat
-                [ roundVal (cumError / fromIntegral variantCount)
-                , "\t", percent oneToTwo variantCount, "\t"
-                , percent gtFive variantCount, "\t"
-                , percent gtTwenty variantCount
-                , roundVal maxError
-                , "\n"
-                ]
+            \(absTime, cumError, oneToTwo, gtFive, gtTwenty, maxError) ->
+                mconcat
+                    [ roundVal (absTime / aggregateOptimalTime), "\t"
+                    , roundVal (cumError / fromIntegral variantCount)
+                    , "\t", percent oneToTwo variantCount, "\t"
+                    , percent gtFive variantCount, "\t"
+                    , percent gtTwenty variantCount
+                    , roundVal maxError
+                    , "\n"
+                    ]
   where
     runReport
         :: Monad m
         => Pair (IntMap Text)
         -> Text
-        -> ((Double, Int, Int, Int, Double) -> Text)
+        -> ((Double, Double, Int, Int, Int, Double) -> Text)
         -> ConduitT () Text m ()
     runReport names sep reportFun = C.yield $
         reportImplementations sep 0 names comparison reportFun reportTimings
@@ -376,9 +390,10 @@ reportTotalStatistics Report{..} implMaps TotalStats{..} = case reportOutput of
     vectorToZipList :: Storable a => Pair (Vector a) -> Compose Pair ZipList a
     vectorToZipList = Compose . fmap (ZipList . VS.toList)
 
-    reportTimings :: Pair [(Int64, (Double, Int, Int, Int, Double))]
-    reportTimings = decompose $ (\(ImplTiming i a) b c d e -> (i,(a,b,c,d,e)))
-            <$> vectorToZipList timesCumRelError
+    reportTimings :: Pair [(Int64, (Double, Double, Int, Int, Int, Double))]
+    reportTimings = decompose $ (\(ImplTiming i a) b c d e f -> (i,(a,b,c,d,e,f)))
+            <$> vectorToZipList aggregateTimes
+            <*> vectorToZipList timesCumRelError
             <*> vectorToZipList relErrorOneToTwo
             <*> vectorToZipList relErrorMoreThanFive
             <*> vectorToZipList relErrorMoreThanTwenty
@@ -388,15 +403,20 @@ reportTotalStatistics Report{..} implMaps TotalStats{..} = case reportOutput of
         decompose = fmap getZipList . getCompose
 
     comparison
-        :: (Int64, (Double, Int, Int, Int, Double))
-        -> (Int64, (Double, Int, Int, Int, Double))
+        :: (Int64, (Double, Double, Int, Int, Int, Double))
+        -> (Int64, (Double, Double, Int, Int, Int, Double))
         -> Ordering
     comparison = comparing compareTime <> comparing fst
       where
-        compareTime :: (Int64, (Double, Int, Int, Int, Double)) -> Double
-        compareTime (_, (avgTime, _, _, _, maxTime)) = case reportSortBy of
-            Avg -> avgTime
-            Max -> maxTime
+        compareTime
+            :: (Int64, (Double, Double, Int, Int, Int, Double)) -> Double
+        compareTime (_, (absTime, cumError, _, _, _, maxError)) =
+          case reportSortBy of
+            AvgError -> cumError -- Same number of variants for every data
+                                 -- point so cumulative is same order as
+                                 -- average
+            MaxError -> maxError
+            AbsTime -> absTime
 
     latexEscape :: Text -> Text
     latexEscape = T.replace "%" "\\%"
