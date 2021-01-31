@@ -46,7 +46,7 @@ newtype Index = Index { getIdx :: Int } deriving (Eq, Storable)
 toPredictorName :: MonadSql m => Key PredictionModel -> m (Int, Text)
 toPredictorName modelId = do
     predName <- getModelName <$> Sql.getJust modelId
-    return (predictedImplId - fromIntegral (fromSqlKey modelId), predName)
+    return (getPredictorImplId modelId, predName)
 
 data RawPrediction
     = ImplPrediction Int

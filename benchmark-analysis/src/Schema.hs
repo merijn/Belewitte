@@ -34,7 +34,7 @@ module Schema
     , module Schema.VariantConfig
     , optimalImplId
     , bestNonSwitchingImplId
-    , predictedImplId
+    , getPredictorImplId
     , getAlgoName
     , getImplName
     , getExternalName
@@ -63,7 +63,7 @@ import Database.Persist.Sql
 
 import Model (Model)
 import Schema.Utils (MonadThrow, mkMigration, getTypeName)
-import Sql.Core (MonadSql, SqlT, Transaction)
+import Sql.Core (MonadSql, SqlT, Transaction, fromSqlKey)
 import Types
 import Utils.Pair (Pair, toPair)
 
@@ -110,8 +110,8 @@ optimalImplId = -1
 bestNonSwitchingImplId :: Integral n => n
 bestNonSwitchingImplId = -2
 
-predictedImplId :: Integral n => n
-predictedImplId = -3
+getPredictorImplId :: Integral n => Key PredictionModel -> n
+getPredictorImplId modelId = -3 - fromIntegral (fromSqlKey modelId)
 
 getAlgoName :: Algorithm -> Text
 getAlgoName Algorithm{algorithmName,algorithmPrettyName} =

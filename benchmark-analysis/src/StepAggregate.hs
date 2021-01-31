@@ -47,9 +47,7 @@ stepAggregator predictors = do
         mapM (cookPredictor stepProps stepTimings) predictors
 
     let zerooutPredictor :: CookedPredictor -> ImplTiming
-        zerooutPredictor p = ImplTiming (predictedImplId - modelId) 0
-          where
-            modelId = fromIntegral . fromSqlKey $ predictorId p
+        zerooutPredictor p = ImplTiming (getPredictorImplId (predictorId p)) 0
 
         zerooutTiming :: ImplTiming -> ImplTiming
         zerooutTiming implTime = implTime { implTimingTiming = 0 }
@@ -109,7 +107,7 @@ aggregateSteps predictors zeroTimeVec = do
                 | otherwise = ImplTiming implId (getTime n)
               where
                 modelId = predictorId $ V.unsafeIndex predictors idx
-                implId = predictedImplId - fromIntegral (fromSqlKey modelId)
+                implId = getPredictorImplId modelId
 
         predictedImpls :: Vector Index
         predictedImpls = VS.generate (V.length predictors) doPredict

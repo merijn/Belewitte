@@ -277,8 +277,7 @@ queryImplementations algoId = IM.union builtinImpls <$>
 
     builtinImpls :: IntMap Implementation
     builtinImpls = IM.fromList
-        [ (predictedImplId, mkImpl "predicted" "Predicted")
-        , (bestNonSwitchingImplId, mkImpl "best" "Best Non-switching")
+        [ (bestNonSwitchingImplId, mkImpl "best" "Best Non-switching")
         , (optimalImplId, mkImpl "optimal" "Optimal")
         ]
 

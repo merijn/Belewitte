@@ -318,8 +318,8 @@ modelQueryMap = M.fromList
             , ("total", ImplRank.Total)
             ]
 
-reportParser :: Map String RelativeTo -> Parser a -> Parser (Report a)
-reportParser relTo implTypes =
+reportParser :: Parser a -> Parser (Report a)
+reportParser implTypes =
   Report <$> variantIntervals <*> resultsRelativeTo <*> sortResultsBy
          <*> implTypes <*> (latexTable <|> detailed <|> pure Minimal)
   where
@@ -345,6 +345,10 @@ reportParser relTo implTypes =
         [ long "rel-to", value Optimal, showDefaultWith (map toLower . show)]
       where
         helpTxt = "Results to normalise result output to."
+
+        relTo :: Map String RelativeTo
+        relTo = M.fromList $
+            [("optimal", Optimal), ("best", BestNonSwitching)]
 
     sortResultsBy :: Parser SortBy
     sortResultsBy = optionParserFromValues values "SORT-BY" helpTxt $ mconcat
@@ -374,10 +378,6 @@ reportParser relTo implTypes =
     detailed = flag' Detailed $ mconcat
         [ long "detail", help "Show detailed performance stats" ]
 
-defaultRelativeToValues :: Map String RelativeTo
-defaultRelativeToValues = M.fromList $
-    [("optimal", Optimal), ("best", BestNonSwitching)]
-
 implTypesParser :: Monoid a => (ImplType -> a) -> Map String a -> Parser a
 implTypesParser makeResult extraVals = mappend (makeResult Builtin) <$>
     (mconcat <$> some implParser <|> pure (makeResult Core))
@@ -400,10 +400,8 @@ filterImpls implTypes = IM.filter (implFilter . implementationType)
     implFilter = getAny . foldMap (\i -> Any . (==i)) implTypes
 
 evaluateParser :: Parser EvaluateReport
-evaluateParser = reportParser relToValues $ byImpls <|> byImplType
+evaluateParser = reportParser $ byImpls <|> byImplType
   where
-    relToValues = M.insert "predicted" Predicted defaultRelativeToValues
-
     byImplType :: Parser ImplFilter
     byImplType = filterImpls <$> implTypesParser S.singleton M.empty
 
@@ -411,8 +409,7 @@ evaluateParser = reportParser relToValues $ byImpls <|> byImplType
     byImpls = implFilterParser
 
 compareParser :: Parser CompareReport
-compareParser = reportParser defaultRelativeToValues $
-    composeFilter <$> implFilterParser <*> implTypes
+compareParser = reportParser $ composeFilter <$> implFilterParser <*> implTypes
   where
     composeFilter :: ImplFilter -> (Any, Set ImplType) -> (Any, ImplFilter)
     composeFilter implFilter (b, types) = (b, implFilter . filterImpls types)

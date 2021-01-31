@@ -193,7 +193,6 @@ aggregateVariants variantIntervals relTo implMaps = do
         relToTime = fromMaybe (error "Implementation not found!") $
             case relTo of
                 Optimal -> Just optimalTime
-                Predicted -> findImplTime predictedImplId
                 BestNonSwitching -> findImplTime bestNonSwitchingImplId
 
         relTiming t = percent t optimalTime <> " (" <> showText t <> ")\n"
@@ -208,7 +207,7 @@ aggregateVariants variantIntervals relTo implMaps = do
             | j == optimalImplId = GT
             | otherwise = compare v1 v2 <> compare i j
 
-data RelativeTo = Optimal | Predicted | BestNonSwitching
+data RelativeTo = Optimal | BestNonSwitching
     deriving (Eq,Ord,Show,Read)
 
 data SortBy = AvgError | MaxError | AbsTime
