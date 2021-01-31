@@ -13,7 +13,6 @@ enum class Rep : char
 , EdgeListCSR
 , StructEdgeListCSR
 , CSR
-, InverseVertexCSR
 };
 
 enum class Dir : char
@@ -48,9 +47,6 @@ inline std::ostream& operator<<(std::ostream& os, const Rep& p)
         break;
       case Rep::CSR:
         os << "CSR";
-        break;
-      case Rep::InverseVertexCSR:
-        os << "InverseVertexCSR";
         break;
     }
     return os;
@@ -112,9 +108,6 @@ class GraphLoader
                 break;
             case Rep::CSR:
                 F<Rep::CSR>::call(rep.direction, args...);
-                break;
-            case Rep::InverseVertexCSR:
-                F<Rep::InverseVertexCSR>::call(rep.direction, args...);
                 break;
         }
     }
@@ -216,20 +209,6 @@ class GraphLoader
                 dest.registerLocalAlloc(&dest->edges, get(out_edges, dir));
             }
         }
-
-        void load(alloc_t<InverseVertexCSR<V,E>>& dest, Dir dir)
-        {
-            Dir opp = dir == Dir::Forward ? Dir::Reverse : Dir::Forward;
-            if (!dest) {
-                dest = p.template allocConstant<InverseVertexCSR<V,E>>();
-                dest->vertex_count = vertex_count;
-                dest->edge_count = edge_count;
-                dest.registerLocalAlloc(&dest->vertices, get(vertices, dir));
-                dest.registerLocalAlloc(&dest->inverse_vertices,
-                                        get(vertices, opp));
-                dest.registerLocalAlloc(&dest->edges, get(out_edges, dir));
-            }
-        }
     };
 
     template<Rep rep>
@@ -312,8 +291,6 @@ class GraphLoader
         std::get<1>(structEdgeListCSR).free();
         std::get<0>(csr).free();
         std::get<1>(csr).free();
-        std::get<0>(inverseVertexCSR).free();
-        std::get<1>(inverseVertexCSR).free();
     }
 
   private:
@@ -324,7 +301,6 @@ class GraphLoader
     pair<alloc_t<EdgeListCSR<V,E>>> edgeListCSR;
     pair<alloc_t<StructEdgeListCSR<V,E>>> structEdgeListCSR;
     pair<alloc_t<CSR<V,E>>> csr;
-    pair<alloc_t<InverseVertexCSR<V,E>>> inverseVertexCSR;
 };
 
 template<typename Platform, typename V, typename E>
@@ -382,14 +358,6 @@ struct LoaderRep<Rep::CSR, Platform, V, E>
 {
     using Loader = GraphLoader<Platform,V,E>;
     static constexpr auto Loader::* field = &Loader::csr;
-    typedef decltype(std::get<0>(std::declval<Loader>().*field)) GraphType;
-};
-
-template<typename Platform, typename V, typename E>
-struct LoaderRep<Rep::InverseVertexCSR, Platform, V, E>
-{
-    using Loader = GraphLoader<Platform,V,E>;
-    static constexpr auto Loader::* field = &Loader::inverseVertexCSR;
     typedef decltype(std::get<0>(std::declval<Loader>().*field)) GraphType;
 };
 #endif

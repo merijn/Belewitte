@@ -71,15 +71,4 @@ struct CSR {
     VERTEX *vertices;
     EDGE *edges;
 };
-
-#ifndef __OPENCL_VERSION__
-template<typename VERTEX, typename EDGE>
-#endif
-struct InverseVertexCSR {
-    uint64_t vertex_count, edge_count;
-
-    VERTEX *vertices;
-    VERTEX *inverse_vertices;
-    EDGE *edges;
-};
 #endif
