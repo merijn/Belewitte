@@ -9,6 +9,7 @@ module Schema
     , GlobalVars.GlobalVar(..)
     , Hash(..)
     , HashDigest
+    , ImplFilter
     , ImplType(..)
     , Model
     , Percentage(..)
@@ -100,6 +101,8 @@ import qualified Schema.Variant as Variant
 import Schema.VariantConfig hiding (migrations, schema)
 import qualified Schema.VariantConfig as VariantConfig
 import Schema.Version (schemaVersion)
+
+type ImplFilter = IntMap Implementation -> IntMap Implementation
 
 optimalImplId :: Integral n => n
 optimalImplId = -1

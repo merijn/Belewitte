@@ -36,8 +36,6 @@ import qualified Sql
 import Utils.ImplTiming
 import Utils.Pair
 
-type ImplFilter = IntMap Implementation -> IntMap Implementation
-
 newtype ZipVector a = ZipVector { getZipVector :: Vector a } deriving Show
 
 newtype MonoidMap k v = MMap { getMonoidMap :: Map k v }

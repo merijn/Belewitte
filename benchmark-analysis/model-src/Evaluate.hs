@@ -220,8 +220,7 @@ data Splittable = Splittable | Fixed
 data ReportOutput = Minimal | Detailed | LaTeX Text Splittable
     deriving (Eq,Ord,Show,Read)
 
-type ImplFilter = IntMap Implementation -> IntMap Implementation
-type EvaluateReport = Report (SqlM ImplFilter)
+type EvaluateReport = Report ImplFilter
 type CompareReport = Report (Any, ImplFilter)
 
 data Report a = Report
@@ -234,10 +233,8 @@ data Report a = Report
 
 evaluateModel :: [RawPredictor] -> EvaluateReport -> TrainingConfig -> SqlM ()
 evaluateModel predictors reportCfg@Report{..} trainConfig = do
-  implFilter <- reportImplFilter
-
   renderRegionOutput $ do
-    impls <- implFilter <$> Sql.queryImplementations stepInfoAlgorithm
+    impls <- reportImplFilter <$> Sql.queryImplementations stepInfoAlgorithm
     predictorNames <- mapM (toPredictorName . rawPredictorId) predictors
 
     let implMaps :: Pair (IntMap Text)

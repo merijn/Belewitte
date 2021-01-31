@@ -9,8 +9,6 @@ import Data.Bifunctor (bimap)
 import Data.Conduit ((.|))
 import qualified Data.Conduit.Combinators as C
 import Data.Foldable (asum)
-import Data.IntervalSet (IntervalSet)
-import qualified Data.IntervalSet as IS
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 import Data.Map (Map)
@@ -31,7 +29,6 @@ import Options
 import BarPlot
 import GlobalPlotOptions
 import Heatmap
-import Interesting (ImplFilter)
 import Query.Dump (plotQueryDump)
 import Query.Level (levelTimePlotQuery)
 import Query.Time (timePlotQuery)
@@ -246,21 +243,6 @@ commands = CommandRoot
     normaliseFlag :: Parser Bool
     normaliseFlag = flag False True $ mconcat [long "normalise"]
 
-    implFilter :: Parser ImplFilter
-    implFilter = implementations <|> pure id
-
-    implementations :: Parser ImplFilter
-    implementations = fmap mkFilter . option intervalReader $ mconcat
-        [ metavar "ID", long "impl-set"
-        , help "Range(s) of implementation ids to print results for. Accepts \
-            \comma-seperated ranges. A range is dash-separated inclusive \
-            \range or a single number. Example: \
-            \--impl-set=5-10,13,17-20"
-        ]
-      where
-        mkFilter :: IntervalSet Int -> ImplFilter
-        mkFilter intervals = IM.filterWithKey (\k _ -> k `IS.member` intervals)
-
     summaryFlag :: Parser Bool
     summaryFlag = switch $ mconcat
         [ long "summary"
@@ -271,7 +253,7 @@ commands = CommandRoot
     reportParser = do
         getVariantInfoConfig <- variantInfoConfigParser
         getVariantConfigId <- optional variantConfigIdParser
-        filterFun <- implFilter
+        filterFun <- implFilterParser
         summary <- summaryFlag
 
         pure $ do

@@ -15,7 +15,6 @@ module ModelOptions
     ) where
 
 import Control.Monad (forM)
-import Data.Bifunctor (second)
 import Data.Char (toLower)
 import qualified Data.Conduit.Combinators as C
 import Data.Foldable (asum)
@@ -405,45 +404,19 @@ evaluateParser = reportParser relToValues $ byImpls <|> byImplType
   where
     relToValues = M.insert "predicted" Predicted defaultRelativeToValues
 
-    byImplType :: Parser (SqlM (IntMap Implementation -> IntMap Implementation))
-    byImplType = return . filterImpls <$> implTypesParser S.singleton M.empty
+    byImplType :: Parser ImplFilter
+    byImplType = filterImpls <$> implTypesParser S.singleton M.empty
 
-    byImpls :: Parser (SqlM (IntMap Implementation -> IntMap Implementation))
-    byImpls = readText <$> implementationFile <*> bestNonSwitching
-      where
-        implementationFile = strOption $ mconcat
-            [ metavar "FILE", long "implementations"
-            , help "File to read implementations to evaluate from"
-            ]
-
-        bestNonSwitching = flag True False $ mconcat
-            [ long "drop-best-non-switching"
-            , help "Drop the best non-switching implementation from the results."
-            ]
-
-    readText
-        :: MonadIO m
-        => FilePath -> Bool -> m (IntMap Implementation -> IntMap Implementation)
-    readText path bestNonSwitching = liftIO $ toFilter <$> T.readFile path
-      where
-        toFilter = filterImplementations . S.fromList . T.lines
-
-        filterImplementations
-            :: Set Text -> IntMap Implementation -> IntMap Implementation
-        filterImplementations textSet = dropBestNonSwitching . setFilter
-          where
-            setFilter = IM.filter $ getAny . mconcat
-                [ Any . (`S.member` textSet) . implementationName
-                , Any . (Builtin==) . implementationType
-                ]
-
-            dropBestNonSwitching
-                | bestNonSwitching = id
-                | otherwise = IM.delete bestNonSwitchingImplId
+    byImpls :: Parser (IntMap Implementation -> IntMap Implementation)
+    byImpls = implFilterParser
 
 compareParser :: Parser CompareReport
-compareParser = reportParser defaultRelativeToValues (second filterImpls <$> implTypes)
+compareParser = reportParser defaultRelativeToValues $
+    composeFilter <$> implFilterParser <*> implTypes
   where
+    composeFilter :: ImplFilter -> (Any, Set ImplType) -> (Any, ImplFilter)
+    composeFilter implFilter (b, types) = (b, implFilter . filterImpls types)
+
     implTypes = implTypesParser ((mempty,) . S.singleton) extraVals
     extraVals = M.singleton "comparison" (Any True, S.empty)
 

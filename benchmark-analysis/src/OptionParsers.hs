@@ -14,6 +14,7 @@ module OptionParsers
     , datasetParser
     , entityParser
     , filterIncomplete
+    , implFilterParser
     , modelIdParser
     , modelParser
     , percentageParser
@@ -47,6 +48,7 @@ import qualified Data.Interval as I
 import Data.IntervalSet (IntervalSet)
 import qualified Data.IntervalSet as IS
 import Data.List (isPrefixOf)
+import qualified Data.IntMap as IM
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
@@ -61,7 +63,7 @@ import System.Exit (exitFailure)
 import Text.Megaparsec
     (Parsec, eof, lookAhead, manyTill, parseMaybe, runParser, sepBy1, try)
 import Text.Megaparsec.Char (alphaNumChar, char, string')
-import Text.Megaparsec.Char.Lexer (decimal)
+import Text.Megaparsec.Char.Lexer (decimal, signed)
 import Text.Megaparsec.Error (errorBundlePretty)
 import Text.Read (readMaybe)
 
@@ -155,6 +157,21 @@ filterIncomplete = flag True False $ mconcat
     [ long "show-incomplete"
     , help "Include results for variants where some results are missing"
     ]
+
+implFilterParser :: Parser ImplFilter
+implFilterParser = implementations <|> pure id
+  where
+    implementations :: Parser ImplFilter
+    implementations = fmap mkFilter . option intervalReader $ mconcat
+        [ metavar "ID", long "impl-set"
+        , help "Range(s) of implementation ids to print results for. Accepts \
+            \comma-seperated ranges. A range is dash-separated inclusive \
+            \range or a single number. Example: \
+            \--impl-set=5-10,13,17-20"
+        ]
+      where
+        mkFilter :: IntervalSet Int -> ImplFilter
+        mkFilter intervals = IM.filterWithKey (\k _ -> k `IS.member` intervals)
 
 modelIdParser :: Parser (SqlM (Key PredictionModel))
 modelIdParser = fmap entityKey <$> modelParser
@@ -439,7 +456,7 @@ intervalReader = maybeReader . parseMaybe $
     interval = range <|> singleValue
 
     singleValue :: Integral a => Parsec () String (Interval a)
-    singleValue = I.singleton <$> decimal
+    singleValue = I.singleton <$> signed (return ()) decimal
 
     range :: Integral a => Parsec () String (Interval a)
     range = toInterval <$> try (decimal <* char '-') <*> decimal
