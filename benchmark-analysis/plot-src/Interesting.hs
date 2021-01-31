@@ -127,9 +127,15 @@ propertiesFromVariant implNames VariantInfo{..} = Just Interest
     lookupName (ImplTiming implId timing) = Arg timing <$>
         IM.lookup (fromIntegral implId) implNames
 
-printSummary :: Monad m => InterestingVariants -> ConduitT () Text m ()
+renderVariantKey :: Key Variant -> ConduitT a b SqlM Text
+renderVariantKey variantId = lift $ do
+    graphId <- variantGraphId <$> Sql.getJust variantId
+    return $ showSqlKey variantId <> "\t(#" <> showSqlKey graphId <> ")"
+
+printSummary :: InterestingVariants -> ConduitT () Text SqlM ()
 printSummary Interest{..} = forM_ variantCounts $ \(variantId, count) -> do
-    C.yield $ showSqlKey variantId <> ":\t" <> showText count <> "\n"
+    idTxt <- renderVariantKey variantId
+    C.yield $ showText count <> ":\t" <> idTxt <> "\n"
   where
     mkMap :: Arg v (Key Variant) -> MonoidMap (Key Variant) (Sum Int)
     mkMap (Arg _ k) = MMap $ M.singleton k 1
@@ -158,7 +164,7 @@ printSummary Interest{..} = forM_ variantCounts $ \(variantId, count) -> do
         ]
 
 printInteresting
-    :: Monad m => Int -> InterestingVariants -> ConduitT () Text m ()
+    :: Int -> InterestingVariants -> ConduitT () Text SqlM ()
 printInteresting maxLen Interest{..} = do
     reportData "Best variant (optimal)" . getZipVector $
         getMin <$> bestVariantsOptimal
@@ -178,37 +184,30 @@ printInteresting maxLen Interest{..} = do
     reportPair "kurtosis" $ kurtosisVal
   where
     reportData
-        :: Monad m
-        => Text
+        :: Text
         -> Vector (Arg v (Text, Key Variant))
-        -> ConduitT () Text m ()
+        -> ConduitT () Text SqlM ()
     reportData name vec = do
         C.yield $ name <> ":\n"
         V.forM_ vec $ \(Arg _ (implName, variantId)) -> do
+            idTxt <- renderVariantKey variantId
             C.yield $ mconcat
-                [ "    "
-                , padName (implName <> ":")
-                , showSqlKey variantId
-                , "\n"
-                ]
+                [ "    " , padName (implName <> ":") , idTxt , "\n" ]
         C.yield "\n"
 
     reportPair
-        :: Monad m
-        => Text
+        :: Text
         -> MinMaxPair (Arg a (Key Variant))
-        -> ConduitT () Text m ()
+        -> ConduitT () Text SqlM ()
     reportPair label (MMPair (Min minArg) (Max maxArg)) = do
-        C.yield $ render "Smallest" (getVal minArg)
-        C.yield $ render "Largest" (getVal maxArg)
+        render "Smallest" (getVal minArg)
+        render "Largest" (getVal maxArg)
       where
-        render :: Text -> Key Variant -> Text
-        render t k = mconcat
-            [ padName (t <> " " <> label <> ":")
-            , "    "
-            , showSqlKey k
-            , "\n"
-            ]
+        render :: Text -> Key Variant -> ConduitT () Text SqlM ()
+        render t variantId = do
+            idTxt <- renderVariantKey variantId
+            C.yield $ mconcat
+                [ padName (t <> " " <> label <> ":") , "    " , idTxt , "\n" ]
 
     padName :: Text -> Text
     padName t = t <> T.replicate (maxLen + 2 - T.length t) " "
