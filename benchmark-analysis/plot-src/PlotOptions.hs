@@ -66,12 +66,13 @@ barPlotParser = do
     getGlobalOpts <- globalOptionsParser
     slideFormat <- slideFlag
     printStdout <- printFlag
+    rotateLabels <- rotateFlag
     graphSet <- intervalFlag "graphs" "graph"
 
     pure $ \barPlotType -> do
         globalOpts@GlobalPlotOptions{..} <- getGlobalOpts
 
-        BarPlot globalOpts barPlotType slideFormat printStdout
+        BarPlot globalOpts barPlotType slideFormat printStdout rotateLabels
             <$> queryVariants globalPlotAlgorithm graphSet
   where
     slideFlag :: Parser Bool
@@ -81,6 +82,10 @@ barPlotParser = do
     printFlag :: Parser Bool
     printFlag = flag False True $ mconcat
         [ long "print", help "Print results to stdout, rather than plotting" ]
+
+    rotateFlag :: Parser Bool
+    rotateFlag = flag False True $ mconcat
+        [ long "rotate", help "Rotate X axis labels" ]
 
 variantSelectionOption :: Parser (Key Algorithm -> SqlM VariantSelection)
 variantSelectionOption = asum

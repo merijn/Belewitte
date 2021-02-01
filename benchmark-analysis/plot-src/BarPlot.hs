@@ -52,6 +52,7 @@ data BarPlotConfig = BarPlotConfig
     , slideFormat :: Bool
     , printStdout :: Bool
     , normaliseData :: Bool
+    , rotateLabels :: Bool
     }
 
 data BarPlot
@@ -60,6 +61,7 @@ data BarPlot
     , barPlotType :: BarPlotType
     , barPlotSlideFormat :: Bool
     , barPlotPrintStdout :: Bool
+    , barPlotRotateLabels :: Bool
     , barPlotVariants :: Set (Key Variant)
     }
 
@@ -93,6 +95,7 @@ barPlot BarPlot{barPlotGlobalOpts = GlobalPlotOptions{..}, ..} = do
         { plotName = name
         , slideFormat = barPlotSlideFormat
         , printStdout = barPlotPrintStdout
+        , rotateLabels = barPlotRotateLabels
         , ..
         }
       where
@@ -157,7 +160,12 @@ runPlotScript BarPlotConfig{..} queryDataConduit
         withStdin plotProcess doWithHandle
   where
     args :: [String]
-    args = [T.unpack plotName, axisName, show normaliseData, show slideFormat]
+    args = [ T.unpack plotName
+           , axisName
+           , show normaliseData
+           , show slideFormat
+           , show rotateLabels
+           ]
 
     doWithHandle :: Handle -> SqlM ()
     doWithHandle hnd = Sql.runRegionConduit $
