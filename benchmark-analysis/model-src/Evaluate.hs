@@ -331,11 +331,13 @@ reportTotalStatistics Report{..} implMaps TotalStats{..} = case reportOutput of
         runReport (fmap latexEscape <$> implMaps) " &" $
             \(absTime, cumError, oneToTwo, gtFive, gtTwenty, maxError) ->
                 mconcat
-                    [ latexPercent oneToTwo variantCount, " & "
+                    [ "$", roundVal (absTime / aggregateOptimalTime)
+                    , "{\\times}$ & $"
+                    , roundVal (cumError / fromIntegral variantCount)
+                    , "{\\times}$ & "
+                    , latexPercent oneToTwo variantCount, " & "
                     , latexPercent gtFive variantCount, " & "
                     , latexPercent gtTwenty variantCount, " & $"
-                    , roundVal (cumError / fromIntegral variantCount)
-                    , "{\\times}$ & $"
                     , roundVal maxError
                     , "{\\times}$\\\\\n"
                     ]
@@ -375,10 +377,10 @@ reportTotalStatistics Report{..} implMaps TotalStats{..} = case reportOutput of
         reportImplementations sep 0 names comparison reportFun reportTimings
 
     roundVal :: Double -> Text
-    roundVal val = T.pack $ showFFloat (Just 3) val ""
+    roundVal val = T.pack $ showFFloat (Just 2) val ""
 
     latexPercent :: Real n => n -> n -> Text
-    latexPercent x y = T.pack $ '$' : showFFloat (Just 2) val "\\%$"
+    latexPercent x y = T.pack $ '$' : showFFloat (Just 0) val "\\%$"
       where
         val :: Double
         val = 100 * realToFrac x / realToFrac y
@@ -444,11 +446,11 @@ latexTableHeader label splittable = case splittable of
 |]
   where
     columnLayout :: Text
-    columnLayout = "lrrrrrr"
+    columnLayout = "lrrrrrrr"
 
     columnHeader :: Text
-    columnHeader = [Interpolate.i|Algorithm & 1--2${\\times}$ & ${>} 5 {\\times}$ &
-${>} 20 {\\times}$ & Average & Worst\\\\\\midrule|]
+    columnHeader = [Interpolate.i|Algorithm & Abs & Avg & 1--2${\\times}$ & ${>} 5 {\\times}$ &
+${>} 20 {\\times}$ &  Worst\\\\\\midrule|]
 
 latexTableFooter :: Text -> Splittable -> Text
 latexTableFooter _ Splittable = "\\end{longtable}\n"
