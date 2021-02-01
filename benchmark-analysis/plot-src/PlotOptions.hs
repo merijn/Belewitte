@@ -25,6 +25,7 @@ import Options
 import BarPlot
 import GlobalPlotOptions
 import Heatmap
+import Interesting
 import Query.Dump (plotQueryDump)
 import Query.Level (levelTimePlotQuery)
 import Query.Time (timePlotQuery)
@@ -34,7 +35,7 @@ data PlotCommand
     = PlotBar BarPlot
     | PlotHeatmap Heatmap
     | ReportInteresting
-        { optVariantConfig :: Maybe (Key VariantConfig)
+        { variantFilter :: VariantFilter
         , variantConfigInfo :: VariantInfoConfig
         , implFilter :: ImplFilter
         , shortSummary :: Bool
@@ -210,6 +211,8 @@ commands = CommandRoot
     reportParser = do
         getVariantInfoConfig <- variantInfoConfigParser
         getVariantConfigId <- optional variantConfigIdParser
+        minEdges <- optional $ minPropParser "edge" "edges"
+        minVertices <- optional $ minPropParser "vertex" "vertices"
         filterFun <- intMapFilter "impl-set" "implementation"
         summary <- summaryFlag
 
@@ -218,7 +221,20 @@ commands = CommandRoot
             variantConfigId <- sequence $
                 getVariantConfigId <*> pure (variantInfoAlgorithm cfg)
 
-            return $ ReportInteresting variantConfigId cfg filterFun summary
+            let vFilter = VFilter
+                    { filterVariantConfigId = variantConfigId
+                    , filterEdgeSize = minEdges
+                    , filterVertexSize = minVertices
+                    }
+
+            return $ ReportInteresting vFilter cfg filterFun summary
+      where
+        minPropParser :: String -> String -> Parser Int
+        minPropParser name desc = option auto $ mconcat
+            [ long $ "min-" <> name <> "-count"
+            , help $ "Minimum number of " <> desc <> " required for a graph \
+                     \to be considered."
+            ]
 
 plotQueryMap :: Map String (Parser DebugQuery)
 plotQueryMap = M.fromList

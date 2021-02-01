@@ -210,19 +210,50 @@ printInteresting maxLen Interest{..} = do
     padName :: Text -> Text
     padName t = t <> T.replicate (maxLen + 2 - T.length t) " "
 
-filterVariantConfig :: Maybe (Key VariantConfig) -> VariantInfo -> SqlM Bool
-filterVariantConfig Nothing _ = return True
-filterVariantConfig (Just variantConfigId) VariantInfo{..} = do
-    Variant{variantVariantConfigId} <- Sql.getJust variantId
-    return $ variantVariantConfigId == variantConfigId
+data VariantFilter = VFilter
+    { filterVariantConfigId :: Maybe (Key VariantConfig)
+    , filterVertexSize :: Maybe Int
+    , filterEdgeSize :: Maybe Int
+    }
+
+filterVariantConfig
+    :: VariantFilter -> ConduitT VariantInfo VariantInfo SqlM ()
+filterVariantConfig VFilter{..} = do
+    checkVertices <- makeFilterFun "vertex count" filterVertexSize
+    checkEdges <- makeFilterFun "edge count" filterVertexSize
+
+    C.filterM $ \VariantInfo{..} -> do
+        Variant{variantVariantConfigId,variantGraphId} <- Sql.getJust variantId
+        if checkVariantConfig variantVariantConfigId
+           then (&&) <$> checkVertices variantGraphId
+                     <*> checkEdges variantGraphId
+           else return False
+  where
+    checkVariantConfig :: Key VariantConfig -> Bool
+    checkVariantConfig = case filterVariantConfigId of
+        Nothing -> const True
+        Just k -> (==k)
+
+    makeFilterFun
+        :: Text -> Maybe Int -> ConduitT a b SqlM (Key Graph -> SqlM Bool)
+    makeFilterFun propName filterSize = case fromIntegral <$> filterSize of
+        Nothing -> return $ const (return True)
+        Just n -> do
+            propId <- Sql.getJustKeyBy $ UniqProperty propName
+            return $ \graphId -> do
+                Entity _ graphProp <- Sql.getJustBy $
+                    UniqGraphPropValue graphId propId
+
+                return $ (>=n) . graphPropValueValue $ graphProp
+
 
 findInterestingVariants
-    :: Maybe (Key VariantConfig)
+    :: VariantFilter
     -> VariantInfoConfig
     -> ImplFilter
     -> Bool
     -> SqlM ()
-findInterestingVariants variantConfigId variantInfoCfg implFilter summary = do
+findInterestingVariants variantFilter variantInfoCfg implFilter summary = do
     impls <- Sql.queryImplementations variantInfoAlgorithm
 
     let implMap :: IntMap Text
@@ -232,7 +263,7 @@ findInterestingVariants variantConfigId variantInfoCfg implFilter summary = do
         maxLength = maximum $ T.length <$> implMap
 
     stats <- runSqlQueryConduit query $
-        C.filterM (filterVariantConfig variantConfigId)
+        filterVariantConfig variantFilter
         .| C.foldMap (propertiesFromVariant implMap)
 
     case stats of
