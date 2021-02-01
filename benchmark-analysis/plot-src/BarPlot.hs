@@ -43,7 +43,7 @@ import Utils.Process (withStdin)
 
 data BarPlotType
     = Levels
-    | Totals { normalise :: Bool }
+    | Totals { normalise :: Bool, useGraphId :: Bool}
     | VsOptimal { normalise :: Bool }
 
 data BarPlotConfig = BarPlotConfig
@@ -81,9 +81,13 @@ barPlot BarPlot{barPlotGlobalOpts = GlobalPlotOptions{..}, ..} = do
                 streamQuery (variantToLevelTimePlotQuery variantId)
                 .| C.map (bimap showText (nameImplementations regular))
 
-        Totals _ -> runPlotScript (plotConfig "times-totals") $
-            streamQuery (variantsToTimePlotQuery barPlotVariants)
-            .| C.map (second $ translatePair . toPair V.convert V.convert)
+        Totals{useGraphId} -> let
+            labelGraph | useGraphId = showSqlKey . fst
+                       | otherwise = snd
+            translateData = translatePair . toPair V.convert V.convert
+            in runPlotScript (plotConfig "times-totals") $
+                streamQuery (variantsToTimePlotQuery barPlotVariants)
+                .| C.map (bimap labelGraph translateData)
 
         VsOptimal _ -> runPlotScript (plotConfig "times-vs-optimal") $
             streamQuery variantQuery
@@ -101,8 +105,8 @@ barPlot BarPlot{barPlotGlobalOpts = GlobalPlotOptions{..}, ..} = do
       where
         (axisName, normaliseData) = case barPlotType of
             Levels -> ("Levels", False)
-            Totals b -> ("Graph", b)
-            VsOptimal b -> ("Graph", b)
+            Totals{normalise} -> ("Graph", normalise)
+            VsOptimal{normalise} -> ("Graph", normalise)
 
     variantFilter VariantInfo{variantId} = S.member variantId barPlotVariants
 

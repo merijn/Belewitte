@@ -22,7 +22,7 @@ timePlotQuery
     -> Key Platform
     -> CommitId
     -> Set (Key Variant)
-    -> Query (Text, (Vector ImplTiming, Vector ImplTiming))
+    -> Query ((Key Graph, Text), (Vector ImplTiming, Vector ImplTiming))
 timePlotQuery algoId platformId commitId variants =
     Query{convert = Simple converter, ..}
   where
@@ -38,13 +38,14 @@ timePlotQuery algoId platformId commitId variants =
     converter
         :: MonadConvert m
         => [PersistValue]
-        -> m (Text, (Vector ImplTiming, Vector ImplTiming))
-    converter [ PersistText graph
+        -> m ((Key Graph, Text), (Vector ImplTiming, Vector ImplTiming))
+    converter [ PersistInt64 (toSqlKey -> graphId)
+              , PersistText graphName
               , PersistByteString (byteStringToVector -> implTimings)
               , externalTimings
               ]
               | Just extImplTimings <- maybeExternalTimings
-              = return (graph, (implTimings, extImplTimings))
+              = return ((graphId, graphName), (implTimings, extImplTimings))
       where
         maybeExternalTimings :: Maybe (Vector ImplTiming)
         maybeExternalTimings = case externalTimings of
@@ -93,8 +94,9 @@ ExternalImplVector(implTiming) AS (
             , toPersistValue commitId
             ]
         , cteQuery = [i|
-VariantTiming(graphName, variantConfigId, variantId, timings) AS (
-    SELECT Graph.name
+VariantTiming(graphId, graphName, variantConfigId, variantId, timings) AS (
+    SELECT Graph.id
+         , Graph.name
          , Variant.variantConfigId
          , Variant.id
          , update_key_value_vector(implTiming, idx, Impls.implId, avgTime)
@@ -147,7 +149,8 @@ ExternalTiming(variantId, timings) AS (
     params = []
 
     queryText = [i|
-SELECT VariantTiming.graphName
+SELECT VariantTiming.graphId
+     , VariantTiming.graphName
      , VariantTiming.timings
      , ExternalTiming.timings
 FROM VariantTiming

@@ -29,9 +29,10 @@ getConfigSet = Sql.selectSource [] [] $ C.foldMap (S.singleton . toTuple)
 toTimeQueries
     :: (Key Algorithm, Key Platform, CommitId)
     -> ConduitT (Key Algorithm, Key Platform, CommitId)
-                (Query (Text, ( Storable.Vector ImplTiming
-                              , Storable.Vector ImplTiming
-                              )
+                (Query ((Key Graph, Text)
+                       , ( Storable.Vector ImplTiming
+                         , Storable.Vector ImplTiming
+                         )
                        )
                 )
                 (Region SqlM)

@@ -156,7 +156,7 @@ commands = CommandRoot
             , commandHeaderDesc = "plot total times for a set of graphs"
             , commandDesc = ""
             }
-            $ barPlotParser <*> (Totals <$> normaliseFlag)
+            $ barPlotParser <*> (Totals <$> normaliseFlag <*> useGraphIdFlag)
         , SingleCommand CommandInfo
             { commandName = "vs-optimal"
             , commandHeaderDesc =
@@ -199,7 +199,16 @@ commands = CommandRoot
   }
   where
     normaliseFlag :: Parser Bool
-    normaliseFlag = flag False True $ mconcat [long "normalise"]
+    normaliseFlag = flag False True $ mconcat
+        [ long "normalise"
+        , help "Normalise bars to slowest implementation"
+        ]
+
+    useGraphIdFlag :: Parser Bool
+    useGraphIdFlag = flag False True $ mconcat
+        [ long "use-graph-ids"
+        , help "Label groups with the graph's id, rather than name"
+        ]
 
     summaryFlag :: Parser Bool
     summaryFlag = switch $ mconcat
