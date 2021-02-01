@@ -14,7 +14,8 @@ module OptionParsers
     , datasetParser
     , entityParser
     , filterIncomplete
-    , implFilterParser
+    , intMapFilter
+    , intervalFlag
     , modelIdParser
     , modelParser
     , percentageParser
@@ -31,7 +32,6 @@ module OptionParsers
     , variantIdParser
     , variantParser
     , variantInfoConfigParser
-    , intervalReader
     , readCI
     , mapOption
     , optionEnumerationHelp
@@ -48,6 +48,7 @@ import qualified Data.Interval as I
 import Data.IntervalSet (IntervalSet)
 import qualified Data.IntervalSet as IS
 import Data.List (isPrefixOf)
+import Data.IntMap (IntMap)
 import qualified Data.IntMap as IM
 import Data.Map (Map)
 import qualified Data.Map as M
@@ -158,20 +159,39 @@ filterIncomplete = flag True False $ mconcat
     , help "Include results for variants where some results are missing"
     ]
 
-implFilterParser :: Parser ImplFilter
-implFilterParser = implementations <|> pure id
+intMapFilter :: String -> String -> Parser (IntMap a -> IntMap a)
+intMapFilter flagName name = filters <|> pure id
   where
-    implementations :: Parser ImplFilter
-    implementations = fmap mkFilter . option intervalReader $ mconcat
-        [ metavar "ID", long "impl-set"
-        , help "Range(s) of implementation ids to print results for. Accepts \
-            \comma-seperated ranges. A range is dash-separated inclusive \
-            \range or a single number. Example: \
-            \--impl-set=5-10,13,17-20"
-        ]
+    filters :: Parser (IntMap a -> IntMap a)
+    filters = fmap mkFilter $ intervalFlag flagName name
       where
-        mkFilter :: IntervalSet Int -> ImplFilter
+        mkFilter :: IntervalSet Int -> IntMap a -> IntMap a
         mkFilter intervals = IM.filterWithKey (\k _ -> k `IS.member` intervals)
+
+intervalFlag :: Integral a => String -> String -> Parser (IntervalSet a)
+intervalFlag flagName name = option intervalReader $ mconcat
+    [ metavar "ID(s)", long flagName
+    , help $ "Range(s) of " <> name <> " ids to print results for. Accepts \
+        \comma-seperated ranges. A range is dash-separated inclusive \
+        \range or a single number. Example: \
+        \--impl-set=5-10,13,17-20"
+    ]
+  where
+    intervalReader :: Integral a => ReadM (IntervalSet a)
+    intervalReader = maybeReader . parseMaybe $
+        IS.fromList <$> sepBy1 interval (char ',')
+      where
+        interval :: Integral a => Parsec () String (Interval a)
+        interval = range <|> singleValue
+
+        singleValue :: Integral a => Parsec () String (Interval a)
+        singleValue = I.singleton <$> signed (return ()) decimal
+
+        range :: Integral a => Parsec () String (Interval a)
+        range = toInterval <$> try (decimal <* char '-') <*> decimal
+
+        toInterval :: Integral a => a -> a -> Interval a
+        toInterval = I.interval `on` (,True) . Finite
 
 modelIdParser :: Parser (SqlM (Key PredictionModel))
 modelIdParser = fmap entityKey <$> modelParser
@@ -297,13 +317,7 @@ rawPredictorConfigSetParser
         -> SqlM [PredictorConfig]
     )
 rawPredictorConfigSetParser = do
-    modelIntervals <- option intervalReader $ mconcat
-        [ metavar "ID", long "predictor-set"
-        , help "Range(s) of predictor ids to print results for. Accepts \
-               \comma-seperated ranges. A range is dash-separated inclusive \
-               \range or a single number. Example: \
-               \--report-range=5-10,13,17-20"
-        ]
+    modelIntervals <- intervalFlag "predictor-set" "predictor"
 
     pure $ \mDefImpl mStrategy -> do
         defImpl <- case mDefImpl of
@@ -447,22 +461,6 @@ variantInfoConfigParser = do
             <$> getPlatformId <*> getCommit algoId <*> pure Nothing
             <*> sequence getDatasetId <*> getUtcTime <*> pure allowNewer
             <*> pure filterFlag
-
-intervalReader :: Integral a => ReadM (IntervalSet a)
-intervalReader = maybeReader . parseMaybe $
-    IS.fromList <$> sepBy1 interval (char ',')
-  where
-    interval :: Integral a => Parsec () String (Interval a)
-    interval = range <|> singleValue
-
-    singleValue :: Integral a => Parsec () String (Interval a)
-    singleValue = I.singleton <$> signed (return ()) decimal
-
-    range :: Integral a => Parsec () String (Interval a)
-    range = toInterval <$> try (decimal <* char '-') <*> decimal
-
-    toInterval :: Integral a => a -> a -> Interval a
-    toInterval = I.interval `on` (,True) . Finite
 
 readCI :: (Foldable f, Show a) => f a -> ReadM a
 readCI vals = maybeReader lookupCI

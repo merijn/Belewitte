@@ -25,12 +25,14 @@ globalOptionsParser = do
     getCommit <- commitIdParser
     getUtcTime <- requiredUtcTimeParser
     allowNewer <- allowNewerParser
+    filterImpls <- intMapFilter "impl-set" "implementation"
+    filterExtImpls <- intMapFilter "ext-impl-set" "external implementation"
 
     pure $ do
         algoId <- getAlgoId
-        impls <- (,) <$> Sql.queryImplementations algoId
-                     <*> Sql.queryExternalImplementations algoId
+        impls <- filterImpls <$> Sql.queryImplementations algoId
+        extImpls <- filterExtImpls <$> Sql.queryExternalImplementations algoId
 
         GlobalPlotOptions algoId
             <$> getPlatformId <*> getCommit algoId <*> getUtcTime
-            <*> pure allowNewer <*> pure impls
+            <*> pure allowNewer <*> pure (impls, extImpls)

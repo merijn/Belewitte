@@ -333,12 +333,7 @@ reportParser implTypes =
         [ long "report-all", help "Reports results for all variants." ]
 
     intervalFlagRange :: Parser (IntervalSet Int64)
-    intervalFlagRange = option intervalReader $ mconcat
-        [ metavar "RANGE", long "report-range"
-        , help "Range(s) of variants to print results for. Accepts \
-               \comma-seperated ranges. A range is dash-separated inclusive \
-               \range or a single number. Example: \
-               \--report-range=5-10,13,17-20" ]
+    intervalFlagRange = intervalFlag "report-range" "variant"
 
     resultsRelativeTo :: Parser RelativeTo
     resultsRelativeTo = optionParserFromValues relTo "REL-TO" helpTxt $ mconcat
@@ -406,10 +401,11 @@ evaluateParser = reportParser $ byImpls <|> byImplType
     byImplType = filterImpls <$> implTypesParser S.singleton M.empty
 
     byImpls :: Parser (IntMap Implementation -> IntMap Implementation)
-    byImpls = implFilterParser
+    byImpls = intMapFilter "impl-set" "implementation"
 
 compareParser :: Parser CompareReport
-compareParser = reportParser $ composeFilter <$> implFilterParser <*> implTypes
+compareParser = reportParser $
+    composeFilter <$> intMapFilter "impl-set" "implementation" <*> implTypes
   where
     composeFilter :: ImplFilter -> (Any, Set ImplType) -> (Any, ImplFilter)
     composeFilter implFilter (b, types) = (b, implFilter . filterImpls types)
