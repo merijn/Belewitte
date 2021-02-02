@@ -43,11 +43,11 @@ import Utils.Process (withStdin)
 
 data BarPlotType
     = Levels
-    | Totals { normalise :: Bool, useGraphId :: Bool}
-    | VsOptimal { normalise :: Bool }
+    | Totals { normalise :: Bool, useGraphId :: Bool, pdfName :: FilePath}
+    | VsOptimal { normalise :: Bool, pdfName :: FilePath }
 
 data BarPlotConfig = BarPlotConfig
-    { plotName :: Text
+    { plotName :: FilePath
     , axisName :: String
     , slideFormat :: Bool
     , printStdout :: Bool
@@ -72,24 +72,24 @@ barPlot BarPlot{barPlotGlobalOpts = GlobalPlotOptions{..}, ..} = do
             graphId <- variantGraphId <$> Sql.getJust variantId
             name <- graphName <$> Sql.getJust graphId
 
-            let pdfName = name <> "-levels"
+            let plotName = T.unpack name <> "-levels.pdf"
                 missingResults (PatternFailed _) = logErrorN $ mconcat
                     [ "Missing results for graph \"", name
                     , "\", variant #", showSqlKey variantId ]
 
-            handle missingResults . runPlotScript (plotConfig pdfName) $
+            handle missingResults . runPlotScript (plotConfig plotName) $
                 streamQuery (variantToLevelTimePlotQuery variantId)
                 .| C.map (bimap showText (nameImplementations regular))
 
-        Totals{useGraphId} -> let
+        Totals{useGraphId, pdfName} -> let
             labelGraph | useGraphId = showSqlKey . fst
                        | otherwise = snd
             translateData = translatePair . toPair V.convert V.convert
-            in runPlotScript (plotConfig "times-totals") $
+            in runPlotScript (plotConfig pdfName) $
                 streamQuery (variantsToTimePlotQuery barPlotVariants)
                 .| C.map (bimap labelGraph translateData)
 
-        VsOptimal _ -> runPlotScript (plotConfig "times-vs-optimal") $
+        VsOptimal{pdfName} -> runPlotScript (plotConfig pdfName) $
             streamQuery variantQuery
             .| C.filter variantFilter
             .| C.mapM dataFromVariantInfo
@@ -164,7 +164,7 @@ runPlotScript BarPlotConfig{..} queryDataConduit
         withStdin plotProcess doWithHandle
   where
     args :: [String]
-    args = [ T.unpack plotName
+    args = [ plotName
            , axisName
            , show normaliseData
            , show slideFormat

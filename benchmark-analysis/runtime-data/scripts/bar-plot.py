@@ -126,7 +126,7 @@ class Plot(object):
         legend = self.ax.legend(hs + self.handles, ls + self.labels,
                 loc='lower center', bbox_to_anchor=(0.5,1), markerscale=2,
                 numpoints=1, scatterpoints=1, ncol=5, edgecolor="black")
-        self.fig.savefig(self.filename + '.pdf', bbox_extra_artists=(legend,),
+        self.fig.savefig(self.filename, bbox_extra_artists=(legend,),
                          bbox_inches='tight')
         plt.close(self.fig)
         return None

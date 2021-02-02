@@ -156,14 +156,18 @@ commands = CommandRoot
             , commandHeaderDesc = "plot total times for a set of graphs"
             , commandDesc = ""
             }
-            $ barPlotParser <*> (Totals <$> normaliseFlag <*> useGraphIdFlag)
+            $ barPlotParser <*> (Totals <$> normaliseFlag
+                                        <*> useGraphIdFlag
+                                        <*> fileNameFlag "times-totals.pdf")
         , SingleCommand CommandInfo
             { commandName = "vs-optimal"
             , commandHeaderDesc =
             "plot total times for a set of graphs against the optimal"
             , commandDesc = ""
             }
-            $ barPlotParser <*> (VsOptimal <$> normaliseFlag)
+            $ barPlotParser <*>
+                (VsOptimal <$> normaliseFlag
+                           <*> fileNameFlag "times-vs-optimal.pdf")
         ]
     , fmap PlotHeatmap <$> CommandGroup CommandInfo
         { commandName = "heatmap"
@@ -198,6 +202,12 @@ commands = CommandRoot
     ]
   }
   where
+    fileNameFlag :: FilePath -> Parser FilePath
+    fileNameFlag def = strArgument $ mconcat
+        [ metavar "FILE", value def
+        , help "Path of the output PDF"
+        ]
+
     normaliseFlag :: Parser Bool
     normaliseFlag = flag False True $ mconcat
         [ long "normalise"
