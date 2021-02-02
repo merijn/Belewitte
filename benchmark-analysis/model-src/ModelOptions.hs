@@ -401,11 +401,12 @@ evaluateParser = reportParser $ byImpls <|> byImplType
     byImplType = filterImpls <$> implTypesParser S.singleton M.empty
 
     byImpls :: Parser (IntMap Implementation -> IntMap Implementation)
-    byImpls = intMapFilter "impl-set" "implementation"
+    byImpls = intMapFilter "impl-set" "implementation" <|> pure id
 
 compareParser :: Parser CompareReport
 compareParser = reportParser $
-    composeFilter <$> intMapFilter "impl-set" "implementation" <*> implTypes
+    composeFilter <$> (intMapFilter "impl-set" "implementation" <|> pure id)
+                  <*> implTypes
   where
     composeFilter :: ImplFilter -> (Any, Set ImplType) -> (Any, ImplFilter)
     composeFilter implFilter (b, types) = (b, implFilter . filterImpls types)

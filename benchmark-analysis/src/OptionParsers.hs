@@ -160,7 +160,7 @@ filterIncomplete = flag True False $ mconcat
     ]
 
 intMapFilter :: String -> String -> Parser (IntMap a -> IntMap a)
-intMapFilter flagName name = filters <|> pure id
+intMapFilter flagName name = filters
   where
     filters :: Parser (IntMap a -> IntMap a)
     filters = fmap mkFilter $ intervalFlag flagName name

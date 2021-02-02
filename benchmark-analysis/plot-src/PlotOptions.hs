@@ -232,7 +232,7 @@ commands = CommandRoot
         getVariantConfigId <- optional variantConfigIdParser
         minEdges <- optional $ minPropParser "edge" "edges"
         minVertices <- optional $ minPropParser "vertex" "vertices"
-        filterFun <- intMapFilter "impl-set" "implementation"
+        filterFun <- intMapFilter "impl-set" "implementation" <|> pure id
         summary <- summaryFlag
 
         pure $ do

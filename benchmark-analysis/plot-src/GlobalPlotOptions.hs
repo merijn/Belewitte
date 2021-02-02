@@ -25,8 +25,9 @@ globalOptionsParser = do
     getCommit <- commitIdParser
     getUtcTime <- requiredUtcTimeParser
     allowNewer <- allowNewerParser
-    filterImpls <- intMapFilter "impl-set" "implementation"
+    filterImpls <- intMapFilter "impl-set" "implementation" <|> pure id
     filterExtImpls <- intMapFilter "ext-impl-set" "external implementation"
+                        <|> pure (const mempty)
 
     pure $ do
         algoId <- getAlgoId
