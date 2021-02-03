@@ -89,7 +89,7 @@ reportImplementations sep pad implMaps cmp f =
 data TotalStatistics =
   TotalStats
   { variantCount :: {-# UNPACK #-} !Int
-  , aggregateOptimalTime :: {-# UNPACK #-} !Double
+  , aggregateComparisonTime :: {-# UNPACK #-} !Double
   , aggregateTimes :: {-# UNPACK #-} !(Pair (Vector ImplTiming))
   , timesCumRelError :: {-# UNPACK #-} !(Pair (Vector Double))
   , relErrorOneToTwo :: {-# UNPACK #-} !(Pair (Vector Int))
@@ -114,7 +114,7 @@ aggregateVariants variantIntervals relTo implMaps = do
     initial :: Pair (Vector ImplTiming) -> TotalStatistics
     initial v = TotalStats
         { variantCount = 0
-        , aggregateOptimalTime = 0
+        , aggregateComparisonTime = 0
         , aggregateTimes = VS.map zerooutTiming <$> v
         , timesCumRelError = zeroDoubleVector
         , relErrorOneToTwo = zeroIntVector
@@ -133,7 +133,7 @@ aggregateVariants variantIntervals relTo implMaps = do
         :: VariantAggregate -> TotalStatistics -> (TotalStatistics, Text)
     aggregate VariantAgg{..} TotalStats{..} = (, variantReport) TotalStats
           { variantCount = variantCount + 1
-          , aggregateOptimalTime = aggregateOptimalTime + optimalTime
+          , aggregateComparisonTime = aggregateComparisonTime + relToTime
           , aggregateTimes =
                 VS.zipWith (liftImplTiming (+)) <$> aggregateTimes
                                                 <*> implTimes
@@ -331,7 +331,7 @@ reportTotalStatistics Report{..} implMaps TotalStats{..} = case reportOutput of
         runReport (fmap latexEscape <$> implMaps) " &" $
             \(absTime, cumError, oneToTwo, gtFive, gtTwenty, maxError) ->
                 mconcat
-                    [ "$", roundVal (absTime / aggregateOptimalTime)
+                    [ "$", roundVal (absTime / aggregateComparisonTime)
                     , "{\\times}$ & $"
                     , roundVal (cumError / fromIntegral variantCount)
                     , "{\\times}$ & "
@@ -348,7 +348,7 @@ reportTotalStatistics Report{..} implMaps TotalStats{..} = case reportOutput of
         C.yield "Summarising:\n"
         runReport implMaps ":" $ \(absTime, cumError, _, _, _, maxError) ->
             mconcat
-                [ roundVal (absTime / aggregateOptimalTime), "\t"
+                [ roundVal (absTime / aggregateComparisonTime), "\t"
                 , roundVal (cumError / fromIntegral variantCount), "\t"
                 , roundVal maxError, "\n"
                 ]
@@ -358,7 +358,7 @@ reportTotalStatistics Report{..} implMaps TotalStats{..} = case reportOutput of
         runReport implMaps ":" $
             \(absTime, cumError, oneToTwo, gtFive, gtTwenty, maxError) ->
                 mconcat
-                    [ roundVal (absTime / aggregateOptimalTime), "\t"
+                    [ roundVal (absTime / aggregateComparisonTime), "\t"
                     , roundVal (cumError / fromIntegral variantCount)
                     , "\t", percent oneToTwo variantCount, "\t"
                     , percent gtFive variantCount, "\t"
