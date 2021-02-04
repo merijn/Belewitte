@@ -449,7 +449,7 @@ latexTableHeader label splittable = case splittable of
     columnLayout = "lrrrrrrr"
 
     columnHeader :: Text
-    columnHeader = [Interpolate.i|Algorithm & Abs & Avg & 1--2${\\times}$ & ${>} 5 {\\times}$ &
+    columnHeader = [Interpolate.i|Algorithm & Total & Avg & 1--2${\\times}$ & ${>} 5 {\\times}$ &
 ${>} 20 {\\times}$ &  Worst\\\\\\midrule|]
 
 latexTableFooter :: Text -> Splittable -> Text
