@@ -52,6 +52,7 @@ data BarPlotConfig = BarPlotConfig
     , slideFormat :: Bool
     , printStdout :: Bool
     , normaliseData :: Bool
+    , numberedGroups :: Bool
     , rotateLabels :: Bool
     }
 
@@ -62,6 +63,7 @@ data BarPlot
     , barPlotSlideFormat :: Bool
     , barPlotPrintStdout :: Bool
     , barPlotRotateLabels :: Bool
+    , barPlotNumberedGroups :: Bool
     , barPlotVariants :: Set (Key Variant)
     }
 
@@ -100,6 +102,7 @@ barPlot BarPlot{barPlotGlobalOpts = GlobalPlotOptions{..}, ..} = do
         , slideFormat = barPlotSlideFormat
         , printStdout = barPlotPrintStdout
         , rotateLabels = barPlotRotateLabels
+        , numberedGroups = barPlotNumberedGroups
         , ..
         }
       where
@@ -169,6 +172,7 @@ runPlotScript BarPlotConfig{..} queryDataConduit
            , show normaliseData
            , show slideFormat
            , show rotateLabels
+           , show numberedGroups
            ]
 
     doWithHandle :: Handle -> SqlM ()

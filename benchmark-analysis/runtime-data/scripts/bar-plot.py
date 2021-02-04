@@ -30,6 +30,12 @@ def isBool(val):
     else:
         return val
 
+def labelise(val):
+    try:
+        return int(val)
+    except:
+        return val
+
 def superscriptNumber(val):
     mapping = {
         '0' : u'⁰', '1' : u'¹', '2' : u'²', '3' : u'³', '4' : u'⁴',
@@ -131,7 +137,7 @@ class Plot(object):
         plt.close(self.fig)
         return None
 
-def plotBars(ax, xAxisName, columnNames, groups, normalised, rotate):
+def plotBars(ax, xAxisName, columnNames, groups, normalised, rotate, numberedGroups):
     groups = list(sorted(groups, key=lambda k: k[0]))
     numGroups = len(groups)
 
@@ -147,6 +153,11 @@ def plotBars(ax, xAxisName, columnNames, groups, normalised, rotate):
     decoratedColumns = zip(columns, colours, hatching)
     for i, ((colIdx, column), colour, hatch) in enumerate(decoratedColumns):
         values = [group[1][colIdx] for group in groups]
+
+        if numberedGroups:
+            label = str(i)
+        else:
+            label = column
 
         ax.bar(ind + i, values, 1, hatch=hatch, edgecolor="black",
                color=colour, label=column)
@@ -181,30 +192,38 @@ def plotBars(ax, xAxisName, columnNames, groups, normalised, rotate):
 
     ax.set_xlabel(xAxisName, fontsize=fontsize)
     ax.set_xticks(ind + (numBars // 3))
+
     if rotate:
-        ax.set_xticklabels([group[0] for i, group in enumerate(groups, 1)],
-                rotation=-45, ha='left', va='top')
+        rotation = -45
+        ha = 'left'
     else:
-        ax.set_xticklabels([group[0] for i, group in enumerate(groups, 1)],
-                rotation=0, ha='center', va='top')
+        rotation = 0
+        ha = 'center'
+
+    if numberedGroups:
+        groupNames = [i for i, group in enumerate(groups, 1)]
+    else:
+        groupNames = [group[0] for i, group in enumerate(groups, 1)]
+
+    ax.set_xticklabels(groupNames, rotation=rotation, ha=ha, va='top')
 
     ax.set_ylim(**ySettings)
 
 if __name__ != "__main__":
     exit(1)
 
-if len(argv) < 6:
+if len(argv) < 7:
     print("Not enough arguments!", file=stderr)
     exit(1)
-elif len(argv) > 6:
+elif len(argv) > 7:
     print("Too many arguments!", file=stderr)
     exit(1)
 
-_, outputPDF, xAxisName, normalise, slideFormat, rotate = map(isBool, argv)
+_, outputPDF, xAxisName, normalise, slideFormat, rotate, numberedGroups = map(isBool, argv)
 
 with Plot(outputPDF, slideFormat) as ax:
     lines = stdin.readlines()
     columns = lines[0].strip().split(':')
     lines = [[s.strip() for s in line.split(':')] for line in lines[1:]]
-    groups = [(k, [float(v) for v in vals.split()]) for k, vals in lines]
-    plotBars(ax, xAxisName, columns, groups, normalise, rotate)
+    groups = [(labelise(k), [float(v) for v in vals.split()]) for k, vals in lines]
+    plotBars(ax, xAxisName, columns, groups, normalise, rotate, numberedGroups)

@@ -65,16 +65,21 @@ queryVariants algoId graphs = do
 barPlotParser :: Parser (BarPlotType -> SqlM BarPlot)
 barPlotParser = do
     getGlobalOpts <- globalOptionsParser
-    slideFormat <- slideFlag
-    printStdout <- printFlag
-    rotateLabels <- rotateFlag
+    barPlotSlideFormat <- slideFlag
+    barPlotPrintStdout <- printFlag
+    barPlotRotateLabels <- rotateFlag
+    barPlotNumberedGroups <- numberedFlag
     graphSet <- intervalFlag "graphs" "graph"
 
     pure $ \barPlotType -> do
-        globalOpts@GlobalPlotOptions{..} <- getGlobalOpts
+        barPlotGlobalOpts@GlobalPlotOptions{..} <- getGlobalOpts
 
-        BarPlot globalOpts barPlotType slideFormat printStdout rotateLabels
-            <$> queryVariants globalPlotAlgorithm graphSet
+        let mkBarPlot variants = BarPlot
+              { barPlotVariants = variants
+              , ..
+              }
+
+        mkBarPlot <$> queryVariants globalPlotAlgorithm graphSet
   where
     slideFlag :: Parser Bool
     slideFlag = flag False True $ mconcat
@@ -87,6 +92,10 @@ barPlotParser = do
     rotateFlag :: Parser Bool
     rotateFlag = flag False True $ mconcat
         [ long "rotate", help "Rotate X axis labels" ]
+
+    numberedFlag :: Parser Bool
+    numberedFlag = flag False True $ mconcat
+        [ long "numbered", help "Use indices for group labels" ]
 
 variantSelectionOption :: Parser (Key Algorithm -> SqlM VariantSelection)
 variantSelectionOption = asum
