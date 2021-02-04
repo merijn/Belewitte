@@ -130,8 +130,9 @@ class Plot(object):
             ax.patch.set_visible(False)
 
         legend = self.ax.legend(hs + self.handles, ls + self.labels,
-                loc='lower center', bbox_to_anchor=(0.5,1), markerscale=2,
-                numpoints=1, scatterpoints=1, ncol=5, edgecolor="black")
+                loc='lower center', bbox_to_anchor=(-0.05,1.02,1.1,1),
+                markerscale=2, numpoints=1, scatterpoints=1, edgecolor="black",
+                mode="expand", ncol=3)
         self.fig.savefig(self.filename, bbox_extra_artists=(legend,),
                          bbox_inches='tight')
         plt.close(self.fig)
