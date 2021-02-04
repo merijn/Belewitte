@@ -43,7 +43,7 @@ def prettyFormat(val, pos):
     divider = pow(10, order)
     return "{0:0.0f}".format(val/divider) + u'×10' + superscriptNumber(order)
 
-def colours():
+def colour_gen():
     def fractions(value):
         for v in [Fraction(8,10), Fraction(5,10)]:
             yield tuple(float(f) for f in hsv_to_rgb(value, Fraction(6,10), v))
@@ -52,7 +52,7 @@ def colours():
         yield c
 
     for i in (2**k for k in itertools.count()):
-        for j in xrange(1,i,2):
+        for j in range(1,i,2):
             for c in fractions(Fraction(j,i)):
                 yield c
 
@@ -141,7 +141,9 @@ def plotBars(ax, xAxisName, columnNames, groups, normalised, rotate):
     ind = np.arange(0, numBars * numGroups, numBars)
 
     hatching = itertools.cycle(['/','\\','o','*','-','+','|','O','.','x'])
-    colours = ["#ac9c3d", "#7f63b8", "#56ae6c", "#b84c7d", "#ba543d", "#FF0000", "#00FF00"]
+    colours = ["#ac9c3d", "#7f63b8", "#56ae6c", "#b84c7d", "#ba543d"]
+    if len(columns) > len(colours):
+        colours = colour_gen()
     decoratedColumns = zip(columns, colours, hatching)
     for i, ((colIdx, column), colour, hatch) in enumerate(decoratedColumns):
         values = [group[1][colIdx] for group in groups]
