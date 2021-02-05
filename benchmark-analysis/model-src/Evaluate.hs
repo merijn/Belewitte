@@ -441,7 +441,7 @@ latexTableHeader label splittable = case splittable of
     Fixed -> [Interpolate.i|\\begin{table}
 \\centering
 \\begin{tabular}{#{columnLayout}}
-\\toprule{}%
+\\toprule
 #{columnHeader}
 |]
   where
@@ -454,8 +454,8 @@ ${>} 20 {\\times}$ &  Worst\\\\\\midrule|]
 
 latexTableFooter :: Text -> Splittable -> Text
 latexTableFooter _ Splittable = "\\end{longtable}\n"
-latexTableFooter label Fixed = [Interpolate.i|\\bottomrule{}
-\\end{tabular}
+latexTableFooter label Fixed = [Interpolate.i|\\bottomrule
+\\end{tabular}%
 #{latexCaption label}
 \\end{table}
 |]
