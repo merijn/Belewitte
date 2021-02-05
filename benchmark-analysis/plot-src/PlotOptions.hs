@@ -108,13 +108,13 @@ totalsHeatmapParser = do
     getGlobalOpts <- globalOptionsParser
     getVariantSelection <- variantSelectionOption
     showOptimal <- showOptimalFlag
-    getDatasetId <- optional datasetIdParser
+    getDatasets <- setParser datasetIdParser
 
     pure $ do
         globalOpts@GlobalPlotOptions{..} <- getGlobalOpts
         TotalHeatmap globalOpts
             <$> getVariantSelection globalPlotAlgorithm
-            <*> sequence getDatasetId <*> pure showOptimal
+            <*> getDatasets <*> pure showOptimal
   where
     showOptimalFlag :: Parser Bool
     showOptimalFlag = flag False True $ mconcat [long "show-optimal"]
@@ -132,7 +132,7 @@ predictHeatmapParser :: Parser (SqlM Heatmap)
 predictHeatmapParser = do
     getGlobalOpts <- globalOptionsParser
     getVariantSelection <- variantSelectionOption
-    getDatasetId <- optional datasetIdParser
+    getDatasets <- setParser datasetIdParser
     getPredictorConfigs <- predictorConfigsParser
 
     pure $ do
@@ -140,7 +140,7 @@ predictHeatmapParser = do
 
         PredictHeatmap globalOpts
             <$> getVariantSelection globalPlotAlgorithm
-            <*> sequence getDatasetId <*> getPredictorConfigs
+            <*> getDatasets <*> getPredictorConfigs
 
 commands :: CommandRoot (SqlM PlotCommand)
 commands = CommandRoot

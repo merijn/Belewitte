@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TupleSections #-}
 module OptionParsers
@@ -26,6 +27,7 @@ module OptionParsers
     , runconfigIdParser
     , runconfigParser
     , requiredUtcTimeParser
+    , setParser
     , utcTimeParser
     , variantConfigIdParser
     , variantConfigParser
@@ -53,6 +55,8 @@ import qualified Data.IntMap as IM
 import Data.Map (Map)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
+import Data.Set (Set)
+import qualified Data.Set as S
 import qualified Data.Text as T
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.Format (defaultTimeLocale, parseTimeM)
@@ -394,7 +398,13 @@ runconfigParser = queryRunConfig <$> runConfigOpt
 requiredUtcTimeParser :: Parser (SqlM UTCTime)
 requiredUtcTimeParser =
     maybe (liftIO getCurrentTime) return <$> optional utcTimeParser
+
+setParser
+    :: forall v . Ord v => Parser (SqlM v) -> Parser (SqlM (Maybe (Set v)))
+setParser p = sequence <$> optional rawSetParser
   where
+    rawSetParser :: Parser (SqlM (Set v))
+    rawSetParser = fmap S.fromList . sequence <$> some p
 
 utcTimeParser :: Parser UTCTime
 utcTimeParser = option utcReader . mconcat $
@@ -450,7 +460,7 @@ variantInfoConfigParser = do
     getAlgoId <- algorithmIdParser
     getCommit <- commitIdParser
     getPlatformId <- platformIdParser
-    getDatasetId <- optional datasetIdParser
+    getDatasets <- setParser datasetIdParser
     filterFlag <- filterIncomplete
     allowNewer <- allowNewerParser
     getUtcTime <- requiredUtcTimeParser
@@ -459,7 +469,7 @@ variantInfoConfigParser = do
         algoId <- getAlgoId
         VariantInfoConfig algoId
             <$> getPlatformId <*> getCommit algoId <*> pure Nothing
-            <*> sequence getDatasetId <*> getUtcTime <*> pure allowNewer
+            <*> getDatasets <*> getUtcTime <*> pure allowNewer
             <*> pure filterFlag
 
 readCI :: (Foldable f, Show a) => f a -> ReadM a

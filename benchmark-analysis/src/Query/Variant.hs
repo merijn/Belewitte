@@ -13,7 +13,10 @@ module Query.Variant
 
 import Control.Monad.ST (runST)
 import Data.Ord (comparing)
+import Data.Set (Set)
+import qualified Data.Set as S
 import Data.String.Interpolate.IsString (i)
+import qualified Data.Text as T
 import qualified Data.Vector.Algorithms.Insertion as V
 import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as VS
@@ -28,8 +31,8 @@ data VariantInfoConfig = VariantInfoConfig
     { variantInfoAlgorithm :: Key Algorithm
     , variantInfoPlatform :: Key Platform
     , variantInfoCommit :: CommitId
-    , variantInfoVariantConfig :: Maybe (Key VariantConfig)
-    , variantInfoDataset :: Maybe (Key Dataset)
+    , variantInfoVariantConfigs :: Maybe (Set (Key VariantConfig))
+    , variantInfoDatasets :: Maybe (Set (Key Dataset))
     , variantInfoTimestamp :: UTCTime
     , variantInfoAllowNewer :: AllowNewer
     , variantInfoFilterIncomplete :: Bool
@@ -61,8 +64,8 @@ variantInfoQuery VariantInfoConfig
   { variantInfoAlgorithm
   , variantInfoPlatform
   , variantInfoCommit
-  , variantInfoDataset
-  , variantInfoVariantConfig
+  , variantInfoDatasets
+  , variantInfoVariantConfigs
   , variantInfoTimestamp
   , variantInfoAllowNewer
   , variantInfoFilterIncomplete
@@ -81,6 +84,18 @@ variantInfoQuery VariantInfoConfig
         NewerImpls -> True
         NewerResults -> False
         AllNewer -> True
+
+    datasets :: Set Text
+    datasets = maybe mempty (S.map showSqlKey) variantInfoDatasets
+
+    variantConfigs :: Set Text
+    variantConfigs = maybe mempty (S.map showSqlKey) variantInfoVariantConfigs
+
+    inExpression :: Set Text -> Text
+    inExpression s = "(" <> clauses <> ")"
+      where
+        clauses = T.intercalate ", " . map clause . S.toAscList $ s
+        clause t = "'" <> t <> "'"
 
     queryName :: Text
     queryName = "variantInfoQuery"
@@ -154,10 +169,8 @@ ExternalImplVector(implTiming) AS (
             , toPersistValue variantInfoAlgorithm
             , toPersistValue variantInfoPlatform
             , toPersistValue variantInfoCommit
-            , toPersistValue variantInfoDataset
-            , toPersistValue variantInfoDataset
-            , toPersistValue variantInfoVariantConfig
-            , toPersistValue variantInfoVariantConfig
+            , toPersistValue $ maybe True S.null variantInfoDatasets
+            , toPersistValue $ maybe True S.null variantInfoVariantConfigs
             , toPersistValue $ not variantInfoFilterIncomplete
             ]
         , cteQuery = [i|
@@ -185,8 +198,8 @@ VariantTiming(variantId, bestNonSwitching, timings) AS (
     WHERE RunConfig.algorithmId = ?
     AND RunConfig.platformId = ?
     AND RunConfig.algorithmVersion = ?
-    AND (RunConfig.datasetId = ? OR ? IS NULL)
-    AND (Variant.variantConfigId = ? OR ? IS NULL)
+    AND (? OR RunConfig.datasetId IN #{inExpression datasets})
+    AND (? OR Variant.variantConfigId IN #{inExpression variantConfigs})
 
     GROUP BY Run.variantId
     HAVING ? OR COUNT(Run.id) = MAX(Impls.count)
@@ -198,8 +211,7 @@ VariantTiming(variantId, bestNonSwitching, timings) AS (
             [ toPersistValue variantInfoAlgorithm
             , toPersistValue variantInfoPlatform
             , toPersistValue variantInfoCommit
-            , toPersistValue variantInfoDataset
-            , toPersistValue variantInfoDataset
+            , toPersistValue $ maybe True S.null variantInfoDatasets
             ]
         , cteQuery = [i|
 OptimalStep(variantId, optimal) AS (
@@ -217,7 +229,7 @@ OptimalStep(variantId, optimal) AS (
         AND RunConfig.algorithmId = ?
         AND RunConfig.platformId = ?
         AND RunConfig.algorithmVersion = ?
-        AND (RunConfig.datasetId = ? OR ? IS NULL)
+        AND (? OR RunConfig.datasetId IN #{inExpression datasets})
 
         INNER JOIN Implementation
         ON Run.implId = Implementation.id

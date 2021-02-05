@@ -9,12 +9,15 @@ module Heatmap
     , plotHeatmap
     ) where
 
+import Control.Monad (forM_)
 import Data.Binary.Put (putDoublehost, runPut)
 import qualified Data.ByteString.Lazy as LBS
 import Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
+import Data.Set (Set)
+import qualified Data.Set as S
 import qualified Data.Text.IO as T
 import Data.Time.Clock (getCurrentTime)
 import Data.Vector.Storable (Vector)
@@ -42,13 +45,15 @@ import qualified Utils.Process as Proc
 
 import GlobalPlotOptions
 
-data VariantSelection = ConfigSelection (Key VariantConfig) | Everything
+data VariantSelection
+    = ConfigSelection (Key VariantConfig)
+    | Everything
 
 data Heatmap
     = TotalHeatmap
       { heatmapGlobalOpts :: GlobalPlotOptions
       , heatmapVariantSelection :: VariantSelection
-      , heatmapDataset :: Maybe (Key Dataset)
+      , heatmapDatasets :: Maybe (Set (Key Dataset))
       , heatmapShowOptimal :: Bool
       }
     | LevelHeatmap
@@ -58,7 +63,7 @@ data Heatmap
     | PredictHeatmap
       { heatmapGlobalOpts :: GlobalPlotOptions
       , heatmapVariantSelection :: VariantSelection
-      , heatmapDataset :: Maybe (Key Dataset)
+      , heatmapDatasets :: Maybe (Set (Key Dataset))
       , heatmapPredictors :: [PredictorConfig]
       }
 
@@ -80,10 +85,10 @@ plotHeatmap TotalHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
         { variantInfoAlgorithm = globalPlotAlgorithm
         , variantInfoPlatform = globalPlotPlatform
         , variantInfoCommit = globalPlotCommit
-        , variantInfoVariantConfig = case heatmapVariantSelection of
+        , variantInfoVariantConfigs = case heatmapVariantSelection of
             Everything -> Nothing
-            ConfigSelection n -> Just n
-        , variantInfoDataset = heatmapDataset
+            ConfigSelection n -> Just (S.singleton n)
+        , variantInfoDatasets = heatmapDatasets
         , variantInfoTimestamp = globalPlotTimestamp
         , variantInfoAllowNewer = globalPlotAllowNewer
         , variantInfoFilterIncomplete = False
@@ -144,9 +149,10 @@ plotHeatmap PredictHeatmap{heatmapGlobalOpts = GlobalPlotOptions{..}, ..} = do
         normaliseTiming (ImplTiming implId timing) =
             ImplTiming implId (timing / optimalTime)
 
-    variantConduit = case heatmapDataset of
+    variantConduit = case heatmapDatasets of
         Nothing -> streamQuery (algorithmVariantQuery globalPlotAlgorithm)
-        Just d -> streamQuery (datasetVariantQuery globalPlotAlgorithm d)
+        Just d -> forM_ d C.yield .>
+            streamQuery . datasetVariantQuery globalPlotAlgorithm
 
 runPlotScript
     :: IntMap Text

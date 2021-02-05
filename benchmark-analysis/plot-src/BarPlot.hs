@@ -128,8 +128,8 @@ barPlot BarPlot{barPlotGlobalOpts = GlobalPlotOptions{..}, ..} = do
         { variantInfoAlgorithm = globalPlotAlgorithm
         , variantInfoPlatform = globalPlotPlatform
         , variantInfoCommit = globalPlotCommit
-        , variantInfoVariantConfig = Nothing
-        , variantInfoDataset = Nothing
+        , variantInfoVariantConfigs = Nothing
+        , variantInfoDatasets = Nothing
         , variantInfoTimestamp = globalPlotTimestamp
         , variantInfoAllowNewer = globalPlotAllowNewer
         , variantInfoFilterIncomplete = False

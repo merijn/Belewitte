@@ -146,7 +146,8 @@ commands = CommandRoot
         }
         $ ValidateModel
             <$> predictorConfigParser
-            <*> (sequence <$> optional platformIdParser) <*> datasetsParser
+            <*> (sequence <$> optional platformIdParser)
+            <*> setParser datasetIdParser
             <*> optional utcTimeParser
     , SingleCommand CommandInfo
         { commandName = "evaluate"
@@ -157,7 +158,8 @@ commands = CommandRoot
         }
         $ EvaluatePredictor
             <$> platformIdParser <*> predictorConfigsParser
-            <*> filterIncomplete <*> evaluateParser <*> datasetsParser
+            <*> filterIncomplete <*> evaluateParser
+            <*> setParser datasetIdParser
             <*> optional utcTimeParser
     , SingleCommand CommandInfo
         { commandName = "show"
@@ -228,12 +230,6 @@ getStepProps algoId = do
   where
     propMap (Entity key PropertyName{propertyNameProperty}) =
         M.singleton propertyNameProperty key
-
-datasetsParser :: Parser (SqlM (Maybe (Set (Key Dataset))))
-datasetsParser = sequence <$> optional rawDatasetsParser
-  where
-    rawDatasetsParser :: Parser (SqlM (Set (Key Dataset)))
-    rawDatasetsParser = fmap S.fromList . sequence <$> some datasetIdParser
 
 graphPercentageParser :: Parser Percentage
 graphPercentageParser = percentageParser
@@ -456,7 +452,7 @@ trainStepConfig :: Parser (QueryMode -> SqlM TrainStepConfig)
 trainStepConfig = do
     getAlgoId <- algorithmIdParser
     getStepInfoConfig <- stepInfoConfig
-    getDatasets <- datasetsParser
+    getDatasets <- setParser datasetIdParser
     trainSeed <- trainSeedParser
     filterGraphProps <- props "graph"
     filterStepProps <- props "step"
