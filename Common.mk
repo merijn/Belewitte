@@ -204,6 +204,7 @@ report-cxx:
 .PHONY: freeze
 freeze:
 	$(PRINTF) "Generating frozen config.\n"
+	$(AT)rm $(CASE)/cabal.project.freeze
 	$(AT)$(CABAL) --builddir="$(abspath $(BUILD)/haskell/)" \
 	    v2-freeze $(if $(AT),2>/dev/null >/dev/null,)
 	$(AT)cp "$(BASE)/cabal.project.freeze" "$(BASE)/$(PROJECTFILE).freeze"

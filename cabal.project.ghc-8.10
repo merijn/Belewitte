@@ -5,11 +5,5 @@ doc-index-file: $datadir/doc/$arch-$os-$compiler/index.html
 optimization: 2
 documentation: False
 
-source-repository-package
-    type: git
-    location: https://github.com/merijn/persistent
-    tag: 5eaac3dc35952125e6eb02842320b2221b1260a6
-    subdir: persistent-sqlite
-
 package benchmark-analysis
     Ghc-Options: -freverse-errors
