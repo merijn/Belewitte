@@ -18,6 +18,7 @@ import qualified Data.Conduit.Combinators as C
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 import Data.List (intersperse)
+import Data.Ord (comparing)
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
@@ -38,7 +39,7 @@ import Schema
 import Sql (Region)
 import qualified Sql
 import Utils.ImplTiming (ImplTiming(..))
-import Utils.Pair (Pair(..), mergePair, toPair)
+import Utils.Pair (Pair(..), mapFirst, mergePair, toPair)
 import Utils.Process (withStdin)
 
 data BarPlotType
@@ -83,11 +84,14 @@ barPlot BarPlot{barPlotGlobalOpts = GlobalPlotOptions{..}, ..} = do
                 streamQuery (variantToLevelTimePlotQuery variantId)
                 .| C.map (bimap showText (nameImplementations regular))
 
-        Totals{useGraphId, pdfName} -> let
-            labelGraph | useGraphId = showSqlKey . fst
-                       | otherwise = snd
-            translateData = translatePair . toPair V.convert V.convert
-            in runPlotScript (plotConfig pdfName) $
+        Totals{useGraphId, pdfName} -> do
+            let labelGraph
+                    | useGraphId = showSqlKey . fst
+                    | otherwise = snd
+
+                translateData = translatePair . toPair V.convert V.convert
+
+            runPlotScript (plotConfig pdfName) $
                 streamQuery (variantsToTimePlotQuery barPlotVariants)
                 .| C.map (bimap labelGraph translateData)
 
@@ -116,7 +120,17 @@ barPlot BarPlot{barPlotGlobalOpts = GlobalPlotOptions{..}, ..} = do
     implMaps@Pair{regular} = toImplNames id id globalPlotImpls
 
     translatePair :: Pair (Vector ImplTiming) -> Vector (Text, Double)
-    translatePair x = mergePair $ nameImplementations <$> implMaps <*> x
+    translatePair p = mergePair $
+        nameImplementations <$> implMaps <*> mapFirst addBest p
+      where
+        addBest :: Vector ImplTiming -> Vector ImplTiming
+        addBest v = V.cons nonSwitchingBest v
+          where
+            nonSwitchingBest = ImplTiming
+                { implTimingImpl = bestNonSwitchingImplId
+                , implTimingTiming = implTimingTiming $
+                    V.minimumBy (comparing implTimingTiming) v
+                }
 
     variantsToTimePlotQuery =
         timePlotQuery globalPlotAlgorithm globalPlotPlatform globalPlotCommit
