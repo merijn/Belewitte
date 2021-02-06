@@ -176,6 +176,7 @@ commands = CommandRoot
             }
             $ barPlotParser <*>
                 (VsOptimal <$> normaliseFlag
+                           <*> useGraphIdFlag
                            <*> fileNameFlag "times-vs-optimal.pdf")
         ]
     , fmap PlotHeatmap <$> CommandGroup CommandInfo

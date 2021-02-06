@@ -18,7 +18,6 @@ import qualified Data.Conduit.Combinators as C
 import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 import Data.List (intersperse)
-import Data.Ord (comparing)
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
@@ -39,13 +38,13 @@ import Schema
 import Sql (Region)
 import qualified Sql
 import Utils.ImplTiming (ImplTiming(..))
-import Utils.Pair (Pair(..), mapFirst, mergePair, toPair)
+import Utils.Pair (Pair(..), mergePair, toPair)
 import Utils.Process (withStdin)
 
 data BarPlotType
     = Levels
     | Totals { normalise :: Bool, useGraphId :: Bool, pdfName :: FilePath}
-    | VsOptimal { normalise :: Bool, pdfName :: FilePath }
+    | VsOptimal { normalise :: Bool, useGraphId :: Bool, pdfName :: FilePath }
 
 data BarPlotConfig = BarPlotConfig
     { plotName :: FilePath
@@ -120,17 +119,7 @@ barPlot BarPlot{barPlotGlobalOpts = GlobalPlotOptions{..}, ..} = do
     implMaps@Pair{regular} = toImplNames id id globalPlotImpls
 
     translatePair :: Pair (Vector ImplTiming) -> Vector (Text, Double)
-    translatePair p = mergePair $
-        nameImplementations <$> implMaps <*> mapFirst addBest p
-      where
-        addBest :: Vector ImplTiming -> Vector ImplTiming
-        addBest v = V.cons nonSwitchingBest v
-          where
-            nonSwitchingBest = ImplTiming
-                { implTimingImpl = bestNonSwitchingImplId
-                , implTimingTiming = implTimingTiming $
-                    V.minimumBy (comparing implTimingTiming) v
-                }
+    translatePair p = mergePair $ nameImplementations <$> implMaps <*> p
 
     variantsToTimePlotQuery =
         timePlotQuery globalPlotAlgorithm globalPlotPlatform globalPlotCommit
