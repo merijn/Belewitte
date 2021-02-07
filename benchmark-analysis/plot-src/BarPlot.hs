@@ -94,10 +94,10 @@ barPlot BarPlot{barPlotGlobalOpts = GlobalPlotOptions{..}, ..} = do
                 streamQuery (variantsToTimePlotQuery barPlotVariants)
                 .| C.map (bimap labelGraph translateData)
 
-        VsOptimal{pdfName} -> runPlotScript (plotConfig pdfName) $
+        VsOptimal{useGraphId, pdfName} -> runPlotScript (plotConfig pdfName) $
             streamQuery variantQuery
             .| C.filter variantFilter
-            .| C.mapM dataFromVariantInfo
+            .| C.mapM (dataFromVariantInfo useGraphId)
             .| C.map (second $ translatePair . fmap V.convert)
   where
     plotConfig name = BarPlotConfig
@@ -139,12 +139,16 @@ barPlot BarPlot{barPlotGlobalOpts = GlobalPlotOptions{..}, ..} = do
         }
 
 dataFromVariantInfo
-    :: VariantInfo -> Region SqlM (Text, Pair (Vector ImplTiming))
-dataFromVariantInfo VariantInfo{..} = do
+    :: Bool -> VariantInfo -> Region SqlM (Text, Pair (Vector ImplTiming))
+dataFromVariantInfo useGraphId VariantInfo{..} = do
     graphId <- variantGraphId <$> Sql.getJust variantId
-    name <- graphName <$> Sql.getJust graphId
+    name <- labelGraph graphId
     return (name, Pair extendedTimings (V.convert variantExternalTimings))
   where
+    labelGraph graphId
+        | useGraphId = return $ showSqlKey graphId
+        | otherwise = graphName <$> Sql.getJust graphId
+
     extendedTimings = V.convert variantTimings
         `V.snoc` ImplTiming bestNonSwitchingImplId variantBestNonSwitching
         `V.snoc` ImplTiming optimalImplId variantOptimal
