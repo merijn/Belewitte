@@ -6,7 +6,9 @@ all: $(SRCDIR)/gen-graph $(SRCDIR)/evolve haskell-dependencies
 $(DEST)/evolve.o: CXXFLAGS+=$(BOOST_CXX_FLAGS)
 $(DEST)/evolve.o: $(BOOST_PREREQ)
 
-$(SRCDIR)/evolve: LDFLAGS+=-ltbb
+$(SRCDIR)/evolve: LDFLAGS+=-ltbb $(if $(TBB_LIB_PATH), -L$(TBB_LIB_PATH))
+
+$(DEST)/Connectivity.o: CPATH:=$(if $(TBB_INCLUDE_PATH), $(TBB_INCLUDE_PATH):)$(CPATH)
 
 $(SRCDIR)/gen-graph: $(DEST)/gen-graph.o $(LIBS)/libutils.a
 	$(PRINTF) " LD\t$@\n"
