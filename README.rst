@@ -62,8 +62,7 @@ GHC Haskell compiler 8.10.2
 cabal-install 3.2
     https://www.haskell.org/cabal/download.html
 
-Intel ICC Compiler
-    Threading Building Blocks
+Intel Threading Building Blocks
 
 The ``Config.mk`` file has several variables that can be used to explicitly
 specify the path to the relevant compilers/compiler versions if they are not on
@@ -202,7 +201,7 @@ Evolutionary Graph Generation Prerequisites
 * gmake
 * GHC 8.6
 * cabal-install 2.4
-* Intel ICC
+* Intel TBB
 * SLURM
 
 Graph Plotting

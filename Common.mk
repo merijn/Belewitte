@@ -15,9 +15,6 @@ endif
 ifndef NVCC
 NVCC:=$(shell command -v nvcc 2> /dev/null)
 endif
-ifndef ICC
-ICC:=$(shell command -v icc 2> /dev/null)
-endif
 ifndef PROJECTFILE
 GHC_VERSION_PARTS:=$(subst ., ,$(shell $(GHC) --numeric-version))
 GHC_VERSION:=$(word 1,$(GHC_VERSION_PARTS)).$(word 2,$(GHC_VERSION_PARTS))
@@ -75,11 +72,7 @@ CLANGWFLAGS=-Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic \
 
 CLANGCXXFLAGS=$(COMMON_CXXFLAGS) $(CLANGWFLAGS) -ftrapv
 
-ICCWFLAGS=-Wall -Wremarks -Wcheck -Werror -diag-disable=869,981,10382,11074,11076
-ICC_CXXFLAGS=$(COMMON_CXXFLAGS) $(ICCWFLAGS) -xHost
-
-CXXFLAGS=$(if $(findstring clang++, $(CXX)), $(CLANGCXXFLAGS), \
-            $(if $(findstring icc, $(CXX)), $(ICC_CXXFLAGS), $(COMMON_CXXFLAGS)))
+CXXFLAGS=$(if $(findstring clang++, $(CXX)), $(CLANGCXXFLAGS), $(COMMON_CXXFLAGS))
 
 CXX_IS_CLANG:=$(findstring clang++, $(CXX))
 

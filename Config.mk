@@ -2,5 +2,4 @@ CXX:=
 CABAL:=
 GHC:=
 NVCC:=
-ICC:=
 PROJECTFILE:=
