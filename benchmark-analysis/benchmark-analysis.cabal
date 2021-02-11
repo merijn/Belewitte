@@ -331,4 +331,4 @@ Executable Plot
 
 Source-Repository head
   Type:     git
-  Location: git+ssh://github.com:merijn/GPU-benchmarks
+  Location: git+ssh://github.com:merijn/Belewitte
