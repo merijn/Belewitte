@@ -59,6 +59,14 @@ else
     PRINTF := @printf
 endif
 
+.PHONY: report-cabal
+report-cabal:
+	$(PRINTF) "$(CABAL)"
+
+.PHONY: report-cxx
+report-cxx:
+	$(PRINTF) "$(CXX) $(filter-out -MMD -MP,$(CXXFLAGS))"
+
 .PHONY: missing-cuda
 missing-cuda:
 	$(PRINTF) "nvcc not found, skipping GPU kernel libraries\n"
@@ -185,14 +193,6 @@ endif
 	    --with-compiler="$(GHC)" -j24 v2-configure \
 	    $(if $(AT),2>/dev/null >/dev/null,)
 	$(AT)rm -f $(CABALCONFIG)~
-
-.PHONY: report-cabal
-report-cabal:
-	$(PRINTF) "$(CABAL)"
-
-.PHONY: report-cxx
-report-cxx:
-	$(PRINTF) "$(CXX) $(filter-out -MMD -MP,$(CXXFLAGS))"
 
 .PHONY: freeze
 freeze:
