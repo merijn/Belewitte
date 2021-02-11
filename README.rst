@@ -294,7 +294,7 @@ cabal-install 3.2
     :Publisher: Springer, Cham
 
 .. [PELGA2016]
-    :Title: “Synthetic Graph Generation for Sys- tematic Exploration of Graph Structural Properties”
+    :Title: “Synthetic Graph Generation for Systematic Exploration of Graph Structural Properties”
     :Authors: Merijn Verstraaten, Ana Lucia Varbanescu, and Cees de Laat
     :Workshop: 2:superscript:`nd` Workshop on Performance Engineering for Large Scale Graph Analytics
     :Proceedings: European Conference on Parallel Processing
