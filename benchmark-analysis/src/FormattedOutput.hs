@@ -37,7 +37,7 @@ import Core
 import Pretty.Fields
 import Query (MonadQuery)
 import Sql
-import Utils.Process (unexpectedTermination)
+import ProcessTools (unexpectedTermination)
 
 fieldToText :: PersistEntity a => FieldInfo a -> Entity a -> Text
 fieldToText (VerboseFieldInfo field toText _ _) =

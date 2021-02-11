@@ -27,9 +27,10 @@ import Data.Foldable (asum)
 import qualified System.Directory as Dir
 import System.FilePath ((</>))
 
+import ProcessTools
+
 import Exceptions
 import Paths_benchmark_analysis (getDataFileName)
-import Utils.Process
 
 getKernelExecutableMaybe :: MonadIO m => m (Maybe FilePath)
 getKernelExecutableMaybe = liftIO $ do

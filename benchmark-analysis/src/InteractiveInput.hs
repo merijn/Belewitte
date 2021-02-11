@@ -41,11 +41,12 @@ import System.Console.Haskeline
 import System.Directory (doesFileExist)
 import Text.Read (readMaybe)
 
+import ProcessTools (CreateProcess, UnexpectedTermination(..))
+import qualified ProcessTools
+
 import Core
 import Sql (EntityField, MonadSql(..), SqlRecord, Unique)
 import qualified Sql
-import Utils.Process (CreateProcess, UnexpectedTermination(..))
-import qualified Utils.Process as Process
 import qualified RuntimeData
 
 data Completer m
@@ -115,12 +116,12 @@ withProcessCompletion args act = do
         withCompletion (SimpleCompletion $ processCompleter process)
       where
         process :: CreateProcess
-        process = Process.proc exe $ ["-L",libDir] ++ args
+        process = ProcessTools.proc exe $ ["-L",libDir] ++ args
 
     mkCompletionBracket _ _ = id
 
     processCompleter process s = do
-        txt <- warnOnError $ Process.readStdout process
+        txt <- warnOnError $ ProcessTools.readStdout process
         let relevant = filter (T.isPrefixOf (T.pack s)) $ T.lines txt
         return $ map (simpleCompletion . T.unpack) relevant
       where

@@ -50,7 +50,7 @@ import qualified System.Process as Proc
 
 import BroadcastChan.Conduit
 import Core
-import Utils.Process (UnexpectedTermination, unexpectedTermination)
+import ProcessTools (UnexpectedTermination, unexpectedTermination)
 import RuntimeData (getKernelExecutable, getKernelLibPath)
 import Query (MonadQuery)
 import Schema

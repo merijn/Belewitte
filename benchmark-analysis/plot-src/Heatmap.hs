@@ -24,6 +24,9 @@ import Data.Vector.Storable (Vector)
 import qualified Data.Vector.Storable as VS
 import System.IO (hClose)
 
+import ProcessTools (Inherited(..), ReadWrite(Write))
+import qualified ProcessTools as Proc
+
 import Core
 import Predictor
     ( PredictorConfig
@@ -40,8 +43,6 @@ import Schema
 import StepAggregate (VariantAggregate(..), stepAggregator)
 import Utils.ImplTiming
 import Utils.Pair (Pair(..))
-import Utils.Process (Inherited(..), ReadWrite(Write))
-import qualified Utils.Process as Proc
 
 import GlobalPlotOptions
 
