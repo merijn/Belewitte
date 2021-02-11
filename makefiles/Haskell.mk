@@ -18,9 +18,9 @@ haskell_%: $(CABALCONFIG) $(CABALFREEZE)
 ifndef CABAL
 	$(PRINTF) "cabal-install not found, skipping Haskell parts\n"
 else
-	$(PRINTF) " CABAL\t$*\n"
+	$(PRINTF) " CABAL\t$(subst _,:,$*)\n"
 	$(AT)$(CABAL) --builddir="$(abspath $(BUILD)/haskell/)" \
-	    v2-build $* $(if $(AT),2>/dev/null >/dev/null,)
+	    v2-build $(subst _,:,$*) $(if $(AT),2>/dev/null >/dev/null,)
 
 $(CABALCONFIG): $(BASE)/cabal.project
 	$(PRINTF) " CABAL\tconfigure\n"
@@ -35,7 +35,7 @@ endif
 	$(AT)rm -f $(CABALCONFIG)~
 
 .PHONY: freeze
-freeze:
+freeze: $(BASE)/cabal.project
 	$(PRINTF) "Generating frozen config.\n"
 	$(AT)rm -f $(BASE)/cabal.project.freeze
 	$(AT)$(CABAL) --builddir="$(abspath $(BUILD)/haskell/)" \
