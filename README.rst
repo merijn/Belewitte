@@ -199,8 +199,8 @@ Evolutionary Graph Generation Prerequisites
 -------------------------------------------
 
 * gmake
-* GHC 8.6
-* cabal-install 2.4
+* GHC 8.10.2
+* cabal-install 3.2
 * Intel TBB
 * SLURM
 
@@ -213,8 +213,8 @@ coordinate `(x, y)` iff there is an edge from vertex `x` to vertex `y`.
 Graph Plotting Prerequisites
 ----------------------------
 
-* GHC 8.6
-* cabal-install 2.4
+* GHC 8.10.2
+* cabal-install 3.2
 
 DAS 5 Instructions
 ==================
