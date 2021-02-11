@@ -110,6 +110,7 @@ Library
   Other-Modules:        Commands
                         Commands.Debug
                         Exceptions
+                        Exceptions.Class
                         Migration
                         Model
                         OptionParsers

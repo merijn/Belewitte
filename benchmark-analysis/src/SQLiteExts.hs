@@ -71,9 +71,6 @@ wrapSqliteExceptions :: (MonadLogger m, MonadCatch m) => m r -> m r
 wrapSqliteExceptions = Catch.handle logUnwrappedSqliteException
   where
     logUnwrappedSqliteException exc
-        | Just (BenchmarkException e) <- fromException exc
-        = Catch.throwM e
-
         | Just e@SqliteException{} <- fromException exc
         = logThrowM $ PrettySqliteException e
 
