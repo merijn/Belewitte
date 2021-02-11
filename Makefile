@@ -2,8 +2,8 @@ SRCDIR := .
 BUILD := .build
 DEST := .build
 BASE := .
-include Common.mk
-include Rules.mk
+include makefiles/Common.mk
+include makefiles/Rules.mk
 
 EXES := kernel-runner normalise-graph reorder-graph check-degree print-graph \
         graph-details

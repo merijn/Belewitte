@@ -1,5 +1,5 @@
 SRCDIR := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
--include SubDir.mk ../SubDir.mk
+-include makefiles/SubDir.mk ../makefiles/SubDir.mk
 
 ifeq ($(SRCDIR),.)
 all: $(LIBS)/lib$(NAME).a
