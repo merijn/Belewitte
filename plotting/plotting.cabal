@@ -1,3 +1,4 @@
+Cabal-Version:       2.2
 Name:                plotting
 Version:             0.1.0
 
@@ -6,15 +7,14 @@ Bug-Reports:
 
 Author:              Merijn Verstraaten
 Maintainer:          Merijn Verstraaten <merijn@inconsistent.nl>
-Copyright:           Copyright © 2017 Merijn Verstraaten
+Copyright:           Copyright © 2017-2020 Merijn Verstraaten
 
-License:             GPL-3
+License:             GPL-3.0-or-later
 License-File:        LICENSE
 
 Category:            System
-Cabal-Version:       >= 1.10
 Build-Type:          Simple
-Tested-With:         GHC == 8.0
+Tested-With:         GHC == 8.10
 
 Synopsis:            
 
@@ -27,12 +27,11 @@ Executable PlotGraph
   Main-Is:              Plot.hs
 
   Build-Depends:        base
-               ,        attoparsec == 0.13.1.*
-               ,        bytestring == 0.10.8.*
-               ,        Chart >= 1.8 && < 1.10
-               ,        Chart-cairo >= 1.8 && < 1.10
+               ,        attoparsec ^>= 0.13.1
+               ,        bytestring ^>= 0.10.8
+               ,        Chart ^>= 1.9.3
+               ,        Chart-cairo ^>= 1.9.3
 
 Source-Repository head
   Type:     git
-  Location: git+ssh://github.com:merijn/GPU-benchmarks
-
+  Location: git+ssh://github.com:merijn/Belewitte
