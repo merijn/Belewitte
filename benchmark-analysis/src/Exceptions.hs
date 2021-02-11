@@ -11,7 +11,7 @@ module Exceptions
     , Except.MonadCatch
     , Except.MonadMask
     , Pretty(pretty)
-    , SomeException
+    , SomeException(..)
     , SqlType(..)
     , SqliteException(..)
     , module Exceptions

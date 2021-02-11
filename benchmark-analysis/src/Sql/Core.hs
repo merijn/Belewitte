@@ -73,7 +73,7 @@ module Sql.Core
     ) where
 
 import Control.Monad (join, void)
-import Control.Monad.Catch (MonadThrow, MonadCatch, MonadMask, handle, throwM)
+import Control.Monad.Catch (handle, throwM)
 import Control.Monad.IO.Unlift (MonadIO(liftIO), MonadUnliftIO(..))
 import Control.Monad.Logger (MonadLogger, MonadLoggerIO, logErrorN)
 import Control.Monad.Reader (ReaderT, ask, asks, runReaderT, withReaderT)

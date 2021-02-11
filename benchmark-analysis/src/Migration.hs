@@ -5,7 +5,7 @@
 module Migration (MigrationSafety(..), checkMigration, migrateTo) where
 
 import Control.Monad (forM_, unless, when)
-import Control.Monad.Catch (MonadMask, MonadThrow, catch, onError)
+import Control.Monad.Catch (catch, onError)
 import Control.Monad.Logger (MonadLogger, logWarnN)
 import qualified Control.Monad.Logger as Log
 import qualified Data.Conduit.Combinators as C

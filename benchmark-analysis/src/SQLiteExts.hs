@@ -7,7 +7,6 @@ module SQLiteExts
     ) where
 
 import Control.Monad ((>=>), when)
-import Control.Monad.Catch (MonadCatch, MonadThrow)
 import qualified Control.Monad.Catch as Catch
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Logger (MonadLogger)

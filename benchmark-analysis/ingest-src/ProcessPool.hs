@@ -21,7 +21,7 @@ module ProcessPool
     ) where
 
 import Control.Monad (guard, unless, void)
-import Control.Monad.Catch (SomeException, onError, try, uninterruptibleMask_)
+import Control.Monad.Catch (onError, try, uninterruptibleMask_)
 import Control.Monad.Logger (Loc, LogLevel, LogSource, LogStr, LoggingT)
 import qualified Control.Monad.Logger as Log
 import Control.Monad.Trans.Resource (ReleaseKey, allocate, register, release)
