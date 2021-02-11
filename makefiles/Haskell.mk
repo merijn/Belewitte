@@ -13,9 +13,6 @@ $(BASE)/cabal.project.freeze: $(BASE)/$(PROJECTFILE).freeze $(BASE)/Config.mk
 	$(PRINTF) " CP\t$(@F)\n"
 	$(AT)cp $< $@
 
-.PHONY: haskell-dependencies
-haskell-dependencies: haskell_all
-
 .PHONY: haskell_%
 haskell_%: $(CABALCONFIG) $(CABALFREEZE)
 ifndef CABAL

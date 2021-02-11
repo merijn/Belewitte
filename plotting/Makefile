@@ -1,7 +1,7 @@
 SRCDIR := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
 -include makefiles/SubDir.mk ../makefiles/SubDir.mk
 
-all: $(SRCDIR)/graph-edges haskell-dependencies
+all: $(SRCDIR)/graph-edges
 
 $(call santargets,$(SRCDIR)/graph-edges): $(SRCDIR)/graph-edges%: \
     $(DEST)/graph-edges%.o $(LIBS)/liboptions%.a $(LIBS)/libutils%.a

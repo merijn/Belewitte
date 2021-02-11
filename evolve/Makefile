@@ -1,7 +1,7 @@
 SRCDIR := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
 -include makefiles/SubDir.mk ../makefiles/SubDir.mk
 
-all: $(SRCDIR)/gen-graph $(SRCDIR)/evolve haskell-dependencies
+all: $(SRCDIR)/gen-graph $(SRCDIR)/evolve
 
 $(DEST)/evolve.o: CXXFLAGS+=$(BOOST_CXX_FLAGS)
 $(DEST)/evolve.o: $(BOOST_PREREQ)
