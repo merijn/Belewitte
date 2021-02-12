@@ -27,9 +27,6 @@ module Core
     , Log.logDebugN
     , Log.logDebugNS
     , MonadResource
-    , MonadCatch
-    , MonadMask
-    , MonadThrow
     , MonadUnliftIO
     , withUnliftIO
     , UnliftIO(..)
@@ -54,7 +51,6 @@ module Core
     ) where
 
 import Control.Monad (guard, when)
-import Control.Monad.Catch (MonadCatch, MonadMask, SomeException)
 import Control.Monad.IO.Unlift
     (MonadIO(liftIO), MonadUnliftIO(..), UnliftIO(..), withUnliftIO)
 import Control.Monad.Logger (LogLevel(..), LogSource, MonadLoggerIO)
@@ -211,7 +207,7 @@ stderrTerminalWidth = runMaybeT $ do
 
 topLevelHandler :: SomeException -> IO ()
 topLevelHandler exc
-    | Just (BenchmarkException _) <- fromException exc
+    | Just (BenchmarkException True _) <- fromException exc
     = return ()
 
     | otherwise = do

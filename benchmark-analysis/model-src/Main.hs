@@ -15,6 +15,8 @@ import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Text.Lazy.IO as LT
 
+import ProcessTools (withStdin)
+
 import Core
 import Evaluate (evaluateModel, compareImplementations)
 import FormattedOutput (renderEntity, renderOutput)
@@ -28,7 +30,6 @@ import Schema
 import qualified Sql
 import Train
 import TrainConfig
-import Utils.Process (withStdin)
 import Validate
 
 reportModelStats :: ModelStats -> ConduitT () Text SqlM ()

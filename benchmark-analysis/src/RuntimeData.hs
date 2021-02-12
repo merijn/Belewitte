@@ -14,7 +14,6 @@ module RuntimeData
     , getOutputChecker
     ) where
 
-import Control.Monad.Catch (MonadMask, MonadThrow, SomeException(..))
 import qualified Control.Monad.Catch as Catch
 import Control.Monad.Logger (MonadLogger, logInfoN, logWarnN)
 import Control.Monad.IO.Class (MonadIO(liftIO))
@@ -28,9 +27,10 @@ import Data.Foldable (asum)
 import qualified System.Directory as Dir
 import System.FilePath ((</>))
 
+import ProcessTools
+
 import Exceptions
 import Paths_benchmark_analysis (getDataFileName)
-import Utils.Process
 
 getKernelExecutableMaybe :: MonadIO m => m (Maybe FilePath)
 getKernelExecutableMaybe = liftIO $ do

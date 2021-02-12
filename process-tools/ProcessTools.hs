@@ -1,9 +1,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-module Utils.Process
+module ProcessTools
     ( ClosedStream(..)
     , CreateProcess
     , ExitCode(..)
@@ -23,7 +21,8 @@ module Utils.Process
     ) where
 
 import Control.Monad (unless, void)
-import Control.Monad.Catch (MonadMask, MonadThrow, SomeException(..))
+import Control.Monad.Catch
+    (Exception(..), MonadMask, MonadThrow, SomeException(..))
 import qualified Control.Monad.Catch as Except
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Logger (MonadLogger, logErrorN, logInfoN, logWarnN)
@@ -39,16 +38,15 @@ import Data.Streaming.Process
 import Data.Text (Text)
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
+import Data.Text.Prettyprint.Doc (Pretty(pretty), (<+>))
+import qualified Data.Text.Prettyprint.Doc as Pretty
+import qualified Data.Text.Prettyprint.Doc.Util as Pretty
 import Data.Tuple (swap)
 import Data.Typeable (Typeable)
 import System.Exit (ExitCode(..))
 import System.IO (Handle, hClose)
 import System.Posix.IO (createPipe, closeFd, fdToHandle)
 import System.Process (CreateProcess, cmdspec, cwd, env)
-
-import Exceptions
-import Pretty ((<+>))
-import qualified Pretty
 
 data ReadWrite = Read | Write deriving (Eq, Show)
 
@@ -199,12 +197,13 @@ instance Pretty UnexpectedTermination where
             , prettyEnv
             ]
       where
+        renderPrettyList = Pretty.align . Pretty.encloseSep "[" "]" ", "
         prettyCmd = case cmdspec p of
             ShellCommand s -> Pretty.reflow $ T.pack s
             RawCommand exe args -> mconcat
                 [ "Executable:" <+> pretty exe
                 , Pretty.line
-                , "Arguments:" <+> renderList args
+                , "Arguments:" <+> renderPrettyList (map pretty args)
                 ]
 
         prettyCwd = case cwd p of
@@ -222,6 +221,4 @@ instance Pretty UnexpectedTermination where
         prettyEnvVar (var, value) = pretty var <+> "=" <+> pretty value
 
 instance Exception UnexpectedTermination where
-    toException = toRuntimeError
-    fromException = fromRuntimeError
     displayException = show . pretty

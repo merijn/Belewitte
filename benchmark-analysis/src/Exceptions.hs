@@ -7,15 +7,19 @@
 module Exceptions
     ( Error(..)
     , Exception(..)
+    , MonadThrow
+    , Except.MonadCatch
+    , Except.MonadMask
     , Pretty(pretty)
+    , SomeException(..)
     , SqlType(..)
     , SqliteException(..)
     , module Exceptions
+    , module Exceptions.Class
     ) where
 
 import Control.Monad.Catch (Exception(..), MonadThrow, SomeException)
 import qualified Control.Monad.Catch as Except
-import Control.Monad.Logger (MonadLogger, logErrorN)
 import Data.Int (Int64)
 import Data.Text (Text)
 import qualified Data.Text as T
@@ -25,45 +29,15 @@ import Database.Persist.Class (Unique)
 import Database.Persist.Types (SqlType(..), PersistValue(..))
 import Database.Sqlite (Error(..), SqliteException(..))
 
+import Exceptions.Class
 import Pretty (Doc, Pretty(pretty), (<+>))
 import qualified Pretty
-
-logThrowM :: (Exception e, MonadLogger m, MonadThrow m, Pretty e) => e -> m r
-logThrowM exc = do
-    logErrorN . Pretty.renderStrict . layoutException $ exc
-    Except.throwM exc
-  where
-    layoutException :: Pretty e => e -> Pretty.SimpleDocStream a
-    layoutException = Pretty.layoutPretty Pretty.defaultLayoutOptions . pretty
-
-displayLogThrowM :: (Exception e, MonadLogger m, MonadThrow m) => e -> m r
-displayLogThrowM e = do
-    logErrorN . T.pack . displayException $ e
-    Except.throwM e
 
 renderList :: Pretty e => [e] -> Doc a
 renderList = renderPrettyList . map pretty
 
 renderPrettyList :: [Doc a] -> Doc a
 renderPrettyList = Pretty.align . Pretty.encloseSep "[" "]" ", "
-
-data BenchmarkException where
-    BenchmarkException :: (Exception e, Pretty e) => e -> BenchmarkException
-    deriving (Typeable)
-
-instance Show BenchmarkException where
-    show (BenchmarkException e) = show e
-
-instance Exception BenchmarkException where
-    displayException (BenchmarkException e) = show $ pretty e
-
-toBenchmarkException :: (Exception e, Pretty e) => e -> SomeException
-toBenchmarkException = toException . BenchmarkException
-
-fromBenchmarkException :: (Exception e, Pretty e) => SomeException -> Maybe e
-fromBenchmarkException exc = do
-    BenchmarkException e <- fromException exc
-    cast e
 
 data MissingPrimaryKey = MissingPrimaryKey Text
     deriving (Show, Typeable)

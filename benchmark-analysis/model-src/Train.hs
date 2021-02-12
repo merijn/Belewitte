@@ -38,11 +38,11 @@ import Text.Megaparsec.Char (char, eol, string)
 import Text.Megaparsec.Char.Lexer (decimal)
 import Text.Megaparsec.Error (errorBundlePretty)
 
+import ProcessTools (ReadWrite(..), runProcessCreation_, withPipe, withProcess)
+
 import Core
 import Model.Stats (UnknownSet(..), ModelStats(..))
 import Predictor (byteStringToModel)
-import Utils.Process
-    (ReadWrite(..), runProcessCreation_, withPipe, withProcess)
 import Utils.PropValue (PropValue(..))
 import Query
 import RuntimeData (getModelScript)

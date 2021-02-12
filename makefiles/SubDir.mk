@@ -3,7 +3,7 @@ ifeq ($(SRCDIR),.)
     DEST := ../.build/$(NAME)
     BUILD := ../.build
     BASE := ..
-    include ../Common.mk
+    include $(BASE)/makefiles/Common.mk
     CXXFLAGS += -I../
     NVCCXXFLAGS += -I../
 else
@@ -13,7 +13,7 @@ else
     BUILD := $(findstring ../,$(SRCDIR)).build
 endif
 
-include $(BASE)/Rules.mk
+include $(BASE)/makefiles/Rules.mk
 
 $(NAME)_CPP_HEADERS:=$(notdir $(wildcard $(SRCDIR)/*.hpp))
 $(NAME)_CPP_SRCS:=$(notdir $(wildcard $(SRCDIR)/*.cpp))

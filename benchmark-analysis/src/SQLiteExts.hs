@@ -7,7 +7,6 @@ module SQLiteExts
     ) where
 
 import Control.Monad ((>=>), when)
-import Control.Monad.Catch (MonadCatch, MonadThrow)
 import qualified Control.Monad.Catch as Catch
 import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Logger (MonadLogger)
@@ -71,9 +70,6 @@ wrapSqliteExceptions :: (MonadLogger m, MonadCatch m) => m r -> m r
 wrapSqliteExceptions = Catch.handle logUnwrappedSqliteException
   where
     logUnwrappedSqliteException exc
-        | Just (BenchmarkException e) <- fromException exc
-        = Catch.throwM e
-
         | Just e@SqliteException{} <- fromException exc
         = logThrowM $ PrettySqliteException e
 

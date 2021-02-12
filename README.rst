@@ -62,8 +62,7 @@ GHC Haskell compiler 8.10.2
 cabal-install 3.2
     https://www.haskell.org/cabal/download.html
 
-Intel ICC Compiler
-    Threading Building Blocks
+Intel Threading Building Blocks
 
 The ``Config.mk`` file has several variables that can be used to explicitly
 specify the path to the relevant compilers/compiler versions if they are not on
@@ -200,9 +199,9 @@ Evolutionary Graph Generation Prerequisites
 -------------------------------------------
 
 * gmake
-* GHC 8.6
-* cabal-install 2.4
-* Intel ICC
+* GHC 8.10.2
+* cabal-install 3.2
+* Intel TBB
 * SLURM
 
 Graph Plotting
@@ -214,8 +213,8 @@ coordinate `(x, y)` iff there is an edge from vertex `x` to vertex `y`.
 Graph Plotting Prerequisites
 ----------------------------
 
-* GHC 8.6
-* cabal-install 2.4
+* GHC 8.10.2
+* cabal-install 3.2
 
 DAS 5 Instructions
 ==================
@@ -295,7 +294,7 @@ cabal-install 3.2
     :Publisher: Springer, Cham
 
 .. [PELGA2016]
-    :Title: “Synthetic Graph Generation for Sys- tematic Exploration of Graph Structural Properties”
+    :Title: “Synthetic Graph Generation for Systematic Exploration of Graph Structural Properties”
     :Authors: Merijn Verstraaten, Ana Lucia Varbanescu, and Cees de Laat
     :Workshop: 2:superscript:`nd` Workshop on Performance Engineering for Large Scale Graph Analytics
     :Proceedings: European Conference on Parallel Processing

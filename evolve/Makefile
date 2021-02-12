@@ -1,30 +1,23 @@
 SRCDIR := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
--include SubDir.mk ../SubDir.mk
+-include makefiles/SubDir.mk ../makefiles/SubDir.mk
+-include makefiles/Cabal.mk ../makefiles/Cabal.mk
 
-all: $(SRCDIR)/gen-graph $(SRCDIR)/evolve haskell-dependencies
+all: $(SRCDIR)/gen-graph $(SRCDIR)/evolve
 
 $(DEST)/evolve.o: CXXFLAGS+=$(BOOST_CXX_FLAGS)
 $(DEST)/evolve.o: $(BOOST_PREREQ)
 
-$(DEST)/Connectivity.o: CPATH:=$(ICC_CPATH):$(CPATH)
-$(DEST)/Connectivity.o: CXX=icc
+$(SRCDIR)/evolve: LDFLAGS+=-ltbb $(if $(TBB_LIB_PATH), -L$(TBB_LIB_PATH))
 
-$(SRCDIR)/evolve: LDFLAGS+=-ltbb
-$(SRCDIR)/evolve: LD=icc
+$(DEST)/Connectivity.o: CPATH:=$(if $(TBB_INCLUDE_PATH), $(TBB_INCLUDE_PATH):)$(CPATH)
 
 $(SRCDIR)/gen-graph: $(DEST)/gen-graph.o $(LIBS)/libutils.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
-ifndef ICC
-.PHONY: $(SRCDIR)/evolve
-$(SRCDIR)/evolve:
-	$(PRINTF) "Intel ICC not found, skipping evolve executable\n"
-else
 $(SRCDIR)/evolve: $(DEST)/evolve.o $(DEST)/Connectivity.o $(LIBS)/libutils.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $^ -o $@
-endif
 
 .PHONY: clean-$(NAME)-bins
 

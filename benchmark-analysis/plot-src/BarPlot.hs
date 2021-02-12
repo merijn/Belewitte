@@ -27,6 +27,8 @@ import qualified Data.Vector as V
 import qualified Data.Vector.Generic as Generic
 import System.IO (Handle, hPutStr, stdout)
 
+import ProcessTools (withStdin)
+
 import Core
 import GlobalPlotOptions
 import RuntimeData (getBarPlotScript)
@@ -39,7 +41,6 @@ import Sql (Region)
 import qualified Sql
 import Utils.ImplTiming (ImplTiming(..))
 import Utils.Pair (Pair(..), mergePair, toPair)
-import Utils.Process (withStdin)
 
 data BarPlotType
     = Levels

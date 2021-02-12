@@ -2,8 +2,8 @@ SRCDIR := .
 BUILD := .build
 DEST := .build
 BASE := .
-include Common.mk
-include Rules.mk
+include makefiles/Common.mk
+include makefiles/Rules.mk
 
 EXES := kernel-runner normalise-graph reorder-graph check-degree print-graph \
         graph-details
@@ -23,7 +23,7 @@ else ifeq ($(CXX),g++)
 $(call santargets,kernel-runner): LDFLAGS += -Wl,-rpath -Wl,$(CUDA_PATH)/lib/
 endif
 
-all: $(EXES)
+all: $(EXES) haskell_all
 asan: $(foreach exe,$(EXES),$(exe).asan)
 msan: $(foreach exe,$(EXES),$(exe).msan)
 ssan: $(foreach exe,$(EXES),$(exe).ssan)

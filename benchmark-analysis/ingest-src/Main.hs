@@ -9,7 +9,6 @@
 module Main(main) where
 
 import BroadcastChan.Conduit
-import Control.Exception (SomeException)
 import Control.Monad (unless, void)
 import Control.Monad.Trans.Maybe (MaybeT(..))
 import Data.Conduit (ConduitT, Void, ZipConduit(..), (.|), runConduit)
