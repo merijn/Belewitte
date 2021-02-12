@@ -92,7 +92,12 @@ BEGIN { count = 0; max_diff=0; split(args,files,"\t");}
     }
 }
 END {
-    if (verbose == 2) print""
-    if (verbose || count > 0) print "Error count:",count"\tMax diff:",max_diff
+    if (verbose == 2) print ""
+    if (verbose) {
+        if (count > 0) print "Error count:",count"\tMax diff:",max_diff;
+        else print "No differences!"
+    } else {
+        exit count
+    }
 }
 '

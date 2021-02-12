@@ -150,6 +150,6 @@ getOutputChecker
 getOutputChecker = liftIO $ do
     exePath <- getDataFileName "runtime-data/numdiff.awk"
     return $ \file1 file2 -> do
-        runProcess exePath [file1,file2] >>= \case
+        runProcess exePath ["-q",file1,file2] >>= \case
             ExitSuccess -> return True
             _ -> return False
