@@ -319,7 +319,10 @@ class Accessor {
       { return Iterator(acc, offset - n); }
 
       difference_type operator-(const Iterator& it) const
-      { return offset - it.offset; }
+      {
+          return static_cast<difference_type>(offset)
+                 - static_cast<difference_type>(it.offset);
+      }
 
       reference operator[](size_type n) const
       { return *(this + n); }
@@ -525,7 +528,10 @@ class MutableGraph {
         { return VertexIterator(vertices, offset - n); }
 
         difference_type operator-(const VertexIterator& it) const
-        { return offset - it.offset; }
+        {
+            return static_cast<difference_type>(offset)
+                   - static_cast<difference_type>(it.offset);
+        }
 
         reference operator[](size_type n) const
         { return *(this + n); }
