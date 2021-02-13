@@ -71,7 +71,9 @@ report-cxx:
 missing-cuda:
 	$(PRINTF) "nvcc not found, skipping GPU kernel libraries\n"
 
-COMMON_CXXFLAGS=-MMD -MP -std=c++17 -g -I$(BASE)
+COMMON_CXXFLAGS=-MMD -MP -std=c++17 -g -I$(BASE) \
+    $(if $(CUDA_PATH),-isystem$(CUDA_PATH)/include/) \
+    $(if $(TBB_INCLUDE_PATH),-isystem$(TBB_INCLUDE_PATH)/)
 
 CLANGWFLAGS=-Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic \
          -Wno-documentation-deprecated-sync -Wno-documentation -Wno-padded \
@@ -120,7 +122,7 @@ PREFIX:=$(BUILD)/prefix
 LIBS := $(BUILD)
 UNAME := $(shell uname -s)
 ifeq ($(UNAME),Darwin)
-    CXXFLAGS += -isystem$(CUDA_PATH)/include/ -Wno-undefined-func-template
+    CXXFLAGS += -isystem/usr/local/include/ -Wno-undefined-func-template
 
     CLANGWFLAGS += -Wno-poison-system-directories
     DYLIBLDFLAGS += -flat_namespace -undefined suppress
@@ -139,7 +141,6 @@ ifeq ($(UNAME),Linux)
     CLANGWFLAGS += -Wno-reserved-id-macro
     CLANGCXXFLAGS += -stdlib=libc++
 
-    CXXFLAGS += -isystem$(CUDA_PATH)/include/
     LDFLAGS += -lpthread
 
 ifdef CXX_IS_CLANG
