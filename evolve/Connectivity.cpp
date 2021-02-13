@@ -9,7 +9,6 @@ typedef Graph_t::Vertices Vertices;
 typedef Accessor<uint64_t> Edges;
 typedef std::unique_ptr<std::atomic<uint64_t>[]> DepthArray;
 
-#ifdef __INTEL_COMPILER
 #include "tbb/parallel_reduce.h"
 #include "tbb/blocked_range.h"
 
@@ -56,11 +55,9 @@ bfs_step(Graph_t& graph, DepthArray& depths, uint64_t current_level)
 
     return reduce(graph.vertices, sum);
 }
-#endif
 
 double connectivity(Graph_t& graph)
 {
-#ifdef __INTEL_COMPILER
     uint64_t count = 0;
     uint64_t level = 0;
     auto depths = std::make_unique<std::atomic<uint64_t>[]>(graph.vertex_count);
@@ -77,9 +74,4 @@ double connectivity(Graph_t& graph)
     }
 
     return static_cast<double>(count) / graph.vertex_count;
-#else
-    (void) graph;
-    checkError(true, "Connectivity not implemented!");
-    return 1.0;
-#endif
 }
