@@ -45,7 +45,7 @@ bool atomic_min(std::atomic<T>& min, T const& val) noexcept;
 template<typename T>
 bool atomic_min(std::atomic<T>& min, T const& val) noexcept
 {
-    bool r;
+    bool r = false;
     T prev = min;
     while (prev > val && !(r = min.compare_exchange_weak(prev, val)));
     return r;
