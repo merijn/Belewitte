@@ -240,7 +240,12 @@ OptimalStep(variantId, optimal) AS (
 )|]
         }
 
-      , [toPersistValue variantInfoPlatform] `inCTE` [i|
+      , CTE
+        { cteParams =
+            [ toPersistValue variantInfoPlatform
+            , toPersistValue $ not variantInfoFilterIncomplete
+            ]
+        , cteQuery = [i|
 ExternalTiming(variantId, timings) AS (
    SELECT Variant.id
         , update_key_value_vector(implTiming, idx, Impls.implId, avgTime)
@@ -255,7 +260,9 @@ ExternalTiming(variantId, timings) AS (
    ON Impls.implId = ExternalTimer.implId
 
    GROUP BY variantId
+   HAVING ? OR COUNT(ExternalTimer.implId) = MAX(Impls.count)
 )|]
+        }
       ]
 
     params :: [PersistValue]
