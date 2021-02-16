@@ -47,7 +47,7 @@ def superscriptNumber(val):
 def prettyFormat(val, pos):
     order = len(str(int(val))) - 1
     divider = pow(10, order)
-    return "{0:0.0f}".format(val/divider) + u'×10' + superscriptNumber(order)
+    return "{0:0.1f}".format(val/divider) + u'×10' + superscriptNumber(order)
 
 def colour_gen():
     def fractions(value):
