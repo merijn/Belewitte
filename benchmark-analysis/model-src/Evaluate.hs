@@ -293,7 +293,7 @@ compareImplementations variantInfoConfig cfg@Report{..} =
         implMaps = toImplNames implFilter filterExternalImpls impls
 
     stats <- streamQuery query
-        .| C.map addBestNonSwitching
+        .| C.concatMap addBestNonSwitching
         .| aggregateVariants reportVariants reportRelativeTo implMaps
 
     reportTotalStatistics cfg implMaps stats
@@ -307,13 +307,15 @@ compareImplementations variantInfoConfig cfg@Report{..} =
     query = variantInfoQuery variantInfoConfig
     (Any compareExternal, implFilter) = reportImplFilter
 
-    addBestNonSwitching :: VariantInfo -> VariantAggregate
-    addBestNonSwitching VariantInfo{..} = VariantAgg
-        { variantid = variantId
-        , optimalTime = variantOptimal
-        , implTimes = mapFirst addBest $
-                Pair variantTimings variantExternalTimings
-        }
+    addBestNonSwitching :: VariantInfo -> Maybe VariantAggregate
+    addBestNonSwitching VariantInfo{..}
+        | compareExternal && VS.null variantExternalTimings = Nothing
+        | otherwise = Just VariantAgg
+            { variantid = variantId
+            , optimalTime = variantOptimal
+            , implTimes = mapFirst addBest $
+                    Pair variantTimings variantExternalTimings
+            }
       where
         addBest v = v `VS.snoc`
             ImplTiming bestNonSwitchingImplId variantBestNonSwitching
