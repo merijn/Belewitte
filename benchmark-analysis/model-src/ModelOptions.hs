@@ -73,9 +73,10 @@ data ModelCommand
       , optionalUTCTime :: Maybe UTCTime
       }
     | EvaluatePredictor
-      { getPlatformId :: SqlM (Key Platform)
+      { getPlatformId :: SqlM (Maybe (Key Platform))
       , getPredictorConfig :: SqlM PredictorConfig
-      , shouldFilterIncomplete :: Bool
+      , shouldFilterIncomplete :: Maybe Bool
+      , allowNewer :: Maybe AllowNewer
       , evaluateConfig :: EvaluateReport
       , getDatasetIds :: SqlM (Maybe (Set (Key Dataset)))
       , optionalUTCTime :: Maybe UTCTime
@@ -164,9 +165,9 @@ commands = CommandRoot
             \against performance of other implementations"
         }
         $ EvaluatePredictor
-            <$> platformIdParser <*> predictorConfigParser
-            <*> filterIncomplete <*> evaluateParser
-            <*> setParser datasetIdParser
+            <$> (sequence <$> optional platformIdParser) <*> predictorConfigParser
+            <*> optional filterIncomplete <*> optional allowNewerParser
+            <*> evaluateParser <*> setParser datasetIdParser
             <*> optional utcTimeParser
     , SingleCommand CommandInfo
         { commandName = "multi-evaluate"

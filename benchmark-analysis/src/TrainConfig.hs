@@ -6,6 +6,7 @@ module TrainConfig
     , TrainingConfig(..)
     , getModelTrainingConfig
     , getStepInfoConfig
+    , setTrainingConfigAllowNewer
     , setTrainingConfigDatasets
     , setTrainingConfigPlatform
     , setTrainingConfigSkipIncomplete
@@ -49,6 +50,10 @@ mapStepInfoConfig f = \case
         {trainStepInfoConfig = f (trainStepInfoConfig cfg)}
     LegacyTrainConfig cfg -> LegacyTrainConfig cfg
         {legacyStepInfoConfig = f (legacyStepInfoConfig cfg)}
+
+setTrainingConfigAllowNewer :: AllowNewer -> Endo TrainingConfig
+setTrainingConfigAllowNewer val = Endo . mapStepInfoConfig $ \stepCfg ->
+    stepCfg { stepInfoAllowNewer = val }
 
 setTrainingConfigDatasets
     :: Maybe (Set (Key Dataset)) -> Endo TrainingConfig

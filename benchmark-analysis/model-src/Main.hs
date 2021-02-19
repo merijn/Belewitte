@@ -148,17 +148,19 @@ main = runCommand commands $ \case
       { getPlatformId
       , getPredictorConfig
       , shouldFilterIncomplete
+      , allowNewer
       , evaluateConfig
       , getDatasetIds
       , optionalUTCTime
       } -> do
         predictor <- getPredictorConfig >>= loadPredictor
-        setPlatformId <- setTrainingConfigPlatform <$> getPlatformId
+        mPlatformId <- getPlatformId
 
         let updateConfig = appEndo $ mconcat
-                [ setTrainingConfigSkipIncomplete shouldFilterIncomplete
+                [ foldMap setTrainingConfigSkipIncomplete shouldFilterIncomplete
                 , setTrainingConfigTimestamp optionalUTCTime
-                , setPlatformId
+                , foldMap setTrainingConfigPlatform mPlatformId
+                , foldMap setTrainingConfigAllowNewer allowNewer
                 ]
 
         datasets <- fromMaybe S.empty <$> getDatasetIds
