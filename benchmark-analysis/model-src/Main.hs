@@ -9,8 +9,9 @@ import Data.Conduit (ConduitT, (.|))
 import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
 import Data.List (sortBy)
-import Data.Ord (comparing)
 import qualified Data.Map as M
+import Data.Maybe (fromMaybe)
+import Data.Ord (comparing)
 import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.Text.Lazy.IO as LT
@@ -144,7 +145,7 @@ main = runCommand commands $ \case
 
     EvaluatePredictor
       { getPlatformId
-      , getPredictorConfigs
+      , getPredictorConfig
       , shouldFilterIncomplete
       , evaluateConfig
       , getDatasetIds
@@ -153,14 +154,37 @@ main = runCommand commands $ \case
         let setSkip = setTrainingConfigSkipIncomplete shouldFilterIncomplete
             setTimestamp = setTrainingConfigTimestamp optionalUTCTime
 
-        ~predictors@(basePred:_) <- getPredictorConfigs >>= mapM loadPredictor
+        predictor <- getPredictorConfig >>= loadPredictor
 
         setPlatformId <- setTrainingConfigPlatform <$> getPlatformId
-        setDatasets <- setTrainingConfigDatasets <$> getDatasetIds
-        evalConfig <- setTimestamp . setSkip . setPlatformId . setDatasets <$>
-            getModelTrainingConfig (rawPredictorId basePred)
+        datasets <- fromMaybe S.empty <$> getDatasetIds
+        evalConfig <- getStepInfoConfig . setTimestamp . setSkip . setPlatformId <$>
+            getModelTrainingConfig (rawPredictorId predictor)
 
-        evaluateModel predictors evaluateConfig evalConfig
+        evaluateModel [predictor] evaluateConfig evalConfig datasets
+
+    EvaluatePredictors
+      { getPredictorConfigs
+      , evaluateConfig
+      , getStepConfig
+      , getDatasets
+      } -> do
+        predictorCfgs@(pCfg:_) <- getPredictorConfigs
+        algoId <- getPredictorConfigAlgorithmId pCfg
+
+        predictors <- forM predictorCfgs $ \predCfg -> do
+            algoId' <- getPredictorConfigAlgorithmId predCfg
+            unless (algoId == algoId') $
+                logThrowM . GenericInvariantViolation $ mconcat
+                    [ "Found predictors for algorithm #", showSqlKey algoId
+                    , " and #", showSqlKey algoId'
+                    ]
+
+            loadPredictor predCfg
+
+        stpConfig <- getStepConfig algoId
+        datasets <- getDatasets
+        evaluateModel predictors evaluateConfig stpConfig datasets
 
     PredictionResults{getPredictionConfig} -> do
         getPredictionConfig >>= outputPredictorResults

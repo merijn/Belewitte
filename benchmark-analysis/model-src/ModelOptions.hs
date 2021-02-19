@@ -24,6 +24,7 @@ import Data.IntMap (IntMap)
 import qualified Data.IntMap.Strict as IM
 import Data.Map (Map)
 import qualified Data.Map as M
+import Data.Maybe (fromMaybe)
 import Data.Monoid (Any(..))
 import Data.Set (Set)
 import qualified Data.Set as S
@@ -73,11 +74,17 @@ data ModelCommand
       }
     | EvaluatePredictor
       { getPlatformId :: SqlM (Key Platform)
-      , getPredictorConfigs :: SqlM [PredictorConfig]
+      , getPredictorConfig :: SqlM PredictorConfig
       , shouldFilterIncomplete :: Bool
       , evaluateConfig :: EvaluateReport
       , getDatasetIds :: SqlM (Maybe (Set (Key Dataset)))
       , optionalUTCTime :: Maybe UTCTime
+      }
+    | EvaluatePredictors
+      { getPredictorConfigs :: SqlM [PredictorConfig]
+      , evaluateConfig :: EvaluateReport
+      , getStepConfig :: Key Algorithm -> SqlM StepInfoConfig
+      , getDatasets :: SqlM (Set (Key Dataset))
       }
     | PredictionResults
       { getPredictionConfig :: SqlM PredictionConfig }
@@ -157,10 +164,23 @@ commands = CommandRoot
             \against performance of other implementations"
         }
         $ EvaluatePredictor
-            <$> platformIdParser <*> predictorConfigsParser
+            <$> platformIdParser <*> predictorConfigParser
             <*> filterIncomplete <*> evaluateParser
             <*> setParser datasetIdParser
             <*> optional utcTimeParser
+    , SingleCommand CommandInfo
+        { commandName = "multi-evaluate"
+        , commandHeaderDesc = "evaluate performance of multiple models"
+        , commandDesc =
+            "Evaluate performance of multiplate BDT models on full dataset \
+            \and compare against performance of other implementations"
+        }
+        $ do
+            EvaluatePredictors
+            <$> predictorConfigsParser
+            <*> evaluateParser
+            <*> (stepInfoConfig <*> allowNewerParser)
+            <*> (fmap (fromMaybe S.empty) <$> setParser datasetIdParser)
     , SingleCommand CommandInfo
         { commandName = "show"
         , commandHeaderDesc = "show predictions for every step of a variant"
@@ -260,7 +280,8 @@ modelQueryMap = M.fromList
             getVariantId <- variantIdParser
             pure $ do
                 algoId <- getAlgoId
-                (,) <$> getStepInfoConfig algoId <*> getVariantId algoId
+                (,) <$> getStepInfoConfig AllNewer algoId
+                    <*> getVariantId algoId
 
     , nameDebugQuery "implRankQuery" $
         implRankQuery <$> fullStepInfoConfig <*> columnParser <*> rankParser
@@ -269,8 +290,9 @@ modelQueryMap = M.fromList
     fullStepInfoConfig :: Compose Parser SqlM StepInfoConfig
     fullStepInfoConfig = Compose $ do
         getAlgoId <- algorithmIdParser
+        allowNewer <- allowNewerParser
         getStepInfoConfig <- stepInfoConfig
-        pure $ getAlgoId >>= getStepInfoConfig
+        pure $ getAlgoId >>= getStepInfoConfig allowNewer
 
     queryModeParser :: Parser QueryMode
     queryModeParser =
@@ -415,15 +437,14 @@ trainSeedParser = option auto . mconcat $
     [ metavar "N", short 's', long "seed", value 42, showDefault
     , help "Seed for training set randomisation" ]
 
-stepInfoConfig :: Parser (Key Algorithm -> SqlM StepInfoConfig)
+stepInfoConfig :: Parser (AllowNewer -> Key Algorithm -> SqlM StepInfoConfig)
 stepInfoConfig = do
     getPlatformId <- platformIdParser
     getCommitId <- commitIdParser
     getUtcTime <- requiredUtcTimeParser
-    allowNewer <- allowNewerParser
     shouldFilter <- filterIncomplete
 
-    pure $ \algoId ->
+    pure $ \allowNewer algoId ->
         StepInfoConfig algoId
             <$> getPlatformId <*> getCommitId algoId <*> pure shouldFilter
             <*> getUtcTime <*> pure allowNewer
@@ -434,13 +455,14 @@ predictionConfig = do
     getStepInfoConfig <- stepInfoConfig
     getVariantId <- variantIdParser
     showProps <- showPropFlag
+    allowNewer <- allowNewerParser
 
     pure $ do
         predictorCfg <- getPredConfig
         algoId <- getPredictorConfigAlgorithmId predictorCfg
 
         PredictionConfig predictorCfg
-            <$> getStepInfoConfig algoId <*> getVariantId algoId
+            <$> getStepInfoConfig allowNewer algoId <*> getVariantId algoId
             <*> pure showProps
   where
     showPropFlag = switch $ mconcat
@@ -462,7 +484,7 @@ trainStepConfig = do
 
     pure $ \queryMode -> do
         algoId <- getAlgoId
-        stepConfig <- getStepInfoConfig algoId
+        stepConfig <- getStepInfoConfig NoNewer algoId
         datasets <- getDatasets
 
         stepProps <- S.union

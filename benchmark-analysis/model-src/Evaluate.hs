@@ -33,6 +33,7 @@ import Data.Monoid (Any(..))
 import Data.Ord (comparing)
 import Data.Semigroup (Max, getMax)
 import qualified Data.Semigroup as Semigroup
+import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.String.Interpolate.IsString as Interpolate
 import qualified Data.Text as T
@@ -49,8 +50,6 @@ import StepAggregate (VariantAggregate(..), stepAggregator)
 import Query.Step
 import Query.Variant
 import qualified Sql
-import Train
-import TrainConfig (getStepInfoConfig)
 import Utils.ImplTiming
 import Utils.Pair (Pair(..), mapFirst, mergePair)
 
@@ -230,8 +229,13 @@ data Report a = Report
      , reportOutput :: ReportOutput
      }
 
-evaluateModel :: [RawPredictor] -> EvaluateReport -> TrainingConfig -> SqlM ()
-evaluateModel predictors reportCfg@Report{..} trainConfig = do
+evaluateModel
+    :: [RawPredictor]
+    -> EvaluateReport
+    -> StepInfoConfig
+    -> Set (Key Dataset)
+    -> SqlM ()
+evaluateModel predictors reportCfg stepCfg datasets = do
   renderRegionOutput $ do
     impls <- reportImplFilter <$> Sql.queryImplementations stepInfoAlgorithm
     predictorNames <- mapM (toPredictorName . rawPredictorId) predictors
@@ -248,17 +252,15 @@ evaluateModel predictors reportCfg@Report{..} trainConfig = do
 
     reportTotalStatistics reportCfg implMaps stats
   where
+    Report{..} = reportCfg
+    StepInfoConfig{..} = stepCfg
+
     variantConduit :: ConduitT a (Key Variant) (Region SqlM) ()
-    variantConduit = case mDatasets of
-        Just datasets | not (S.null datasets) -> C.yieldMany datasets
+    variantConduit
+        | not (S.null datasets) = C.yieldMany datasets
             .> streamQuery . datasetVariantQuery stepInfoAlgorithm
 
-        _ -> streamQuery (algorithmVariantQuery stepInfoAlgorithm)
-
-    stepCfg@StepInfoConfig{..} = getStepInfoConfig trainConfig
-    mDatasets = case trainConfig of
-        LegacyTrainConfig LegacyConfig{..} -> legacyDatasets
-        TrainConfig TrainStepConfig{..} -> trainStepDatasets
+        | otherwise = streamQuery (algorithmVariantQuery stepInfoAlgorithm)
 
     addBestNonSwitching
         :: IntMap Implementation -> VariantAggregate -> VariantAggregate
