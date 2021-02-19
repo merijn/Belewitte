@@ -11,6 +11,7 @@ import qualified Data.Conduit.Combinators as C
 import Data.List (sortBy)
 import qualified Data.Map as M
 import Data.Maybe (fromMaybe)
+import Data.Monoid (Endo(..))
 import Data.Ord (comparing)
 import qualified Data.Set as S
 import qualified Data.Text as T
@@ -151,14 +152,17 @@ main = runCommand commands $ \case
       , getDatasetIds
       , optionalUTCTime
       } -> do
-        let setSkip = setTrainingConfigSkipIncomplete shouldFilterIncomplete
-            setTimestamp = setTrainingConfigTimestamp optionalUTCTime
-
         predictor <- getPredictorConfig >>= loadPredictor
-
         setPlatformId <- setTrainingConfigPlatform <$> getPlatformId
+
+        let updateConfig = appEndo $ mconcat
+                [ setTrainingConfigSkipIncomplete shouldFilterIncomplete
+                , setTrainingConfigTimestamp optionalUTCTime
+                , setPlatformId
+                ]
+
         datasets <- fromMaybe S.empty <$> getDatasetIds
-        evalConfig <- getStepInfoConfig . setTimestamp . setSkip . setPlatformId <$>
+        evalConfig <- getStepInfoConfig . updateConfig <$>
             getModelTrainingConfig (rawPredictorId predictor)
 
         evaluateModel [predictor] evaluateConfig evalConfig datasets

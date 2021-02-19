@@ -9,6 +9,7 @@ import Data.Bifunctor (first)
 import Data.Conduit (ConduitT)
 import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
+import Data.Monoid (Endo(..))
 import Data.Set (Set)
 import qualified Data.Text as T
 import Data.Vector.Storable (Vector)
@@ -54,12 +55,13 @@ validateModel predictor config mTime mPlatform mDatasets = renderOutput $
             C.yield "\n"
             computeResults "total" $ reduceInfo <$> total
         _ -> do
-            let setPlatform = maybe id setTrainingConfigPlatform mPlatform
-                setDatasets = setTrainingConfigDatasets mDatasets
-                setTimestamp = setTrainingConfigTimestamp mTime
+            let updateConfig = appEndo $ mconcat
+                    [ foldMap setTrainingConfigPlatform mPlatform
+                    , setTrainingConfigDatasets mDatasets
+                    , setTrainingConfigTimestamp mTime
+                    ]
 
-                newConfig = setTimestamp . setPlatform . setDatasets $ config
-                comparisonQuery = getTotalQuery newConfig
+                comparisonQuery = getTotalQuery $ updateConfig config
 
             computeResults "comparison" $ reduceInfo <$> comparisonQuery
   where

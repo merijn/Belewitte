@@ -1,3 +1,4 @@
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE RecordWildCards #-}
 module TrainConfig
@@ -5,7 +6,6 @@ module TrainConfig
     , TrainingConfig(..)
     , getModelTrainingConfig
     , getStepInfoConfig
-    , mapStepInfoConfig
     , setTrainingConfigDatasets
     , setTrainingConfigPlatform
     , setTrainingConfigSkipIncomplete
@@ -14,6 +14,7 @@ module TrainConfig
 
 import Data.Conduit ((.|))
 import qualified Data.Conduit.Combinators as C
+import Data.Monoid (Endo(..))
 import Data.Set (Set)
 import qualified Data.Set as S
 
@@ -43,15 +44,15 @@ getStepInfoConfig trainConfig = case trainConfig of
 
 mapStepInfoConfig
     :: (StepInfoConfig -> StepInfoConfig) -> TrainingConfig -> TrainingConfig
-mapStepInfoConfig f trainConfig = case trainConfig of
+mapStepInfoConfig f = \case
     TrainConfig cfg -> TrainConfig cfg
         {trainStepInfoConfig = f (trainStepInfoConfig cfg)}
     LegacyTrainConfig cfg -> LegacyTrainConfig cfg
         {legacyStepInfoConfig = f (legacyStepInfoConfig cfg)}
 
 setTrainingConfigDatasets
-    :: Maybe (Set (Key Dataset)) -> TrainingConfig -> TrainingConfig
-setTrainingConfigDatasets datasets trainConfig = case trainConfig of
+    :: Maybe (Set (Key Dataset)) -> Endo TrainingConfig
+setTrainingConfigDatasets datasets = Endo $ \case
     TrainConfig cfg@TrainStepConfig{trainStepDatasets} ->
         TrainConfig cfg{ trainStepDatasets = updateDatasets trainStepDatasets }
 
@@ -62,19 +63,20 @@ setTrainingConfigDatasets datasets trainConfig = case trainConfig of
         | maybe True S.null datasets = id
         | otherwise = const datasets
 
-setTrainingConfigPlatform :: Key Platform -> TrainingConfig -> TrainingConfig
-setTrainingConfigPlatform platformId = mapStepInfoConfig $ \cfg ->
+setTrainingConfigPlatform :: Key Platform -> Endo TrainingConfig
+setTrainingConfigPlatform platformId = Endo . mapStepInfoConfig $ \cfg ->
     cfg{ stepInfoPlatform = platformId }
 
-setTrainingConfigSkipIncomplete :: Bool -> TrainingConfig -> TrainingConfig
-setTrainingConfigSkipIncomplete val trainConfig = case trainConfig of
-    LegacyTrainConfig{} -> trainConfig
-    TrainConfig{} -> mapStepInfoConfig go trainConfig
+setTrainingConfigSkipIncomplete :: Bool -> Endo TrainingConfig
+setTrainingConfigSkipIncomplete val = Endo $ \trainConfig ->
+    case trainConfig of
+        LegacyTrainConfig{} -> trainConfig
+        TrainConfig{} -> mapStepInfoConfig go trainConfig
   where
     go cfg = cfg{ stepInfoFilterIncomplete = val }
 
-setTrainingConfigTimestamp :: Maybe UTCTime -> TrainingConfig -> TrainingConfig
-setTrainingConfigTimestamp val trainConfig = case trainConfig of
+setTrainingConfigTimestamp :: Maybe UTCTime -> Endo TrainingConfig
+setTrainingConfigTimestamp val = Endo $ \trainConfig -> case trainConfig of
     LegacyTrainConfig{} -> trainConfig
     TrainConfig{} -> mapStepInfoConfig go trainConfig
   where
