@@ -391,6 +391,9 @@ instance MonadResource m => MonadSql (SqlT m) where
 
     getConnWithoutTransaction = SqlT $ asks Sqlite.unsafeAcquireSqlConnFromPool
 
+instance (MonadLogger m, MonadThrow m) => MonadFail (SqlT m) where
+    fail = logThrowM . PatternFailed . T.pack
+
 instance MonadTrans SqlT where
     lift = SqlT . lift
 
