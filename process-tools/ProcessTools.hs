@@ -138,7 +138,7 @@ runProcess exe args = do
     (ec, ()) <- runProcessCreation $ do
         withProcess process $ \ClosedStream stdout -> do
             info <- liftIO $ T.hGetContents stdout
-            unless (T.null info) $ logInfoN info
+            unless (T.null (T.stripStart info)) $ logInfoN info
     return ec
   where
     process = Process.proc exe args
