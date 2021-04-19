@@ -5,7 +5,7 @@ BOOST_ROOT:=$(DOWNLOAD)/$(BOOST_NAME)
 BOOST_PREREQ:=$(PREFIX)/include/boost/
 
 BOOST_CXX_FLAGS:=-I$(PREFIX)/include -isystem$(PREFIX)/include
-BOOST_LD_FLAGS:=$(if $(wildcard $(PREFIX)/lib),-L$(PREFIX)/lib) \
+BOOST_LD_FLAGS=$(if $(wildcard $(PREFIX)/lib),-L$(PREFIX)/lib) \
     $(if $(wildcard $(PREFIX)/lib64),-L$(PREFIX)/lib64)
 
 ifdef CXX_IS_CLANG
