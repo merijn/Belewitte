@@ -124,7 +124,7 @@ lookup(const string fileName, const bool reverse, int argc, char **argv)
 }
 
 static void
-convertMatrixMarket(const string graphFile)
+convertMatrixMarket(const string graphFile, bool nonVoid = false)
 {
     auto filename = path(graphFile).filename().replace_extension(".mtx");
     Graph<uint64_t,uint64_t> graph(graphFile);
@@ -136,7 +136,9 @@ convertMatrixMarket(const string graphFile)
 
     for (auto v : graph.vertices) {
         for (auto &e : v.edges) {
-            mtxFile << v.id + 1 << "\t" << e + 1 << endl;
+            mtxFile << v.id + 1 << "\t" << e + 1;
+            if (nonVoid) mtxFile << "\t1.0";
+            mtxFile << endl;
         }
     }
 }
@@ -212,6 +214,11 @@ int main(int argc, char **argv)
         for (int i = 1; i < argc; i++) {
             cout << "Converting to MatrixMarket: " << argv[i] << endl;
             convertMatrixMarket(argv[i]);
+        }
+    } else if (argc >= 2 && !strcmp(argv[0], "mtx-float")) {
+        for (int i = 1; i < argc; i++) {
+            cout << "Converting to MatrixMarket: " << argv[i] << endl;
+            convertMatrixMarket(argv[i], true);
         }
     } else if (argc >= 2 && !strcmp(argv[0], "edge-list")) {
         for (int i = 1; i < argc; i++) {
