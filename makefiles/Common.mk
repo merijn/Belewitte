@@ -71,7 +71,7 @@ report-cxx:
 missing-cuda:
 	$(PRINTF) "nvcc not found, skipping GPU kernel libraries\n"
 
-COMMON_CXXFLAGS=-MMD -MP -std=c++17 -g -I$(BASE) \
+COMMON_CXXFLAGS=-MMD -MP -Wall -std=c++17 -g -I$(BASE) \
     $(if $(CUDA_PATH),-isystem$(CUDA_PATH)/include/) \
     $(if $(TBB_INCLUDE_PATH),-isystem$(TBB_INCLUDE_PATH)/)
 
