@@ -7,7 +7,7 @@ import locale
 
 from collections import OrderedDict
 from fractions import Fraction
-from math import isinf
+from math import isinf, inf
 import itertools
 
 import numpy as np
@@ -222,9 +222,14 @@ elif len(argv) > 7:
 
 _, outputPDF, xAxisName, normalise, slideFormat, rotate, numberedGroups = map(isBool, argv)
 
+def convert_values(nColumns, values):
+    padColumns = [inf] * max(0, nColumns - len(values))
+    return [float(v) for v in values] + padColumns
+
 with Plot(outputPDF, slideFormat) as ax:
     lines = stdin.readlines()
     columns = lines[0].strip().split(':')
+    numColumns = len(columns)
     lines = [[s.strip() for s in line.split(':')] for line in lines[1:]]
-    groups = [(labelise(k), [float(v) for v in vals.split()]) for k, vals in lines]
+    groups = [(labelise(k), convert_values(numColumns, vals.split())) for k, vals in lines]
     plotBars(ax, xAxisName, columns, groups, normalise, rotate, numberedGroups)
