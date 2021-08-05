@@ -13,6 +13,7 @@ module Parsers
 
 import Control.Applicative ((<|>))
 import Control.Monad.Catch (MonadThrow)
+import Data.Int (Int64)
 import Data.Text (Text)
 import Data.Attoparsec.Text
 import Data.Conduit (ConduitT, (.|))
@@ -40,7 +41,7 @@ data Property
     | Prediction Int Int
     deriving (Show, Eq)
 
-data ExternalResult = ExternalResult Text Text Timing
+data ExternalResult = ExternalResult Text Int64 Timing
     deriving (Show, Eq)
 
 property :: Parser Property
@@ -83,8 +84,19 @@ timing = do
     stddev <- double <* endOfLine
     return Timing{..}
 
+externalTiming :: Parser Timing
+externalTiming = do
+    avgTime <- double <* endOfLine
+    return Timing
+      { name = "computation"
+      , minTime = 0
+      , avgTime = avgTime
+      , maxTime = 0
+      , stddev = 0
+      }
+
 externalResult :: Parser ExternalResult
 externalResult = do
     name <- takeWhile1 (/=':') <* char ':'
-    variant <- takeWhile1 (/=':') <* char ':'
-    ExternalResult name variant <$> timing
+    dataset <- decimal <* char ':'
+    ExternalResult name dataset <$> externalTiming

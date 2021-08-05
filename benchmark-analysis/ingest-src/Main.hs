@@ -182,45 +182,37 @@ importResults = do
     Entity platformId _ <- getInteractive platformInput "Platform Name"
     Entity algoId _ <- getInteractive algoInput "Algorithm Name"
     Entity implId _ <- getInteractive (implInput algoId) "Implementation Name"
+    Entity varCfgId _ <- getInteractive (varCfgInput algoId) "Variant Config Name"
 
     filepath <- getInteractive filepathInput "Result File"
 
     lift . SqlTrans.runTransaction . runConduit $
         C.sourceFile filepath
         .| C.decode C.utf8
-        .| C.map (T.replace "," "")
         .| conduitParse externalResult
-        .| C.mapM_ (insertResult platformId algoId implId)
+        .| C.mapM_ (insertResult platformId algoId implId varCfgId)
   where
     platformInput = sqlInput PlatformName UniqPlatform
     algoInput = sqlInput AlgorithmName UniqAlgorithm
     implInput algoId = sqlInput ExternalImplName (UniqExternalImpl algoId)
+    varCfgInput algoId = sqlInput VariantConfigName (UniqVariantConfigName algoId)
 
     insertResult
         :: (MonadLogger m, MonadSql m, MonadThrow m)
         => Key Platform
         -> Key Algorithm
         -> Key ExternalImpl
+        -> Key VariantConfig
         -> ExternalResult
         -> Transaction m ()
-    insertResult platId algoId implId (ExternalResult gname varName Timing{..}) = do
-        graphId <- SqlTrans.selectKeysList [GraphName ==. gname] [] >>= \case
-            [graphId] -> return graphId
-            [] -> logThrowM . PatternFailed $
-                "No graphs found for name \"" <> gname <> "\""
-            _ -> logThrowM . PatternFailed $
-                "More than one graph found for \"" <> gname <> "\""
-
-        let uniqVariantConfig = UniqVariantConfigName algoId varName
-
-        varCfgId <- SqlTrans.getBy uniqVariantConfig >>= \case
+    insertResult platId algoId implId varCfgId (ExternalResult gname dataset Timing{..}) = do
+        datasetId <- SqlTrans.validateKey dataset
+        graphId <- SqlTrans.getBy (UniqGraphName gname datasetId) >>= \case
             Just (Entity key _) -> return key
             Nothing -> logThrowM . PatternFailed $
-                "No variant config found with name \"" <> varName <> "\""
+                "Graph not found for specified dataset"
 
-        let uniqVariant = UniqVariant graphId varCfgId
-
-        varId <- SqlTrans.getBy uniqVariant >>= \case
+        varId <- SqlTrans.getBy (UniqVariant graphId varCfgId) >>= \case
             Just (Entity key _) -> return key
             Nothing -> logThrowM . PatternFailed $
                 "Variant not found for specified graph"
