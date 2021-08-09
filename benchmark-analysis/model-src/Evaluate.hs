@@ -428,7 +428,10 @@ latexCaption label = [Interpolate.i|\\caption{\\glsdesc*{#{label}}}\\label{#{lab
 
 latexTableHeader :: Text -> Splittable -> Text
 latexTableHeader label splittable = case splittable of
-    Splittable -> [Interpolate.i|\\begin{longtable}{#{columnLayout}}
+    Splittable -> [Interpolate.i|\\begingroup
+\\setlength{\\LTleft}{-20cm plus -1fill}
+\\setlength{\\LTright}{\\LTleft}
+\\begin{longtable}{#{columnLayout}}
 \\toprule
 #{columnHeader}
 \\endfirsthead%
@@ -457,7 +460,7 @@ latexTableHeader label splittable = case splittable of
 ${>} 20 {\\times}$ &  Worst\\\\\\midrule|]
 
 latexTableFooter :: Text -> Splittable -> Text
-latexTableFooter _ Splittable = "\\end{longtable}\n"
+latexTableFooter _ Splittable = "\\end{longtable}\n\\endgroup\n"
 latexTableFooter label Fixed = [Interpolate.i|\\bottomrule
 \\end{tabular}%
 #{latexCaption label}
