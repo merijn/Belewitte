@@ -46,7 +46,7 @@ module Core
     , redirectLogging
     , runSqlMWithOptions
     , showText
-    , stderrTerminalWidth
+    , terminalWidth
     , withTime
     ) where
 
@@ -73,6 +73,7 @@ import GHC.Conc.Sync
     (getNumProcessors, setNumCapabilities, setUncaughtExceptionHandler)
 import System.Clock (Clock(Monotonic), diffTimeSpec, getTime, toNanoSecs)
 import System.Console.Terminal.Size (hSize, width)
+import System.IO (Handle)
 import qualified System.IO as System
 import System.Log.FastLogger (fromLogStr)
 
@@ -200,10 +201,10 @@ instance MonadExplain m => MonadExplain (ConduitT a b m) where
     shouldExplainQuery = lift . shouldExplainQuery
     shouldLogQuery = lift . shouldLogQuery
 
-stderrTerminalWidth :: IO (Maybe Int)
-stderrTerminalWidth = runMaybeT $ do
-    guard =<< liftIO (System.hIsTerminalDevice System.stderr)
-    width <$> MaybeT (hSize System.stderr)
+terminalWidth :: Handle -> IO (Maybe Int)
+terminalWidth hnd = runMaybeT $ do
+    guard =<< liftIO (System.hIsTerminalDevice hnd)
+    width <$> MaybeT (hSize hnd)
 
 topLevelHandler :: SomeException -> IO ()
 topLevelHandler exc
@@ -211,7 +212,7 @@ topLevelHandler exc
     = return ()
 
     | otherwise = do
-        pageWidth <- terminalToPageWidth <$> stderrTerminalWidth
+        pageWidth <- terminalToPageWidth <$> terminalWidth System.stderr
         renderError pageWidth $ Pretty.vsep
             [ Pretty.reflow "Encountered an unexpected exception!"
             , "", pretty . T.pack $ displayException exc, ""

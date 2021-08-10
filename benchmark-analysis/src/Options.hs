@@ -74,7 +74,7 @@ runCommandRoot :: forall a . CommandRoot a -> (a -> SqlM ()) -> String -> IO ()
 runCommandRoot CommandRoot{..} work progName = do
     System.hFlush System.stdout >> System.hFlush System.stderr
 
-    cols <- fromMaybe 80 <$> stderrTerminalWidth
+    cols <- fromMaybe 80 <$> terminalWidth System.stderr
 
     let parsePrefs = prefs $ columns cols
 
