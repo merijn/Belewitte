@@ -29,11 +29,17 @@ reflowWithMaxWidth maxWidth = foldMap wordToDoc . words
       where
         maybeLine c = mIf (c + length s >= maxWidth) Help.hardline
 
-data CommandInfo = CommandInfo
-    { commandName :: String
-    , commandHeaderDesc :: String
-    , commandDesc :: String
-    }
+data CommandInfo
+    = CommandInfo
+      { commandName :: String
+      , commandHeaderDesc :: String
+      , commandDesc :: String
+      }
+    | CommandInfoDoc
+      { commandName :: String
+      , commandHeaderDesc :: String
+      , commandDocDesc :: Doc
+      }
 
 pattern HiddenCommand :: CommandInfo -> Parser a -> Command a
 pattern HiddenCommand info parser = Hidden (Command info (Single parser))
@@ -81,25 +87,17 @@ buildCommand cmd = (parser, infoMod)
 
 unfoldCommand :: String -> Command a -> (String, Parser a, InfoMod b)
 unfoldCommand prefix (Hidden cmd) = unfoldCommand prefix cmd
-unfoldCommand prefix (Command CommandInfo{..} cmdType) =
-    (commandName, parser, infoMod)
+unfoldCommand prefix (Command cmdInfo cmdType) =
+    (commandInfoName, parser, infoMod)
   where
     groupPrefix :: String
-    groupPrefix = prefix ++ commandName ++ " "
-
-    justUnless :: Bool -> v -> Maybe v
-    justUnless b v
-        | not b = Just v
-        | otherwise = Nothing
+    groupPrefix = prefix ++ commandInfoName ++ " "
 
     infoMod :: InfoMod a
     infoMod = mconcat
         [ fullDesc
-        , header $ prefix ++ commandName ++ " - " ++ commandHeaderDesc
-        , progDescDoc . justUnless (null commandDesc) $ mconcat
-            [ mIf (null prefix) Help.linebreak
-            , reflowWithMaxWidth 80 commandDesc
-            ]
+        , header $ prefix ++ commandInfoName ++ " - " ++ commandInfoHeaderDesc
+        , progDescDoc commandInfoDesc
         ]
 
     parser = case cmdType of
@@ -107,6 +105,23 @@ unfoldCommand prefix (Command CommandInfo{..} cmdType) =
         WithSubGroup p cmds -> p <|> groupToParser cmds groupPrefix
         WithFlags p cmds -> groupToParser cmds groupPrefix <*> p
         Group cmds -> groupToParser cmds groupPrefix
+
+    normaliseDesc :: String -> Maybe Doc
+    normaliseDesc desc
+        | null desc = Nothing
+        | otherwise = Just $ mconcat
+            [ mIf (null prefix) Help.linebreak
+            , reflowWithMaxWidth 80 desc
+            ]
+
+    (commandInfoName, commandInfoHeaderDesc, commandInfoDesc) =
+      case cmdInfo of
+        CommandInfo{..} ->
+            (commandName, commandHeaderDesc, normaliseDesc commandDesc)
+
+        CommandInfoDoc{..} ->
+            (commandName, commandHeaderDesc, Just commandDocDesc)
+
 
 groupToParser :: forall a . [Command a] -> String -> Parser a
 groupToParser cmds prefix = groupParser
