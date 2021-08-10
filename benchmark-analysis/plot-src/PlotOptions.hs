@@ -152,18 +152,21 @@ commands = CommandRoot
     [ fmap PlotBar <$> CommandGroup CommandInfo
         { commandName = "bar"
         , commandHeaderDesc = "bar plots"
-        , commandDesc = ""
+        , commandDesc = "Generates a bar plot of the specified runs/graphs."
         }
         [ SingleCommand CommandInfo
             { commandName = "levels"
             , commandHeaderDesc = "plot level times for a graph"
-            , commandDesc = ""
+            , commandDesc =
+                "Generate a bar plot of the time per BFS level."
             }
             $ barPlotParser <*> pure Levels
         , SingleCommand CommandInfo
             { commandName = "totals"
             , commandHeaderDesc = "plot total times for a set of graphs"
-            , commandDesc = ""
+            , commandDesc =
+                "Generate a bar plot of the total implementation time for a \
+                \set of graphs."
             }
             $ barPlotParser <*> (Totals <$> normaliseFlag
                                         <*> useGraphIdFlag
@@ -171,8 +174,10 @@ commands = CommandRoot
         , SingleCommand CommandInfo
             { commandName = "vs-optimal"
             , commandHeaderDesc =
-            "plot total times for a set of graphs against the optimal"
-            , commandDesc = ""
+                "plot total times for a set of graphs against the optimal"
+            , commandDesc =
+                "Generate a bar plot of the total implementation time \
+                \compared to optimal for a set of graphs."
             }
             $ barPlotParser <*>
                 (VsOptimal <$> normaliseFlag
@@ -182,24 +187,31 @@ commands = CommandRoot
     , fmap PlotHeatmap <$> CommandGroup CommandInfo
         { commandName = "heatmap"
         , commandHeaderDesc = "heatmap plots"
-        , commandDesc = ""
+        , commandDesc =
+            "Generate a heatmap of the runtimes per variant/implementation."
         }
         [ SingleCommand CommandInfo
             { commandName = "total"
             , commandHeaderDesc = "plot heatmap for all variants"
-            , commandDesc = ""
+            , commandDesc =
+                "Generate a heatmap of the implementation runtimes for all \
+                \variants."
             }
             $ totalsHeatmapParser
         , SingleCommand CommandInfo
             { commandName = "levels"
             , commandHeaderDesc = "plot heatmap for a variant"
-            , commandDesc = ""
+            , commandDesc =
+                "Generate a heatmap of the implementation runtimes for each \
+                \level of a specfic variant."
             }
             $ levelsHeatmapParser
         , SingleCommand CommandInfo
             { commandName = "predict"
             , commandHeaderDesc = "plot heatmap for a predictor"
-            , commandDesc = ""
+            , commandDesc =
+                "Generate a heatmap of the implementation runtimes for all \
+                \variants, including predicted switching runtimes."
             }
             $ predictHeatmapParser
         ]

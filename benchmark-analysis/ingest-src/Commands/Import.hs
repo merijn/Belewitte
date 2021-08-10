@@ -20,14 +20,17 @@ commands = CommandGroup CommandInfo
   , commandDesc = ""
   } [ SingleCommand CommandInfo
         { commandName = "external-impls"
-        , commandHeaderDesc = ""
-        , commandDesc = ""
+        , commandHeaderDesc = "Import external implementations"
+        , commandDesc =
+            "Import external implementations from an existing database."
         }
         $ importAll (Proxy :: Proxy ExternalImpl) <$> importDatabase
     , SingleCommand CommandInfo
         { commandName = "external-timers"
-        , commandHeaderDesc = ""
-        , commandDesc = ""
+        , commandHeaderDesc = "Import external implementation timer data"
+        , commandDesc =
+            "Import timer data of external implementations from an existing \
+            \database."
         }
         $ importAll (Proxy :: Proxy ExternalTimer) <$> importDatabase
     ]
