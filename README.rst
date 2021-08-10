@@ -53,6 +53,8 @@ OpenCL
 SLURM Workload Manager
     https://slurm.schedmd.com/documentation.html
 
+    Optional, can be replaced with custom run commands.
+
 Python 3.6 or 3.7
     The python 3.6/3.7 executable is expected to be in the user's ``PATH``
 
@@ -146,9 +148,20 @@ Provides 3 tools for managing GPU experiments:
     * Registering input graphs/datasets
     * Importing results from external tools/experiments
 
-    Also takes care of running the specified experiments, this requires SLURM's
-    ``srun`` to be on the user's path and on having compiled the `Kernel
-    Runner`_ successfully.
+    Also takes care of running the specified experiments, this requires that
+    the `Kernel Runner`_ has been compiled successfully and that SLURM's
+    ``srun`` is on the user's path.
+
+    Optionally, the use of SLURM can be replaced with other tools. To do this,
+    a `run-command` should be configured using `Ingest`. Runs are invoked as
+    follows::
+
+        <run-command> <platform> -- kernel-runner <runner args...>
+
+    Here, the `run-command` is either a built-in `srun` invocation, or the
+    command configured by the user using `Ingest`. The `platform` is either the
+    flags specified for the platform (if any) and otherwise the name specified
+    during the registration with `Ingest`.
 
 ``Model``
     Used to train and evaluate models using stored experimental results.

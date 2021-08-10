@@ -6,6 +6,7 @@ module Commands.Set (commands) where
 import Control.Monad (guard)
 import qualified Control.Monad.Catch as Except
 import qualified Data.Text as T
+import qualified Options.Applicative.Help.Pretty as Pretty
 import System.Exit (exitFailure)
 
 import Core
@@ -23,12 +24,24 @@ commands = CommandGroup CommandInfo
     , commandHeaderDesc = "set values in the database"
     , commandDesc = "Set or override values in the database"
     }
-    [ SingleCommand CommandInfo
+    [ SingleCommand CommandInfoDoc
         { commandName = "run-command"
         , commandHeaderDesc = "set alternate job running command"
-        , commandDesc =
-            "Replace the use of SLURM's srun command with an alternate job \
-            \runner."
+        , commandDocDesc = mconcat
+            [ Pretty.text
+                "Replace the use of SLURM's srun command with an alternate \
+                \job runner. Runs are invoked as follows:"
+            , Pretty.hardline, Pretty.hardline
+            , Pretty.indent 4 $ Pretty.text
+                "<run-command> <platform> -- kernel-runner <runner args...>"
+            , Pretty.hardline, Pretty.hardline
+            , Pretty.text
+                "Here, the run-command is either a built-in srun invocation, \
+                \or the command configured by the user using Ingest. The \
+                \platform is either the flags specified for the platform (if \
+                \any) and otherwise the name specified during the \
+                \registration with Ingest."
+            ]
         }
         $ setRunCommand <$> forceOpt <*> strArgument runCmd
     , SingleCommand CommandInfo
