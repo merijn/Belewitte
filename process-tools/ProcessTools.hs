@@ -25,7 +25,7 @@ import Control.Monad.Catch
     (Exception(..), MonadMask, MonadThrow, SomeException(..))
 import qualified Control.Monad.Catch as Except
 import Control.Monad.IO.Class (MonadIO(liftIO))
-import Control.Monad.Logger (MonadLogger, logErrorN, logInfoN, logWarnN)
+import Control.Monad.Logger (MonadLogger, logErrorNS, logInfoNS, logWarnNS)
 import Control.Monad.Trans (MonadTrans(lift))
 import Control.Monad.Trans.Cont (ContT(..), mapContT)
 import Control.Monad.Reader (ReaderT, runReaderT, local, ask)
@@ -102,12 +102,11 @@ withProcess cp f = ProcessCreation . lift $
         free
         (r, err) <- work stdin stdout stderr `Except.onException` terminate sph
         ec <- Process.waitForStreamingProcess sph
-        ProcResult cp ec r <$ case ec of
-            ExitSuccess -> logStderrOutput err
-            _ -> logErrorN err
+        ProcResult cp ec r <$ logStderrOutput err
   where
     logStderrOutput :: MonadLogger m => Text -> m ()
-    logStderrOutput t = unless (T.null (T.strip t)) $ logWarnN t
+    logStderrOutput t = unless (T.null (T.strip t)) $
+        logWarnNS "ProcessTools#logStderrOutput" t
 
     alloc = Process.streamingProcess cp
     cleanup (_, _, _, sph) = Process.closeStreamingProcessHandle sph
@@ -121,7 +120,7 @@ withProcess cp f = ProcessCreation . lift $
         => Handle -> SomeException -> m a
     logAndRethrow stderr (SomeException exc) = do
         err <- liftIO $ T.hGetContents stderr
-        logErrorN err
+        logErrorNS "ProcessTools#logAndRethrow" err
         Except.throwM exc
 
     work stdin stdout stderr = Except.handle (logAndRethrow stderr) $
@@ -138,7 +137,8 @@ runProcess exe args = do
     (ec, ()) <- runProcessCreation $ do
         withProcess process $ \ClosedStream stdout -> do
             info <- liftIO $ T.hGetContents stdout
-            unless (T.null (T.stripStart info)) $ logInfoN info
+            unless (T.null (T.stripStart info)) $
+                logInfoNS "ProcessTools#runProcess" info
     return ec
   where
     process = Process.proc exe args
@@ -156,7 +156,7 @@ withStdin process work = runProcessCreation_ $ do
         work stdin
         liftIO $ hClose stdin
         info <- liftIO $ T.hGetContents stdout
-        unless (T.null info) $ logInfoN info
+        unless (T.null info) $ logInfoNS "ProcessTools#withStdin" info
 
 withPipe
     :: (MonadMask m, MonadResource m)
