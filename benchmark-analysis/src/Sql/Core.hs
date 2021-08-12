@@ -5,7 +5,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeFamilies #-}
 module Sql.Core
-    ( MonadRegion(..)
+    ( Avg(..)
+    , Max(..)
+    , MonadRegion(..)
     , MonadSql(..)
     , Region
     , SqlField
@@ -126,6 +128,9 @@ import qualified Lens.Micro.Extras as Lens
 
 import Exceptions
 import SQLiteExts
+
+newtype Avg = Avg { getAvg :: Int } deriving (Show, Eq, Ord)
+newtype Max = Max { getMax :: Int } deriving (Show, Eq, Ord)
 
 class MonadResource m => MonadSql m where
     getConnFromPool :: m (Acquire (RawSqlite SqlBackend))

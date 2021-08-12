@@ -281,9 +281,6 @@ queryImplementations algoId = IM.union builtinImpls <$>
         , (optimalImplId, mkImpl "optimal" "Optimal")
         ]
 
-newtype Avg = Avg { getAvg :: Int } deriving (Show, Eq, Ord)
-newtype Max = Max { getMax :: Int } deriving (Show, Eq, Ord)
-
 data ColumnFilter rec where
     ColumnEq :: PersistField a => EntityField rec a -> a -> ColumnFilter rec
 
