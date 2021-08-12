@@ -19,9 +19,10 @@ import Database.Persist.Sql (Checkmark, Unique)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Pretty.Fields
+import Pretty.Fields.Persistent
 import Schema.Import
-import Schema.Utils (EntityDef, Int64, MonadSql, Transaction, (.>), (.=))
+import Schema.Utils
+    (Entity, EntityDef, Int64, MonadSql, Transaction, (.>), (.=))
 import qualified Schema.Utils as Utils
 
 import qualified Schema.Platform.V0 as V0
@@ -42,7 +43,7 @@ Platform
 
 deriving instance Show (Unique Platform)
 
-instance PrettyFields Platform where
+instance PrettyFields (Entity Platform) where
     prettyFieldInfo = ("Id", idField PlatformId) :|
         [ ("Name", textField PlatformName)
         , ("Pretty Name", maybeTextField PlatformPrettyName)

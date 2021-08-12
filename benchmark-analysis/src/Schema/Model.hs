@@ -22,9 +22,10 @@ import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
 import Model (Model)
-import Pretty.Fields
+import Pretty.Fields.Persistent
 import Schema.Utils
-    ( EntityDef
+    ( Entity
+    , EntityDef
     , Int64
     , MonadLogger
     , MonadSql
@@ -68,7 +69,7 @@ PredictionModel
 
 deriving instance Show (Unique PredictionModel)
 
-instance PrettyFields PredictionModel where
+instance PrettyFields (Entity PredictionModel) where
     prettyFieldInfo = ("Id", idField PredictionModelId) :|
         [ ("Name", textField PredictionModelName)
         , ("Pretty Name", maybeTextField PredictionModelPrettyName)

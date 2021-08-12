@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -7,6 +8,7 @@ module FormattedOutput
     ( renderEntity
     , printProxyEntity
     , renderColumns
+    , renderColumnsSelect
     , renderOutput
     , renderRegionOutput
     ) where
@@ -39,16 +41,17 @@ import Query (MonadQuery)
 import Sql
 import ProcessTools (unexpectedTermination)
 
-fieldToText :: PersistEntity a => FieldInfo a -> Entity a -> Text
-fieldToText (VerboseFieldInfo field toText _ _) =
-    toText . view (Sql.fieldLens field)
+fieldToText :: FieldInfo a -> a -> Text
+fieldToText (VerboseFieldInfo accessor toText _ _) =
+    case accessor of
+        PersistField field -> toText . view (Sql.fieldLens field)
 
 fieldToVerboseText
-    :: MonadSql m => PersistEntity a => FieldInfo a -> Entity a -> m Text
-fieldToVerboseText (VerboseFieldInfo field toText toTextM _) =
-    renderText . view (Sql.fieldLens field)
-  where
-    renderText = fromMaybe (return . toText) toTextM
+    :: MonadSql m => FieldInfo a -> a -> m Text
+fieldToVerboseText (VerboseFieldInfo accessor toText toTextM _) val =
+    case accessor of
+        PersistField field -> fromMaybe (return . toText) toTextM $
+            view (Sql.fieldLens field) val
 
 padText :: Int -> Text -> Text
 padText n input = input <> T.replicate (n - T.length input) " "
@@ -59,8 +62,9 @@ queryFieldInfo
 queryFieldInfo (name, col@(VerboseFieldInfo _ _ _ True)) =
     return (name, col, (Avg 0, Max 0))
 
-queryFieldInfo (name, col@(VerboseFieldInfo field _ _ False)) =
-    annotateField <$> Sql.getFieldLength field
+queryFieldInfo (name, col@(VerboseFieldInfo accessor _ _ False)) =
+    annotateField <$> case accessor of
+        PersistField field -> Sql.getFieldLength field
   where
     fieldSize = Max . T.length $ name
     annotateField (avgVal, maxVal)
@@ -68,7 +72,7 @@ queryFieldInfo (name, col@(VerboseFieldInfo field _ _ False)) =
         | otherwise = (name, col, (avgVal, maxVal))
 
 renderEntity
-    :: forall a m . (MonadSql m, PrettyFields a) => Entity a -> m Text
+    :: forall a m . (MonadSql m, PrettyFields a) => a -> m Text
 renderEntity ent = fold <$> traverse formatLine fieldInfos
   where
     formatLine :: (Text, FieldInfo a) -> m Text
@@ -84,11 +88,11 @@ renderEntity ent = fold <$> traverse formatLine fieldInfos
     fieldInfos :: NonEmpty (Text, FieldInfo a)
     fieldInfos = prettyFieldInfo
 
-printProxyEntity :: PrettyFields a => proxy a -> Entity a -> SqlM ()
+printProxyEntity :: PrettyFields a => proxy a -> a -> SqlM ()
 printProxyEntity _ ent = renderOutput $ renderEntity ent >>= C.yield
 
 columnFormatter
-    :: (MonadQuery m, PrettyFields a) => m (Text, Entity a -> Text)
+    :: (MonadQuery m, PrettyFields a) => m (Text, a -> Text)
 columnFormatter = do
     (startCol :| columns) <- traverse queryFieldInfo prettyFieldInfo
     let entityRenderer = padColumn startCol <> foldMap sepPadColumn columns
@@ -108,18 +112,24 @@ columnFormatter = do
 
     padColumn
         :: PrettyFields a
-        => (Text, FieldInfo a, (Avg, Max)) -> Entity a -> Text
+        => (Text, FieldInfo a, (Avg, Max)) -> a -> Text
     padColumn (_, _, (_, Max 0)) = const ""
     padColumn (_, field, (_, Max n)) = padText n . fieldToText field
 
     sepPadColumn
         :: PrettyFields a
-        => (Text, FieldInfo a, (Avg, Max)) -> Entity a -> Text
+        => (Text, FieldInfo a, (Avg, Max)) -> a -> Text
     sepPadColumn (_, _, (_, Max 0)) _ = ""
     sepPadColumn x y = sep <> padColumn x y
 
-renderColumns :: PrettyFields a => [Filter a] -> [SelectOpt a] -> SqlM ()
-renderColumns filts order = do
+renderColumnsSelect
+    :: (PrettyFields (Entity a), SqlRecord a)
+    => [Filter a] -> [SelectOpt a] -> SqlM ()
+renderColumnsSelect filts order =
+  renderColumns $ Sql.selectSourceRegion filts order
+
+renderColumns :: PrettyFields a => ConduitT () a (Region SqlM) () -> SqlM ()
+renderColumns source = do
     (header, f) <- columnFormatter
     maybeHeight <- liftIO $ fmap height <$> hSize stdout
 
@@ -131,8 +141,7 @@ renderColumns filts order = do
                 empty <- C.null
                 unless empty $ annotateHeaders
 
-    renderRegionOutput $
-        Sql.selectSourceRegion filts order .| annotateHeaders .| C.unlines
+    renderRegionOutput $ source .| annotateHeaders .| C.unlines
 
 renderOutput :: ConduitT () Text SqlM () -> SqlM ()
 renderOutput producer = do

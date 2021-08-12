@@ -9,6 +9,7 @@ module Schema.Utils
     , MonadThrow
     , Transaction
     , DBName(..)
+    , Entity
     , EntityDef
     , ForeignDef
     , HaskellName(..)
@@ -30,7 +31,7 @@ import Control.Monad (void)
 import Data.Int (Int64)
 import qualified Data.Map as M
 import Data.Text (Text)
-import Database.Persist.Sql (Migration, entityDef, migrate)
+import Database.Persist.Sql (Entity, Migration, entityDef, migrate)
 import Database.Persist.TH (embedEntityDefs)
 import Database.Persist.Types
     (DBName(..), EntityDef(..), ForeignDef(..), HaskellName(..), noCascade)

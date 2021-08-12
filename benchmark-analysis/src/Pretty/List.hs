@@ -19,7 +19,7 @@ import qualified Data.Map as M
 import Options.Applicative.Help ((</>))
 
 import Core
-import FormattedOutput (renderColumns)
+import FormattedOutput (renderColumnsSelect)
 import Options
 import Pretty.Fields
 import Sql
@@ -28,6 +28,7 @@ import Sql
     , PersistEntity
     , PersistField
     , SelectOpt(..)
+    , SqlRecord
     , (==.)
     , (||.)
     )
@@ -137,12 +138,12 @@ toFilter name field = parseMultiple <|> pure []
 
 buildOptionsWithOptionalId
     :: forall rec
-     . (PersistEntity rec, PrettyFields rec)
+     . (PrettyFields (Entity rec), SqlRecord rec)
     => Either (FieldSpec rec) [AnyField rec]
     -> [(String, FieldSpec rec)]
     -> Parser (SqlM ())
 buildOptionsWithOptionalId idKey (M.fromList -> optMap) =
-    renderColumns <$> filters <*> selections
+    renderColumnsSelect <$> filters <*> selections
   where
     filters :: Parser [Filter rec]
     filters = mconcat . M.elems <$> M.traverseWithKey toFilter optMap
@@ -180,13 +181,13 @@ buildOptionsWithOptionalId idKey (M.fromList -> optMap) =
                </> optionEnumerationHelp "NAME" optionNames
 
 buildOptions
-    :: (PersistEntity r, PrettyFields r, Sql.ToBackendKey Sql.SqlBackend r)
+    :: (PrettyFields (Entity r), Sql.ToBackendKey Sql.SqlBackend r)
     => [(String, FieldSpec r)] -> Parser (SqlM ())
 buildOptions = buildOptionsWithOptionalId (Left recordIdField)
   where
     recordIdField = IdField '\0' $ Simple Sql.persistIdField
 
 buildOptionsWithoutId
-    :: (PersistEntity rec, PrettyFields rec)
+    :: (PrettyFields (Entity rec), SqlRecord rec)
     => [AnyField rec] -> [(String, FieldSpec rec)] -> Parser (SqlM ())
 buildOptionsWithoutId = buildOptionsWithOptionalId . Right

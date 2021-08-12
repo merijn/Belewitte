@@ -86,6 +86,7 @@ Library
                         Options
                         Predictor
                         Pretty.Fields
+                        Pretty.Fields.Persistent
                         Pretty.List
                         Query
                         Query.Field

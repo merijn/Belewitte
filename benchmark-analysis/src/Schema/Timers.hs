@@ -20,9 +20,10 @@ import Data.Text (Text)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Pretty.Fields
+import Pretty.Fields.Persistent
 import Schema.Utils
-    ( EntityDef
+    ( Entity
+    , EntityDef
     , ForeignDef
     , Int64
     , MonadLogger
@@ -63,7 +64,7 @@ StepTimer
     deriving Eq Show
 |]
 
-instance PrettyFields TotalTimer where
+instance PrettyFields (Entity TotalTimer) where
     prettyFieldInfo = ("Run", idField TotalTimerRunId) :|
         [ ("Name", textField TotalTimerName)
         , ("Min. Time", doubleField 0 TotalTimerMinTime)
@@ -75,7 +76,7 @@ instance PrettyFields TotalTimer where
 instance NamedEntity TotalTimer where
     entityName = totalTimerName
 
-instance PrettyFields StepTimer where
+instance PrettyFields (Entity StepTimer) where
     prettyFieldInfo = ("Run", idField StepTimerRunId) :|
         [ ("Variant", idField StepTimerVariantId)
         , ("Step", StepTimerStepId `fieldVia` prettyShow)

@@ -103,9 +103,13 @@ commands = CommandGroup CommandInfo
     ]
   where
     renderEntityParser
-        :: (PrettyFields v, ToBackendKey SqlBackend v)
+        :: forall proxy v
+         . (PrettyFields (Entity v), ToBackendKey SqlBackend v)
         => proxy v -> Parser (SqlM ())
-    renderEntityParser proxy = (>>= printProxyEntity proxy) <$> entityParser
+    renderEntityParser _ = (>>= printProxyEntity proxy) <$> entityParser
+      where
+        proxy :: Proxy (Entity v)
+        proxy = Proxy
 
     renderVariant :: Entity Variant -> SqlM ()
     renderVariant = graphFromVariant >=> renderGraph

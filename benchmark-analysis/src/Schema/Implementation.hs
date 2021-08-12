@@ -20,8 +20,9 @@ import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Pretty.Fields
-import Schema.Utils (EntityDef, Int64, MonadSql, Transaction, (.=), (.>))
+import Pretty.Fields.Persistent
+import Schema.Utils
+    (Entity, EntityDef, Int64, MonadSql, Transaction, (.=), (.>))
 import qualified Schema.Utils as Utils
 import Types
 
@@ -42,7 +43,7 @@ Implementation
 
 deriving instance Show (Unique Implementation)
 
-instance PrettyFields Implementation where
+instance PrettyFields (Entity Implementation) where
     prettyFieldInfo = ("Id", idField ImplementationId) :|
         [ ("Algorithm", namedIdField ImplementationAlgorithmId)
         , ("Name", textField ImplementationName)

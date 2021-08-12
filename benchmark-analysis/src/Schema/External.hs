@@ -20,9 +20,10 @@ import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Pretty.Fields
+import Pretty.Fields.Persistent
 import Schema.Import
-import Schema.Utils (EntityDef, ForeignDef, Int64, MonadSql, Transaction, (.>))
+import Schema.Utils
+    (Entity, EntityDef, ForeignDef, Int64, MonadSql, Transaction, (.>))
 import qualified Schema.Utils as Utils
 
 import Schema.Algorithm (AlgorithmId)
@@ -54,14 +55,14 @@ ExternalTimer
 
 deriving instance Show (Unique ExternalImpl)
 
-instance PrettyFields ExternalImpl where
+instance PrettyFields (Entity ExternalImpl) where
     prettyFieldInfo = ("Id", idField ExternalImplId) :|
         [ ("Algorithm", namedIdField ExternalImplAlgorithmId)
         , ("Name", textField ExternalImplName)
         , ("Pretty Name", maybeTextField ExternalImplPrettyName)
         ]
 
-instance PrettyFields ExternalTimer where
+instance PrettyFields (Entity ExternalTimer) where
     prettyFieldInfo = ("Platform", namedIdField ExternalTimerPlatformId) :|
         [ ("Variant", idField ExternalTimerVariantId)
         , ("Algorithm", namedIdField ExternalTimerAlgorithmId)

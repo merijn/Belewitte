@@ -18,9 +18,9 @@ import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Pretty.Fields
+import Pretty.Fields.Persistent
 import Schema.Import (Importable(updateFields))
-import Schema.Utils (EntityDef, Int64, MonadSql, Transaction, (.=))
+import Schema.Utils (Entity, EntityDef, Int64, MonadSql, Transaction, (.=))
 import qualified Schema.Utils as Utils
 
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
@@ -33,7 +33,7 @@ Algorithm
 
 deriving instance Show (Unique Algorithm)
 
-instance PrettyFields Algorithm where
+instance PrettyFields (Entity Algorithm) where
     prettyFieldInfo = ("Id", idField AlgorithmId) :|
         [ ("Name", textField AlgorithmName)
         , ("Pretty Name", maybeTextField AlgorithmPrettyName)

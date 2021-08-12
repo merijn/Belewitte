@@ -23,10 +23,10 @@ import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
 import Exceptions (DBConstraintViolation(..), logThrowM)
-import Pretty.Fields
+import Pretty.Fields.Persistent
 import Schema.Import
 import Schema.Utils
-    (EntityDef, Int64, MonadLogger, MonadSql, MonadThrow, Transaction, (.>))
+    (Entity, EntityDef, Int64, MonadLogger, MonadSql, MonadThrow, Transaction, (.>))
 import qualified Schema.Utils as Utils
 
 import Schema.Algorithm (AlgorithmId)
@@ -48,7 +48,7 @@ VariantConfig
 
 deriving instance Show (Unique VariantConfig)
 
-instance PrettyFields VariantConfig where
+instance PrettyFields (Entity VariantConfig) where
     prettyFieldInfo = ("Id", idField VariantConfigId) :|
         [ ("Name", textField VariantConfigName)
         , ("Algorithm", namedIdField VariantConfigAlgorithmId)

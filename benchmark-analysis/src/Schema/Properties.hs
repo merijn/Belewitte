@@ -21,9 +21,9 @@ import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Pretty.Fields
+import Pretty.Fields.Persistent
 import Schema.Utils
-    (EntityDef, ForeignDef, Int64, MonadSql, Transaction, (.=), (.>))
+    (Entity, EntityDef, ForeignDef, Int64, MonadSql, Transaction, (.=), (.>))
 import qualified Schema.Utils as Utils
 
 import Schema.Algorithm (AlgorithmId)
@@ -88,7 +88,7 @@ pattern GraphPropName name = PropertyName name False
 pattern StepPropName :: Text -> PropertyName
 pattern StepPropName name = PropertyName name True
 
-instance PrettyFields PropertyName where
+instance PrettyFields (Entity PropertyName) where
     prettyFieldInfo = ("Id", idField PropertyNameId) :|
         [ ("Property", textField PropertyNameProperty)
         ]
@@ -96,18 +96,18 @@ instance PrettyFields PropertyName where
 instance NamedEntity PropertyName where
     entityName = propertyNameProperty
 
-instance PrettyFields GraphPropValue where
+instance PrettyFields (Entity GraphPropValue) where
     prettyFieldInfo = ("Graph", idField GraphPropValueGraphId) :|
         [ ("Property", namedIdField GraphPropValuePropId)
         , ("Value", doubleField_ GraphPropValueValue)
         ]
 
-instance PrettyFields StepProp where
+instance PrettyFields (Entity StepProp) where
     prettyFieldInfo = ("Property", idField StepPropPropId) :|
         [ ("Algorithm", namedIdField StepPropAlgorithmId)
         ]
 
-instance PrettyFields StepPropValue where
+instance PrettyFields (Entity StepPropValue) where
     prettyFieldInfo = ("Algorithm", namedIdField StepPropValueAlgorithmId) :|
         [ ("Variant", idField StepPropValueVariantId)
         , ("Step", StepPropValueStepId `fieldVia` prettyShow)

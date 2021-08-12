@@ -19,9 +19,9 @@ import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Pretty.Fields
+import Pretty.Fields.Persistent
 import Schema.Import
-import Schema.Utils (EntityDef, Int64, MonadSql, Transaction, (.>))
+import Schema.Utils (Entity, EntityDef, Int64, MonadSql, Transaction, (.>))
 import qualified Schema.Utils as Utils
 
 TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
@@ -33,7 +33,7 @@ Dataset
 
 deriving instance Show (Unique Dataset)
 
-instance PrettyFields Dataset where
+instance PrettyFields (Entity Dataset) where
     prettyFieldInfo = ("Id", idField DatasetId) :|
         [ ("Name", textField DatasetName) ]
 

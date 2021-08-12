@@ -20,8 +20,9 @@ import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Pretty.Fields
-import Schema.Utils (EntityDef, ForeignDef, Int64, MonadSql, Transaction, (.>))
+import Pretty.Fields.Persistent
+import Schema.Utils
+    (Entity, EntityDef, ForeignDef, Int64, MonadSql, Transaction, (.>))
 import qualified Schema.Utils as Utils
 
 import Schema.Algorithm (AlgorithmId)
@@ -44,7 +45,7 @@ Run
 
 deriving instance Show (Unique Run)
 
-instance PrettyFields Run where
+instance PrettyFields (Entity Run) where
     prettyFieldInfo = ("Id", idField RunId) :|
         [ ("Run Config", idField RunRunConfigId)
         , ("Algorithm", namedIdField RunAlgorithmId)

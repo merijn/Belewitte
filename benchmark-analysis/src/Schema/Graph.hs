@@ -21,9 +21,10 @@ import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 
-import Pretty.Fields
+import Pretty.Fields.Persistent
 import Schema.Import
-import Schema.Utils (EntityDef, Int64, MonadSql, Transaction, (.>), (.=))
+import Schema.Utils
+    (Entity, EntityDef, Int64, MonadSql, Transaction, (.>), (.=))
 import qualified Schema.Utils as Utils
 
 import Schema.Dataset (DatasetId)
@@ -44,7 +45,7 @@ Graph
 
 deriving instance Show (Unique Graph)
 
-instance PrettyFields Graph where
+instance PrettyFields (Entity Graph) where
     prettyFieldInfo = ("Id", idField GraphId) :|
         [ ("Name", textField GraphName)
         , ("Dataset", namedIdField GraphDatasetId)

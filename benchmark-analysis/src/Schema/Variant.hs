@@ -19,7 +19,7 @@ import Database.Persist.TH (persistUpperCase)
 import qualified Database.Persist.TH as TH
 import Database.Persist.Types
 
-import Pretty.Fields
+import Pretty.Fields.Persistent
 import Schema.Import
 import Schema.Utils (Int64, MonadSql, Transaction, (.>), (.=))
 import qualified Schema.Utils as Utils
@@ -47,7 +47,7 @@ Variant
 
 deriving instance Show (Unique Variant)
 
-instance PrettyFields Variant where
+instance PrettyFields (Entity Variant) where
     prettyFieldInfo = ("Id", idField VariantId) :|
         [ ("Variant Config", namedIdField VariantVariantConfigId)
         , ("Algorithm", namedIdField VariantAlgorithmId)
