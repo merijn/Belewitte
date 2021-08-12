@@ -6,4 +6,4 @@ optimization: 2
 documentation: False
 
 package benchmark-analysis
-    Ghc-Options: -freverse-errors
+    Ghc-Options: -freverse-errors -Werror=incomplete-patterns
