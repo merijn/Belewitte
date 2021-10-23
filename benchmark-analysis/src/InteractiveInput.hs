@@ -121,7 +121,7 @@ withProcessCompletion args act = do
     mkCompletionBracket _ _ = id
 
     processCompleter process s = do
-        txt <- warnOnError $ ProcessTools.readStdout process
+        txt <- warnOnError $ ProcessTools.readStdout_ process
         let relevant = filter (T.isPrefixOf (T.pack s)) $ T.lines txt
         return $ map (simpleCompletion . T.unpack) relevant
       where

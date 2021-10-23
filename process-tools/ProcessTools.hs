@@ -10,6 +10,7 @@ module ProcessTools
     , ReadWrite(..)
     , UnexpectedTermination(..)
     , readStdout
+    , readStdout_
     , runProcess
     , runProcess_
     , runProcessCreation
@@ -144,8 +145,14 @@ runProcess exe args = do
     process = Process.proc exe args
 
 readStdout
+    :: (MonadIO m, MonadLogger m, MonadMask m)
+    => CreateProcess -> m (ExitCode, Text)
+readStdout process = runProcessCreation $ do
+    withProcess process $ \ClosedStream -> liftIO . T.hGetContents
+
+readStdout_
     :: (MonadIO m, MonadLogger m, MonadMask m) => CreateProcess -> m Text
-readStdout process = runProcessCreation_ $ do
+readStdout_ process = runProcessCreation_ $ do
     withProcess process $ \ClosedStream -> liftIO . T.hGetContents
 
 withStdin
