@@ -179,6 +179,7 @@ Library
                         cbits/count_transitions.c
                         cbits/key_value_vector.c
                         cbits/min_key.c
+                        cbits/misc.c
                         cbits/pcg_basic.c
                         cbits/random_sample.c
                         cbits/random_fun.c

@@ -1,6 +1,8 @@
 #include <stdbool.h>
 #include <sqlite3.h>
 
+void sqlite_sqrt(sqlite3_context *ctxt, int nArgs, sqlite3_value **args);
+
 void randomFun(sqlite3_context *ctxt, int nArgs, sqlite3_value **args);
 void double_vector_step(sqlite3_context *ctxt, int nArgs, sqlite3_value **args);
 void double_vector_finalise(sqlite3_context *ctxt);

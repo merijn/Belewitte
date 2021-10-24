@@ -43,6 +43,7 @@ registerSqlFunctions
     :: (MonadIO m, MonadLogger m, MonadThrow m) => Ptr () -> m ()
 registerSqlFunctions sqlitePtr = mapM_ ($sqlitePtr)
     [ createSqlFunction 1 "legacy_random" randomFun
+    , createSqlFunction 1 "sqrt" sqliteSqrt
     , createSqlAggregate 3 "init_key_value_vector" infinity
         init_key_value_vector_step key_value_vector_finalise
     , createSqlAggregate 3 "init_key_value_vector_nan" nan
@@ -78,6 +79,9 @@ wrapSqliteExceptions = Catch.handle logUnwrappedSqliteException
 
 foreign import ccall "sqlite-functions.h &randomFun"
     randomFun :: FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
+
+foreign import ccall "sqlite-functions.h &sqlite_sqrt"
+    sqliteSqrt :: FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
 
 foreign import ccall "sqlite-functions.h &init_key_value_vector_step"
     init_key_value_vector_step
