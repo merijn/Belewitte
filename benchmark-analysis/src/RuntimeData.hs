@@ -1,9 +1,11 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 module RuntimeData
-    ( getKernelExecutableMaybe
+    ( OutputDiff(..)
+    , getKernelExecutableMaybe
     , getKernelExecutable
     , getKernelLibPathMaybe
     , getKernelLibPath
@@ -12,6 +14,7 @@ module RuntimeData
     , getHeatmapScript
     , getModelScript
     , getOutputChecker
+    , renderOutputDiff
     ) where
 
 import qualified Control.Monad.Catch as Catch
@@ -20,10 +23,15 @@ import Control.Monad.IO.Class (MonadIO(liftIO))
 import Control.Monad.Trans.Maybe (MaybeT(..))
 import Crypto.Hash (Digest, SHA512, digestFromByteString)
 import Crypto.Hash.Conduit (hashFile)
+import Data.Attoparsec.Text
 import Data.Bool (bool)
 import qualified Data.ByteArray as ByteArray (convert)
 import qualified Data.ByteString as BS
 import Data.Foldable (asum)
+import Data.Function (on)
+import Data.Text (Text)
+import qualified Data.Text as T
+import Numeric (showFFloat)
 import qualified System.Directory as Dir
 import System.FilePath ((</>))
 
@@ -144,12 +152,64 @@ getModelScript
     :: (MonadIO m, MonadLogger m, MonadMask m) => [String] -> m CreateProcess
 getModelScript = getPythonScript "model.py"
 
+data OutputDiff = OutputDiff
+    { maxAbsDiff :: {-# UNPACK #-} !Double
+    , maxRelDiff :: {-# UNPACK #-} !Double
+    , diffCount :: {-# UNPACK #-} !Int
+    }
+
+instance Semigroup OutputDiff where
+    diff1 <> diff2 = OutputDiff
+      { maxAbsDiff = (max `on` maxAbsDiff) diff1 diff2
+      , maxRelDiff = (max `on` maxRelDiff) diff1 diff2
+      , diffCount = diffCount diff1 + diffCount diff2
+      }
+
+instance Monoid OutputDiff where
+    mempty = OutputDiff 0 0 0
+
+showText :: Show a => a -> Text
+showText = T.pack . show
+
+renderOutputDiff :: OutputDiff -> Text
+renderOutputDiff OutputDiff{..} = T.unlines
+    [ "Max abs error: " <> showText maxAbsDiff
+    , "Max rel error: " <> showText maxRelDiff <> " ("
+        <> T.pack (showFFloat (Just 2) (100 * maxRelDiff) "%)")
+    , "Error count: " <> showText diffCount
+    ]
+
+outputDiff :: Parser OutputDiff
+outputDiff = do
+    option () $ do
+        string "Max absolute error: " *> double *> endOfLine
+
+    option () $ do
+        string "Max relative error: "
+        double *> string " (" *> double *> string "%)" *> endOfLine
+
+    absDiff <- string "Max abs diff: " *> double <* endOfLine
+    relDiff <- string "Max rel diff: " *> double <* string " ("
+        <* double <* string "%)" <* endOfLine
+
+    errCount <- string "Error count: " *> decimal <* endOfLine
+    endOfInput
+
+    pure $ OutputDiff
+      { maxAbsDiff = absDiff
+      , maxRelDiff = relDiff
+      , diffCount = errCount
+      }
+
 getOutputChecker
     :: (MonadIO m, MonadLogger m, MonadMask m, MonadIO n)
-    => n (FilePath -> FilePath -> m Bool)
+    => n (FilePath -> FilePath -> m (Bool, OutputDiff))
 getOutputChecker = liftIO $ do
     exePath <- getDataFileName "runtime-data/numdiff.awk"
     return $ \file1 file2 -> do
-        runProcess exePath ["-q",file1,file2] >>= \case
-            ExitSuccess -> return True
-            _ -> return False
+        (exitCode, txt) <- readStdout $ proc exePath ["-r","0.01","-e",file1,file2]
+        case parseOnly outputDiff txt of
+            Left exc -> logThrowM $ OutputDiffUnparseable exc
+            Right diff -> case exitCode of
+                ExitSuccess -> return (True, diff)
+                ExitFailure _ -> return (False, diff)

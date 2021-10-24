@@ -19,6 +19,7 @@ import Data.Foldable (asum)
 import Data.Map (Map)
 import qualified Data.Map as M
 import qualified Data.Text as T
+import qualified Data.Text.IO as T
 import System.Exit (exitFailure)
 
 import qualified Commands.Add as Add
@@ -37,6 +38,7 @@ import ProcessPool
 import Query (Region, streamQuery, runSqlQueryConduit)
 import Query.Field (getDistinctFieldQuery)
 import Query.Missing
+import RuntimeData (OutputDiff(..))
 import qualified RuntimeData
 import Schema
 import Sql (MonadSql, SelectOpt(Asc), Transaction, (==.), (||.))
@@ -159,10 +161,13 @@ runBenchmarks = lift $ do
 validate :: Input SqlM ()
 validate = lift $ do
     checkCxxCompiled
-    Sql.selectSource [] [] $
-        parMapM_ (pipelineHandler entityKey) 10 validateForPlatform
+    diff <- Sql.selectSource [] [] $
+        parMapM (pipelineHandler entityKey) 10 validateForPlatform .| C.fold
+
+    liftIO . T.putStrLn $ mconcat
+        [ "Overall max difference:\n", RuntimeData.renderOutputDiff diff ]
   where
-    validateForPlatform :: Entity Platform -> SqlM ()
+    validateForPlatform :: Entity Platform -> SqlM OutputDiff
     validateForPlatform (Entity platformId platform) =
         withProcessPool numNodes platform $ \procPool -> Sql.runRegionConduit $
             streamQuery (validationVariantQuery platformId)
@@ -170,7 +175,7 @@ validate = lift $ do
             .> validationMissingRuns platformId
             .| toRegion (processJobsParallelWithSharedPool numNodes procPool)
             .| toRegion (validateResults numNodes)
-            .| toRegion (C.mapM_ cleanupValidation)
+            .| toRegion (C.foldMapM cleanupValidation)
       where
         numNodes = platformAvailable platform
 

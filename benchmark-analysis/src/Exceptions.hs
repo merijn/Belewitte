@@ -257,6 +257,18 @@ fromImpossibleError exc = do
     Impossible e <- fromException exc
     cast e
 
+data OutputDiffUnparseable = OutputDiffUnparseable String
+    deriving (Show, Typeable)
+
+instance Pretty OutputDiffUnparseable where
+    pretty (OutputDiffUnparseable txt) = Pretty.reflow $
+      "Failed to parse numdiff.awk output: " <> T.pack txt
+
+instance Exception OutputDiffUnparseable where
+    toException = toImpossibleError
+    fromException = fromImpossibleError
+    displayException = show . pretty
+
 data QueryPlanUnparseable = QueryPlanUnparseable
     deriving (Show, Typeable)
 

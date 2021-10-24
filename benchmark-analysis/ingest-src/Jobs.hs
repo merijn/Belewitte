@@ -35,6 +35,7 @@ import ProcessPool (Job, Result(..), makePropertyJob, makeTimingJob)
 import qualified ProcessPool
 import Query (streamQuery)
 import Query.Missing
+import RuntimeData (OutputDiff(..))
 import qualified RuntimeData
 import Schema
 import Sql (MonadSql, Region, Transaction, (=.))
@@ -322,32 +323,43 @@ validationMissingRuns platformId result@Result{..} = do
     outputFile = T.unpack resultLabel <> ".output"
 
 validateResults
-    :: Int -> ConduitT (Result Validation) (Result Validation) SqlM ()
+    :: Int
+    -> ConduitT (Result Validation) (Result (Validation, OutputDiff)) SqlM ()
 validateResults numProcs = do
     validate <- RuntimeData.getOutputChecker
     parMapM (Simple Terminate) numProcs (process validate)
   where
     process
-        :: (FilePath -> FilePath -> SqlM Bool)
+        :: (FilePath -> FilePath -> SqlM (Bool, OutputDiff))
         -> Result Validation
-        -> SqlM (Result Validation)
+        -> SqlM (Result (Validation, OutputDiff))
     process check res@Result{resultAlgorithmVersion, resultOutput, resultValue}
-      | originalCommit /= resultAlgorithmVersion = do
-            res <$ logErrorN "Result validation used wrong algorithm version!"
+      | originalCommit /= resultAlgorithmVersion = fmap (,mempty) res <$
+            logErrorN "Result validation used wrong algorithm version!"
       | otherwise = do
-            result <- check referenceResult outputFile
+            (result, diff) <- check referenceResult outputFile
             ts <- liftIO $ getCurrentTime
 
-            when result $ do
-                Sql.update runId [RunValidated =. True, RunTimestamp =. ts]
-            return res
+            let logMsg = mconcat
+                    [ "Run #", showSqlKey runId, ":\n"
+                    , RuntimeData.renderOutputDiff diff
+                    ]
+
+            if result
+               then do
+                   logInfoN logMsg
+                   Sql.update runId [RunValidated =. True, RunTimestamp =. ts]
+               else logWarnN logMsg
+
+            return $ fmap (,diff) res
       where
         Validation{..} = resultValue
         (outputFile, _) = resultOutput
 
-cleanupValidation :: Result Validation -> SqlM ()
-cleanupValidation result@Result{resultValue = Validation{..}} = do
+cleanupValidation :: Result (Validation, OutputDiff) -> SqlM OutputDiff
+cleanupValidation result@Result{resultValue = (Validation{..}, diff)} = do
     ProcessPool.cleanupOutput result
     ProcessPool.cleanupTimings result
     ProcessPool.cleanupProperties result
-    cleanData
+    diff <$ cleanData
+
