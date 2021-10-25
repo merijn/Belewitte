@@ -34,7 +34,7 @@ import InteractiveInput
 import Jobs
 import Options
 import Parsers
-import ProcessPool
+import JobPool
 import Query (Region, streamQuery, runSqlQueryConduit)
 import Query.Field (getDistinctFieldQuery)
 import Query.Missing

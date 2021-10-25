@@ -18,7 +18,7 @@ import Data.Maybe (fromMaybe)
 import Data.String.Interpolate.IsString (i)
 
 import Core
-import ProcessPool (Job, makeTimingJob)
+import JobPool (Job, makeTimingJob)
 import Query
 import Schema
 import Sql (fromPersistValue)

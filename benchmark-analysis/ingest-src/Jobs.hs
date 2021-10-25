@@ -31,8 +31,8 @@ import Data.Time.Clock (getCurrentTime)
 
 import Core
 import Parsers
-import ProcessPool (Job, Result(..), makePropertyJob, makeTimingJob)
-import qualified ProcessPool
+import JobPool (Job, Result(..), makePropertyJob, makeTimingJob)
+import qualified JobPool
 import Query (streamQuery)
 import Query.Missing
 import RuntimeData (OutputDiff(..))
@@ -114,8 +114,8 @@ processProperty result@Result
   , resultPropLog = Nothing
   , ..
   } = do
-    ProcessPool.cleanupOutput result
-    ProcessPool.cleanupTimings result
+    JobPool.cleanupOutput result
+    JobPool.cleanupTimings result
     logThrowM . GenericInvariantViolation $ mconcat
         [ "Found property run without property log file for algorithm #"
         , showSqlKey algoId, " variant #", showSqlKey resultVariant
@@ -128,7 +128,7 @@ processProperty result@Result
   , ..
   } = do
     logDebugNS "Property#Start" resultLabel
-    ProcessPool.cleanupTimings result
+    JobPool.cleanupTimings result
     resultHash <- computeHash outputFile
 
     SqlTrans.tryAbortableTransaction $ do
@@ -140,7 +140,7 @@ processProperty result@Result
             _ -> False <$ logErrorN
                     ("Hash mismatch for variant: " <> showSqlKey resultVariant)
 
-        ProcessPool.cleanupOutput result
+        JobPool.cleanupOutput result
 
         when loadProps $ do
             stepCount <- runConduit $
@@ -175,7 +175,7 @@ processProperty result@Result
 
             SqlTrans.update resultVariant [VariantPropsStored =. True]
 
-        ProcessPool.cleanupProperties result
+        JobPool.cleanupProperties result
 
     logDebugNS "Property#End" resultLabel
   where
@@ -228,8 +228,8 @@ processTiming runConfigId commit result@Result{..} = do
     logDebugNS "Timing#Start" resultLabel
     time <- liftIO getCurrentTime
     resultHash <- computeHash outputFile
-    ProcessPool.cleanupProperties result
-    ProcessPool.cleanupOutput result
+    JobPool.cleanupProperties result
+    JobPool.cleanupOutput result
 
     if commit /= resultAlgorithmVersion
        then logErrorN $ mconcat
@@ -260,7 +260,7 @@ processTiming runConfigId commit result@Result{..} = do
 
         logDebugNS "Timing#End" resultLabel
 
-    ProcessPool.cleanupTimings result
+    JobPool.cleanupTimings result
   where
     (algoId, implId, hash, maxStep) = resultValue
     timingFile = T.unpack resultLabel <> ".timings"
@@ -294,8 +294,8 @@ validationMissingRuns
     -> Result ValidationVariant
     -> ConduitT (Result ValidationVariant) (Job Validation) (Region SqlM) ()
 validationMissingRuns platformId result@Result{..} = do
-    ProcessPool.cleanupTimings result
-    ProcessPool.cleanupProperties result
+    JobPool.cleanupTimings result
+    JobPool.cleanupProperties result
     refCounter <- liftIO $ STM.newTVarIO validationMissingCount
 
     let onCompletion :: SqlM ()
@@ -304,7 +304,7 @@ validationMissingRuns platformId result@Result{..} = do
                 STM.modifyTVar' refCounter (subtract 1)
                 STM.readTVar refCounter
 
-            when (count == 0) $ ProcessPool.cleanupOutput result
+            when (count == 0) $ JobPool.cleanupOutput result
 
         mkValidation :: Key Run -> Validation
         mkValidation = Validation onCompletion validationCommit outputFile
@@ -358,8 +358,8 @@ validateResults numProcs = do
 
 cleanupValidation :: Result (Validation, OutputDiff) -> SqlM OutputDiff
 cleanupValidation result@Result{resultValue = (Validation{..}, diff)} = do
-    ProcessPool.cleanupOutput result
-    ProcessPool.cleanupTimings result
-    ProcessPool.cleanupProperties result
+    JobPool.cleanupOutput result
+    JobPool.cleanupTimings result
+    JobPool.cleanupProperties result
     diff <$ cleanData
 

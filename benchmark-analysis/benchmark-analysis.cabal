@@ -254,8 +254,8 @@ Executable Ingest
                         Commands.Set
                         Commands.Unset
                         Jobs
+                        JobPool
                         Parsers
-                        ProcessPool
                         Query.Missing
 
   Other-Extensions:     DeriveFoldable
