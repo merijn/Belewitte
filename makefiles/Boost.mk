@@ -17,7 +17,7 @@ endif
 
 $(DOWNLOAD)/$(BOOST_NAME).tar.gz: | $(DOWNLOAD)/
 	$(PRINTF) " CURL\tboost $(BOOST_VERSION)\n"
-	$(AT)curl -s -L https://dl.bintray.com/boostorg/release/$(BOOST_VERSION)/source/$(BOOST_NAME).tar.gz >$@
+	$(AT)curl -s -L https://boostorg.jfrog.io/artifactory/main/release/$(BOOST_VERSION)/source/$(BOOST_NAME).tar.gz >$@
 	$(AT)printf "$(BOOST_SHASUM)  $@\n" | shasum -c /dev/stdin >/dev/null
 
 $(BOOST_ROOT)/: $(DOWNLOAD)/$(BOOST_NAME).tar.gz
