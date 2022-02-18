@@ -38,7 +38,7 @@ Common exes
 
   Build-Depends:        evolution
                ,        directory
-               ,        optparse-applicative ^>= 0.15
+               ,        optparse-applicative ^>= 0.17
                ,        temporary ^>= 1.3
                ,        transformers ^>= 0.5
 

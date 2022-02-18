@@ -54,7 +54,7 @@ Common all
                ,        interpolate ^>= 0.2.0
                ,        monad-logger ^>= 0.3.28
                ,        mtl ^>= 2.2.1
-               ,        optparse-applicative ^>= 0.15
+               ,        optparse-applicative ^>= 0.17
                ,        pretty-show ^>= 1.10
                ,        resourcet ^>= 1.2.0
                ,        text ^>= 1.2.3.2
