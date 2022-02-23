@@ -249,9 +249,11 @@ processTasksParallelWithSharedPool Task{..} numNodes procPool =
     withResource procPool $ \proc@Process{inHandle,outHandle,errHandle} -> do
         checkProcess proc
 
+        let logErrors act = act `Catch.onError` nonBlockingLogHandle errHandle
         taskHandleErrors val $ do
             Log.logDebugNS "Process#Job#Start" jobCommand
-            output <- liftIO $ do
+
+            output <- logErrors . liftIO $ do
                 T.hPutStrLn inHandle jobCommand
                 T.hGetLine outHandle
 
