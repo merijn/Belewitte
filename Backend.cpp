@@ -19,6 +19,7 @@ Backend::base_alloc_t::copyDevToHost()
 void
 Backend::base_alloc_t::free()
 {
+    freeImpl();
     hostPtr.reset();
     byteSize = 0;
     read_only = true;
