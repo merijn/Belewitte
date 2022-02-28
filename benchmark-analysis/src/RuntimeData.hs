@@ -207,9 +207,13 @@ getOutputChecker
 getOutputChecker = liftIO $ do
     exePath <- getDataFileName "runtime-data/numdiff.awk"
     return $ \file1 file2 -> do
-        (exitCode, txt) <- readStdout $ proc exePath ["-r","0.01","-e",file1,file2]
+        (exitCode, txt) <- readStdout $
+            proc exePath ["-r","0.025","-e",file1,file2]
+
         case parseOnly outputDiff txt of
             Left exc -> logThrowM $ OutputDiffUnparseable exc
-            Right diff -> case exitCode of
-                ExitSuccess -> return (True, diff)
-                ExitFailure _ -> return (False, diff)
+            Right diff@OutputDiff{..} -> return $ case exitCode of
+                ExitSuccess -> (True, diff)
+                ExitFailure _
+                    | maxRelDiff < 0.05 && diffCount <= 2 -> (True, diff)
+                    | otherwise -> (False, diff)
