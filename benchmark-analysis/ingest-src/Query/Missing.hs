@@ -21,6 +21,7 @@ import Data.String.Interpolate.IsString (i)
 
 import Core
 import JobPool (Job, makeTimingJob, maxRetryCount)
+import Pretty.Fields.Record
 import Query
 import Schema
 import Sql (fromPersistValue)
@@ -33,6 +34,12 @@ data MissingRun a = MissingRun
     , missingRunArgs :: ![Text]
     , missingRunExtraInfo :: !a
     } deriving (Functor, Show)
+
+instance PrettyFields (MissingRun a) where
+    prettyFieldInfo = ("Algorithm", namedIdField missingRunAlgorithmId) :|
+        [ ("Implementation", namedIdField missingRunImplId)
+        , ("Variant", idField missingRunVariantId)
+        ]
 
 data ExtraVariantInfo = ExtraVariantInfo
     { extraVariantHash :: !(Maybe Hash)

@@ -21,11 +21,16 @@ import Data.Text (Text)
 import qualified Data.Text as T
 import Database.Persist.Class (EntityField)
 
-import Sql.Core (Entity, MonadSql, SqlRecord)
+import Sql.Core (Avg(..), Entity, Max(..), MonadQuery, MonadSql, SqlRecord)
 
 data FieldAccessor ty v where
     PersistField
         :: SqlRecord rec => EntityField rec v -> FieldAccessor (Entity rec) v
+
+    RecordField
+        :: (rec -> v)
+        -> (forall m . MonadQuery m => m (Avg, Max))
+        -> FieldAccessor rec v
 
 data FieldInfo rec where
     VerboseFieldInfo

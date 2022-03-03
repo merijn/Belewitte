@@ -44,13 +44,14 @@ fieldToText :: FieldInfo a -> a -> Text
 fieldToText (VerboseFieldInfo accessor toText _ _) =
     case accessor of
         PersistField field -> toText . view (Sql.fieldLens field)
+        RecordField getField _ -> toText . getField
 
 fieldToVerboseText
     :: MonadSql m => FieldInfo a -> a -> m Text
 fieldToVerboseText (VerboseFieldInfo accessor toText toTextM _) val =
-    case accessor of
-        PersistField field -> fromMaybe (return . toText) toTextM $
-            view (Sql.fieldLens field) val
+    fromMaybe (return . toText) toTextM $ case accessor of
+        PersistField field -> view (Sql.fieldLens field) val
+        RecordField getField _ -> getField val
 
 padText :: Int -> Text -> Text
 padText n input = input <> T.replicate (n - T.length input) " "
@@ -64,6 +65,7 @@ queryFieldInfo (name, col@(VerboseFieldInfo _ _ _ True)) =
 queryFieldInfo (name, col@(VerboseFieldInfo accessor _ _ False)) =
     annotateField <$> case accessor of
         PersistField field -> Sql.getFieldLength field
+        RecordField _ getWidth -> getWidth
   where
     fieldSize = Max . T.length $ name
     annotateField (avgVal, maxVal)
