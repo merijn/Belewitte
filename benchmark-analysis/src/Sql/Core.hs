@@ -7,7 +7,9 @@
 module Sql.Core
     ( Avg(..)
     , Max(..)
+    , MonadExplain(..)
     , MonadRegion(..)
+    , MonadQuery
     , MonadSql(..)
     , Region
     , SqlField
@@ -151,6 +153,25 @@ instance MonadSql m => MonadSql (ResourceT m) where
     getConnFromPool = lift getConnFromPool
     getConnWithoutForeignKeysFromPool = lift getConnWithoutForeignKeysFromPool
     getConnWithoutTransaction = lift getConnWithoutTransaction
+
+class Monad m => MonadExplain m where
+    shouldExplainQuery :: Text -> m Bool
+    shouldLogQuery :: Text -> m Bool
+
+instance MonadExplain m => MonadExplain (Region m) where
+    shouldExplainQuery = lift . shouldExplainQuery
+    shouldLogQuery = lift . shouldLogQuery
+
+instance MonadExplain m => MonadExplain (SqlT m) where
+    shouldExplainQuery = lift . shouldExplainQuery
+    shouldLogQuery = lift . shouldLogQuery
+
+instance MonadExplain m => MonadExplain (ConduitT a b m) where
+    shouldExplainQuery = lift . shouldExplainQuery
+    shouldLogQuery = lift . shouldLogQuery
+
+type MonadQuery m =
+    (MonadResource m, MonadSql m, MonadExplain m, MonadLogger m, MonadThrow m)
 
 newtype Transaction m r = Transaction (ReaderT (RawSqlite SqlBackend) m r)
   deriving

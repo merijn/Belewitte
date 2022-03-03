@@ -38,11 +38,8 @@ import Numeric (showGFloat)
 
 import Core
 import Schema
-import Sql.Core (MonadSql, Region, runRegionConduit)
+import Sql.Core (MonadQuery, MonadSql, Region, runRegionConduit)
 import qualified Sql.Core as Sql
-
-type MonadQuery m =
-    (MonadResource m, MonadSql m, MonadExplain m, MonadLogger m, MonadThrow m)
 
 type MonadConvert m = (MonadIO m, MonadLogger m, MonadThrow m)
 

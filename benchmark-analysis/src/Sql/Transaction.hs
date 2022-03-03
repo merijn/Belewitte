@@ -33,7 +33,7 @@ import qualified Database.Persist.Sqlite as Sqlite
 import Lens.Micro.Extras (view)
 
 import Exceptions
-import Query (CTE, Converter(Simple), MonadConvert, MonadQuery, Query(..))
+import Query (CTE, Converter(Simple), MonadConvert, Query(..))
 import qualified Query
 import Schema
 import Sql.Core as Sql hiding (getJust, selectKeysRegion, selectSourceRegion)

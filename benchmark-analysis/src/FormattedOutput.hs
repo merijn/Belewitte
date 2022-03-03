@@ -37,7 +37,6 @@ import System.IO.Error (ioeGetErrorType)
 
 import Core
 import Pretty.Fields
-import Query (MonadQuery)
 import Sql
 import ProcessTools (unexpectedTermination)
 

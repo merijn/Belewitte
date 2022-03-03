@@ -170,10 +170,6 @@ redirectLogging logFun act = do
     let swapLogFun = atomicModifyIORef' ref (\oldFun -> (logFun, oldFun))
     withAcquire (mkAcquire swapLogFun (writeIORef ref)) $ \_ -> act
 
-class Monad m => MonadExplain m where
-    shouldExplainQuery :: Text -> m Bool
-    shouldLogQuery :: Text -> m Bool
-
 instance MonadExplain CoreM where
     shouldExplainQuery name = do
         querySet <- asks explainQuerySet
@@ -188,18 +184,6 @@ instance MonadExplain CoreM where
             Nothing -> return True
             Just names | S.member (T.toLower name) names -> return True
             _ -> return False
-
-instance MonadExplain m => MonadExplain (Region m) where
-    shouldExplainQuery = lift . shouldExplainQuery
-    shouldLogQuery = lift . shouldLogQuery
-
-instance MonadExplain m => MonadExplain (SqlT m) where
-    shouldExplainQuery = lift . shouldExplainQuery
-    shouldLogQuery = lift . shouldLogQuery
-
-instance MonadExplain m => MonadExplain (ConduitT a b m) where
-    shouldExplainQuery = lift . shouldExplainQuery
-    shouldLogQuery = lift . shouldLogQuery
 
 terminalWidth :: Handle -> IO (Maybe Int)
 terminalWidth hnd = runMaybeT $ do
