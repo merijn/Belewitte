@@ -9,6 +9,8 @@ module Query.Missing
     ( MissingRun(..)
     , ExtraVariantInfo(..)
     , ValidationVariant(..)
+    , FilterRetries(..)
+    , maxRetryCount
     , missingBenchmarkQuery
     , validationVariantQuery
     , validationRunQuery
@@ -18,7 +20,7 @@ import Data.Maybe (fromMaybe)
 import Data.String.Interpolate.IsString (i)
 
 import Core
-import JobPool (Job, makeTimingJob)
+import JobPool (Job, makeTimingJob, maxRetryCount)
 import Query
 import Schema
 import Sql (fromPersistValue)
@@ -157,8 +159,12 @@ WHERE RunConfig.platformId = ?
   AND NOT Run.validated
 |]
 
-missingBenchmarkQuery :: Key RunConfig -> Query (MissingRun ExtraVariantInfo)
-missingBenchmarkQuery runConfigId = Query{convert = Simple converter, ..}
+data FilterRetries = NoFilterRetries | FilterRetries deriving (Show, Eq)
+
+missingBenchmarkQuery
+    :: FilterRetries -> Key RunConfig -> Query (MissingRun ExtraVariantInfo)
+missingBenchmarkQuery filtering runConfigId =
+    Query{convert = Simple converter, ..}
   where
     queryName :: Text
     queryName = "missingBenchmarkQuery"
@@ -194,8 +200,16 @@ missingBenchmarkQuery runConfigId = Query{convert = Simple converter, ..}
     commonTableExpressions :: [CTE]
     commonTableExpressions = []
 
+    dontFilterRetries :: Bool
+    dontFilterRetries = case filtering of
+        NoFilterRetries -> True
+        FilterRetries -> False
+
     params :: [PersistValue]
-    params = [ toPersistValue runConfigId ]
+    params = [ toPersistValue runConfigId
+             , toPersistValue dontFilterRetries
+             , toPersistValue maxRetryCount
+             ]
 
     queryText = [i|
 SELECT DISTINCT RunConfig.repeats
@@ -233,5 +247,6 @@ ON Variant.id = Run.variantId
 AND Implementation.id = Run.implId
 AND RunConfig.id = Run.runConfigId
 
-WHERE RunConfig.id = ? AND Variant.retryCount < 5 AND Run.runConfigId IS NULL
+WHERE RunConfig.id = ? AND Run.runConfigId IS NULL
+AND (? OR Variant.retryCount < ?)
 |]

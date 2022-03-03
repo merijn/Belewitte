@@ -10,6 +10,7 @@ module JobPool
     , Result(..)
     , makePropertyJob
     , makeTimingJob
+    , maxRetryCount
     , cleanupTimings
     , cleanupOutput
     , cleanupProperties
@@ -100,6 +101,9 @@ cleanupProperties Result{resultPropLog} = case resultPropLog of
     Just (_, key) -> release key
     Nothing -> return ()
 
+maxRetryCount :: Int
+maxRetryCount = 5
+
 jobTask
     :: (MonadLogger m, MonadMask m, MonadSql m)
     => Task m (Job a) (Result a)
@@ -164,7 +168,7 @@ jobTask = Task
       | Just Timeout <- fromException exc = return Retry
       | otherwise = do
           retries <- variantRetryCount <$> Sql.getJust jobVariant
-          if retries >= 5
+          if retries >= maxRetryCount
              then return Drop
              else Retry <$ Sql.update jobVariant [ VariantRetryCount +=. 1 ]
 

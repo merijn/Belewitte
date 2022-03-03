@@ -142,7 +142,7 @@ runBenchmarks = lift $ do
                     , " returned run config for different platform!"
                     ]
 
-            runSqlQueryConduit (missingBenchmarkQuery runCfgId) $
+            runSqlQueryConduit (missingBenchmarkQuery FilterRetries runCfgId) $
                 C.concatMapM (missingRunToTimingJob platformId)
                 .| processJobsParallel numNodes platform
                 .| C.mapM_ (processTiming runCfgId commitId)
@@ -229,7 +229,7 @@ ingestQueryDump :: FilePath -> SqlM ()
 ingestQueryDump outputSuffix = do
     Sql.runRegionConduit $
         Sql.selectKeysRegion [] [Asc RunConfigId]
-        .| C.map missingBenchmarkQuery
+        .| C.map (missingBenchmarkQuery FilterRetries)
         .> streamQuery
         .| querySink "missingQuery-"
 
@@ -261,7 +261,7 @@ ingestQueryDump outputSuffix = do
 ingestQueryMap :: Map String (Parser DebugQuery)
 ingestQueryMap = M.fromList
     [ nameDebugQuery "missingBenchmarkQuery" $
-        missingBenchmarkQuery <$> Compose runconfigIdParser
+        missingBenchmarkQuery FilterRetries <$> Compose runconfigIdParser
     , nameDebugQuery "validationVariantQuery" $
         validationVariantQuery <$> Compose platformIdParser
     , nameDebugQuery "validationRunQuery" $

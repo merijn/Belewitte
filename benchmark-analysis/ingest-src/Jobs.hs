@@ -54,7 +54,7 @@ variantToPropertyJob
     (Entity varId (Variant graphId variantCfgId _ hash step hasProps retries)) =
         case hash of
             Nothing
-                | retries < 5 && not hasProps && step == 0 -> yieldJob
+                | retries < maxRetryCount && not hasProps && step == 0 -> yieldJob
                 | hasProps -> jobError $
                     "Properties stored, but not result hash for variant #"
                     <> showSqlKey varId
@@ -63,7 +63,7 @@ variantToPropertyJob
                     "No properties, but did find max steps for variant #"
                     <> showSqlKey varId
 
-                | retries >= 5 -> jobWarn $
+                | retries >= maxRetryCount -> jobWarn $
                     "Hash missing, but too many retries for variant #"
                     <> showSqlKey varId
 
@@ -72,7 +72,7 @@ variantToPropertyJob
                     <> " is in an inconsistent state!"
 
             Just _
-                | retries < 5 && not hasProps && step == 0 -> do
+                | retries < maxRetryCount && not hasProps && step == 0 -> do
                     logWarnN $ mconcat
                       [ "Found a stored result, but no properties for variant#"
                       , showSqlKey varId
@@ -85,7 +85,7 @@ variantToPropertyJob
                     "No properties, but did find max steps for variant #"
                     <> showSqlKey varId
 
-                | retries >= 5 -> jobWarn $
+                | retries >= maxRetryCount -> jobWarn $
                     "No properties, but too many retries for variant #"
                     <> showSqlKey varId
 
