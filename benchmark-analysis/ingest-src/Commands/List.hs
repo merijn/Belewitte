@@ -16,7 +16,8 @@ import Pretty.List
     , buildOptionsWithoutId
     )
 import Query (streamQuery)
-import Query.Missing (FilterRetries(..), missingBenchmarkQuery)
+import Query.Missing
+    (FilterRetries(..), missingBenchmarkQuery, validationVariantQuery)
 import Schema
 import Sql (SelectOpt(Asc))
 import qualified Sql
@@ -95,12 +96,25 @@ commands = CommandGroup CommandInfo
             , "type" =. EnumField 't' $ Simple ImplementationType
             , "pretty-name" =. StringField 'p' $ Optional ImplementationPrettyName
             ]
-    , SingleCommand CommandInfo
+    , CommandGroup CommandInfo
         { commandName = "missing"
-        , commandHeaderDesc = "list missing runs"
-        , commandDesc = "List all missing runs."
+        , commandHeaderDesc = "list missing database entries"
+        , commandDesc =
+            "List *missing* database entries of various information entities."
         }
-        $ listMissing <$> retryFilterFlag
+        [ SingleCommand CommandInfo
+            { commandName = "runs"
+            , commandHeaderDesc = "list missing runs"
+            , commandDesc = "List all missing runs."
+            }
+            $ listMissing <$> retryFilterFlag
+        , SingleCommand CommandInfo
+            { commandName = "validations"
+            , commandHeaderDesc = "list missing validations"
+            , commandDesc = "List all missing validations."
+            }
+            $ pure listMissingValidations
+        ]
     , SingleCommand CommandInfo
         { commandName = "platform"
         , commandHeaderDesc = "list platforms"
@@ -241,6 +255,12 @@ commands = CommandGroup CommandInfo
     retryFilterFlag = flag FilterRetries NoFilterRetries $ mconcat
         [ long "all", help "Do not filter missing runs that have reached the\
         \ maximum number of retries." ]
+
+listMissingValidations :: SqlM ()
+listMissingValidations = renderColumns $
+    Sql.selectKeysRegion [] [Asc PlatformId]
+    .| C.map validationVariantQuery
+    .> streamQuery
 
 listMissing :: FilterRetries -> SqlM ()
 listMissing filt = renderColumns $

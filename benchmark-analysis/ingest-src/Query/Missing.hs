@@ -53,6 +53,13 @@ data ValidationVariant = ValidationVariant
     , validationArgs :: ![Text]
     } deriving (Show)
 
+instance PrettyFields ValidationVariant where
+    prettyFieldInfo = ("Algorithm", namedIdField validationAlgorithmId) :|
+        [ ("Variant", idField validationVariantId)
+        , ("Missing Validations",
+            validationMissingCount `fieldVia` prettyShow $ 1)
+        ]
+
 validationVariantQuery :: Key Platform -> Query ValidationVariant
 validationVariantQuery platformId = Query{convert = Simple converter, ..}
   where
