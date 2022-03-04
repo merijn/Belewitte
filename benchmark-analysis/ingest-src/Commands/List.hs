@@ -1,7 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Commands.List (commands) where
 
+import Data.Conduit ((.|))
+import qualified Data.Conduit.Combinators as C
+
 import Core
+import FormattedOutput (renderColumns)
 import Options
 import Pretty.List
     ( AnyField(..)
@@ -11,7 +15,11 @@ import Pretty.List
     , buildOptions
     , buildOptionsWithoutId
     )
+import Query (streamQuery)
+import Query.Missing (FilterRetries(..), missingBenchmarkQuery)
 import Schema
+import Sql (SelectOpt(Asc))
+import qualified Sql
 
 commands :: Command (SqlM ())
 commands = CommandGroup CommandInfo
@@ -87,6 +95,12 @@ commands = CommandGroup CommandInfo
             , "type" =. EnumField 't' $ Simple ImplementationType
             , "pretty-name" =. StringField 'p' $ Optional ImplementationPrettyName
             ]
+    , SingleCommand CommandInfo
+        { commandName = "missing"
+        , commandHeaderDesc = "list missing runs"
+        , commandDesc = "List all missing runs."
+        }
+        $ listMissing <$> retryFilterFlag
     , SingleCommand CommandInfo
         { commandName = "platform"
         , commandHeaderDesc = "list platforms"
@@ -222,3 +236,14 @@ commands = CommandGroup CommandInfo
             , "retries" =. SortOnlyField $ VariantRetryCount
             ]
     ]
+  where
+    retryFilterFlag :: Parser FilterRetries
+    retryFilterFlag = flag FilterRetries NoFilterRetries $ mconcat
+        [ long "all", help "Do not filter missing runs that have reached the\
+        \ maximum number of retries." ]
+
+listMissing :: FilterRetries -> SqlM ()
+listMissing filt = renderColumns $
+    Sql.selectKeysRegion [] [Asc RunConfigId]
+    .| C.map (missingBenchmarkQuery filt)
+    .> streamQuery
