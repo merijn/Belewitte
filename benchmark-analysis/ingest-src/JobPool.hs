@@ -10,7 +10,6 @@ module JobPool
     , Result(..)
     , makePropertyJob
     , makeTimingJob
-    , maxRetryCount
     , cleanupTimings
     , cleanupOutput
     , cleanupProperties
@@ -34,6 +33,7 @@ import ProcessTools.Pool hiding (withProcessPool)
 import qualified ProcessTools.Pool as Pool
 import RuntimeData (getKernelExecutable, getKernelLibPath)
 import Query (MonadQuery)
+import Query.Missing (maxRetryCount)
 import Schema
 import Sql (MonadSql, (+=.), getGlobalVar)
 import qualified Sql
@@ -100,9 +100,6 @@ cleanupProperties :: MonadIO m => Result a -> m ()
 cleanupProperties Result{resultPropLog} = case resultPropLog of
     Just (_, key) -> release key
     Nothing -> return ()
-
-maxRetryCount :: Int
-maxRetryCount = 5
 
 jobTask
     :: (MonadLogger m, MonadMask m, MonadSql m)

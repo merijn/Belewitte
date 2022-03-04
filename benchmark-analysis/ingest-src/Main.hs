@@ -171,6 +171,7 @@ validate = lift $ do
     validateForPlatform (Entity platformId platform) =
         withProcessPool numNodes platform $ \procPool -> Sql.runRegionConduit $
             streamQuery (validationVariantQuery platformId)
+            .| C.map validationVariantToJob
             .| toRegion (processJobsParallelWithSharedPool numNodes procPool)
             .> validationMissingRuns platformId
             .| toRegion (processJobsParallelWithSharedPool numNodes procPool)
@@ -178,6 +179,13 @@ validate = lift $ do
             .| toRegion (C.foldMapM cleanupValidation)
       where
         numNodes = platformAvailable platform
+
+        validationVariantToJob :: ValidationVariant -> Job ValidationVariant
+        validationVariantToJob config@ValidationVariant{..} = makeTimingJob
+            config
+            validationVariantId
+            Nothing
+            ("-k switch" : validationArgs)
 
         toRegion :: Monad m => ConduitT a b m r -> ConduitT a b (Region m) r
         toRegion = C.transPipe lift
@@ -246,7 +254,6 @@ ingestQueryDump outputSuffix = do
         Sql.selectKeysRegion [] [Asc PlatformId]
         .| C.map validationVariantQuery
         .> streamQuery
-        .| C.map jobValue
         .| finalSink
   where
     querySink

@@ -20,7 +20,6 @@ import Data.Maybe (fromMaybe)
 import Data.String.Interpolate.IsString (i)
 
 import Core
-import JobPool (Job, makeTimingJob, maxRetryCount)
 import Pretty.Fields.Record
 import Query
 import Schema
@@ -54,13 +53,13 @@ data ValidationVariant = ValidationVariant
     , validationArgs :: ![Text]
     } deriving (Show)
 
-validationVariantQuery :: Key Platform -> Query (Job ValidationVariant)
+validationVariantQuery :: Key Platform -> Query ValidationVariant
 validationVariantQuery platformId = Query{convert = Simple converter, ..}
   where
     queryName :: Text
     queryName = "validationVariantQuery"
 
-    converter :: MonadConvert m => [PersistValue] -> m (Job ValidationVariant)
+    converter :: MonadConvert m => [PersistValue] -> m ValidationVariant
     converter [ PersistInt64 (toSqlKey -> validationAlgorithmId)
               , PersistText algoName
               , PersistInt64 (toSqlKey -> validationVariantId)
@@ -68,10 +67,7 @@ validationVariantQuery platformId = Query{convert = Simple converter, ..}
               , PersistInt64 validationMissingCount
               , (fromPersistValue -> Right variantFlags)
               , PersistText graphPath
-              ] = return $ makeTimingJob ValidationVariant{..}
-                            validationVariantId
-                            Nothing
-                            ("-k switch" : validationArgs)
+              ] = return ValidationVariant{..}
       where
         validationArgs =
           [ "-a " <> algoName
@@ -167,6 +163,9 @@ WHERE RunConfig.platformId = ?
 |]
 
 data FilterRetries = NoFilterRetries | FilterRetries deriving (Show, Eq)
+
+maxRetryCount :: Int
+maxRetryCount = 5
 
 missingBenchmarkQuery
     :: FilterRetries -> Key RunConfig -> Query (MissingRun ExtraVariantInfo)
