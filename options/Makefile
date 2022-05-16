@@ -10,7 +10,6 @@ msan: $(LIBS)/lib$(NAME).msan.a
 ssan: $(LIBS)/lib$(NAME).ssan.a
 tsan: $(LIBS)/lib$(NAME).tsan.a
 
-$(DEST)/Options.o: CXXFLAGS+=$(BOOST_CXX_FLAGS)
 $(DEST)/Options.o: $(BOOST_PREREQ)
 
 $(LIBS)/lib$(NAME).a: $($(NAME)_CPP_OBJS)

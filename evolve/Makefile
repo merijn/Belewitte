@@ -4,7 +4,6 @@ SRCDIR := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
 
 all: $(SRCDIR)/gen-graph $(SRCDIR)/evolve
 
-$(DEST)/evolve.o: CXXFLAGS+=$(BOOST_CXX_FLAGS)
 $(DEST)/evolve.o: $(BOOST_PREREQ)
 
 $(SRCDIR)/evolve: LDFLAGS+=-ltbb $(if $(TBB_LIB_PATH), -L$(TBB_LIB_PATH))

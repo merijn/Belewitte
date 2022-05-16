@@ -71,8 +71,8 @@ report-cxx:
 missing-cuda:
 	$(PRINTF) "nvcc not found, skipping GPU kernel libraries\n"
 
-COMMON_CXXFLAGS=-MMD -MP -Wall -std=c++17 -g -I$(BASE) \
-    $(if $(CUDA_PATH),-isystem$(CUDA_PATH)/include/) \
+COMMON_CXXFLAGS=-MMD -MP -Wall -std=c++17 -g -iquote$(BASE) \
+    -isystem$(abspath $(PREFIX)/include) $(if $(CUDA_PATH),-isystem$(CUDA_PATH)/include/) \
     $(if $(TBB_INCLUDE_PATH),-isystem$(TBB_INCLUDE_PATH)/)
 
 CLANGWFLAGS=-Weverything -Wno-c++98-compat -Wno-c++98-compat-pedantic \
@@ -122,7 +122,7 @@ PREFIX:=$(BUILD)/prefix
 LIBS := $(BUILD)
 UNAME := $(shell uname -s)
 ifeq ($(UNAME),Darwin)
-    CXXFLAGS += -isystem/usr/local/include/ -Wno-undefined-func-template
+    CXXFLAGS += -Wno-undefined-func-template
 
     CLANGWFLAGS += -Wno-poison-system-directories
     DYLIBLDFLAGS += -flat_namespace -undefined suppress
@@ -153,7 +153,9 @@ endif
                    -Wno-deprecated-gpu-targets
 endif
 
-$(BUILD)/kernels/ $(DOWNLOAD)/ $(PREFIX)/ $(TARGET)/:
+BUILD_DIRS:=$(patsubst $(BASE)/%/Makefile, $(BUILD)/%/, $(wildcard $(BASE)/*/Makefile))
+
+$(BUILD)/kernels/ $(DOWNLOAD)/ $(PREFIX)/ $(TARGET)/ $(BUILD)/ $(BUILD_DIRS):
 	$(PRINTF) " MKDIR\t$@\n"
 	$(AT)mkdir -p $@
 

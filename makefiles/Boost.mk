@@ -4,7 +4,6 @@ BOOST_SHASUM:=882b48708d211a5f48e60b0124cf5863c1534cd544ecd0664bb534a4b5d506e9
 BOOST_ROOT:=$(DOWNLOAD)/$(BOOST_NAME)
 BOOST_PREREQ:=$(PREFIX)/include/boost/
 
-BOOST_CXX_FLAGS:=-I$(PREFIX)/include -isystem$(PREFIX)/include
 BOOST_LD_FLAGS=$(if $(wildcard $(PREFIX)/lib),-L$(PREFIX)/lib) \
     $(if $(wildcard $(PREFIX)/lib64),-L$(PREFIX)/lib64)
 

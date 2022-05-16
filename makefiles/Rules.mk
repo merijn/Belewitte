@@ -1,8 +1,5 @@
-$(DEST)/:
-	$(AT)mkdir -p $@
-
 .SECONDEXPANSION:
-$(DEST)/%.o: $(SRCDIR)/%.cpp | $$(dir $(DEST)/%.o)
+$(BUILD)/%.o: $(BASE)/%.cpp | $$(dir $$@)
 	$(PRINTF) " CXX\t$*.cpp\n"
 	$(AT)$(CXX) $(CXXFLAGS) -O3 -I. $< -c -o $@
 
@@ -45,25 +42,30 @@ SANITISERS=-fsanitize=undefined -fsanitize=integer -fsanitize=nullability \
 %.ssan %.ssan.a: LDFLAGS:=$(LDFLAGS) $(SANITISERS) -fsanitize=safe-stack
 %.tsan %.tsan.a: LDFLAGS:=$(LDFLAGS) $(SANITISERS) -fsanitize=thread
 
-$(DEST)/%.asan.o: $(SRCDIR)/%.cpp | $(DEST)/
+.SECONDEXPANSION:
+$(DEST)/%.asan.o: $(BASE)/%.cpp | $$(dir $$@)
 	$(PRINTF) " CXX\t$*.cpp\n"
 	$(AT)$(CXX) $(CXXFLAGS) -I. $< -c -o $@
 
-$(DEST)/%.msan.o: $(SRCDIR)/%.cpp | $(DEST)/
+.SECONDEXPANSION:
+$(DEST)/%.msan.o: $(BASE)/%.cpp | $$(dir $$@)
 	$(PRINTF) " CXX\t$*.cpp\n"
 	$(AT)$(CXX) $(CXXFLAGS) -I. $< -c -o $@
 
-$(DEST)/%.ssan.o: $(SRCDIR)/%.cpp | $(DEST)/
+.SECONDEXPANSION:
+$(DEST)/%.ssan.o: $(BASE)/%.cpp | $$(dir $$@)
 	$(PRINTF) " CXX\t$*.cpp\n"
 	$(AT)$(CXX) $(CXXFLAGS) -I. $< -c -o $@
 
-$(DEST)/%.tsan.o: $(SRCDIR)/%.cpp | $(DEST)/
+.SECONDEXPANSION:
+$(DEST)/%.tsan.o: $(BASE)/%.cpp | $$(dir $$@)
 	$(PRINTF) " CXX\t$*.cpp\n"
 	$(AT)$(CXX) $(CXXFLAGS) -I. $< -c -o $@
 endif
 
 $(DEST)/%.obj: SRCDIR:=$(SRCDIR)
-$(DEST)/%.obj: $(SRCDIR)/%.cu | $(DEST)/
+.SECONDEXPANSION:
+$(DEST)/%.obj: $(BASE)/%.cu | $$(dir $$@)
 	$(PRINTF) " NVCC\t$*.cu\n"
 	$(AT)$(NVCC) $(NVCCXXFLAGS) -M -I. $< -o $(@:.obj=.d)
 	$(AT)$(SED) -i.bak "s#$(notdir $*).o#$(@) $(SRCDIR)/$*.ptx#" $(@:.obj=.d)
@@ -71,7 +73,8 @@ $(DEST)/%.obj: $(SRCDIR)/%.cu | $(DEST)/
 	$(AT)$(NVCC) $(NVCCXXFLAGS) $(NVCCARCHFLAGS) -lineinfo -I. --device-c $< -o $@
 
 $(DEST)/%.debug.obj: SRCDIR:=$(SRCDIR)
-$(DEST)/%.debug.obj: $(SRCDIR)/%.cu | $(DEST)/
+.SECONDEXPANSION:
+$(DEST)/%.debug.obj: $(BASE)/%.cu | $$(dir $$@)
 	$(PRINTF) " NVCC\t$*.cu\n"
 	$(AT)$(NVCC) $(NVCCXXFLAGS) -M -I. $< -o $(@:.obj=.d)
 	$(AT)$(SED) -i.bak "s#$(notdir $*).o#$(@) $(SRCDIR)/$*.ptx#" $(@:.obj=.d)

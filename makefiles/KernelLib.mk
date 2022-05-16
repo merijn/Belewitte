@@ -5,8 +5,10 @@ $(NAME)_CUDA_PTXS:=$(patsubst %.cu, $(SRCDIR)/%.ptx, $($(NAME)_CUDA_SRCS))
 
 -include $(patsubst %.cu, $(DEST)/%.d, $($(NAME)_CUDA_SRCS))
 
-$($(NAME)_CUDA_OBJS): | $(DEST)/
-$($(NAME)_CUDA_DEBUG_OBJS): | $(DEST)/
+.SECONDEXPANSION:
+$($(NAME)_CUDA_OBJS): | $$(dir $$@)
+.SECONDEXPANSION:
+$($(NAME)_CUDA_DEBUG_OBJS): | $$(dir $$@)
 
 ifdef NVCC
 all: $(BUILD)/kernels/lib$(NAME)kernel.so \

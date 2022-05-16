@@ -21,8 +21,6 @@ $(NAME)_CPP_OBJS:=$(patsubst %.cpp, $(DEST)/%.o, $($(NAME)_CPP_SRCS))
 
 -include $(patsubst %.cpp, $(DEST)/%.d, $($(NAME)_CPP_SRCS))
 
-$(foreach obj,$($(NAME)_CPP_OBJS), $(call sanobjects,$(obj))): | $(DEST)/
-
 .PHONY: clean-$(NAME)-objs clean-$(NAME)-deps clean-$(NAME)-%san
 
 clean-$(NAME)-objs: NAME:=$(NAME)

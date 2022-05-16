@@ -33,10 +33,6 @@ tsan: $(foreach exe,$(EXES),$(exe).tsan)
 
 $(call sanobjects,$(DEST)/kernel-runner) \
     $(call sanobjects,$(DEST)/normalise-graph) \
-    $(call sanobjects,$(DEST)/graph-details): CXXFLAGS+=$(BOOST_CXX_FLAGS)
-
-$(call sanobjects,$(DEST)/kernel-runner) \
-    $(call sanobjects,$(DEST)/normalise-graph) \
     $(call sanobjects,$(DEST)/graph-details): $(BOOST_PREREQ)
 
 ifndef NVCC
