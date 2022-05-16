@@ -219,17 +219,17 @@ class Accessor {
   };
 
   template<bool is_const>
-  class Iterator : public std::iterator<std::random_access_iterator_tag, Converter> {
+  class Iterator {
     public:
+      using iterator_category = std::random_access_iterator_tag;
+      using value_type = typename std::conditional
+                            <is_const, const Converter, Converter>::type;
+      using difference_type = int64_t;
+      using size_type = uint64_t;
+      using pointer = value_type*;
+      using reference = value_type&;
       typedef typename std::conditional
           <is_const, const Accessor<T>, Accessor<T>>::type accessor;
-      typedef std::random_access_iterator_tag iterator_category;
-      typedef uint64_t size_type;
-      typedef int64_t difference_type;
-      typedef typename std::conditional
-          <is_const, const Converter, Converter>::type value_type;
-      typedef value_type& reference;
-      typedef value_type* pointer;
 
     private:
       accessor& acc;
@@ -426,20 +426,21 @@ class MutableGraph {
     class Edges;
 
     template<bool is_const>
-    class VertexIterator : public std::iterator<std::random_access_iterator_tag, Vertex> {
+    class VertexIterator {
       public:
+        using iterator_category = std::random_access_iterator_tag;
+        using value_type = typename std::conditional
+            <is_const, const Vertex, Vertex>::type;
+        using difference_type = int64_t;
+        using size_type = uint64_t;
+        using pointer = value_type*;
+        using reference = value_type&;
+
         typedef typename std::conditional
             < is_const
             , const MutableGraph::Vertices
             , MutableGraph::Vertices>::type Vertices;
 
-        typedef std::random_access_iterator_tag iterator_category;
-        typedef uint64_t size_type;
-        typedef int64_t difference_type;
-        typedef typename std::conditional
-            <is_const, const Vertex, Vertex>::type value_type;
-        typedef value_type& reference;
-        typedef value_type* pointer;
 
       private:
         Vertices& vertices;
@@ -538,20 +539,20 @@ class MutableGraph {
     };
 
     template<bool is_const>
-    class EdgeIterator : public std::iterator<std::bidirectional_iterator_tag, Edge<E>> {
+    class EdgeIterator {
       public:
+        using iterator_category = std::bidirectional_iterator_tag;
+        using value_type = typename std::conditional
+            <is_const, const Edge<E>, Edge<E>>::type;
+        using difference_type = int64_t;
+        using size_type = uint64_t;
+        using pointer = value_type*;
+        using reference = value_type&;
+
         typedef typename std::conditional
             < is_const
             , const MutableGraph::Edges
             , MutableGraph::Edges>::type Edges;
-
-        typedef std::bidirectional_iterator_tag iterator_category;
-        typedef uint64_t size_type;
-        typedef int64_t difference_type;
-        typedef typename std::conditional
-            <is_const, const Edge<E>, Edge<E>>::type value_type;
-        typedef value_type& reference;
-        typedef value_type* pointer;
 
       private:
         Edges& edges;

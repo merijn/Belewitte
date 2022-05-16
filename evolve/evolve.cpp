@@ -112,7 +112,7 @@ class MurmurHashCrossover : public CrossoverFun {
         MurmurHashCrossover(uint64_t) : seed(random_device()())
         {}
 
-        virtual ~MurmurHashCrossover();
+        virtual ~MurmurHashCrossover() override;
 };
 
 MurmurHashCrossover::~MurmurHashCrossover() {}
@@ -215,12 +215,14 @@ class Crossover {
         { return const_reverse_iterator(begin()); }
     };
 
-    class Iterator : public std::iterator<std::forward_iterator_tag, edge> {
+    class Iterator {
       public:
-        typedef std::bidirectional_iterator_tag iterator_category;
-        typedef const edge value_type;
-        typedef value_type& reference;
-        typedef value_type* pointer;
+        using iterator_category = std::forward_iterator_tag;
+        using value_type = const edge;
+        using difference_type = int64_t;
+        using size_type = uint64_t;
+        using pointer = value_type*;
+        using reference = value_type&;
 
       private:
         bool ended;
