@@ -58,10 +58,10 @@ SLURM Workload Manager
 Python 3.6 or 3.7
     The python 3.6/3.7 executable is expected to be in the user's ``PATH``
 
-GHC Haskell compiler 8.10.2
+GHC Haskell compiler 8.10.7
     https://www.haskell.org/ghc/download.html
 
-cabal-install 3.2
+cabal-install 3.6
     https://www.haskell.org/cabal/download.html
 
 Intel Threading Building Blocks
@@ -190,8 +190,8 @@ Benchmark Analysis Tools Prerequisites
 --------------------------------------
 
 * gmake
-* GHC 8.10.2
-* cabal-install 3.2
+* GHC 8.10.7
+* cabal-install 3.6
 
 Optional prerequisities:
 
@@ -212,8 +212,8 @@ Evolutionary Graph Generation Prerequisites
 -------------------------------------------
 
 * gmake
-* GHC 8.10.2
-* cabal-install 3.2
+* GHC 8.10.7
+* cabal-install 3.6
 * Intel TBB
 * SLURM
 
@@ -226,8 +226,8 @@ coordinate `(x, y)` iff there is an edge from vertex `x` to vertex `y`.
 Graph Plotting Prerequisites
 ----------------------------
 
-* GHC 8.10.2
-* cabal-install 3.2
+* GHC 8.10.7
+* cabal-install 3.6
 
 DAS 5 Instructions
 ==================
@@ -259,31 +259,32 @@ clang++ 8
     tar xvf clang+llvm-8.0.0-x86_64-linux-sles11.3.tar.xz -C $INSTALL_PATH --strip-components=1
     rm clang+llvm-8.0.0-x86_64-linux-sles11.3.tar.xz
 
-GHC 8.10.2
+GHC 8.10.7
 ----------
 
 .. code:: bash
 
-    wget https://downloads.haskell.org/~ghc/8.10.2/ghc-8.10.2-x86_64-centos7-linux.tar.xz
-    tar xvf ghc-8.10.2-x86_64-centos7-linux.tar.xz
-    rm ghc-8.10.2-x86_64-centos7-linux.tar.xz
-    cd ghc-8.10.2
+
+    wget https://downloads.haskell.org/~ghc/8.10.7/ghc-8.10.7-x86_64-centos7-linux.tar.xz
+    tar xvf ghc-8.10.7-x86_64-centos7-linux.tar.xz
+    rm ghc-8.10.7-x86_64-centos7-linux.tar.xz
+    cd ghc-8.10.7
     ./configure --prefix=$INSTALL_PATH
     make install
     hash -r
     cd ..
-    rm -r ghc-8.10.2
+    rm -r ghc-8.10.7
 
-cabal-install 3.2
+cabal-install 3.6
 -----------------
 
 .. code:: bash
 
-    wget https://downloads.haskell.org/~cabal/cabal-install-3.2.0.0/cabal-install-3.2.0.0-x86_64-unknown-linux.tar.xz
-    tar xvf cabal-install-3.2.0.0-x86_64-unknown-linux.tar.xz
+    wget https://downloads.haskell.org/~ghcup/unofficial-bindists/cabal/3.6.2.0/cabal-install-3.6.2.0-x86_64-linux-alpine-static.tar.xz
+    tar xvf cabal-install-3.6.2.0-x86_64-linux-alpine-static.tar.xz
     mkdir -p $INSTALL_PATH/bin/
     mv cabal $INSTALL_PATH/bin/
-    rm cabal.sig cabal-install-3.2.0.0-x86_64-unknown-linux.tar.xz
+    rm cabal.sig cabal-install-3.6.2.0-x86_64-linux-alpine-static.tar.xz
 
 -------------------------------------------------------------------------------
 
