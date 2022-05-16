@@ -10,11 +10,13 @@ $(SRCDIR)/evolve: LDFLAGS+=-ltbb $(if $(TBB_LIB_PATH), -L$(TBB_LIB_PATH))
 
 $(DEST)/Connectivity.o: CPATH:=$(if $(TBB_INCLUDE_PATH), $(TBB_INCLUDE_PATH):)$(CPATH)
 
-$(SRCDIR)/gen-graph: $(DEST)/gen-graph.o $(LIBS)/libutils.a
+$(SRCDIR)/gen-graph: $(DEST)/gen-graph.o $(LIBS)/libutils.a \
+    $(LIBS)/liboptions.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
-$(SRCDIR)/evolve: $(DEST)/evolve.o $(DEST)/Connectivity.o $(LIBS)/libutils.a
+$(SRCDIR)/evolve: $(DEST)/evolve.o $(DEST)/Connectivity.o $(LIBS)/libutils.a \
+    $(LIBS)/liboptions.a
 	$(PRINTF) " LD\t$@\n"
 	$(AT)$(LD) $(LDFLAGS) $^ -o $@
 
@@ -30,4 +32,7 @@ clean-bins: clean-$(NAME)-bins
 
 ifeq ($(SRCDIR),.)
 include $(BASE)/utils/Makefile
+endif
+ifeq ($(SRCDIR),.)
+include $(BASE)/Options/Makefile
 endif

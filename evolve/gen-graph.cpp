@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "utils/Graph.hpp"
+#include "options/Options.hpp"
 
 using namespace std;
 
@@ -44,29 +45,27 @@ string file_name(T first, Args... args)
     return gen_name(fileName, args...);
 }
 
-static const char *execName = "gen-graph";
+static const char *exeName = "gen-graph";
+static Options options('h', "help", cout, [](ostream& out)
+{
+    out << "Usage:" << endl;
+    out << exeName << " -S" << endl;
+    out << exeName << " chain <vertex count>" << endl;
+    out << exeName << " star <vertex count>" << endl;
+    out << exeName << " mesh <mesh width> <mesh height>" << endl;
+    out << exeName << " degree4 <vertex count>" << endl;
+    out << exeName << " degree6 <vertex count>" << endl;
+    out << exeName << " any <?> <?>" << endl;
+    out << exeName << " random <graph> <vertex count> <edge count>" << endl;
+    out << exeName << " random-mutations <graph> <vertex count> <mutation rate>"
+        << endl << endl;
+    out << endl << "Options:" << endl;
+});
 
 static void __attribute__((noreturn))
 usage(int exitCode = EXIT_FAILURE)
 {
-    vector<string> args = {
-        "chain <vertex count>",
-        "star <vertex count>",
-        "mesh <mesh width> <mesh height>",
-        "degree4 <vertex count>",
-        "degree6 <vertex count>",
-        "any <?> <?>",
-        "random <graph> <vertex count> <edge count>",
-        "random-mutations <graph> <vertex count> <mutation rate>"
-    };
-
-    ostream& out(exitCode == EXIT_SUCCESS ? cout : cerr);
-    out << "Usage:" << endl;
-    out << execName << " [--help | -h ]" << endl;
-    for (auto&& arg : args) {
-        out << execName << " [--directed | -d ] [--undirected | -u] "
-             << arg << endl;
-    }
+    options.usage(cout, "    ");
     exit(exitCode);
 }
 
