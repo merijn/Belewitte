@@ -122,7 +122,7 @@ PREFIX:=$(BUILD)/prefix
 LIBS := $(BUILD)
 UNAME := $(shell uname -s)
 ifeq ($(UNAME),Darwin)
-    CXXFLAGS += -Wno-undefined-func-template
+    CXXFLAGS += -isystem/usr/local/include/ -Wno-undefined-func-template
 
     CLANGWFLAGS += -Wno-poison-system-directories
     DYLIBLDFLAGS += -flat_namespace -undefined suppress
