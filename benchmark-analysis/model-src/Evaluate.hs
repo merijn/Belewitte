@@ -424,7 +424,7 @@ reportTotalStatistics Report{..} implMaps TotalStats{..} = case reportOutput of
     latexEscape = T.replace "%" "\\%"
 
 latexCaption :: Text -> Text
-latexCaption label = [Interpolate.i|\\caption{\\glsdesc*{#{label}}}\\label{#{label}}%|]
+latexCaption label = [Interpolate.i|\\caption[\\glsxtrshort*{#{label}}]{\\glsdesc*{#{label}}}\\label{#{label}}%|]
 
 latexTableHeader :: Text -> Splittable -> Text
 latexTableHeader label splittable = case splittable of
