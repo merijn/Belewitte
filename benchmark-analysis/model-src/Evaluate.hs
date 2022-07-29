@@ -9,6 +9,7 @@ module Evaluate
     ( CompareReport
     , EvaluateReport
     , Report(..)
+    , Spacing(..)
     , Splittable(..)
     , ReportOutput(..)
     , RelativeTo(..)
@@ -215,7 +216,10 @@ data SortBy = AvgError | MaxError | AbsTime
 data Splittable = Splittable | Fixed
     deriving (Eq,Ord,Show,Read)
 
-data ReportOutput = Minimal | Detailed | LaTeX Text Splittable
+data Spacing = Normal | Compact
+    deriving (Eq,Ord,Show,Read)
+
+data ReportOutput = Minimal | Detailed | LaTeX Text Splittable Spacing
     deriving (Eq,Ord,Show,Read)
 
 type EvaluateReport = Report ImplFilter
@@ -329,8 +333,8 @@ reportTotalStatistics
     -> TotalStatistics
     -> ConduitT () Text m ()
 reportTotalStatistics Report{..} implMaps TotalStats{..} = case reportOutput of
-    LaTeX label splittable -> do
-        C.yield $ latexTableHeader label splittable
+    LaTeX label splittable spacing -> do
+        C.yield $ latexTableHeader label splittable spacing
 
         runReport (fmap latexEscape <$> implMaps) " &" $
             \(absTime, cumError, oneToTwo, gtFive, gtTwenty, maxError) ->
@@ -426,9 +430,10 @@ reportTotalStatistics Report{..} implMaps TotalStats{..} = case reportOutput of
 latexCaption :: Text -> Text
 latexCaption label = [Interpolate.i|\\caption[\\glsxtrshort*{#{label}}]{\\glsdesc*{#{label}}}\\label{#{label}}%|]
 
-latexTableHeader :: Text -> Splittable -> Text
-latexTableHeader label splittable = case splittable of
+latexTableHeader :: Text -> Splittable -> Spacing -> Text
+latexTableHeader label splittable spacing = case splittable of
     Splittable -> [Interpolate.i|\\begingroup
+\\footnotesize#{columnSpacing}
 \\setlength{\\LTleft}{-20cm plus -1fill}
 \\setlength{\\LTright}{\\LTleft}
 \\begin{longtable}{#{columnLayout}}
@@ -447,11 +452,18 @@ latexTableHeader label splittable = case splittable of
 
     Fixed -> [Interpolate.i|\\begin{table}
 \\centering
+\\makebox[\\textwidth][c]{
+\\footnotesize#{columnSpacing}
 \\begin{tabular}{#{columnLayout}}
 \\toprule
 #{columnHeader}
 |]
   where
+    columnSpacing :: Text
+    columnSpacing = case spacing of
+        Normal -> ""
+        Compact -> "\n\\setlength{\\tabcolsep}{3pt}"
+
     columnLayout :: Text
     columnLayout = "lrrrrrrr"
 
@@ -462,7 +474,7 @@ ${>} 20 {\\times}$ &  Worst\\\\\\midrule|]
 latexTableFooter :: Text -> Splittable -> Text
 latexTableFooter _ Splittable = "\\end{longtable}\n\\endgroup\n"
 latexTableFooter label Fixed = [Interpolate.i|\\bottomrule
-\\end{tabular}%
+\\end{tabular}}%
 #{latexCaption label}
 \\end{table}
 |]

@@ -36,6 +36,7 @@ import Evaluate
     ( CompareReport
     , EvaluateReport
     , Report(..)
+    , Spacing(..)
     , Splittable(..)
     , ReportOutput(..)
     , RelativeTo(..)
@@ -376,7 +377,7 @@ reportParser implTypes =
         helpTxt = "Time to sort results by."
 
     latexTable :: Parser ReportOutput
-    latexTable = LaTeX <$> tableLabel <*> splittable
+    latexTable = LaTeX <$> tableLabel <*> splittable <*> spacing
       where
         tableLabel = strOption $ mconcat
             [ metavar "LABEL", long "latex"
@@ -386,6 +387,11 @@ reportParser implTypes =
         splittable = flag Fixed Splittable $ mconcat
             [ long "splittable"
             , help "Allows LaTeX table to be split across multiple pages."
+            ]
+
+        spacing = flag Normal Compact $ mconcat
+            [ long "compact"
+            , help "Use more compact column spacing when type setting table."
             ]
 
     detailed :: Parser ReportOutput
