@@ -24,6 +24,7 @@ module OptionParsers
     , platformParser
     , predictorConfigParser
     , predictorConfigsParser
+    , renameParser
     , runconfigIdParser
     , runconfigParser
     , requiredUtcTimeParser
@@ -41,7 +42,7 @@ module OptionParsers
     , module Options.Applicative
     ) where
 
-import Control.Monad (void)
+import Control.Monad (void, when)
 import Data.Char (toLower)
 import Data.Foldable (asum)
 import Data.Function (on)
@@ -66,7 +67,8 @@ import Options.Applicative.Help (Doc, (</>))
 import qualified Options.Applicative.Help as Help
 import System.Exit (exitFailure)
 import Text.Megaparsec
-    (Parsec, eof, lookAhead, manyTill, parseMaybe, runParser, sepBy1, try)
+    ( Parsec, eof, lookAhead, manyTill, parseMaybe, runParser, sepBy1, takeRest
+    , try)
 import Text.Megaparsec.Char (alphaNumChar, char, string')
 import Text.Megaparsec.Char.Lexer (decimal, signed)
 import Text.Megaparsec.Error (errorBundlePretty)
@@ -380,6 +382,29 @@ predictorConfigsParser = do
         mispredictionStrategyReader =
             maybeReader $ parseMaybe parseMispredictionStrategy
 
+renameParser :: Parser (IntMap Text)
+renameParser = IM.unions <$> many renameOpt
+  where
+    renameOpt :: Parser (IntMap Text)
+    renameOpt = option (eitherReader renameReader) $ mconcat
+        [ metavar "ID:NAME", long "rename"
+        , help "Specify manual name override for an implementation id" ]
+
+    renameReader :: String -> Either String (IntMap Text)
+    renameReader s = case runParser idNameParser "" s of
+        Right (k, v) -> Right $ IM.singleton k v
+        Left e -> Left $ errorBundlePretty e
+
+    idNameParser :: Parsec Void String (Int, Text)
+    idNameParser = do
+        d <- decimal
+        void $ char ':'
+        name <- takeRest
+
+        when (null name) $
+            fail "Expected name with non-zero length!"
+
+        return (d, T.pack name)
 
 runconfigIdParser :: Parser (SqlM (Key RunConfig))
 runconfigIdParser = fmap entityKey <$> runconfigParser

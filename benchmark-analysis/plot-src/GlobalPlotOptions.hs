@@ -16,6 +16,7 @@ data GlobalPlotOptions
     , globalPlotTimestamp :: UTCTime
     , globalPlotAllowNewer :: AllowNewer
     , globalPlotImpls :: (IntMap Implementation, IntMap ExternalImpl)
+    , globalPlotImplRenames :: IntMap Text
     }
 
 globalOptionsParser :: Parser (SqlM GlobalPlotOptions)
@@ -28,6 +29,7 @@ globalOptionsParser = do
     filterImpls <- intMapFilter "impl-set" "implementation" <|> pure id
     filterExtImpls <- intMapFilter "ext-impl-set" "external implementation"
                         <|> pure (const mempty)
+    renames <- renameParser
 
     pure $ do
         algoId <- getAlgoId
@@ -36,4 +38,4 @@ globalOptionsParser = do
 
         GlobalPlotOptions algoId
             <$> getPlatformId <*> getCommit algoId <*> getUtcTime
-            <*> pure allowNewer <*> pure (impls, extImpls)
+            <*> pure allowNewer <*> pure (impls, extImpls) <*> pure renames

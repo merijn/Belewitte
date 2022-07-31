@@ -117,7 +117,9 @@ barPlot BarPlot{barPlotGlobalOpts = GlobalPlotOptions{..}, ..} = do
 
     variantFilter VariantInfo{variantId} = S.member variantId barPlotVariants
 
-    implMaps@Pair{regular} = toImplNames id id globalPlotImpls
+    renamePair = Pair globalPlotImplRenames globalPlotImplRenames
+    implMaps@Pair{regular} =
+        IM.union <$> renamePair <*> toImplNames id id globalPlotImpls
 
     translatePair :: Pair (Vector ImplTiming) -> Vector (Text, Double)
     translatePair p = mergePair $ nameImplementations <$> implMaps <*> p
