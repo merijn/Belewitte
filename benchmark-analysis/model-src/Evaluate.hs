@@ -4,6 +4,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 module Evaluate
     ( CompareReport
@@ -57,7 +58,21 @@ import Utils.Pair (Pair(..), mapFirst, mergePair)
 padText :: Word -> Text -> Text
 padText n t = t <> T.replicate (fromIntegral n - T.length t) " "
 
-reportImplementations
+splitEnds :: Int -> [a] -> ([a], [a], [a])
+splitEnds 0 l = ([], l, [])
+splitEnds n l = (begin, middle, end)
+  where
+    (begin, rest) = splitAt n l
+    (middle, end) = splitAtEnd n rest
+
+splitAtEnd :: Int -> [a] -> ([a], [a])
+splitAtEnd n l = go id l (drop n l)
+  where
+    go f xs [] = (f [], xs)
+    go _ [] _ = ([], [])
+    go f (x:xs) (_:ys) = go (f . (x:)) xs ys
+
+reportImplementations_
     :: Text
     -> Int
     -> Pair (IntMap Text)
@@ -65,17 +80,36 @@ reportImplementations
     -> (a -> Text)
     -> Pair [(Int64, a)]
     -> Text
-reportImplementations sep pad implMaps cmp f =
-    foldMap renderEntry
-        . sortBy (cmp `on` snd)
-        . mergePair
-        . filterLabelEntries
+reportImplementations_ = reportImplementations ("\n", "\n", "\n")
+
+reportImplementations
+    :: forall a
+     . (Text, Text, Text)
+    -> Text
+    -> Int
+    -> Pair (IntMap Text)
+    -> ((Int64, a) -> (Int64, a) -> Ordering)
+    -> (a -> Text)
+    -> Pair [(Int64, a)]
+    -> Text
+reportImplementations lineSeparators nameSep pad implMaps cmp f entries =
+    T.intercalate affixSep begin <> beginSep
+    <> T.intercalate infixSep middle <> middleSep
+    <> T.intercalate affixSep end <> endSep
   where
     lookupName :: IntMap Text -> (Int64, a) -> Maybe (Text, (Int64, a))
     lookupName implNames v@(i, _) = (,v) <$> implNames !? fromIntegral i
 
-    filterLabelEntries :: Pair [(Int64, a)] -> Pair [(Text, (Int64, a))]
-    filterLabelEntries entries = mapMaybe . lookupName <$> implMaps <*> entries
+    filterLabelEntries :: Pair [(Text, (Int64, a))]
+    filterLabelEntries = mapMaybe . lookupName <$> implMaps <*> entries
+
+    orderedEntries :: [(Text, (Int64, a))]
+    orderedEntries = sortBy (cmp `on` snd) . mergePair $ filterLabelEntries
+
+    (begin, middle, end) = splitEnds 3 $ map renderEntry orderedEntries
+    (affixSep, infixSep, endSep) = lineSeparators
+    beginSep = if not (null middle) then affixSep else mempty
+    middleSep = if not (null end) then affixSep else mempty
 
     padSize :: Word
     padSize = getMax $ 2 + mergePair (foldMap getLength <$> implMaps)
@@ -84,7 +118,7 @@ reportImplementations sep pad implMaps cmp f =
         getLength = Semigroup.Max . fromIntegral . T.length
 
     renderEntry (name, (_, val)) = mconcat
-        [ T.replicate pad " ", padText padSize $ name <> sep, f val ]
+        [ T.replicate pad " ", padText padSize $ name <> nameSep, f val ]
 
 data TotalStatistics =
   TotalStats
@@ -161,7 +195,7 @@ aggregateVariants variantIntervals relTo implMaps = do
         variantReport :: Text
         variantReport = mIf shouldReportVariant $ mconcat
             [ "Variant #", showText (fromSqlKey variantid), "\n"
-            , reportImplementations ":" 4 implMaps comparison relTiming results
+            , reportImplementations_ ":" 4 implMaps comparison relTiming results
             , "\n"
             ]
 
@@ -336,7 +370,7 @@ reportTotalStatistics Report{..} implMaps TotalStats{..} = case reportOutput of
     LaTeX label splittable spacing -> do
         C.yield $ latexTableHeader label splittable spacing
 
-        runReport (fmap latexEscape <$> implMaps) " &" $
+        runReport splittable (fmap latexEscape <$> implMaps) " &" $
             \(absTime, cumError, oneToTwo, gtFive, gtTwenty, maxError) ->
                 mconcat
                     [ "$", roundVal (absTime / aggregateComparisonTime)
@@ -347,23 +381,23 @@ reportTotalStatistics Report{..} implMaps TotalStats{..} = case reportOutput of
                     , latexPercent gtFive variantCount, " & "
                     , latexPercent gtTwenty variantCount, " & $"
                     , roundVal maxError
-                    , "{\\times}$\\\\\n"
+                    , "{\\times}$"
                     ]
 
         C.yield $ latexTableFooter label splittable
 
     Minimal -> do
         C.yield "Summarising:\n"
-        runReport implMaps ":" $ \(absTime, cumError, _, _, _, maxError) ->
+        runReport_ implMaps ":" $ \(absTime, cumError, _, _, _, maxError) ->
             mconcat
                 [ roundVal (absTime / aggregateComparisonTime), "\t"
                 , roundVal (cumError / fromIntegral variantCount), "\t"
-                , roundVal maxError, "\n"
+                , roundVal maxError
                 ]
 
     Detailed -> do
         C.yield "Summarising:\n"
-        runReport implMaps ":" $
+        runReport_ implMaps ":" $
             \(absTime, cumError, oneToTwo, gtFive, gtTwenty, maxError) ->
                 mconcat
                     [ roundVal (absTime / aggregateComparisonTime), "\t"
@@ -372,17 +406,39 @@ reportTotalStatistics Report{..} implMaps TotalStats{..} = case reportOutput of
                     , percent gtFive variantCount, "\t"
                     , percent gtTwenty variantCount
                     , roundVal maxError
-                    , "\n"
                     ]
   where
-    runReport
+    runRawReport
+        :: Monad m
+        => (Text, Text, Text)
+        -> Pair (IntMap Text)
+        -> Text
+        -> ((Double, Double, Int, Int, Int, Double) -> Text)
+        -> ConduitT () Text m ()
+    runRawReport lineSeparators names nameSep reportFun =
+      C.yield $ reportImplementations lineSeparators nameSep 0
+                    names comparison reportFun reportTimings
+
+    runReport_
         :: Monad m
         => Pair (IntMap Text)
         -> Text
         -> ((Double, Double, Int, Int, Int, Double) -> Text)
         -> ConduitT () Text m ()
-    runReport names sep reportFun = C.yield $
-        reportImplementations sep 0 names comparison reportFun reportTimings
+    runReport_ = runRawReport ("\n", "\n", "\n")
+
+    runReport
+        :: Monad m
+        => Splittable
+        -> Pair (IntMap Text)
+        -> Text
+        -> ((Double, Double, Int, Int, Int, Double) -> Text)
+        -> ConduitT () Text m ()
+    runReport splittable = runRawReport seps
+      where
+        seps = case splittable of
+            Splittable -> ("\\\\*\n", "\\\\\n", "\n")
+            Fixed -> ("\\\\\n", "\\\\\n", "\\\\\n")
 
     roundVal :: Double -> Text
     roundVal val = T.pack $ showFFloat (Just 2) val ""
