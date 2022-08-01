@@ -507,8 +507,7 @@ latexTableHeader label splittable spacing = case splittable of
 |]
 
     Fixed -> [Interpolate.i|\\begin{table}
-\\centering
-\\makebox[\\textwidth][c]{
+\\centerfloat%
 \\footnotesize#{columnSpacing}
 \\begin{tabular}{#{columnLayout}}
 \\toprule
@@ -530,7 +529,7 @@ ${>} 20 {\\times}$ &  Worst\\\\\\midrule|]
 latexTableFooter :: Text -> Splittable -> Text
 latexTableFooter _ Splittable = "\\end{longtable}\n\\endgroup\n"
 latexTableFooter label Fixed = [Interpolate.i|\\bottomrule
-\\end{tabular}}%
+\\end{tabular}%
 #{latexCaption label}
 \\end{table}
 |]
