@@ -134,7 +134,7 @@ class Plot(object):
                 markerscale=2, numpoints=1, scatterpoints=1, edgecolor="black",
                 mode="expand", ncol=3)
         self.fig.savefig(self.filename, bbox_extra_artists=(legend,),
-                         bbox_inches='tight')
+                         bbox_inches='tight', metadata={'CreationDate': None})
         plt.close(self.fig)
         return None
 

@@ -61,4 +61,4 @@ ax = sns.heatmap(data, vmin=1.0, vmax=50, norm=LogNorm(), xticklabels=columns)
 
 fig = ax.get_figure()
 fig.set_size_inches(30, 10)
-fig.savefig(opts.outputPDF + '.pdf', bbox_inches='tight')
+fig.savefig(opts.outputPDF + '.pdf', bbox_inches='tight', metadata={'CreationDate': None})
