@@ -8,6 +8,10 @@ authors:
     family-names: Verstraaten
     affiliation: University of Amsterdam
     orcid: 'https://orcid.org/0000-0002-2717-9851'
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.6959684
+    description: Final thesis release for Belewitte
 repository-code: 'https://github.com/merijn/Belewitte'
 license: GPL-3.0-or-later
 version: 1.0.0

@@ -2,10 +2,10 @@
 Belewitte [1]_
 ==============
 
-.. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.3902239.svg
-   :target: https://doi.org/10.5281/zenodo.3902239
-.. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.3902234.svg
-   :target: https://doi.org/10.5281/zenodo.3902234
+.. image:: https://zenodo.org/badge/88159659.svg
+   :target: https://zenodo.org/badge/latestdoi/88159659
+.. image:: https://zenodo.org/badge/DOI/10.5281/zenodo.6925023.svg
+   :target: https://doi.org/10.5281/zenodo.6925023
 
 This repository is made up of 5 (mostly) independent components:
 
