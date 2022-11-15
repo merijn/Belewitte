@@ -19,7 +19,6 @@ import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
 import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
-import qualified Database.Persist.TH as TH
 
 import Model (Model)
 import Pretty.Fields.Persistent
@@ -46,7 +45,7 @@ import qualified Schema.Model.V4 as V4
 import qualified Schema.Model.V5 as V5
 import qualified Schema.Model.V6 as V6
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
+Utils.mkEntities "schema" [persistUpperCase|
 PredictionModel
     platformId PlatformId
     algorithmId AlgorithmId

@@ -8,7 +8,6 @@ module Schema.Utils
     , MonadSql
     , MonadThrow
     , Transaction
-    , DBName(..)
     , Entity
     , EntityDef
     , ForeignDef
@@ -22,6 +21,7 @@ module Schema.Utils
     , createTableFromSchema
     , mkForeignRef
     , addForeignRef
+    , mkEntities
     , mkMigration
     , mkMigrationLookup
     , getTypeName
@@ -36,6 +36,7 @@ import Database.Persist.TH (embedEntityDefs)
 import Database.Persist.Types
     (DBName(..), EntityDef(..), ForeignDef(..), HaskellName(..), noCascade)
 
+import Schema.Utils.TH (mkEntities)
 import Sql.Core (MonadLogger, MonadSql, MonadThrow, SqlRecord, Transaction)
 import qualified Sql.Core as Sql
 

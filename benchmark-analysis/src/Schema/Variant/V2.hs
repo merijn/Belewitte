@@ -13,7 +13,6 @@
 module Schema.Variant.V2 where
 
 import Database.Persist.TH (persistUpperCase)
-import qualified Database.Persist.TH as TH
 
 import Schema.Utils (EntityDef, ForeignDef)
 import qualified Schema.Utils as Utils
@@ -23,7 +22,7 @@ import Schema.Algorithm (AlgorithmId)
 import Schema.Graph (GraphId)
 import Schema.VariantConfig (VariantConfigId)
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema'"] [persistUpperCase|
+Utils.mkEntities "schema'" [persistUpperCase|
 Variant
     graphId GraphId
     variantConfigId VariantConfigId

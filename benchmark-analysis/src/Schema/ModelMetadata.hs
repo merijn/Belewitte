@@ -15,7 +15,6 @@ module Schema.ModelMetadata where
 
 import Data.String.Interpolate.IsString (i)
 import Database.Persist.TH (persistUpperCase)
-import qualified Database.Persist.TH as TH
 
 import Schema.Utils (EntityDef, Int64, MonadSql, Transaction, (.=), (.>))
 import qualified Schema.Utils as Utils
@@ -27,7 +26,7 @@ import qualified Schema.ModelMetadata.V0 as V0
 import qualified Schema.ModelMetadata.V1 as V1
 import qualified Schema.ModelMetadata.V2 as V2
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
+Utils.mkEntities "schema" [persistUpperCase|
 ModelProperty
     modelId PredictionModelId
     propId PropertyNameId

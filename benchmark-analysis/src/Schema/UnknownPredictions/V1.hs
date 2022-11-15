@@ -15,7 +15,6 @@
 module Schema.UnknownPredictions.V1 where
 
 import Database.Persist.TH (persistUpperCase)
-import qualified Database.Persist.TH as TH
 
 import Schema.Utils (EntityDef, ForeignDef)
 import qualified Schema.Utils as Utils
@@ -24,7 +23,7 @@ import Schema.Algorithm (AlgorithmId)
 import Schema.Model (PredictionModelId)
 import Schema.Implementation (ImplementationId)
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema'"] [persistUpperCase|
+Utils.mkEntities "schema'" [persistUpperCase|
 UnknownPrediction
     modelId PredictionModelId
     algorithmId AlgorithmId

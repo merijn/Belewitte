@@ -15,14 +15,15 @@ module Schema.Timers.V0 where
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
 import Database.Persist.TH (persistUpperCase)
-import qualified Database.Persist.TH as TH
+
+import qualified Schema.Utils as Utils
+import Types
 
 import Schema.Implementation (ImplementationId)
 import Schema.Platform.V0 (GPUId)
 import Schema.Variant (VariantId)
-import Types
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
+Utils.mkEntities "schema" [persistUpperCase|
 TotalTimer
     gpuId GPUId
     variantId VariantId

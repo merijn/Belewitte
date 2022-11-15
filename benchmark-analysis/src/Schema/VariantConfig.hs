@@ -20,7 +20,6 @@ import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
 import Database.Persist.Sql (Checkmark, Unique)
 import Database.Persist.TH (persistUpperCase)
-import qualified Database.Persist.TH as TH
 
 import Exceptions (DBConstraintViolation(..), logThrowM)
 import Pretty.Fields.Persistent
@@ -33,7 +32,7 @@ import Schema.Algorithm (AlgorithmId)
 import qualified Schema.VariantConfig.V0 as V0
 import qualified Schema.VariantConfig.V1 as V1
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
+Utils.mkEntities "schema" [persistUpperCase|
 VariantConfig
     algorithmId AlgorithmId
     name Text

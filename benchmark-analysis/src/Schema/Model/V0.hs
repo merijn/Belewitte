@@ -15,13 +15,13 @@ module Schema.Model.V0 where
 import Data.Time.Clock (UTCTime)
 import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
-import qualified Database.Persist.TH as TH
 
 import Model (Model)
+import qualified Schema.Utils as Utils
 
 import Schema.Platform.V0 (GPUId)
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
+Utils.mkEntities "schema" [persistUpperCase|
 PredictionModel
     gpuId GPUId
     model Model

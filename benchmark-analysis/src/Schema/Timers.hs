@@ -18,7 +18,6 @@ import Control.Monad (when)
 import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
 import Database.Persist.TH (persistUpperCase)
-import qualified Database.Persist.TH as TH
 
 import Pretty.Fields.Persistent
 import Schema.Utils
@@ -40,7 +39,7 @@ import qualified Schema.Timers.V2 as V2
 import Schema.Run (RunId)
 import Schema.Variant (VariantId)
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema'"] [persistUpperCase|
+Utils.mkEntities "schema'" [persistUpperCase|
 TotalTimer
     runId RunId
     name Text

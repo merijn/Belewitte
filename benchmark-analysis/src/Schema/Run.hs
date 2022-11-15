@@ -18,7 +18,6 @@ import Data.String.Interpolate.IsString (i)
 import Data.Time.Clock (UTCTime)
 import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
-import qualified Database.Persist.TH as TH
 
 import Pretty.Fields.Persistent
 import Schema.Utils
@@ -31,7 +30,7 @@ import Schema.RunConfig (RunConfigId)
 import Schema.Variant (VariantId)
 import qualified Schema.Run.V0 as V0
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema'"] [persistUpperCase|
+Utils.mkEntities "schema'" [persistUpperCase|
 Run
     runConfigId RunConfigId
     variantId VariantId

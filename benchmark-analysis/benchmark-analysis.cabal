@@ -164,6 +164,7 @@ Library
                         Schema.UnknownPredictions.V1
                         Schema.UnknownPredictions.V2
                         Schema.Utils
+                        Schema.Utils.TH
                         Schema.Variant
                         Schema.Variant.V0
                         Schema.Variant.V1
@@ -236,6 +237,7 @@ Library
                ,        prettyprinter ^>= 1.6.0
                ,        prettyprinter-ansi-terminal ^>= 1.1.1
                ,        resource-pool ^>= 0.2.3.2
+               ,        template-haskell ^>= 2.16.0.0
                ,        terminal-size ^>= 0.3.2.1
                ,        transformers
                ,        unliftio-core ^>= 0.2.0.1

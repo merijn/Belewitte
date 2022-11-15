@@ -18,7 +18,6 @@ import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
 import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
-import qualified Database.Persist.TH as TH
 
 import Pretty.Fields.Persistent
 import Schema.Import
@@ -31,7 +30,7 @@ import Schema.Platform (PlatformId)
 import Schema.Variant (VariantId)
 import qualified Schema.External.V0 as V0
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema'"] [persistUpperCase|
+Utils.mkEntities "schema'" [persistUpperCase|
 ExternalImpl
     algorithmId AlgorithmId
     name Text

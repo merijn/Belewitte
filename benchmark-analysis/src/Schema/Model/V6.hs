@@ -14,16 +14,16 @@ module Schema.Model.V6 where
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
 import Database.Persist.TH (persistUpperCase)
-import qualified Database.Persist.TH as TH
 
 import Model (Model)
 import Schema.Utils (Int64)
+import qualified Schema.Utils as Utils
 import Types
 
 import Schema.Algorithm (AlgorithmId)
 import Schema.Platform (PlatformId)
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
+Utils.mkEntities "schema" [persistUpperCase|
 PredictionModel
     platformId PlatformId
     algorithmId AlgorithmId

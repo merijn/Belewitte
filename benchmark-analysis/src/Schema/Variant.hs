@@ -16,7 +16,6 @@ module Schema.Variant where
 import Data.String.Interpolate.IsString (i)
 import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
-import qualified Database.Persist.TH as TH
 import Database.Persist.Types
 
 import Pretty.Fields.Persistent
@@ -32,7 +31,7 @@ import qualified Schema.Variant.V0 as V0
 import qualified Schema.Variant.V1 as V1
 import qualified Schema.Variant.V2 as V2
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema'"] [persistUpperCase|
+Utils.mkEntities "schema'" [persistUpperCase|
 Variant
     graphId GraphId
     variantConfigId VariantConfigId

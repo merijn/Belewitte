@@ -19,7 +19,6 @@ import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
 import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
-import qualified Database.Persist.TH as TH
 
 import Pretty.Fields.Persistent
 import Schema.Utils
@@ -32,7 +31,7 @@ import Schema.Variant (VariantId)
 import qualified Schema.Properties.V0 as V0
 import qualified Schema.Properties.V1 as V1
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema'"] [persistUpperCase|
+Utils.mkEntities "schema'" [persistUpperCase|
 PropertyName
     property Text
     isStepProp Bool

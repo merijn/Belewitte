@@ -17,14 +17,13 @@ import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
 import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
-import qualified Database.Persist.TH as TH
 
 import Pretty.Fields.Persistent
 import Schema.Import
 import Schema.Utils (Entity, EntityDef, Int64, MonadSql, Transaction, (.>))
 import qualified Schema.Utils as Utils
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
+Utils.mkEntities "schema" [persistUpperCase|
 Dataset
     name Text
     UniqDataset name

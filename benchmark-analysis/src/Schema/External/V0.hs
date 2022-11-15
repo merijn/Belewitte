@@ -14,13 +14,14 @@ module Schema.External.V0 where
 
 import Data.Text (Text)
 import Database.Persist.TH (persistUpperCase)
-import qualified Database.Persist.TH as TH
+
+import qualified Schema.Utils as Utils
 
 import Schema.Algorithm (AlgorithmId)
 import Schema.Platform (PlatformId)
 import Schema.Variant (VariantId)
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
+Utils.mkEntities "schema" [persistUpperCase|
 ExternalImpl
     algorithmId AlgorithmId
     name Text

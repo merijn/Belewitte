@@ -14,9 +14,10 @@ module Schema.Graph.V0 where
 import Data.Text (Text)
 import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
-import qualified Database.Persist.TH as TH
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
+import qualified Schema.Utils as Utils
+
+Utils.mkEntities "schema" [persistUpperCase|
 Graph
     name Text
     dataset Text

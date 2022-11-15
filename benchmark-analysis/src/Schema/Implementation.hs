@@ -18,7 +18,6 @@ import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
 import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
-import qualified Database.Persist.TH as TH
 
 import Pretty.Fields.Persistent
 import Schema.Utils
@@ -29,7 +28,7 @@ import Types
 import Schema.Algorithm (AlgorithmId)
 import qualified Schema.Implementation.V0 as V0
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
+Utils.mkEntities "schema" [persistUpperCase|
 Implementation
     algorithmId AlgorithmId
     name Text

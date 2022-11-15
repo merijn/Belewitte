@@ -12,14 +12,14 @@
 module Schema.Variant.V1 where
 
 import Database.Persist.TH (persistUpperCase)
-import qualified Database.Persist.TH as TH
 
+import qualified Schema.Utils as Utils
 import Types
 
 import Schema.Graph (GraphId)
 import Schema.VariantConfig (VariantConfigId)
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
+Utils.mkEntities "schema" [persistUpperCase|
 Variant
     graphId GraphId
     variantConfigId VariantConfigId

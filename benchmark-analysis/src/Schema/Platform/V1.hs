@@ -14,9 +14,9 @@ module Schema.Platform.V1 where
 import Data.Text (Text)
 import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
-import qualified Database.Persist.TH as TH
+import qualified Schema.Utils as Utils
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
+Utils.mkEntities "schema" [persistUpperCase|
 Platform
     name Text
     prettyName Text Maybe

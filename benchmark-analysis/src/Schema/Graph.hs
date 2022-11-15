@@ -19,7 +19,6 @@ import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
 import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
-import qualified Database.Persist.TH as TH
 
 import Pretty.Fields.Persistent
 import Schema.Import
@@ -31,7 +30,7 @@ import Schema.Dataset (DatasetId)
 import qualified Schema.Graph.V0 as V0
 import qualified Schema.Graph.V1 as V1
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
+Utils.mkEntities "schema" [persistUpperCase|
 Graph
     name Text
     path Text

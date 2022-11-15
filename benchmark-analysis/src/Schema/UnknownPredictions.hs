@@ -20,7 +20,6 @@ import Data.Maybe (fromMaybe)
 import Data.String.Interpolate.IsString (i)
 import Database.Persist.Sql (Unique)
 import Database.Persist.TH (persistUpperCase)
-import qualified Database.Persist.TH as TH
 
 import Exceptions (AbortMigration(..), logThrowM)
 import Schema.Utils
@@ -42,7 +41,7 @@ import qualified Schema.UnknownPredictions.V0 as V0
 import qualified Schema.UnknownPredictions.V1 as V1
 import qualified Schema.UnknownPredictions.V2 as V2
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema'"] [persistUpperCase|
+Utils.mkEntities "schema'" [persistUpperCase|
 UnknownPrediction
     modelId PredictionModelId
     algorithmId AlgorithmId

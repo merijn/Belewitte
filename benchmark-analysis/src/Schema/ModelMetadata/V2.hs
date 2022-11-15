@@ -13,13 +13,14 @@
 module Schema.ModelMetadata.V2 where
 
 import Database.Persist.TH (persistUpperCase)
-import qualified Database.Persist.TH as TH
+
+import qualified Schema.Utils as Utils
 
 import Schema.Dataset (DatasetId)
 import Schema.Model (PredictionModelId)
 import Schema.Properties (PropertyNameId)
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
+Utils.mkEntities "schema" [persistUpperCase|
 ModelProperty
     modelId PredictionModelId
     propId PropertyNameId

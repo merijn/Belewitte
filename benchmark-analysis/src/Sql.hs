@@ -24,7 +24,7 @@ import Data.String.Interpolate.IsString (i)
 import Database.Persist.Sqlite (OnlyOneUniqueKey, sqlType)
 
 import Core
-import Query (CTE, Converter(Simple), MonadConvert, MonadQuery, Query(..))
+import Query (CTE, Converter(Simple), MonadConvert, Query(..))
 import qualified Query
 import Schema
 import Schema.GlobalVars (Unique(UniqGlobal))

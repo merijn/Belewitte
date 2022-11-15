@@ -13,11 +13,11 @@ module Schema.Graph.V1 where
 
 import Data.Text (Text)
 import Database.Persist.TH (persistUpperCase)
-import qualified Database.Persist.TH as TH
 
 import Schema.Dataset (DatasetId)
+import qualified Schema.Utils as Utils
 
-TH.share [TH.mkPersist TH.sqlSettings, TH.mkSave "schema"] [persistUpperCase|
+Utils.mkEntities "schema" [persistUpperCase|
 Graph
     name Text
     path Text
