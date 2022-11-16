@@ -130,6 +130,7 @@ import qualified Lens.Micro.Extras as Lens
 
 import Exceptions
 import SQLiteExts
+import qualified Sql.Core.PersistCompat as Compat
 
 newtype Avg = Avg { getAvg :: Int } deriving (Show, Eq, Ord)
 newtype Max = Max { getMax :: Int } deriving (Show, Eq, Ord)
@@ -405,17 +406,17 @@ newtype SqlT m a = SqlT { unSqlT :: ReaderT SqlPool m a }
   , MonadLoggerIO, MonadMask, MonadResource, MonadThrow)
 
 instance MonadResource m => MonadSql (SqlT m) where
-    getConnFromPool = SqlT $ asks Sqlite.acquireSqlConnFromPool
+    getConnFromPool = SqlT $ asks Compat.acquireSqlConnFromPool
     getConnWithoutForeignKeysFromPool = do
         pool <- SqlT $ ask
         return $ do
-            conn <- Sqlite.unsafeAcquireSqlConnFromPool pool
+            conn <- Compat.unsafeAcquireSqlConnFromPool pool
             let foreignOff = setPragmaConn "foreign_keys" (0 :: Int64)
                 foreignOn _ = setPragmaConn "foreign_keys" (1 :: Int64) conn
             () <- mkAcquire (foreignOff conn) foreignOn
             Sqlite.acquireSqlConn conn
 
-    getConnWithoutTransaction = SqlT $ asks Sqlite.unsafeAcquireSqlConnFromPool
+    getConnWithoutTransaction = SqlT $ asks Compat.unsafeAcquireSqlConnFromPool
 
 instance (MonadLogger m, MonadThrow m) => MonadFail (SqlT m) where
     fail = logThrowM . PatternFailed . T.pack
