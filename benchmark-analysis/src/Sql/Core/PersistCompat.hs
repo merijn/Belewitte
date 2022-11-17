@@ -1,11 +1,9 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Sql.Core.PersistCompat
     (unsafeAcquireSqlConnFromPool, acquireSqlConnFromPool) where
 
-#if MIN_VERSION_persistent(2,12,0)
 import Control.Monad.Reader (MonadReader)
 import qualified Control.Monad.Reader as MonadReader
 import Data.Acquire (Acquire, ReleaseType(..), mkAcquireType)
@@ -32,7 +30,3 @@ acquireSqlConnFromPool
 acquireSqlConnFromPool = do
     connFromPool <- unsafeAcquireSqlConnFromPool
     return $ connFromPool >>= acquireSqlConn
-#else
-import Database.Persist.Sqlite
-    (unsafeAcquireSqlConnFromPool, acquireSqlConnFromPool)
-#endif

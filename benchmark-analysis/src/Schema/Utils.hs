@@ -11,7 +11,6 @@ module Schema.Utils
     , Entity
     , EntityDef
     , ForeignDef
-    , HaskellName(..)
     , Int64
     , (.=)
     , (.>)
@@ -37,11 +36,21 @@ import Data.List (stripPrefix)
 import qualified Data.Map as M
 import Data.Text (Text)
 import qualified Data.Text as T
-import Database.Persist.Sql (Entity, Migration, entityDef, migrate)
-import Database.Persist.TH (embedEntityDefs)
+import Database.Persist.EntityDef.Internal (EntityDef(..))
+import Database.Persist.Quasi.Internal (UnboundEntityDef)
+import Database.Persist.Sql (Entity, Migration, entityDef)
+import Database.Persist.TH (migrateModels)
 import qualified Database.Persist.TH as TH
 import Database.Persist.Types
-    (DBName(..), EntityDef(..), ForeignDef(..), HaskellName(..), noCascade)
+    ( ConstraintNameDB(..)
+    , ConstraintNameHS(..)
+    , EntityNameDB(..)
+    , EntityNameHS(..)
+    , FieldNameDB(..)
+    , FieldNameHS(..)
+    , ForeignDef(..)
+    , noCascade
+    )
 import Language.Haskell.TH (Dec, Q)
 
 import Sql.Core (MonadLogger, MonadSql, MonadThrow, SqlRecord, Transaction)
@@ -53,13 +62,16 @@ import qualified Sql.Core as Sql
 (.>) :: Functor f => a -> b -> f c -> (a, (b, f c))
 (.>) i schema act = (i, (schema, act))
 
-mkEntities :: String -> [EntityDef] -> Q [Dec]
+mkEntities :: String -> [UnboundEntityDef] -> Q [Dec]
 mkEntities name = TH.share
-    [TH.mkPersist TH.sqlSettings, TH.mkSave name]
+    [TH.mkPersist TH.sqlSettings, TH.mkEntityDefList name]
 
-mkEntitiesWith :: String -> [[EntityDef]] -> [EntityDef] -> Q [Dec]
-mkEntitiesWith name _ = TH.share
-    [TH.mkPersist TH.sqlSettings, TH.mkSave name]
+mkEntitiesWith :: String -> [[EntityDef]] -> [UnboundEntityDef] -> Q [Dec]
+mkEntitiesWith name entLists = TH.share
+    [TH.mkPersistWith TH.sqlSettings ents, TH.mkEntityDefList name]
+  where
+    ents :: [EntityDef]
+    ents = mconcat entLists
 
 mkMigration
     :: (MonadLogger m, MonadSql m, MonadThrow m)
@@ -78,18 +90,15 @@ mkMigration ents = do
 
             throwM exc
   where
-    embeddedEnts :: [EntityDef]
-    embeddedEnts = embedEntityDefs . concat $ ents
-
     resolvedEnts :: Migration
-    resolvedEnts = mapM_ (migrate embeddedEnts) embeddedEnts
+    resolvedEnts = migrateModels . concat $ ents
 
     reportError :: MonadLogger m => String -> Transaction m ()
     reportError msg
         | Just _name <- stripPrefix "Table not found: " msg
         = Log.logErrorN . T.unlines $
             [ T.pack msg, "Found tables:" ]
-            ++ map (unHaskellName . entityHaskell) (concat ents)
+            ++ map (unEntityNameHS . entityHaskell) (concat ents)
 
         | otherwise = Log.logErrorN "Unknown error while generating migration"
 
@@ -102,10 +111,12 @@ createTableFromSchema defs = do
 
 mkForeignRef :: Text -> [(Text, Text)] -> ForeignDef
 mkForeignRef foreignTable refs = ForeignDef
-    { foreignRefTableHaskell = HaskellName foreignTable
-    , foreignRefTableDBName = DBName foreignTable
-    , foreignConstraintNameHaskell = HaskellName $ "Foreign" <> foreignTable
-    , foreignConstraintNameDBName = DBName $ "Foreign" <> foreignTable
+    { foreignRefTableHaskell = EntityNameHS foreignTable
+    , foreignRefTableDBName = EntityNameDB foreignTable
+    , foreignConstraintNameHaskell =
+        ConstraintNameHS $ "Foreign" <> foreignTable
+    , foreignConstraintNameDBName =
+        ConstraintNameDB $ "Foreign" <> foreignTable
     , foreignFields = map wrapNames refs
     , foreignFieldCascade = noCascade
     , foreignToPrimary = False
@@ -113,14 +124,16 @@ mkForeignRef foreignTable refs = ForeignDef
     , foreignNullable = False
     }
   where
-    wrapNames :: (Text, Text) -> ((HaskellName, DBName), (HaskellName, DBName))
+    wrapNames
+        :: (Text, Text)
+        -> ((FieldNameHS, FieldNameDB), (FieldNameHS, FieldNameDB))
     wrapNames (src, dst) =
-        ((HaskellName src, DBName src), (HaskellName dst, DBName dst))
+      ((FieldNameHS src, FieldNameDB src), (FieldNameHS dst, FieldNameDB dst))
 
 addForeignRef :: Text -> ForeignDef -> [EntityDef] -> [EntityDef]
 addForeignRef _ _ [] = []
 addForeignRef name fk (ent:ents)
-    | entityHaskell ent /= HaskellName name = ent : addForeignRef name fk ents
+    | entityHaskell ent /= EntityNameHS name = ent : addForeignRef name fk ents
     | otherwise = ent { entityForeigns = fk : entityForeigns ent } : ents
 
 mkMigrationLookup
@@ -136,4 +149,4 @@ mkMigrationLookup (M.fromList -> migrationMap) = \i ->
             | otherwise -> return schema
 
 getTypeName :: SqlRecord rec => proxy rec -> Text
-getTypeName = unHaskellName . entityHaskell . entityDef
+getTypeName = unEntityNameHS . entityHaskell . entityDef

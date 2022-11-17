@@ -113,7 +113,7 @@ selectSourceImport filts order = do
     toProducer source <* release key
 
 runImport
-    :: ( MonadLogger m
+    :: ( MonadLoggerIO m
        , MonadMask m
        , MonadResource m
        , MonadThrow m

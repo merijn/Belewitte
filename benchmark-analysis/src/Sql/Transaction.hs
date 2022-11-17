@@ -26,6 +26,7 @@ import Database.Persist.Sqlite
     , FilterValue(..)
     , OnlyOneUniqueKey
     , PersistFilter(..)
+    , SafeToInsert
     , getFieldName
     , getTableName
     )
@@ -88,7 +89,11 @@ validateUniqKey
 validateUniqKey = fmap entityKey . validateUniqEntity
 
 getUniq
-    :: (MonadSql m, SqlRecord record, OnlyOneUniqueKey record)
+    :: ( MonadSql m
+       , SafeToInsert record
+       , SqlRecord record
+       , OnlyOneUniqueKey record
+       )
     => record -> Transaction m (Key record)
 getUniq record = do
     result <- getBy =<< onlyUnique record
@@ -100,6 +105,7 @@ insertUniq
     :: ( MonadLogger m
        , MonadSql m
        , MonadThrow m
+       , SafeToInsert record
        , SqlRecord record
        , AtLeastOneUniqueKey record
        , Eq record
@@ -169,14 +175,18 @@ getJustEntity
     :: (MonadSql m, SqlRecord rec) => Key rec -> Transaction m (Entity rec)
 getJustEntity = Transaction . Sqlite.getJustEntity
 
-insert :: (MonadSql m, SqlRecord rec) => rec -> Transaction m (Key rec)
+insert
+    :: (MonadSql m, SafeToInsert rec, SqlRecord rec)
+    => rec -> Transaction m (Key rec)
 insert = Transaction . Sqlite.insert
 
-insert_ :: (MonadSql m, SqlRecord rec) => rec -> Transaction m ()
+insert_
+    :: (MonadSql m, SafeToInsert rec, SqlRecord rec)
+    => rec -> Transaction m ()
 insert_ = Transaction . Sqlite.insert_
 
 insertBy
-    :: (AtLeastOneUniqueKey rec, MonadSql m, SqlRecord rec)
+    :: (AtLeastOneUniqueKey rec, MonadSql m, SafeToInsert rec, SqlRecord rec)
     => rec -> Transaction m (Either (Entity rec) (Key rec))
 insertBy = Transaction . Sqlite.insertBy
 

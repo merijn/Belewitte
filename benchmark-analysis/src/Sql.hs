@@ -21,7 +21,7 @@ import Data.Conduit (ConduitT, Void, transPipe)
 import Data.IntMap (IntMap)
 import Data.Proxy (Proxy(Proxy))
 import Data.String.Interpolate.IsString (i)
-import Database.Persist.Sqlite (OnlyOneUniqueKey, sqlType)
+import Database.Persist.Sqlite (OnlyOneUniqueKey, SafeToInsert, sqlType)
 
 import Core
 import Query (CTE, Converter(Simple), MonadConvert, Query(..))
@@ -145,10 +145,10 @@ getJust = runReadOnlyTransaction . SqlTrans.getJust
 getJustEntity :: (MonadSql m, SqlRecord rec) => Key rec -> m (Entity rec)
 getJustEntity = runReadOnlyTransaction . SqlTrans.getJustEntity
 
-insert :: (MonadSql m, SqlRecord rec) => rec -> m (Key rec)
+insert :: (MonadSql m, SafeToInsert rec, SqlRecord rec) => rec -> m (Key rec)
 insert = runTransaction . SqlTrans.insert
 
-insert_ :: (MonadSql m, SqlRecord rec) => rec -> m ()
+insert_ :: (MonadSql m, SafeToInsert rec, SqlRecord rec) => rec -> m ()
 insert_ = runTransaction . SqlTrans.insert_
 
 insertKey :: (MonadSql m, SqlRecord rec) => Key rec -> rec -> m ()
@@ -160,8 +160,8 @@ onlyUnique
 onlyUnique = runReadOnlyTransaction . SqlTrans.onlyUnique
 
 insertUniq
-    :: ( MonadLogger m, MonadSql m, MonadThrow m, SqlRecord record
-       , AtLeastOneUniqueKey record, Eq record, Show record
+    :: ( MonadLogger m, MonadSql m, MonadThrow m, SafeToInsert record
+       , SqlRecord record, AtLeastOneUniqueKey record, Eq record, Show record
        )
     => record -> m (Key record)
 insertUniq = runTransaction . SqlTrans.insertUniq

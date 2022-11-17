@@ -98,8 +98,8 @@ Library ffi-core
   Include-Dirs:         cbits
   Includes:             sqlite-functions.h
 
-  Build-Depends:        persistent ^>= 2.11.0.2
-               ,        persistent-sqlite ^>= 2.11.1.0
+  Build-Depends:        persistent ^>= 2.14.3
+               ,        persistent-sqlite ^>= 2.13.1
                ,        prettyprinter ^>= 1.6.0
                ,        prettyprinter-ansi-terminal ^>= 1.1.1
 
@@ -242,9 +242,8 @@ Library
                ,        megaparsec ^>= 7.0.0
                ,        memory ^>= 0.15
                ,        microlens ^>= 0.4.8
-               ,        persistent ^>= 2.11.0.2
-               ,        persistent-template ^>= 2.9.1.0
-               ,        persistent-sqlite ^>= 2.11.1.0
+               ,        persistent ^>= 2.14.3
+               ,        persistent-sqlite ^>= 2.13.1
                ,        resource-pool ^>= 0.2.3.2
                ,        template-haskell ^>= 2.16.0.0
                ,        terminal-size ^>= 0.3.2.1

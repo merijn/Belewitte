@@ -438,12 +438,12 @@ instance MonadUnliftIO m => MonadUnliftIO (SqlT m) where
     {-# INLINE withRunInIO #-}
 
 runSqlT
-    :: (MonadLogger m, MonadThrow m, MonadUnliftIO m)
+    :: (MonadLoggerIO m, MonadThrow m, MonadUnliftIO m)
     => Text -> SqlT m r -> m r
 runSqlT database (SqlT sqlAct) = runPool $ runReaderT sqlAct
   where
     runPool
-        :: (MonadLogger m, MonadUnliftIO m, MonadThrow m)
+        :: (MonadLoggerIO m, MonadUnliftIO m, MonadThrow m)
         => (SqlPool -> m r) -> m r
     runPool = Sqlite.withRawSqlitePoolInfo connInfo setup 20
 
