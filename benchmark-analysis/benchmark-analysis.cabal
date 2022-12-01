@@ -31,7 +31,7 @@ Data-Files:             runtime-data/kernel-runner
 
 Extra-Source-Files:     cbits/*.h
 
-Common all
+Common compile-flags
   Default-Language:     Haskell2010
   GHC-Options:          -O2 -Wall -fno-warn-unused-do-bind
   GHC-Prof-Options:     -fprof-auto
@@ -45,25 +45,63 @@ Common all
                         ViewPatterns
 
   Build-Depends:        base
-               ,        process-tools
                ,        bytestring ^>= 0.10.8
+               ,        exceptions ^>= 0.10.0
+               ,        monad-logger ^>= 0.3.28
+               ,        text ^>= 1.2.3.2
+
+Common all
+  Import:               compile-flags
+
+  Build-Depends:        process-tools
                ,        conduit ^>= 1.3.1.1
                ,        conduit-extra ^>= 1.3.4
                ,        containers >= 0.5.11 && < 0.7
-               ,        exceptions ^>= 0.10.0
                ,        interpolate ^>= 0.2.0
-               ,        monad-logger ^>= 0.3.28
                ,        mtl ^>= 2.2.1
                ,        optparse-applicative ^>= 0.17
                ,        pretty-show ^>= 1.10
                ,        resourcet ^>= 1.2.0
-               ,        text ^>= 1.2.3.2
                ,        time ^>= 1.9
                ,        unix ^>= 2.7.0
 
 Common exes
   GHC-Options:          -rtsopts -threaded -with-rtsopts=-qg
   GHC-Prof-Options:     "-with-rtsopts=-qg -p -l-au"
+  Build-Depends:        ffi-core
+
+Library ffi-core
+  Import:               compile-flags
+  Hs-Source-Dirs:       ffi-core
+  Exposed-Modules:      Exceptions
+                        Exceptions.Class
+                        Pretty
+                        SQLiteExts
+
+  Other-Extensions:     CApiFFI
+                        ExistentialQuantification
+                        FlexibleContexts
+                        GADTs
+                        GADTSyntax
+                        StandaloneDeriving
+
+  C-Sources:            cbits/check_unique.c
+                        cbits/count_transitions.c
+                        cbits/key_value_vector.c
+                        cbits/min_key.c
+                        cbits/misc.c
+                        cbits/pcg_basic.c
+                        cbits/random_sample.c
+                        cbits/random_fun.c
+
+  CC-Options:           -Wall -Wextra -pedantic -std=c11 -g -O3 -DSQLITE_CORE
+  Include-Dirs:         cbits
+  Includes:             sqlite-functions.h
+
+  Build-Depends:        persistent ^>= 2.11.0.2
+               ,        persistent-sqlite ^>= 2.11.1.0
+               ,        prettyprinter ^>= 1.6.0
+               ,        prettyprinter-ansi-terminal ^>= 1.1.1
 
 Library
   Import:               all
@@ -100,15 +138,12 @@ Library
   Autogen-Modules:      Paths_benchmark_analysis
   Other-Modules:        Commands
                         Commands.Debug
-                        Exceptions
-                        Exceptions.Class
                         Migration
                         Model
                         OptionParsers
                         Paths_benchmark_analysis
                         Predictor.Config
                         Predictor.Raw
-                        Pretty
                         Schema.Algorithm
                         Schema.Dataset
                         Schema.External
@@ -164,24 +199,9 @@ Library
                         Schema.Version
                         Sql.Core
                         Sql.Core.PersistCompat
-                        SQLiteExts
                         Types
 
-  C-Sources:            cbits/check_unique.c
-                        cbits/count_transitions.c
-                        cbits/key_value_vector.c
-                        cbits/min_key.c
-                        cbits/misc.c
-                        cbits/pcg_basic.c
-                        cbits/random_sample.c
-                        cbits/random_fun.c
-
-  CC-Options:           -Wall -Wextra -pedantic -std=c11 -g -O3 -DSQLITE_CORE
-  Include-Dirs:         cbits
-  Includes:             sqlite-functions.h
-
   Other-Extensions:     BangPatterns
-                        CApiFFI
                         CPP
                         ConstraintKinds
                         DefaultSignatures
@@ -192,7 +212,6 @@ Library
                         FlexibleContexts
                         FlexibleInstances
                         GADTs
-                        GADTSyntax
                         GeneralizedNewtypeDeriving
                         MagicHash
                         MultiParamTypeClasses
@@ -206,7 +225,8 @@ Library
                         TypeSynonymInstances
                         UndecidableInstances
 
-  Build-Depends:        attoparsec ^>= 0.13.1
+  Build-Depends:        ffi-core
+               ,        attoparsec ^>= 0.13.1
                ,        base64 ^>= 0.4.1
                ,        binary ^>= 0.8.7
                ,        clock ^>= 0.8
@@ -224,8 +244,6 @@ Library
                ,        persistent ^>= 2.11.0.2
                ,        persistent-template ^>= 2.9.1.0
                ,        persistent-sqlite ^>= 2.11.1.0
-               ,        prettyprinter ^>= 1.6.0
-               ,        prettyprinter-ansi-terminal ^>= 1.1.1
                ,        resource-pool ^>= 0.2.3.2
                ,        template-haskell ^>= 2.16.0.0
                ,        terminal-size ^>= 0.3.2.1
