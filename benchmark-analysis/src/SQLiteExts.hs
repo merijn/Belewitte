@@ -1,8 +1,7 @@
 {-# LANGUAGE CApiFFI #-}
 {-# LANGUAGE OverloadedStrings #-}
 module SQLiteExts
-    ( initialiseSqlite
-    , registerSqlFunctions
+    ( registerSqlFunctions
     , wrapSqliteExceptions
     ) where
 
@@ -14,7 +13,7 @@ import qualified Data.ByteString as BS
 import Data.Text (Text)
 import Data.Text.Encoding (decodeUtf8')
 import Data.Typeable (Typeable)
-import Foreign (Ptr, FinalizerPtr, FunPtr, castFunPtr, nullPtr, nullFunPtr)
+import Foreign (Ptr, FinalizerPtr, FunPtr, nullPtr, nullFunPtr)
 import qualified Foreign
 import Foreign.C (CInt(..), CString, withCString)
 import Foreign.Storable (Storable)
@@ -159,19 +158,6 @@ foreign import ccall "sqlite3.h sqlite3_create_window_function"
         -> FunPtr (Ptr () -> CInt -> Ptr (Ptr ()) -> IO ())
         -> FunPtr (Ptr () -> IO ())
         -> IO CInt
-
-foreign import ccall "sqlite3.h &sqlite3_series_init"
-    sqlite3_series_init
-        :: FunPtr (Ptr () -> Ptr CString -> Ptr () -> IO CInt)
-
-foreign import ccall "sqlite3.h sqlite3_auto_extension"
-    registerAutoExtension :: FunPtr (IO ()) -> IO CInt
-
-initialiseSqlite :: (MonadIO m, MonadThrow m) => m ()
-initialiseSqlite = do
-    result <- liftIO $ registerAutoExtension (castFunPtr sqlite3_series_init)
-    when (result /= sqliteOk) $ do
-        Catch.throwM . SqliteErrorCode result $ ""
 
 createSqliteFun
     :: (MonadIO m, MonadLogger m, MonadThrow m, Storable a)

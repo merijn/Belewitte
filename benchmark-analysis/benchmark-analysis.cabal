@@ -29,7 +29,7 @@ Data-Files:             runtime-data/kernel-runner
                         runtime-data/scripts/heatmap.py
                         runtime-data/virtualenv
 
-Extra-Source-Files:     cbits/*.h sqlite3exts/*.h
+Extra-Source-Files:     cbits/*.h
 
 Common all
   Default-Language:     Haskell2010
@@ -65,19 +65,8 @@ Common exes
   GHC-Options:          -rtsopts -threaded -with-rtsopts=-qg
   GHC-Prof-Options:     "-with-rtsopts=-qg -p -l-au"
 
-Common sqlite3exts
-  Include-Dirs:         sqlite3exts
-  Includes:             sqlite3ext.h
-
-Library SQLiteExts
-  Import:               sqlite3exts
-  Default-Language:     Haskell2010
-  C-Sources:            sqlite3exts/series.c
-  CC-Options:           -Wall -pedantic -std=c11 -g -O3 -DSQLITE_CORE
-  Build-Depends:        persistent-sqlite ^>= 2.11.1.0
-
 Library
-  Import:               all, sqlite3exts
+  Import:               all
   Hs-Source-Dirs:       src
   Exposed-Modules:      Core
                         FormattedOutput
@@ -217,8 +206,7 @@ Library
                         TypeSynonymInstances
                         UndecidableInstances
 
-  Build-Depends:        SQLiteExts
-               ,        attoparsec ^>= 0.13.1
+  Build-Depends:        attoparsec ^>= 0.13.1
                ,        base64 ^>= 0.4.1
                ,        binary ^>= 0.8.7
                ,        clock ^>= 0.8
