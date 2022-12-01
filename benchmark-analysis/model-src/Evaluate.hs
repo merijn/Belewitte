@@ -229,7 +229,7 @@ aggregateVariants variantIntervals relTo implMaps = do
                 Optimal -> Just optimalTime
                 BestNonSwitching -> findImplTime bestNonSwitchingImplId
 
-        relTiming t = percent t optimalTime <> " (" <> showText t <> ")\n"
+        relTiming t = percent t optimalTime <> " (" <> showText t <> ")"
 
         results = unwrapImplTiming <$> mapFirst (VS.cons optimalTiming) implTimes
           where
