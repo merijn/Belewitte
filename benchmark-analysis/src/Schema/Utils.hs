@@ -33,10 +33,11 @@ import qualified Data.Map as M
 import Data.Text (Text)
 import Database.Persist.Sql (Entity, Migration, entityDef, migrate)
 import Database.Persist.TH (embedEntityDefs)
+import qualified Database.Persist.TH as TH
 import Database.Persist.Types
     (DBName(..), EntityDef(..), ForeignDef(..), HaskellName(..), noCascade)
+import Language.Haskell.TH (Dec, Q)
 
-import Schema.Utils.TH (mkEntities)
 import Sql.Core (MonadLogger, MonadSql, MonadThrow, SqlRecord, Transaction)
 import qualified Sql.Core as Sql
 
@@ -45,6 +46,10 @@ import qualified Sql.Core as Sql
 
 (.>) :: Functor f => a -> b -> f c -> (a, (b, f c))
 (.>) i schema act = (i, (schema, act))
+
+mkEntities :: String -> [EntityDef] -> Q [Dec]
+mkEntities name = TH.share
+    [TH.mkPersist TH.sqlSettings, TH.mkSave name]
 
 mkMigration :: [[EntityDef]] -> Migration
 mkMigration ents = mapM_ (migrate embeddedEnts) embeddedEnts
