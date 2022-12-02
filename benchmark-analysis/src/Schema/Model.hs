@@ -36,7 +36,9 @@ import qualified Schema.Utils as Utils
 import Types
 
 import Schema.Algorithm (AlgorithmId)
+import qualified Schema.Algorithm as Algorithm
 import Schema.Platform (PlatformId)
+import qualified Schema.Platform as Platform
 import qualified Schema.Model.V0 as V0
 import qualified Schema.Model.V1 as V1
 import qualified Schema.Model.V2 as V2
@@ -45,7 +47,8 @@ import qualified Schema.Model.V4 as V4
 import qualified Schema.Model.V5 as V5
 import qualified Schema.Model.V6 as V6
 
-Utils.mkEntities "schema" [persistUpperCase|
+Utils.mkEntitiesWith "schema"
+    [Algorithm.schema, Platform.schema] [persistUpperCase|
 PredictionModel
     platformId PlatformId
     algorithmId AlgorithmId

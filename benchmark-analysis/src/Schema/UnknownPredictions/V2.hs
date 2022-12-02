@@ -20,10 +20,14 @@ import Schema.Utils (EntityDef, ForeignDef)
 import qualified Schema.Utils as Utils
 
 import Schema.Algorithm (AlgorithmId)
+import qualified Schema.Algorithm as Algorithm
 import Schema.Model (PredictionModelId)
+import qualified Schema.Model as Model
 import Schema.Implementation (ImplementationId)
+import qualified Schema.Implementation as Implementation
 
-Utils.mkEntities "schema'" [persistUpperCase|
+Utils.mkEntitiesWith "schema'"
+    [Algorithm.schema, Model.schema, Implementation.schema] [persistUpperCase|
 UnknownPrediction
     modelId PredictionModelId
     algorithmId AlgorithmId

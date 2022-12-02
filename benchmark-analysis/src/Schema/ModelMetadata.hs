@@ -20,13 +20,17 @@ import Schema.Utils (EntityDef, Int64, MonadSql, Transaction, (.=), (.>))
 import qualified Schema.Utils as Utils
 
 import Schema.Dataset (DatasetId)
+import qualified Schema.Dataset as Dataset
 import Schema.Model (PredictionModelId)
+import qualified Schema.Model as Model
 import Schema.Properties (PropertyNameId)
+import qualified Schema.Properties as Property
 import qualified Schema.ModelMetadata.V0 as V0
 import qualified Schema.ModelMetadata.V1 as V1
 import qualified Schema.ModelMetadata.V2 as V2
 
-Utils.mkEntities "schema" [persistUpperCase|
+Utils.mkEntitiesWith "schema"
+    [Dataset.schema, Model.schema, Property.schema] [persistUpperCase|
 ModelProperty
     modelId PredictionModelId
     propId PropertyNameId

@@ -20,8 +20,9 @@ import Model (Model)
 import qualified Schema.Utils as Utils
 
 import Schema.Platform.V0 (GPUId)
+import qualified Schema.Platform.V0 as Platform
 
-Utils.mkEntities "schema" [persistUpperCase|
+Utils.mkEntitiesWith "schema" [Platform.schema] [persistUpperCase|
 PredictionModel
     gpuId GPUId
     model Model

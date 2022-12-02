@@ -17,10 +17,14 @@ import Database.Persist.TH (persistUpperCase)
 import qualified Schema.Utils as Utils
 
 import Schema.Implementation (ImplementationId)
+import qualified Schema.Implementation as Implementation
 import Schema.RunConfig (RunConfigId)
+import qualified Schema.RunConfig as RunConfig
 import Schema.Variant (VariantId)
+import qualified Schema.Variant as Variant
 
-Utils.mkEntities "schema" [persistUpperCase|
+Utils.mkEntitiesWith "schema"
+    [Implementation.schema, RunConfig.schema, Variant.schema] [persistUpperCase|
 Run
     runConfigId RunConfigId
     variantId VariantId

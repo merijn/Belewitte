@@ -18,9 +18,12 @@ import qualified Schema.Utils as Utils
 import Types
 
 import Schema.Algorithm (AlgorithmId)
+import qualified Schema.Algorithm as Algorithm
 import Schema.Graph (GraphId)
+import qualified Schema.Graph as Graph
 
-Utils.mkEntities "schema" [persistUpperCase|
+Utils.mkEntitiesWith "schema"
+    [Algorithm.schema, Graph.schema] [persistUpperCase|
 Variant
     graphId GraphId
     algorithmId AlgorithmId

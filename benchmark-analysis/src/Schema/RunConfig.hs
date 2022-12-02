@@ -25,11 +25,15 @@ import qualified Schema.Utils as Utils
 import Types
 
 import Schema.Algorithm (AlgorithmId)
+import qualified Schema.Algorithm as Algorithm
 import Schema.Dataset (DatasetId)
+import qualified Schema.Dataset as Dataset
 import Schema.Platform (PlatformId)
+import qualified Schema.Platform as Platform
 import qualified Schema.RunConfig.V0 as V0
 
-Utils.mkEntities "schema" [persistUpperCase|
+Utils.mkEntitiesWith "schema"
+    [Algorithm.schema, Dataset.schema, Platform.schema] [persistUpperCase|
 RunConfig
     algorithmId AlgorithmId
     platformId PlatformId

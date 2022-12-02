@@ -17,8 +17,9 @@ import Database.Persist.TH (persistUpperCase)
 import qualified Schema.Utils as Utils
 
 import Schema.Algorithm (AlgorithmId)
+import qualified Schema.Algorithm as Algorithm
 
-Utils.mkEntities "schema" [persistUpperCase|
+Utils.mkEntitiesWith "schema" [Algorithm.schema] [persistUpperCase|
 VariantConfig
     algorithmId AlgorithmId
     name Text

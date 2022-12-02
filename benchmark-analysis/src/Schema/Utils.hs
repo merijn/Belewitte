@@ -22,6 +22,7 @@ module Schema.Utils
     , mkForeignRef
     , addForeignRef
     , mkEntities
+    , mkEntitiesWith
     , mkMigration
     , mkMigrationLookup
     , getTypeName
@@ -49,6 +50,10 @@ import qualified Sql.Core as Sql
 
 mkEntities :: String -> [EntityDef] -> Q [Dec]
 mkEntities name = TH.share
+    [TH.mkPersist TH.sqlSettings, TH.mkSave name]
+
+mkEntitiesWith :: String -> [[EntityDef]] -> [EntityDef] -> Q [Dec]
+mkEntitiesWith name _ = TH.share
     [TH.mkPersist TH.sqlSettings, TH.mkSave name]
 
 mkMigration :: [[EntityDef]] -> Migration

@@ -19,9 +19,12 @@ import Model (Model)
 import qualified Schema.Utils as Utils
 
 import Schema.Algorithm (AlgorithmId)
+import qualified Schema.Algorithm as Algorithm
 import Schema.Platform (PlatformId)
+import qualified Schema.Platform as Platform
 
-Utils.mkEntities "schema" [persistUpperCase|
+Utils.mkEntitiesWith "schema"
+    [Algorithm.schema, Platform.schema] [persistUpperCase|
 PredictionModel
     platformId PlatformId
     algorithmId AlgorithmId

@@ -18,9 +18,11 @@ import Database.Persist.TH (persistUpperCase)
 import qualified Schema.Utils as Utils
 
 import Schema.Graph (GraphId)
+import qualified Schema.Graph as Graph
 import Schema.Variant (VariantId)
+import qualified Schema.Variant as Variant
 
-Utils.mkEntities "schema" [persistUpperCase|
+Utils.mkEntitiesWith "schema" [Graph.schema, Variant.schema] [persistUpperCase|
 GraphProp
     graphId GraphId
     property Text

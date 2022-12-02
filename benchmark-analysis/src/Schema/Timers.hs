@@ -37,9 +37,11 @@ import qualified Schema.Timers.V1 as V1
 import qualified Schema.Timers.V2 as V2
 
 import Schema.Run (RunId)
+import qualified Schema.Run as Run
 import Schema.Variant (VariantId)
+import qualified Schema.Variant as Variant
 
-Utils.mkEntities "schema'" [persistUpperCase|
+Utils.mkEntitiesWith "schema'" [Run.schema, Variant.schema] [persistUpperCase|
 TotalTimer
     runId RunId
     name Text

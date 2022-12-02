@@ -27,10 +27,11 @@ import Schema.Utils
 import qualified Schema.Utils as Utils
 
 import Schema.Dataset (DatasetId)
+import qualified Schema.Dataset as Dataset
 import qualified Schema.Graph.V0 as V0
 import qualified Schema.Graph.V1 as V1
 
-Utils.mkEntities "schema" [persistUpperCase|
+Utils.mkEntitiesWith "schema" [Dataset.schema] [persistUpperCase|
 Graph
     name Text
     path Text

@@ -26,12 +26,16 @@ import Schema.Utils
 import qualified Schema.Utils as Utils
 
 import Schema.Algorithm (AlgorithmId)
+import qualified Schema.Algorithm as Algorithm
 import Schema.Graph (GraphId)
+import qualified Schema.Graph as Graph
 import Schema.Variant (VariantId)
+import qualified Schema.Variant as Variant
 import qualified Schema.Properties.V0 as V0
 import qualified Schema.Properties.V1 as V1
 
-Utils.mkEntities "schema'" [persistUpperCase|
+Utils.mkEntitiesWith "schema'"
+    [Algorithm.schema, Graph.schema, Variant.schema] [persistUpperCase|
 PropertyName
     property Text
     isStepProp Bool

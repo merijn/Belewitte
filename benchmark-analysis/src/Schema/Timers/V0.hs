@@ -20,10 +20,14 @@ import qualified Schema.Utils as Utils
 import Types
 
 import Schema.Implementation (ImplementationId)
+import qualified Schema.Implementation as Implementation
 import Schema.Platform.V0 (GPUId)
+import qualified Schema.Platform.V0 as Platform
 import Schema.Variant (VariantId)
+import qualified Schema.Variant as Variant
 
-Utils.mkEntities "schema" [persistUpperCase|
+Utils.mkEntitiesWith "schema"
+    [Implementation.schema, Platform.schema, Variant.schema] [persistUpperCase|
 TotalTimer
     gpuId GPUId
     variantId VariantId

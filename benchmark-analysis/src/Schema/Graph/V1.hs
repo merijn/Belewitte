@@ -15,9 +15,10 @@ import Data.Text (Text)
 import Database.Persist.TH (persistUpperCase)
 
 import Schema.Dataset (DatasetId)
+import qualified Schema.Dataset as Dataset
 import qualified Schema.Utils as Utils
 
-Utils.mkEntities "schema" [persistUpperCase|
+Utils.mkEntitiesWith "schema" [Dataset.schema] [persistUpperCase|
 Graph
     name Text
     path Text

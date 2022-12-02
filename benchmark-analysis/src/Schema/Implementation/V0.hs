@@ -18,8 +18,9 @@ import qualified Schema.Utils as Utils
 import Types
 
 import Schema.Algorithm (AlgorithmId)
+import qualified Schema.Algorithm as Algorithm
 
-Utils.mkEntities "schema" [persistUpperCase|
+Utils.mkEntitiesWith "schema" [Algorithm.schema] [persistUpperCase|
 Implementation
     algorithmId AlgorithmId
     name Text

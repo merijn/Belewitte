@@ -18,9 +18,11 @@ import Database.Persist.TH (persistUpperCase)
 import qualified Schema.Utils as Utils
 
 import Schema.Dataset (DatasetId)
+import qualified Schema.Dataset as Dataset
 import Schema.Model (PredictionModelId)
+import qualified Schema.Model as Model
 
-Utils.mkEntities "schema" [persistUpperCase|
+Utils.mkEntitiesWith "schema" [Dataset.schema, Model.schema] [persistUpperCase|
 ModelGraphProperty
     modelId PredictionModelId
     property Text

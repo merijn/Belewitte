@@ -20,10 +20,14 @@ import qualified Schema.Utils as Utils
 import Types
 
 import Schema.Implementation (ImplementationId)
+import qualified Schema.Implementation as Implementation
 import Schema.Platform (PlatformId)
+import qualified Schema.Platform as Platform
 import Schema.Variant (VariantId)
+import qualified Schema.Variant as Variant
 
-Utils.mkEntities "schema" [persistUpperCase|
+Utils.mkEntitiesWith "schema"
+    [Implementation.schema, Platform.schema, Variant.schema] [persistUpperCase|
 TotalTimer
     platformId PlatformId
     variantId VariantId

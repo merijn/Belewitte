@@ -18,8 +18,9 @@ import Database.Persist.TH (persistUpperCase)
 import qualified Schema.Utils as Utils
 
 import Schema.Run (RunId)
+import qualified Schema.Run as Run
 
-Utils.mkEntities "schema" [persistUpperCase|
+Utils.mkEntitiesWith "schema" [Run.schema] [persistUpperCase|
 TotalTimer
     runId RunId
     name Text

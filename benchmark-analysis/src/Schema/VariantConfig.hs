@@ -29,10 +29,11 @@ import Schema.Utils
 import qualified Schema.Utils as Utils
 
 import Schema.Algorithm (AlgorithmId)
+import qualified Schema.Algorithm as Algorithm
 import qualified Schema.VariantConfig.V0 as V0
 import qualified Schema.VariantConfig.V1 as V1
 
-Utils.mkEntities "schema" [persistUpperCase|
+Utils.mkEntitiesWith "schema" [Algorithm.schema] [persistUpperCase|
 VariantConfig
     algorithmId AlgorithmId
     name Text

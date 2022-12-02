@@ -19,8 +19,9 @@ import Model (Model)
 import qualified Schema.Utils as Utils
 
 import Schema.Platform (PlatformId)
+import qualified Schema.Platform as Platform
 
-Utils.mkEntities "schema" [persistUpperCase|
+Utils.mkEntitiesWith "schema" [Platform.schema] [persistUpperCase|
 PredictionModel
     platformId PlatformId
     name Text

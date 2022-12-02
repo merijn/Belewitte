@@ -35,13 +35,17 @@ import Schema.Utils
 import qualified Schema.Utils as Utils
 
 import Schema.Algorithm (AlgorithmId)
+import qualified Schema.Algorithm as Algorithm
 import Schema.Model (PredictionModelId)
+import qualified Schema.Model as Model
 import Schema.Implementation (ImplementationId)
+import qualified Schema.Implementation as Implementation
 import qualified Schema.UnknownPredictions.V0 as V0
 import qualified Schema.UnknownPredictions.V1 as V1
 import qualified Schema.UnknownPredictions.V2 as V2
 
-Utils.mkEntities "schema'" [persistUpperCase|
+Utils.mkEntitiesWith "schema'"
+    [Algorithm.schema, Model.schema, Implementation.schema] [persistUpperCase|
 UnknownPrediction
     modelId PredictionModelId
     algorithmId AlgorithmId
