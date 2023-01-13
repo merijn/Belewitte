@@ -46,8 +46,15 @@ data StepInfo =
 
 sortStepTimings :: StepInfo -> StepInfo
 sortStepTimings info@StepInfo{..} =
-    info { stepTimings = sortVector stepTimings }
+    info { stepTimings = sorted, stepBestIdx = bestIdx }
   where
+    bestIdx :: Int64
+    bestIdx = maybe (-1) fromIntegral $
+        VS.findIndex ((stepBestImpl==) . implTimingImpl) sorted
+
+    sorted :: Vector ImplTiming
+    sorted = sortVector stepTimings
+
     sortVector :: Vector ImplTiming -> Vector ImplTiming
     sortVector vec = runST $ do
         mvec <- VS.thaw vec
