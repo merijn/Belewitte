@@ -152,6 +152,7 @@ Library
                         Schema.Graph
                         Schema.Graph.V0
                         Schema.Graph.V1
+                        Schema.Graph.V2
                         Schema.Implementation
                         Schema.Implementation.V0
                         Schema.Import

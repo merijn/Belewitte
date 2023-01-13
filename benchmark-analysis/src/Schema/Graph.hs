@@ -30,6 +30,7 @@ import Schema.Dataset (DatasetId)
 import qualified Schema.Dataset as Dataset
 import qualified Schema.Graph.V0 as V0
 import qualified Schema.Graph.V1 as V1
+import qualified Schema.Graph.V2 as V2
 
 Utils.mkEntitiesWith "schema" [Dataset.schema] [persistUpperCase|
 Graph
@@ -65,12 +66,13 @@ instance Importable Graph where
 
 migrations :: MonadSql m => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup
-    [ 1 .> V0.schema $ do
+    [ 0 .= V0.schema
+    , 1 .> V1.schema $ do
         Utils.executeSql [i|
 ALTER TABLE "Graph"
 ADD COLUMN "dataset" VARCHAR NOT NULL DEFAULT 'unknown'
 |]
-    , 5 .= V1.schema
+    , 5 .= V2.schema
     , 20 .> schema $ do
         Utils.executeSql [i|
 ALTER TABLE "Graph"

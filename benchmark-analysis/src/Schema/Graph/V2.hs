@@ -9,21 +9,22 @@
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE UndecidableInstances #-}
-module Schema.Graph.V1 where
+module Schema.Graph.V2 where
 
 import Data.Text (Text)
-import qualified Database.Persist.Sql as Sql
 import Database.Persist.TH (persistUpperCase)
 
+import Schema.Dataset (DatasetId)
+import qualified Schema.Dataset as Dataset
 import qualified Schema.Utils as Utils
 
-Utils.mkEntities "schema" [persistUpperCase|
+Utils.mkEntitiesWith "schema" [Dataset.schema] [persistUpperCase|
 Graph
     name Text
-    dataset Text
     path Text
     prettyName Text Maybe
+    datasetId DatasetId
     UniqGraph path
-    UniqGraphName path dataset
+    UniqGraphName name datasetId
     deriving Eq Show
 |]

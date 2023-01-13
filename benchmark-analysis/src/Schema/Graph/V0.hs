@@ -20,10 +20,8 @@ import qualified Schema.Utils as Utils
 Utils.mkEntities "schema" [persistUpperCase|
 Graph
     name Text
-    dataset Text
     path Text
     prettyName Text Maybe
     UniqGraph path
-    UniqGraphName path dataset
     deriving Eq Show
 |]
