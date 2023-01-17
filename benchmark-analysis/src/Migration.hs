@@ -55,7 +55,7 @@ checkSchema
     :: (MonadLogger m, MonadSql m, MonadThrow m)
     => Migration -> Transaction m ()
 checkSchema schema = do
-    changes <- Sql.getMigration schema
+    changes <- Sql.getMigration_ schema
     unless (null changes) $ do
         Log.logDebugNS "SQL#Migration" $ T.unlines changes
         logThrowM WrongSchema

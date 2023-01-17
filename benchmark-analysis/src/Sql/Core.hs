@@ -32,6 +32,7 @@ module Sql.Core
     , executeSqlSingleValue
     , getJust
     , getMigration
+    , getMigration_
     , querySingleValue
     , runMigrationQuiet
     , runMigrationUnsafeQuiet
@@ -76,8 +77,10 @@ module Sql.Core
     , toSqlKey
     ) where
 
-import Control.Monad (join, void)
-import Control.Monad.Catch (handle, throwM)
+import Control.DeepSeq (force)
+import Control.Exception (evaluate)
+import Control.Monad ((>=>), join, void)
+import Control.Monad.Catch (handle, throwM, try)
 import Control.Monad.IO.Unlift (MonadIO(liftIO), MonadUnliftIO(..))
 import Control.Monad.Logger (MonadLogger, MonadLoggerIO, logErrorN)
 import Control.Monad.Reader (ReaderT, ask, asks, runReaderT, withReaderT)
@@ -385,8 +388,14 @@ querySingleValue query args = runTransaction . Transaction $ do
         [Single v] -> return v
         _ -> logThrowM $ ExpectedSingleValue query
 
-getMigration :: (MonadSql m) => Migration -> Transaction m [Text]
-getMigration = liftProjectPersist . Sqlite.getMigration
+getMigration
+    :: (MonadSql m) => Migration -> Transaction m (Either SomeException [Text])
+getMigration migration = liftProjectPersist $ do
+    try $ Sqlite.getMigration migration >>= liftIO . evaluate . force
+
+getMigration_
+    :: (MonadSql m, MonadThrow m) => Migration -> Transaction m [Text]
+getMigration_ = getMigration >=> either throwM return
 
 runMigrationQuiet :: (MonadSql m) => Migration -> Transaction m [Text]
 runMigrationQuiet = liftProjectPersist . Sqlite.runMigrationQuiet
