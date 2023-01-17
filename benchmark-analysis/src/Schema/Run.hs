@@ -21,7 +21,16 @@ import Database.Persist.TH (persistUpperCase)
 
 import Pretty.Fields.Persistent
 import Schema.Utils
-    (Entity, EntityDef, ForeignDef, Int64, MonadSql, Transaction, (.>))
+    ( Entity
+    , EntityDef
+    , ForeignDef
+    , Int64
+    , MonadLogger
+    , MonadSql
+    , MonadThrow
+    , Transaction
+    , (.>)
+    )
 import qualified Schema.Utils as Utils
 
 import Schema.Algorithm (AlgorithmId)
@@ -78,7 +87,9 @@ schema = Utils.addForeignRef "Run" runConfig
     impl = Utils.mkForeignRef "Implementation"
         [ ("implId", "id"), ("algorithmId", "algorithmId") ]
 
-migrations :: MonadSql m => Int64 -> Transaction m [EntityDef]
+migrations
+    :: (MonadLogger m, MonadSql m, MonadThrow m)
+    => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup
     [ 6 .> V0.schema $ do
         Utils.createTableFromSchema V0.schema

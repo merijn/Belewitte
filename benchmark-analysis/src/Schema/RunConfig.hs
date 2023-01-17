@@ -20,7 +20,16 @@ import Database.Persist.TH (persistUpperCase)
 
 import Pretty.Fields.Persistent
 import Schema.Utils
-    (Entity, EntityDef, Int64, MonadSql, Transaction, (.>), (.=))
+    ( Entity
+    , EntityDef
+    , Int64
+    , MonadLogger
+    , MonadSql
+    , MonadThrow
+    , Transaction
+    , (.>)
+    , (.=)
+    )
 import qualified Schema.Utils as Utils
 import Types
 
@@ -55,7 +64,9 @@ instance PrettyFields (Entity RunConfig) where
         , ("Algorithm Commit", RunConfigAlgorithmVersion `fieldVia` getCommitId)
         ]
 
-migrations :: MonadSql m => Int64 -> Transaction m [EntityDef]
+migrations
+    :: (MonadLogger m, MonadSql m, MonadThrow m)
+    => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup
     [ 6 .> V0.schema $ do
         Utils.createTableFromSchema schema

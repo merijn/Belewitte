@@ -65,8 +65,9 @@ validateSchema
     => Bool -> Int64 -> m Bool
 validateSchema _ v
     | v > schemaVersion = logThrowM $ TooNew v
-    | v == schemaVersion = Sql.runTransaction $
-                                False <$ checkSchema currentSchema
+    | v == schemaVersion = Sql.runTransaction $ do
+        currentSchema <- getCurrentSchema
+        False <$ checkSchema currentSchema
 
 validateSchema migrateSchema version
     | not migrateSchema = logThrowM $ MigrationNeeded version
@@ -146,6 +147,7 @@ checkMigration migrateSchema = do
 
     case tableCount :: Int64 of
         0 -> Sql.runTransaction $ do
+            currentSchema <- getCurrentSchema
             Sql.runMigrationQuiet currentSchema
             checkSchema currentSchema
             updateIndicesToVersion schemaVersion

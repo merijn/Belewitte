@@ -56,13 +56,17 @@ mkEntitiesWith :: String -> [[EntityDef]] -> [EntityDef] -> Q [Dec]
 mkEntitiesWith name _ = TH.share
     [TH.mkPersist TH.sqlSettings, TH.mkSave name]
 
-mkMigration :: [[EntityDef]] -> Migration
-mkMigration ents = mapM_ (migrate embeddedEnts) embeddedEnts
+mkMigration :: MonadSql m => [[EntityDef]] -> Transaction m Migration
+mkMigration ents = return $ mapM_ (migrate embeddedEnts) embeddedEnts
   where
     embeddedEnts = embedEntityDefs . concat $ ents
 
-createTableFromSchema :: MonadSql m => [EntityDef] -> Transaction m ()
-createTableFromSchema = void . Sql.runMigrationQuiet . mkMigration . pure
+createTableFromSchema
+    :: (MonadLogger m, MonadSql m, MonadThrow m)
+    => [EntityDef] -> Transaction m ()
+createTableFromSchema defs = do
+    schema <- mkMigration [defs]
+    void $ Sql.runMigrationQuiet schema
 
 mkForeignRef :: Text -> [(Text, Text)] -> ForeignDef
 mkForeignRef foreignTable refs = ForeignDef

@@ -45,7 +45,7 @@ module Schema
     , renderPercentage
     , toImplNames
     , schemaVersion
-    , currentSchema
+    , getCurrentSchema
     , updateSchemaToVersion
     , updateIndicesToVersion
     , validRational
@@ -160,11 +160,12 @@ migrations =
 
 type MigrationAction = Transaction (SqlT (ResourceT (LoggingT IO))) [EntityDef]
 
-currentSchema :: Migration
-currentSchema = mkMigration $ map fst
+getCurrentSchema
+    :: (MonadLogger m, MonadSql m, MonadThrow m) => Transaction m Migration
+getCurrentSchema = mkMigration $ map fst
     (migrations :: [([EntityDef], Int64 -> MigrationAction)])
 
 updateSchemaToVersion
     :: (MonadLogger m, MonadSql m, MonadThrow m)
     => Int64 -> Transaction m Migration
-updateSchemaToVersion n = mkMigration <$> mapM (($n) . snd) migrations
+updateSchemaToVersion n = mapM (($n) . snd) migrations >>= mkMigration
