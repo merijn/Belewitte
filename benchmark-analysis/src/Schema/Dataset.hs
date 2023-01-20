@@ -56,7 +56,7 @@ migrations
     => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup
     [ 5 .> schema $ do
-        Utils.createTableFromSchema schema
+        Utils.createTableFromSchema [schema]
 
         Utils.executeSql [i|
 INSERT INTO "Dataset"

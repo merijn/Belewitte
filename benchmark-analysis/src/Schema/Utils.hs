@@ -63,9 +63,9 @@ mkMigration ents = return $ mapM_ (migrate embeddedEnts) embeddedEnts
 
 createTableFromSchema
     :: (MonadLogger m, MonadSql m, MonadThrow m)
-    => [EntityDef] -> Transaction m ()
+    => [[EntityDef]] -> Transaction m ()
 createTableFromSchema defs = do
-    schema <- mkMigration [defs]
+    schema <- mkMigration defs
     void $ Sql.runMigrationQuiet schema
 
 mkForeignRef :: Text -> [(Text, Text)] -> ForeignDef

@@ -33,6 +33,10 @@ import Schema.Utils
 import qualified Schema.Utils as Utils
 import Types
 
+-- Schema version for RunConfig table initialisation
+import qualified Schema.Platform.V1 as Platform.V1
+
+-- Schema version for current schema
 import Schema.Algorithm (AlgorithmId)
 import qualified Schema.Algorithm as Algorithm
 import Schema.Dataset (DatasetId)
@@ -69,7 +73,12 @@ migrations
     => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup
     [ 6 .> V0.schema $ do
-        Utils.createTableFromSchema schema
+        Utils.createTableFromSchema
+            [ Algorithm.schema
+            , Dataset.schema
+            , Platform.V1.schema
+            , schema
+            ]
 
         Utils.executeSql [i|
 INSERT INTO "RunConfig"

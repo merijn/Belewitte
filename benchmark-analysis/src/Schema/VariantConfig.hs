@@ -73,7 +73,7 @@ migrations
     => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup
     [ 7 .> V0.schema $ do
-        Utils.createTableFromSchema V0.schema
+        Utils.createTableFromSchema [Algorithm.schema, V0.schema]
 
         Utils.executeSql [i|
 INSERT INTO "VariantConfig"

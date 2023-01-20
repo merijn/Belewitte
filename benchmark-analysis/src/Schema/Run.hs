@@ -33,6 +33,15 @@ import Schema.Utils
     )
 import qualified Schema.Utils as Utils
 
+-- Schema versions for Run table initialisation
+import qualified Schema.Dataset as Dataset
+import qualified Schema.Graph.V2 as Graph.V2
+import qualified Schema.Implementation.V0 as Implementation.V0
+import qualified Schema.Platform.V1 as Platform.V1
+import qualified Schema.RunConfig.V0 as RunConfig.V0
+import qualified Schema.Variant.V0 as Variant.V0
+
+-- Schema versions for current schema
 import Schema.Algorithm (AlgorithmId)
 import qualified Schema.Algorithm as Algorithm
 import Schema.Implementation (ImplementationId)
@@ -92,7 +101,16 @@ migrations
     => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup
     [ 6 .> V0.schema $ do
-        Utils.createTableFromSchema V0.schema
+        Utils.createTableFromSchema
+            [ Algorithm.schema
+            , Dataset.schema
+            , Graph.V2.schema
+            , Implementation.V0.schema
+            , Platform.V1.schema
+            , RunConfig.V0.schema
+            , Variant.V0.schema
+            , V0.schema
+            ]
 
         Utils.executeSql [i|
 INSERT INTO "Run"

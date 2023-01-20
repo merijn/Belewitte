@@ -34,6 +34,12 @@ import Schema.Utils
     )
 import qualified Schema.Utils as Utils
 
+-- Schema versions for ExternalImpl/ExternalTimer table initialisations
+import qualified Schema.Graph.V1 as Graph.V1
+import qualified Schema.Platform.V1 as Platform.V1
+import qualified Schema.Variant.V0 as Variant.V0
+
+-- Schema versions for current schema
 import Schema.Algorithm (AlgorithmId)
 import qualified Schema.Algorithm as Algorithm
 import Schema.Platform (PlatformId)
@@ -119,7 +125,13 @@ migrations
     => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup
     [ 4 .> V0.schema $ do
-        Utils.createTableFromSchema V0.schema
+        Utils.createTableFromSchema
+            [ Algorithm.schema
+            , Graph.V1.schema
+            , Platform.V1.schema
+            , Variant.V0.schema
+            , V0.schema
+            ]
 
         Utils.executeSql [i|
 ALTER TABLE "ExternalImpl"
