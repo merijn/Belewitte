@@ -28,10 +28,15 @@ module Schema.Utils
     , getTypeName
     ) where
 
+import Control.Exception (ErrorCall(..), fromException)
 import Control.Monad (void)
+import qualified Control.Monad.Logger as Log
+import Control.Monad.Catch (throwM)
 import Data.Int (Int64)
+import Data.List (stripPrefix)
 import qualified Data.Map as M
 import Data.Text (Text)
+import qualified Data.Text as T
 import Database.Persist.Sql (Entity, Migration, entityDef, migrate)
 import Database.Persist.TH (embedEntityDefs)
 import qualified Database.Persist.TH as TH
@@ -56,10 +61,37 @@ mkEntitiesWith :: String -> [[EntityDef]] -> [EntityDef] -> Q [Dec]
 mkEntitiesWith name _ = TH.share
     [TH.mkPersist TH.sqlSettings, TH.mkSave name]
 
-mkMigration :: MonadSql m => [[EntityDef]] -> Transaction m Migration
-mkMigration ents = return $ mapM_ (migrate embeddedEnts) embeddedEnts
+mkMigration
+    :: (MonadLogger m, MonadSql m, MonadThrow m)
+    => [[EntityDef]] -> Transaction m Migration
+mkMigration ents = do
+    result <- Sql.getMigration resolvedEnts
+    case result of
+        Right sql -> do
+            Log.logInfoN $ T.unlines sql
+            return resolvedEnts
+
+        Left exc -> do
+            case fromException exc of
+                Just (ErrorCall e) -> reportError e
+                _ -> Log.logErrorN "Unknown error while generating migration"
+
+            throwM exc
   where
+    embeddedEnts :: [EntityDef]
     embeddedEnts = embedEntityDefs . concat $ ents
+
+    resolvedEnts :: Migration
+    resolvedEnts = mapM_ (migrate embeddedEnts) embeddedEnts
+
+    reportError :: MonadLogger m => String -> Transaction m ()
+    reportError msg
+        | Just _name <- stripPrefix "Table not found: " msg
+        = Log.logErrorN . T.unlines $
+            [ T.pack msg, "Found tables:" ]
+            ++ map (unHaskellName . entityHaskell) (concat ents)
+
+        | otherwise = Log.logErrorN "Unknown error while generating migration"
 
 createTableFromSchema
     :: (MonadLogger m, MonadSql m, MonadThrow m)
