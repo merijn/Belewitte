@@ -12,7 +12,6 @@
 module Schema.RunConfig.V0 where
 
 import Data.Text (Text)
-import Database.Persist.TH (persistUpperCase)
 
 import qualified Schema.Utils as Utils
 
@@ -24,7 +23,7 @@ import Schema.Platform (PlatformId)
 import qualified Schema.Platform as Platform
 
 Utils.mkEntitiesWith "schema"
-    [Algorithm.schema, Dataset.schema, Platform.schema] [persistUpperCase|
+    [Algorithm.schema, Dataset.schema, Platform.schema] [Utils.mkSchema|
 RunConfig
     algorithmId AlgorithmId
     platformId PlatformId

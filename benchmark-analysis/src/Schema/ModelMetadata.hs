@@ -14,7 +14,6 @@
 module Schema.ModelMetadata where
 
 import Data.String.Interpolate.IsString (i)
-import Database.Persist.TH (persistUpperCase)
 
 import Schema.Utils (EntityDef, Int64, MonadSql, Transaction, (.=), (.>))
 import qualified Schema.Utils as Utils
@@ -30,7 +29,7 @@ import qualified Schema.ModelMetadata.V1 as V1
 import qualified Schema.ModelMetadata.V2 as V2
 
 Utils.mkEntitiesWith "schema"
-    [Dataset.schema, Model.schema, Property.schema] [persistUpperCase|
+    [Dataset.schema, Model.schema, Property.schema] [Utils.mkSchema|
 ModelProperty
     modelId PredictionModelId
     propId PropertyNameId

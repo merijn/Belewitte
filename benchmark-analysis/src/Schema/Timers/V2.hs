@@ -13,14 +13,13 @@
 module Schema.Timers.V2 where
 
 import Data.Text (Text)
-import Database.Persist.TH (persistUpperCase)
 
 import qualified Schema.Utils as Utils
 
 import Schema.Run (RunId)
 import qualified Schema.Run as Run
 
-Utils.mkEntitiesWith "schema" [Run.schema] [persistUpperCase|
+Utils.mkEntitiesWith "schema" [Run.schema] [Utils.mkSchema|
 TotalTimer
     runId RunId
     name Text

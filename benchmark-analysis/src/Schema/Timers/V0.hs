@@ -14,7 +14,6 @@ module Schema.Timers.V0 where
 
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
-import Database.Persist.TH (persistUpperCase)
 
 import qualified Schema.Utils as Utils
 import Types
@@ -27,7 +26,7 @@ import Schema.Variant (VariantId)
 import qualified Schema.Variant as Variant
 
 Utils.mkEntitiesWith "schema"
-    [Implementation.schema, Platform.schema, Variant.schema] [persistUpperCase|
+    [Implementation.schema, Platform.schema, Variant.schema] [Utils.mkSchema|
 TotalTimer
     gpuId GPUId
     variantId VariantId

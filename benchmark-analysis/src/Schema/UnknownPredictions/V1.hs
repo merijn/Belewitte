@@ -14,8 +14,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Schema.UnknownPredictions.V1 where
 
-import Database.Persist.TH (persistUpperCase)
-
 import Schema.Utils (EntityDef, ForeignDef)
 import qualified Schema.Utils as Utils
 
@@ -27,7 +25,7 @@ import Schema.Implementation (ImplementationId)
 import qualified Schema.Implementation as Implementation
 
 Utils.mkEntitiesWith "schema'"
-    [Algorithm.schema, Model.schema, Implementation.schema] [persistUpperCase|
+    [Algorithm.schema, Model.schema, Implementation.schema] [Utils.mkSchema|
 UnknownPrediction
     modelId PredictionModelId
     algorithmId AlgorithmId

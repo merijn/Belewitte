@@ -24,6 +24,7 @@ module Schema.Utils
     , mkEntitiesWith
     , mkMigration
     , mkMigrationLookup
+    , mkSchema
     , getTypeName
     ) where
 
@@ -37,6 +38,7 @@ import qualified Data.Map as M
 import Data.Text (Text)
 import qualified Data.Text as T
 import Database.Persist.EntityDef.Internal (EntityDef(..))
+import qualified Database.Persist.Quasi as Quasi
 import Database.Persist.Quasi.Internal (UnboundEntityDef)
 import Database.Persist.Sql (Entity, Migration, entityDef)
 import Database.Persist.TH (migrateModels)
@@ -52,6 +54,7 @@ import Database.Persist.Types
     , noCascade
     )
 import Language.Haskell.TH (Dec, Q)
+import Language.Haskell.TH.Quote (QuasiQuoter)
 
 import Sql.Core (MonadLogger, MonadSql, MonadThrow, SqlRecord, Transaction)
 import qualified Sql.Core as Sql
@@ -61,6 +64,9 @@ import qualified Sql.Core as Sql
 
 (.>) :: Functor f => a -> b -> f c -> (a, (b, f c))
 (.>) i schema act = (i, (schema, act))
+
+mkSchema :: QuasiQuoter
+mkSchema = TH.persistWith Quasi.upperCaseSettings
 
 mkEntities :: String -> [UnboundEntityDef] -> Q [Dec]
 mkEntities name = TH.share

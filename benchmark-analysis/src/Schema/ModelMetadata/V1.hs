@@ -13,7 +13,6 @@
 module Schema.ModelMetadata.V1 where
 
 import Data.Text (Text)
-import Database.Persist.TH (persistUpperCase)
 
 import qualified Schema.Utils as Utils
 
@@ -22,7 +21,7 @@ import qualified Schema.Dataset as Dataset
 import Schema.Model (PredictionModelId)
 import qualified Schema.Model as Model
 
-Utils.mkEntitiesWith "schema" [Dataset.schema, Model.schema] [persistUpperCase|
+Utils.mkEntitiesWith "schema" [Dataset.schema, Model.schema] [Utils.mkSchema|
 ModelGraphProperty
     modelId PredictionModelId
     property Text

@@ -17,7 +17,6 @@ module Schema.Run where
 import Data.String.Interpolate.IsString (i)
 import Data.Time.Clock (UTCTime)
 import Database.Persist.Sql (Unique)
-import Database.Persist.TH (persistUpperCase)
 
 import Pretty.Fields.Persistent
 import Schema.Utils
@@ -54,7 +53,7 @@ import qualified Schema.Run.V0 as V0
 
 Utils.mkEntitiesWith "schema'"
     [Algorithm.schema, Implementation.schema, RunConfig.schema, Variant.schema]
-    [persistUpperCase|
+    [Utils.mkSchema|
 Run
     runConfigId RunConfigId
     variantId VariantId

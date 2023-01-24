@@ -13,14 +13,13 @@ module Schema.VariantConfig.V1 where
 
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
-import Database.Persist.TH (persistUpperCase)
 
 import qualified Schema.Utils as Utils
 
 import Schema.Algorithm (AlgorithmId)
 import qualified Schema.Algorithm as Algorithm
 
-Utils.mkEntitiesWith "schema" [Algorithm.schema] [persistUpperCase|
+Utils.mkEntitiesWith "schema" [Algorithm.schema] [Utils.mkSchema|
 VariantConfig
     algorithmId AlgorithmId
     name Text

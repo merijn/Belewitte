@@ -19,7 +19,6 @@ import Control.Monad.Logger (logErrorN)
 import Data.Maybe (fromMaybe)
 import Data.String.Interpolate.IsString (i)
 import Database.Persist.Sql (Unique)
-import Database.Persist.TH (persistUpperCase)
 
 import Exceptions (AbortMigration(..), logThrowM)
 import Schema.Utils
@@ -45,7 +44,7 @@ import qualified Schema.UnknownPredictions.V1 as V1
 import qualified Schema.UnknownPredictions.V2 as V2
 
 Utils.mkEntitiesWith "schema'"
-    [Algorithm.schema, Model.schema, Implementation.schema] [persistUpperCase|
+    [Algorithm.schema, Model.schema, Implementation.schema] [Utils.mkSchema|
 UnknownPrediction
     modelId PredictionModelId
     algorithmId AlgorithmId

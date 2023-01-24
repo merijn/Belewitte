@@ -11,8 +11,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Schema.Variant.V1 where
 
-import Database.Persist.TH (persistUpperCase)
-
 import qualified Schema.Utils as Utils
 import Types
 
@@ -22,7 +20,7 @@ import Schema.VariantConfig (VariantConfigId)
 import qualified Schema.VariantConfig as VariantConfig
 
 Utils.mkEntitiesWith "schema"
-    [Graph.schema, VariantConfig.schema] [persistUpperCase|
+    [Graph.schema, VariantConfig.schema] [Utils.mkSchema|
 Variant
     graphId GraphId
     variantConfigId VariantConfigId

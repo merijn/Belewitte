@@ -14,7 +14,6 @@ module Schema.Model.V1 where
 
 import Data.Time.Clock (UTCTime)
 import qualified Database.Persist.Sql as Sql
-import Database.Persist.TH (persistUpperCase)
 
 import Model (Model)
 import qualified Schema.Utils as Utils
@@ -22,7 +21,7 @@ import qualified Schema.Utils as Utils
 import Schema.Platform (PlatformId)
 import qualified Schema.Platform as Platform
 
-Utils.mkEntitiesWith "schema" [Platform.schema] [persistUpperCase|
+Utils.mkEntitiesWith "schema" [Platform.schema] [Utils.mkSchema|
 PredictionModel
     platformId PlatformId
     model Model

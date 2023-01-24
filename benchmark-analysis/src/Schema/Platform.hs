@@ -16,7 +16,6 @@ module Schema.Platform where
 import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
 import Database.Persist.Sql (Checkmark, Unique)
-import Database.Persist.TH (persistUpperCase)
 
 import Pretty.Fields.Persistent
 import Schema.Import
@@ -28,7 +27,7 @@ import qualified Schema.Platform.V0 as V0
 import qualified Schema.Platform.V1 as V1
 import qualified Schema.Platform.V2 as V2
 
-Utils.mkEntities "schema" [persistUpperCase|
+Utils.mkEntities "schema" [Utils.mkSchema|
 Platform
     name Text
     prettyName Text Maybe

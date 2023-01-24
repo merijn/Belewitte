@@ -13,8 +13,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Schema.UnknownPredictions.V0 where
 
-import Database.Persist.TH (persistUpperCase)
-
 import qualified Schema.Utils as Utils
 
 import Schema.Model (PredictionModelId)
@@ -23,7 +21,7 @@ import Schema.Implementation (ImplementationId)
 import qualified Schema.Implementation as Implementation
 
 Utils.mkEntitiesWith "schema"
-    [Model.schema, Implementation.schema] [persistUpperCase|
+    [Model.schema, Implementation.schema] [Utils.mkSchema|
 UnknownPrediction
     modelId PredictionModelId
     count Int

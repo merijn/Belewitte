@@ -16,7 +16,6 @@ module Schema.Dataset where
 import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
 import Database.Persist.Sql (Unique)
-import Database.Persist.TH (persistUpperCase)
 
 import Pretty.Fields.Persistent
 import Schema.Import
@@ -32,7 +31,7 @@ import Schema.Utils
     )
 import qualified Schema.Utils as Utils
 
-Utils.mkEntities "schema" [persistUpperCase|
+Utils.mkEntities "schema" [Utils.mkSchema|
 Dataset
     name Text
     UniqDataset name

@@ -13,7 +13,6 @@
 module Schema.External.V0 where
 
 import Data.Text (Text)
-import Database.Persist.TH (persistUpperCase)
 
 import qualified Schema.Utils as Utils
 
@@ -25,7 +24,7 @@ import Schema.Variant (VariantId)
 import qualified Schema.Variant as Variant
 
 Utils.mkEntitiesWith "schema"
-    [Algorithm.schema, Platform.schema, Variant.schema] [persistUpperCase|
+    [Algorithm.schema, Platform.schema, Variant.schema] [Utils.mkSchema|
 ExternalImpl
     algorithmId AlgorithmId
     name Text

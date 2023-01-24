@@ -13,7 +13,6 @@
 module Schema.Properties.V0 where
 
 import Data.Text (Text)
-import Database.Persist.TH (persistUpperCase)
 
 import qualified Schema.Utils as Utils
 
@@ -22,7 +21,7 @@ import qualified Schema.Graph as Graph
 import Schema.Variant (VariantId)
 import qualified Schema.Variant as Variant
 
-Utils.mkEntitiesWith "schema" [Graph.schema, Variant.schema] [persistUpperCase|
+Utils.mkEntitiesWith "schema" [Graph.schema, Variant.schema] [Utils.mkSchema|
 GraphProp
     graphId GraphId
     property Text

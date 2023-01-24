@@ -14,7 +14,6 @@
 module Schema.Properties.V1 where
 
 import Data.Text (Text)
-import Database.Persist.TH (persistUpperCase)
 
 import Schema.Utils (EntityDef, ForeignDef)
 import qualified Schema.Utils as Utils
@@ -27,7 +26,7 @@ import Schema.Variant (VariantId)
 import qualified Schema.Variant as Variant
 
 Utils.mkEntitiesWith "schema'"
-    [Algorithm.schema, Graph.schema, Variant.schema] [persistUpperCase|
+    [Algorithm.schema, Graph.schema, Variant.schema] [Utils.mkSchema|
 GraphProp
     graphId GraphId
     property Text

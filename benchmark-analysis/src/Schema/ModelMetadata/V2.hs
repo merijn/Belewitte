@@ -12,8 +12,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Schema.ModelMetadata.V2 where
 
-import Database.Persist.TH (persistUpperCase)
-
 import qualified Schema.Utils as Utils
 
 import Schema.Dataset (DatasetId)
@@ -24,7 +22,7 @@ import Schema.Properties (PropertyNameId)
 import qualified Schema.Properties as Property
 
 Utils.mkEntitiesWith "schema" 
-    [Dataset.schema, Model.schema, Property.schema] [persistUpperCase|
+    [Dataset.schema, Model.schema, Property.schema] [Utils.mkSchema|
 ModelProperty
     modelId PredictionModelId
     propId PropertyNameId

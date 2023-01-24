@@ -12,7 +12,6 @@
 module Schema.Variant.V0 where
 
 import Data.Text (Text)
-import Database.Persist.TH (persistUpperCase)
 
 import qualified Schema.Utils as Utils
 import Types
@@ -23,7 +22,7 @@ import Schema.Graph (GraphId)
 import qualified Schema.Graph as Graph
 
 Utils.mkEntitiesWith "schema"
-    [Algorithm.schema, Graph.schema] [persistUpperCase|
+    [Algorithm.schema, Graph.schema] [Utils.mkSchema|
 Variant
     graphId GraphId
     algorithmId AlgorithmId

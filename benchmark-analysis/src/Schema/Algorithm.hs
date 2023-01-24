@@ -15,14 +15,13 @@ module Schema.Algorithm where
 
 import Data.Text (Text)
 import Database.Persist.Sql (Unique)
-import Database.Persist.TH (persistUpperCase)
 
 import Pretty.Fields.Persistent
 import Schema.Import (Importable(updateFields))
 import Schema.Utils (Entity, EntityDef, Int64, MonadSql, Transaction, (.=))
 import qualified Schema.Utils as Utils
 
-Utils.mkEntities "schema" [persistUpperCase|
+Utils.mkEntities "schema" [Utils.mkSchema|
 Algorithm
     name Text
     prettyName Text Maybe

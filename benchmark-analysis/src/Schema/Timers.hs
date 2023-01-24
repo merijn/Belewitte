@@ -17,7 +17,6 @@ module Schema.Timers where
 import Control.Monad (when)
 import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
-import Database.Persist.TH (persistUpperCase)
 
 import Pretty.Fields.Persistent
 import Schema.Utils
@@ -41,7 +40,7 @@ import qualified Schema.Run as Run
 import Schema.Variant (VariantId)
 import qualified Schema.Variant as Variant
 
-Utils.mkEntitiesWith "schema'" [Run.schema, Variant.schema] [persistUpperCase|
+Utils.mkEntitiesWith "schema'" [Run.schema, Variant.schema] [Utils.mkSchema|
 TotalTimer
     runId RunId
     name Text

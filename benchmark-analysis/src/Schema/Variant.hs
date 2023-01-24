@@ -15,7 +15,6 @@ module Schema.Variant where
 
 import Data.String.Interpolate.IsString (i)
 import Database.Persist.Sql (Unique)
-import Database.Persist.TH (persistUpperCase)
 import Database.Persist.Types
 
 import Pretty.Fields.Persistent
@@ -35,7 +34,7 @@ import qualified Schema.Variant.V1 as V1
 import qualified Schema.Variant.V2 as V2
 
 Utils.mkEntitiesWith "schema'"
-    [Algorithm.schema, Graph.schema, VariantConfig.schema] [persistUpperCase|
+    [Algorithm.schema, Graph.schema, VariantConfig.schema] [Utils.mkSchema|
 Variant
     graphId GraphId
     variantConfigId VariantConfigId

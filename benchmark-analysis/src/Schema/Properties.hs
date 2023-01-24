@@ -18,7 +18,6 @@ module Schema.Properties where
 import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
 import Database.Persist.Sql (Unique)
-import Database.Persist.TH (persistUpperCase)
 
 import Pretty.Fields.Persistent
 import Schema.Utils
@@ -35,7 +34,7 @@ import qualified Schema.Properties.V0 as V0
 import qualified Schema.Properties.V1 as V1
 
 Utils.mkEntitiesWith "schema'"
-    [Algorithm.schema, Graph.schema, Variant.schema] [persistUpperCase|
+    [Algorithm.schema, Graph.schema, Variant.schema] [Utils.mkSchema|
 PropertyName
     property Text
     isStepProp Bool

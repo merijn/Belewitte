@@ -18,7 +18,6 @@ import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
 import Database.Persist.Sql (Unique)
-import Database.Persist.TH (persistUpperCase)
 
 import Model (Model)
 import Pretty.Fields.Persistent
@@ -48,7 +47,7 @@ import qualified Schema.Model.V5 as V5
 import qualified Schema.Model.V6 as V6
 
 Utils.mkEntitiesWith "schema"
-    [Algorithm.schema, Platform.schema] [persistUpperCase|
+    [Algorithm.schema, Platform.schema] [Utils.mkSchema|
 PredictionModel
     platformId PlatformId
     algorithmId AlgorithmId

@@ -19,7 +19,6 @@ import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
 import Database.Persist.Sql (Checkmark, Unique)
-import Database.Persist.TH (persistUpperCase)
 
 import Exceptions (DBConstraintViolation(..), logThrowM)
 import Pretty.Fields.Persistent
@@ -33,7 +32,7 @@ import qualified Schema.Algorithm as Algorithm
 import qualified Schema.VariantConfig.V0 as V0
 import qualified Schema.VariantConfig.V1 as V1
 
-Utils.mkEntitiesWith "schema" [Algorithm.schema] [persistUpperCase|
+Utils.mkEntitiesWith "schema" [Algorithm.schema] [Utils.mkSchema|
 VariantConfig
     algorithmId AlgorithmId
     name Text

@@ -16,7 +16,6 @@ module Schema.RunConfig where
 
 import Data.String.Interpolate.IsString (i)
 import Database.Persist.Sql (Unique)
-import Database.Persist.TH (persistUpperCase)
 
 import Pretty.Fields.Persistent
 import Schema.Utils
@@ -46,7 +45,7 @@ import qualified Schema.Platform as Platform
 import qualified Schema.RunConfig.V0 as V0
 
 Utils.mkEntitiesWith "schema"
-    [Algorithm.schema, Dataset.schema, Platform.schema] [persistUpperCase|
+    [Algorithm.schema, Dataset.schema, Platform.schema] [Utils.mkSchema|
 RunConfig
     algorithmId AlgorithmId
     platformId PlatformId

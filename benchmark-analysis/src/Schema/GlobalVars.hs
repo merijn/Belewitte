@@ -15,12 +15,11 @@ module Schema.GlobalVars where
 
 import Data.Text (Text)
 import Database.Persist.Sql (Unique)
-import Database.Persist.TH (persistUpperCase)
 
 import Schema.Utils (EntityDef, Int64, MonadSql, Transaction, (.=))
 import qualified Schema.Utils as Utils
 
-Utils.mkEntities "schema" [persistUpperCase|
+Utils.mkEntities "schema" [Utils.mkSchema|
 GlobalVars
     name Text
     value Text

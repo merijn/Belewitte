@@ -17,7 +17,6 @@ import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
 import Database.Persist.Sql (Unique)
-import Database.Persist.TH (persistUpperCase)
 
 import Pretty.Fields.Persistent
 import Schema.Utils
@@ -29,7 +28,7 @@ import Schema.Algorithm (AlgorithmId)
 import qualified Schema.Algorithm as Algorithm
 import qualified Schema.Implementation.V0 as V0
 
-Utils.mkEntitiesWith "schema" [Algorithm.schema] [persistUpperCase|
+Utils.mkEntitiesWith "schema" [Algorithm.schema] [Utils.mkSchema|
 Implementation
     algorithmId AlgorithmId
     name Text

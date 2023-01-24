@@ -12,7 +12,6 @@
 module Schema.Run.V0 where
 
 import Data.Time.Clock (UTCTime)
-import Database.Persist.TH (persistUpperCase)
 
 import qualified Schema.Utils as Utils
 
@@ -24,7 +23,7 @@ import Schema.Variant (VariantId)
 import qualified Schema.Variant as Variant
 
 Utils.mkEntitiesWith "schema"
-    [Implementation.schema, RunConfig.schema, Variant.schema] [persistUpperCase|
+    [Implementation.schema, RunConfig.schema, Variant.schema] [Utils.mkSchema|
 Run
     runConfigId RunConfigId
     variantId VariantId

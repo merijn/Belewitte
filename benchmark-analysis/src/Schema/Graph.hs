@@ -18,7 +18,6 @@ import Data.String.Interpolate.IsString (i)
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
 import Database.Persist.Sql (Unique)
-import Database.Persist.TH (persistUpperCase)
 
 import Pretty.Fields.Persistent
 import Schema.Import
@@ -32,7 +31,7 @@ import qualified Schema.Graph.V0 as V0
 import qualified Schema.Graph.V1 as V1
 import qualified Schema.Graph.V2 as V2
 
-Utils.mkEntitiesWith "schema" [Dataset.schema] [persistUpperCase|
+Utils.mkEntitiesWith "schema" [Dataset.schema] [Utils.mkSchema|
 Graph
     name Text
     path Text

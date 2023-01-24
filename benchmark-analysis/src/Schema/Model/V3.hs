@@ -13,7 +13,6 @@ module Schema.Model.V3 where
 
 import Data.Text (Text)
 import Data.Time.Clock (UTCTime)
-import Database.Persist.TH (persistUpperCase)
 
 import Model (Model)
 import qualified Schema.Utils as Utils
@@ -24,7 +23,7 @@ import Schema.Platform (PlatformId)
 import qualified Schema.Platform as Platform
 
 Utils.mkEntitiesWith "schema"
-    [Algorithm.schema, Platform.schema] [persistUpperCase|
+    [Algorithm.schema, Platform.schema] [Utils.mkSchema|
 PredictionModel
     platformId PlatformId
     algorithmId AlgorithmId

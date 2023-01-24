@@ -13,14 +13,13 @@
 module Schema.ModelMetadata.V0 where
 
 import Data.Text (Text)
-import Database.Persist.TH (persistUpperCase)
 
 import qualified Schema.Utils as Utils
 
 import Schema.Model (PredictionModelId)
 import qualified Schema.Model as Model
 
-Utils.mkEntitiesWith "schema" [Model.schema] [persistUpperCase|
+Utils.mkEntitiesWith "schema" [Model.schema] [Utils.mkSchema|
 ModelGraphProperty
     modelId PredictionModelId
     property Text

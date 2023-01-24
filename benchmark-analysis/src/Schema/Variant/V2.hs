@@ -12,8 +12,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Schema.Variant.V2 where
 
-import Database.Persist.TH (persistUpperCase)
-
 import Schema.Utils (EntityDef, ForeignDef)
 import qualified Schema.Utils as Utils
 import Types
@@ -26,7 +24,7 @@ import Schema.VariantConfig (VariantConfigId)
 import qualified Schema.VariantConfig as VariantConfig
 
 Utils.mkEntitiesWith "schema'"
-    [Algorithm.schema, Graph.schema, VariantConfig.schema] [persistUpperCase|
+    [Algorithm.schema, Graph.schema, VariantConfig.schema] [Utils.mkSchema|
 Variant
     graphId GraphId
     variantConfigId VariantConfigId
