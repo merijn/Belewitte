@@ -18,8 +18,6 @@ module Schema.Utils
     , Sql.executeSqlSingleValue
     , Sql.executeSqlSingleValueMaybe
     , createTableFromSchema
-    , mkForeignRef
-    , addForeignRef
     , mkEntities
     , mkEntitiesWith
     , mkMigration
@@ -45,15 +43,7 @@ import Database.Persist.Sql (Entity, Migration, entityDef)
 import Database.Persist.TH (migrateModels)
 import qualified Database.Persist.TH as TH
 import Database.Persist.Types
-    ( ConstraintNameDB(..)
-    , ConstraintNameHS(..)
-    , EntityNameDB(..)
-    , EntityNameHS(..)
-    , FieldNameDB(..)
-    , FieldNameHS(..)
-    , ForeignDef(..)
-    , noCascade
-    )
+    (ConstraintNameHS(..), EntityNameHS(..), ForeignDef)
 import Language.Haskell.TH (Dec, Q)
 import Language.Haskell.TH.Quote (QuasiQuoter)
 
@@ -124,33 +114,6 @@ createTableFromSchema
 createTableFromSchema defs = do
     schema <- mkMigration defs
     void $ Sql.runMigrationQuiet schema
-
-mkForeignRef :: Text -> [(Text, Text)] -> ForeignDef
-mkForeignRef foreignTable refs = ForeignDef
-    { foreignRefTableHaskell = EntityNameHS foreignTable
-    , foreignRefTableDBName = EntityNameDB foreignTable
-    , foreignConstraintNameHaskell =
-        ConstraintNameHS $ "Foreign" <> foreignTable
-    , foreignConstraintNameDBName =
-        ConstraintNameDB $ "Foreign" <> foreignTable
-    , foreignFields = map wrapNames refs
-    , foreignFieldCascade = noCascade
-    , foreignToPrimary = False
-    , foreignAttrs = []
-    , foreignNullable = False
-    }
-  where
-    wrapNames
-        :: (Text, Text)
-        -> ((FieldNameHS, FieldNameDB), (FieldNameHS, FieldNameDB))
-    wrapNames (src, dst) =
-      ((FieldNameHS src, FieldNameDB src), (FieldNameHS dst, FieldNameDB dst))
-
-addForeignRef :: Text -> ForeignDef -> [EntityDef] -> [EntityDef]
-addForeignRef _ _ [] = []
-addForeignRef name fk (ent:ents)
-    | entityHaskell ent /= EntityNameHS name = ent : addForeignRef name fk ents
-    | otherwise = ent { entityForeigns = fk : entityForeigns ent } : ents
 
 mkMigrationLookup
     :: MonadSql m
