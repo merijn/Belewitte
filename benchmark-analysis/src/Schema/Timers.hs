@@ -22,7 +22,6 @@ import Pretty.Fields.Persistent
 import Schema.Utils
     ( Entity
     , EntityDef
-    , ForeignDef
     , Int64
     , MonadLogger
     , MonadSql
@@ -40,7 +39,7 @@ import qualified Schema.Run as Run
 import Schema.Variant (VariantId)
 import qualified Schema.Variant as Variant
 
-Utils.mkEntitiesWith "schema'" [Run.schema, Variant.schema] [Utils.mkSchema|
+Utils.mkEntitiesWith "schema" [Run.schema, Variant.schema] [Utils.mkSchema|
 TotalTimer
     runId RunId
     name Text
@@ -61,6 +60,7 @@ StepTimer
     maxTime Double
     stdDev Double
     Primary runId stepId name
+    Foreign Run foreignRun runId variantId References Id variantId
     deriving Eq Show
 |]
 
@@ -89,13 +89,6 @@ instance PrettyFields (Entity StepTimer) where
 
 instance NamedEntity StepTimer where
     entityName = stepTimerName
-
-schema :: [EntityDef]
-schema = Utils.addForeignRef "StepTimer" run $ schema'
-  where
-    run :: ForeignDef
-    run = Utils.mkForeignRef "Run"
-        [ ("runId", "id"), ("variantId", "variantId") ]
 
 migrations
     :: (MonadLogger m, MonadSql m, MonadThrow m)

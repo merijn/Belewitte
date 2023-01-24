@@ -23,7 +23,6 @@ import Schema.Import
 import Schema.Utils
     ( Entity
     , EntityDef
-    , ForeignDef
     , Int64
     , MonadLogger
     , MonadSql
@@ -47,7 +46,7 @@ import Schema.Variant (VariantId)
 import qualified Schema.Variant as Variant
 import qualified Schema.External.V0 as V0
 
-Utils.mkEntitiesWith "schema'"
+Utils.mkEntitiesWith "schema"
     [Algorithm.schema, Platform.schema, Variant.schema] [Utils.mkSchema|
 ExternalImpl
     algorithmId AlgorithmId
@@ -67,6 +66,8 @@ ExternalTimer
     maxTime Double
     stdDev Double
     Primary platformId variantId implId algorithmId name
+    Foreign Variant foreignVariant variantId algorithmId References Id algorithmId
+    Foreign ExternalImpl foreignExternalImpl implId algorithmId References Id algorithmId
     deriving Eq Show
 |]
 
@@ -105,19 +106,6 @@ instance Importable ExternalTimer where
         , ForeignKeyField ExternalTimerImplId
         , ForeignKeyField ExternalTimerAlgorithmId
         ]
-
-schema :: [EntityDef]
-schema = Utils.addForeignRef "ExternalTimer" variant
-       . Utils.addForeignRef "ExternalTimer" extImpl
-       $ schema'
-  where
-    variant :: ForeignDef
-    variant = Utils.mkForeignRef "Variant"
-        [ ("variantId", "id"), ("algorithmId", "algorithmId") ]
-
-    extImpl :: ForeignDef
-    extImpl = Utils.mkForeignRef "ExternalImpl"
-        [ ("implId", "id"), ("algorithmId", "algorithmId") ]
 
 migrations
     :: (MonadLogger m, MonadSql m, MonadThrow m)

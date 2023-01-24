@@ -71,7 +71,7 @@ import Schema.Algorithm hiding (migrations, schema)
 import qualified Schema.Algorithm as Algorithm
 import Schema.Dataset hiding (migrations, schema)
 import qualified Schema.Dataset as Dataset
-import Schema.External hiding (migrations, schema, schema')
+import Schema.External hiding (migrations, schema)
 import qualified Schema.External as External
 import qualified Schema.GlobalVars as GlobalVars
 import Schema.Graph hiding (migrations, schema)
@@ -88,15 +88,15 @@ import Schema.Platform hiding (migrations, schema)
 import qualified Schema.Platform as Platform
 import Schema.Properties hiding (migrations, schema)
 import qualified Schema.Properties as Properties
-import Schema.Run hiding (migrations, schema, schema')
+import Schema.Run hiding (migrations, schema)
 import qualified Schema.Run as Run
 import Schema.RunConfig hiding (migrations, schema)
 import qualified Schema.RunConfig as RunConfig
-import Schema.Timers hiding (migrations, schema, schema')
+import Schema.Timers hiding (migrations, schema)
 import qualified Schema.Timers as Timers
-import Schema.UnknownPredictions hiding (migrations, schema, schema')
+import Schema.UnknownPredictions hiding (migrations, schema)
 import qualified Schema.UnknownPredictions as UnknownPredictions
-import Schema.Variant hiding (migrations, schema, schema')
+import Schema.Variant hiding (migrations, schema)
 import qualified Schema.Variant as Variant
 import Schema.VariantConfig hiding (migrations, schema)
 import qualified Schema.VariantConfig as VariantConfig

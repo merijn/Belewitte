@@ -23,7 +23,6 @@ import Database.Persist.Sql (Unique)
 import Exceptions (AbortMigration(..), logThrowM)
 import Schema.Utils
     ( EntityDef
-    , ForeignDef
     , Int64
     , MonadLogger
     , MonadSql
@@ -43,7 +42,7 @@ import qualified Schema.UnknownPredictions.V0 as V0
 import qualified Schema.UnknownPredictions.V1 as V1
 import qualified Schema.UnknownPredictions.V2 as V2
 
-Utils.mkEntitiesWith "schema'"
+Utils.mkEntitiesWith "schema"
     [Algorithm.schema, Model.schema, Implementation.schema] [Utils.mkSchema|
 UnknownPrediction
     modelId PredictionModelId
@@ -51,6 +50,7 @@ UnknownPrediction
     unknownSetId Int64
     count Int
     UniqUnknownPrediction modelId unknownSetId
+    Foreign PredictionModel foreignPredictionModel modelId algorithmId References Id algorithmId
     deriving Eq Show
 
 UnknownPredictionSet
@@ -58,23 +58,11 @@ UnknownPredictionSet
     implId ImplementationId
     algorithmId AlgorithmId
     Primary unknownPredId implId
+    Foreign UnknownPrediction foreignUnknownPrediction unknownPredId algorithmId References Id algorithmId
     deriving Eq Show
 |]
 
 deriving instance Show (Unique UnknownPrediction)
-
-schema :: [EntityDef]
-schema = Utils.addForeignRef "UnknownPrediction" model
-       . Utils.addForeignRef "UnknownPredictionSet" unknownPred
-       $ schema'
-  where
-    model :: ForeignDef
-    model = Utils.mkForeignRef "PredictionModel"
-        [ ("modelId", "id"), ("algorithmId", "algorithmId") ]
-
-    unknownPred :: ForeignDef
-    unknownPred = Utils.mkForeignRef "UnknownPrediction"
-        [ ("unknownPredId", "id"), ("algorithmId", "algorithmId") ]
 
 reconcileTables
     :: (MonadLogger m, MonadSql m, MonadThrow m) => Transaction m ()

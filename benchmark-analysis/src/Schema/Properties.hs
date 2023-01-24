@@ -21,7 +21,7 @@ import Database.Persist.Sql (Unique)
 
 import Pretty.Fields.Persistent
 import Schema.Utils
-    (Entity, EntityDef, ForeignDef, Int64, MonadSql, Transaction, (.=), (.>))
+    (Entity, EntityDef, Int64, MonadSql, Transaction, (.=), (.>))
 import qualified Schema.Utils as Utils
 
 import Schema.Algorithm (AlgorithmId)
@@ -33,7 +33,7 @@ import qualified Schema.Variant as Variant
 import qualified Schema.Properties.V0 as V0
 import qualified Schema.Properties.V1 as V1
 
-Utils.mkEntitiesWith "schema'"
+Utils.mkEntitiesWith "schema"
     [Algorithm.schema, Graph.schema, Variant.schema] [Utils.mkSchema|
 PropertyName
     property Text
@@ -64,6 +64,8 @@ StepPropValue
     value Double
     Primary variantId stepId propId
     UniqStepPropValue variantId stepId propId
+    Foreign StepProp foreignStepProp algorithmId propId References algorithmId propId
+    Foreign Variant foreignVariant variantId algorithmId References Id algorithmId
     deriving Eq Show
 |]
 
@@ -71,19 +73,6 @@ deriving instance Show (Unique PropertyName)
 deriving instance Show (Unique GraphPropValue)
 deriving instance Show (Unique StepProp)
 deriving instance Show (Unique StepPropValue)
-
-schema :: [EntityDef]
-schema = Utils.addForeignRef "StepPropValue" stepProp
-       . Utils.addForeignRef "StepPropValue" variant
-       $ schema'
-  where
-    stepProp :: ForeignDef
-    stepProp = Utils.mkForeignRef "StepProp"
-        [ ("algorithmId", "algorithmId"), ("propId", "propId") ]
-
-    variant :: ForeignDef
-    variant = Utils.mkForeignRef "Variant"
-        [ ("variantId", "id"), ("algorithmId", "algorithmId") ]
 
 pattern GraphPropName :: Text -> PropertyName
 pattern GraphPropName name = PropertyName name False

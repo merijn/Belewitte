@@ -15,7 +15,6 @@ module Schema.Properties.V1 where
 
 import Data.Text (Text)
 
-import Schema.Utils (EntityDef, ForeignDef)
 import qualified Schema.Utils as Utils
 
 import Schema.Algorithm (AlgorithmId)
@@ -25,7 +24,7 @@ import qualified Schema.Graph as Graph
 import Schema.Variant (VariantId)
 import qualified Schema.Variant as Variant
 
-Utils.mkEntitiesWith "schema'"
+Utils.mkEntitiesWith "schema"
     [Algorithm.schema, Graph.schema, Variant.schema] [Utils.mkSchema|
 GraphProp
     graphId GraphId
@@ -50,18 +49,7 @@ StepPropValue
     value Double
     Primary variantId stepId property
     UniqStepPropValue variantId stepId property
+    Foreign StepProp foreignStepProp algorithmId property References algorithmId property
+    Foreign Variant foreignVariant variantId algorithmId References Id algorithmId
     deriving Eq Show
 |]
-
-schema :: [EntityDef]
-schema = Utils.addForeignRef "StepPropValue" stepProp
-       . Utils.addForeignRef "StepPropValue" variant
-       $ schema'
-  where
-    stepProp :: ForeignDef
-    stepProp = Utils.mkForeignRef "StepProp"
-        [ ("algorithmId", "algorithmId"), ("property", "property") ]
-
-    variant :: ForeignDef
-    variant = Utils.mkForeignRef "Variant"
-        [ ("variantId", "id"), ("algorithmId", "algorithmId") ]

@@ -12,7 +12,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Schema.Variant.V2 where
 
-import Schema.Utils (EntityDef, ForeignDef)
 import qualified Schema.Utils as Utils
 import Types
 
@@ -23,7 +22,7 @@ import qualified Schema.Graph as Graph
 import Schema.VariantConfig (VariantConfigId)
 import qualified Schema.VariantConfig as VariantConfig
 
-Utils.mkEntitiesWith "schema'"
+Utils.mkEntitiesWith "schema"
     [Algorithm.schema, Graph.schema, VariantConfig.schema] [Utils.mkSchema|
 Variant
     graphId GraphId
@@ -33,12 +32,6 @@ Variant
     propsStored Bool
     retryCount Int
     UniqVariant graphId variantConfigId
+    Foreign VariantConfig foreignVariantConfig variantConfigId algorithmId References Id algorithmId
     deriving Eq Show
 |]
-
-schema :: [EntityDef]
-schema = Utils.addForeignRef "Variant" variantConfig schema'
-  where
-    variantConfig :: ForeignDef
-    variantConfig = Utils.mkForeignRef "VariantConfig"
-        [ ("variantConfigId", "id"), ("algorithmId", "algorithmId") ]

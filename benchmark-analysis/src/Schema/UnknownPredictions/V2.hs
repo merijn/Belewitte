@@ -14,7 +14,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 module Schema.UnknownPredictions.V2 where
 
-import Schema.Utils (EntityDef, ForeignDef)
 import qualified Schema.Utils as Utils
 
 import Schema.Algorithm (AlgorithmId)
@@ -24,12 +23,13 @@ import qualified Schema.Model as Model
 import Schema.Implementation (ImplementationId)
 import qualified Schema.Implementation as Implementation
 
-Utils.mkEntitiesWith "schema'"
+Utils.mkEntitiesWith "schema"
     [Algorithm.schema, Model.schema, Implementation.schema] [Utils.mkSchema|
 UnknownPrediction
     modelId PredictionModelId
     algorithmId AlgorithmId
     count Int
+    Foreign PredictionModel foreignPredictionModel modelId algorithmId References Id algorithmId
     deriving Eq Show
 
 UnknownPredictionSet
@@ -37,18 +37,6 @@ UnknownPredictionSet
     implId ImplementationId
     algorithmId AlgorithmId
     Primary unknownPredId implId
+    Foreign UnknownPrediction foreignUnknownPrediction unknownPredId algorithmId References Id algorithmId
     deriving Eq Show
 |]
-
-schema :: [EntityDef]
-schema = Utils.addForeignRef "UnknownPrediction" model
-       . Utils.addForeignRef "UnknownPredictionSet" unknownPred
-       $ schema'
-  where
-    model :: ForeignDef
-    model = Utils.mkForeignRef "PredictionModel"
-        [ ("modelId", "id"), ("algorithmId", "algorithmId") ]
-
-    unknownPred :: ForeignDef
-    unknownPred = Utils.mkForeignRef "UnknownPrediction"
-        [ ("unknownPredId", "id"), ("algorithmId", "algorithmId") ]

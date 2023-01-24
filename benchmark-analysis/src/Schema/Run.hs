@@ -22,7 +22,6 @@ import Pretty.Fields.Persistent
 import Schema.Utils
     ( Entity
     , EntityDef
-    , ForeignDef
     , Int64
     , MonadLogger
     , MonadSql
@@ -51,7 +50,7 @@ import Schema.Variant (VariantId)
 import qualified Schema.Variant as Variant
 import qualified Schema.Run.V0 as V0
 
-Utils.mkEntitiesWith "schema'"
+Utils.mkEntitiesWith "schema"
     [Algorithm.schema, Implementation.schema, RunConfig.schema, Variant.schema]
     [Utils.mkSchema|
 Run
@@ -62,6 +61,9 @@ Run
     timestamp UTCTime
     validated Bool
     UniqRun runConfigId variantId implId algorithmId
+    Foreign RunConfig foreignRunConfig runConfigId algorithmId References Id algorithmId
+    Foreign Variant foreignVariant variantId algorithmId References Id algorithmId
+    Foreign Implementation foreignImplementation implId algorithmId References Id algorithmId
     deriving Eq Show
 |]
 
@@ -76,24 +78,6 @@ instance PrettyFields (Entity Run) where
         , ("Validated", RunValidated `fieldVia` prettyShow)
         , ("Timestamp", RunTimestamp `fieldVia` prettyShow)
         ]
-
-schema :: [EntityDef]
-schema = Utils.addForeignRef "Run" runConfig
-       . Utils.addForeignRef "Run" variant
-       . Utils.addForeignRef "Run" impl
-       $ schema'
-  where
-    runConfig :: ForeignDef
-    runConfig = Utils.mkForeignRef "RunConfig"
-        [ ("runConfigId", "id"), ("algorithmId", "algorithmId") ]
-
-    variant :: ForeignDef
-    variant = Utils.mkForeignRef "Variant"
-        [ ("variantId", "id"), ("algorithmId", "algorithmId") ]
-
-    impl :: ForeignDef
-    impl = Utils.mkForeignRef "Implementation"
-        [ ("implId", "id"), ("algorithmId", "algorithmId") ]
 
 migrations
     :: (MonadLogger m, MonadSql m, MonadThrow m)

@@ -38,6 +38,7 @@ import qualified Data.Map as M
 import Data.Text (Text)
 import qualified Data.Text as T
 import Database.Persist.EntityDef.Internal (EntityDef(..))
+import Database.Persist.Quasi (PersistSettings)
 import qualified Database.Persist.Quasi as Quasi
 import Database.Persist.Quasi.Internal (UnboundEntityDef)
 import Database.Persist.Sql (Entity, Migration, entityDef)
@@ -66,7 +67,16 @@ import qualified Sql.Core as Sql
 (.>) i schema act = (i, (schema, act))
 
 mkSchema :: QuasiQuoter
-mkSchema = TH.persistWith Quasi.upperCaseSettings
+mkSchema = TH.persistWith schemaSettings
+  where
+    constraintName :: EntityNameHS -> ConstraintNameHS -> Text
+    constraintName (EntityNameHS ent) (ConstraintNameHS constraint) =
+      case T.stripPrefix "foreign" constraint of
+          Nothing -> ent <> constraint
+          Just remainder -> "Foreign" <> remainder
+
+    schemaSettings :: PersistSettings
+    schemaSettings = Quasi.setPsToFKName constraintName Quasi.upperCaseSettings
 
 mkEntities :: String -> [UnboundEntityDef] -> Q [Dec]
 mkEntities name = TH.share

@@ -33,7 +33,7 @@ import qualified Schema.Variant.V0 as V0
 import qualified Schema.Variant.V1 as V1
 import qualified Schema.Variant.V2 as V2
 
-Utils.mkEntitiesWith "schema'"
+Utils.mkEntitiesWith "schema"
     [Algorithm.schema, Graph.schema, VariantConfig.schema] [Utils.mkSchema|
 Variant
     graphId GraphId
@@ -44,6 +44,7 @@ Variant
     propsStored Bool
     retryCount Int
     UniqVariant graphId variantConfigId
+    Foreign VariantConfig foreignVariantConfig variantConfigId algorithmId References Id algorithmId
     deriving Eq Show
 |]
 
@@ -65,13 +66,6 @@ instance Importable Variant where
         , ForeignKeyField VariantAlgorithmId
         , ForeignKeyField VariantVariantConfigId
         ]
-
-schema :: [EntityDef]
-schema = Utils.addForeignRef "Variant" variantConfig schema'
-  where
-    variantConfig :: ForeignDef
-    variantConfig = Utils.mkForeignRef "VariantConfig"
-        [ ("variantConfigId", "id"), ("algorithmId", "algorithmId") ]
 
 migrations :: MonadSql m => Int64 -> Transaction m [EntityDef]
 migrations = Utils.mkMigrationLookup
