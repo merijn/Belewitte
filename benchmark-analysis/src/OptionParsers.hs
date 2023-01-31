@@ -46,7 +46,7 @@ import Control.Monad (void, when)
 import Data.Char (toLower)
 import Data.Foldable (asum)
 import Data.Function (on)
-import Data.Interval (Extended(Finite), Interval)
+import Data.Interval (Boundary(Closed), Extended(Finite), Interval)
 import qualified Data.Interval as I
 import Data.IntervalSet (IntervalSet)
 import qualified Data.IntervalSet as IS
@@ -197,7 +197,7 @@ intervalFlag flagName name = option intervalReader $ mconcat
         range = toInterval <$> try (decimal <* char '-') <*> decimal
 
         toInterval :: Integral a => a -> a -> Interval a
-        toInterval = I.interval `on` (,True) . Finite
+        toInterval = I.interval `on` (,Closed) . Finite
 
 modelIdParser :: Parser (SqlM (Key PredictionModel))
 modelIdParser = fmap entityKey <$> modelParser
