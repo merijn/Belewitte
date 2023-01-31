@@ -22,7 +22,7 @@ else
 	$(AT)$(CABAL) --builddir="$(abspath $(BUILD)/haskell/)" \
 	    v2-build $(subst _,:,$*) $(if $(AT),2>/dev/null >/dev/null,)
 
-$(CABALCONFIG): $(BASE)/cabal.project
+$(CABALCONFIG): $(BASE)/cabal.project $(BASE)/Config.mk
 	$(PRINTF) " CABAL\tconfigure\n"
 	$(AT)$(CABAL) --builddir="$(abspath $(BUILD)/haskell/)" v2-update \
 	    $(if $(AT),2>/dev/null >/dev/null,)
