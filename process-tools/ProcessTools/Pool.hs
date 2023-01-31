@@ -46,9 +46,9 @@ import System.Posix.Signals (sigKILL, signalProcess)
 import System.Process (CreateProcess(..), ProcessHandle, Pid, StdStream(..))
 import qualified System.Process as Proc
 
-import Data.Text.Prettyprint.Doc (Pretty(pretty))
-import qualified Data.Text.Prettyprint.Doc as Pretty
-import qualified Data.Text.Prettyprint.Doc.Render.Terminal as Pretty
+import Prettyprinter (Pretty(pretty))
+import qualified Prettyprinter as Pretty
+import qualified Prettyprinter.Render.Terminal as Pretty
 
 import BroadcastChan.Conduit
 import ProcessTools (UnexpectedTermination, unexpectedTermination)
@@ -159,14 +159,15 @@ withProcessPool n runnerCreator f = do
         -> String
         -> Runner
         -> IO (Pool Process)
-    createProcessPool logFun hostName runner = Pool.createPool
-            (unLog $ allocateProcess runner)
-            (unLog . destroyProcess hostName)
-            1
-            3153600000
-            n
+    createProcessPool logFun hostName runner = Pool.newPool poolConfig
       where
         unLog act = Log.runLoggingT act logFun
+
+        poolConfig = Pool.setNumStripes (Just 1) $ Pool.defaultPoolConfig
+            (unLog $ allocateProcess runner)
+            (unLog . destroyProcess hostName)
+            3153600000
+            n
 
     destroyProcessPool :: Pool Process -> IO ()
     destroyProcessPool = liftIO . Pool.destroyAllResources

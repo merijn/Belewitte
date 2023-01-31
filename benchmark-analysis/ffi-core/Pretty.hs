@@ -1,9 +1,9 @@
 module Pretty
-    ( module Data.Text.Prettyprint.Doc
-    , module Data.Text.Prettyprint.Doc.Util
-    , module Data.Text.Prettyprint.Doc.Render.Terminal
+    ( module Prettyprinter
+    , module Prettyprinter.Util
+    , module Prettyprinter.Render.Terminal
     ) where
 
-import Data.Text.Prettyprint.Doc
-import Data.Text.Prettyprint.Doc.Util
-import Data.Text.Prettyprint.Doc.Render.Terminal
+import Prettyprinter
+import Prettyprinter.Util
+import Prettyprinter.Render.Terminal
