@@ -21,7 +21,6 @@ import Data.IORef
 import qualified Data.Map as M
 import Data.Profunctor (lmap)
 import qualified Data.Random as Random
-import Data.Random.Shuffle.Weighted
 import Data.Set (Set)
 import qualified Data.Set as S
 import qualified Data.Text as T
@@ -35,6 +34,7 @@ import System.IO (hClose, openBinaryTempFile)
 import System.Random.MWC (createSystemRandom, GenIO)
 
 import Process hiding (numChildren)
+import WeightedShuffle
 
 data CrossoverType = SinglePoint | VertexWise | EdgeWise deriving (Read, Show)
 
