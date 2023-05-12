@@ -292,7 +292,15 @@ main = withChildrenDo Kill $ do
         setSocketOption sock ReuseAddr 1
         setSocketOption sock KeepAlive 1
 
-        bind sock (SockAddrInet aNY_PORT iNADDR_ANY)
+        let resolveHints = defaultHints
+                { addrFlags = [AI_PASSIVE]
+                , addrFamily = AF_INET
+                , addrSocketType = Stream
+                }
+
+        (resolvedAddress:_) <- getAddrInfo (Just resolveHints) Nothing Nothing
+
+        bind sock (addrAddress resolvedAddress)
         port <- socketPort sock
         listen sock 5
 
