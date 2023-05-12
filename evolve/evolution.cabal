@@ -45,14 +45,13 @@ Common exes
 Executable darwin
   Import:               all, exes
   Main-Is:              Server.hs
-  Other-Modules:        
+  Other-Modules:        WeightedShuffle
 
   Build-Depends:        base
                ,        async ^>= 2.1 || ^>= 2.2
                ,        foldl ^>= 1.4
                ,        mwc-random ^>= 0.14
                ,        profunctors ^>= 5.4
-               ,        random-extras ^>= 0.19
                ,        random-fu ^>= 0.2.7
 
 Executable breeding-pool
