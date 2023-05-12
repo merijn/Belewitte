@@ -56,7 +56,7 @@ import Data.Typeable (Typeable)
 import qualified Data.ByteString as BS
 import GHC.Generics (Generic)
 import GHC.Conc (getUncaughtExceptionHandler,setUncaughtExceptionHandler)
-import Network.Socket hiding (recv, send)
+import Network.Socket
 import qualified Network.Socket.ByteString as BS (recv, sendAll)
 import Pipes
 import Pipes.Concurrent hiding (recv, send, atomically, fromInput, toOutput)

@@ -6,7 +6,7 @@ module Main where
 import Control.Monad
 import Control.Monad.Catch (bracket)
 import GHC.Conc (getNumProcessors)
-import Network.Socket hiding (send)
+import Network.Socket
 import Options.Applicative hiding (Success)
 import System.Posix.Signals hiding (Ignore)
 import qualified Pipes.Prelude as P
