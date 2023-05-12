@@ -48,7 +48,7 @@ Common compile-flags
                ,        bytestring ^>= 0.11.4.0
                ,        exceptions ^>= 0.10.7
                ,        monad-logger ^>= 0.3.39
-               ,        text ^>= 2.0.1
+               ,        text ^>= 2.0.2
 
 Common all
   Import:               compile-flags
@@ -64,9 +64,7 @@ Common all
                --       resourcet 1.3.0 is not supported by broadcast-chan
                ,        resourcet ^>= 1.2.0
                ,        time ^>= 1.12.2
-               --       unix 2.8.0.0 is unsupported by unix-compat 0.6, which
-               --       is required by fast-logger 3.1.1
-               ,        unix ^>= 2.7.3
+               ,        unix ^>= 2.8.1.1
 
 Common exes
   GHC-Options:          -rtsopts -threaded -with-rtsopts=-qg
@@ -239,11 +237,8 @@ Library
                --       deepseq 1.4.4.0 ships with GHC 8.10 and is required for
                --       template-haskell 2.16.0.0
                ,        deepseq ^>= 1.4.4.0
-               --       directory 1.3.8.0 requires unix 2.8.0.0, which is
-               --       unsupported by unix-compat 0.6, which is required by
-               --       fast-logger 3.1.1
-               ,        directory ^>= 1.3.7.1
-               ,        fast-logger ^>= 3.1.1
+               ,        directory ^>= 1.3.8.1
+               ,        fast-logger ^>= 3.2.1
                ,        filepath ^>= 1.4.100.0
                ,        format-numbers ^>= 0.1.0.1
                ,        haskeline ^>= 0.8.2
@@ -288,10 +283,7 @@ Executable Ingest
                ,        broadcast-chan-conduit ^>= 0.2.1.2
                ,        attoparsec ^>= 0.14.4
                ,        cryptonite-conduit ^>= 0.2.2
-               --       directory 1.3.8.0 requires unix 2.8.0.0, which is
-               --       unsupported by unix-compat 0.6, which is required by
-               --       fast-logger 3.1.1
-               ,        directory ^>= 1.3.7.1
+               ,        directory ^>= 1.3.8.1
                ,        filepath ^>= 1.4.100.0
                ,        hostname ^>= 1.0
                ,        memory ^>= 0.18

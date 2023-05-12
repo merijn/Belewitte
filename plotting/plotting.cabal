@@ -32,8 +32,8 @@ Executable PlotGraph
   Main-Is:              Plot.hs
 
   Build-Depends:        base
-               ,        attoparsec ^>= 0.13.1
-               ,        bytestring ^>= 0.10.8
+               ,        attoparsec ^>= 0.14.4
+               ,        bytestring ^>= 0.11.4.0
                ,        Chart ^>= 1.9.3
 
   if flag(has-cairo)
