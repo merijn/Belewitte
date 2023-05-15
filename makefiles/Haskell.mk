@@ -1,20 +1,19 @@
-ifdef CABAL
-CABALCONFIG:=$(BASE)/cabal.project.local
-ifeq ($(BASE)/$(PROJECTFILE).freeze, $(wildcard $(BASE)/$(PROJECTFILE).freeze))
-CABALFREEZE:=$(BASE)/cabal.project.freeze
-endif
-endif
-
-$(BASE)/cabal.project: $(BASE)/$(PROJECTFILE) $(BASE)/Config.mk
+$(BASE)/cabal.project: $(PROJECTFILE) $(BASE)/Config.mk
 	$(PRINTF) " CP\t$(@F)\n"
 	$(AT)cp $< $@
 
-$(BASE)/cabal.project.freeze: $(BASE)/$(PROJECTFILE).freeze $(BASE)/Config.mk
+ifeq ($(FREEZEFILE), $(wildcard $(FREEZEFILE)))
+$(BASE)/cabal.project.freeze: $(FREEZEFILE) $(BASE)/Config.mk
 	$(PRINTF) " CP\t$(@F)\n"
 	$(AT)cp $< $@
+else
+$(BASE)/cabal.project.freeze: $(BASE)/Config.mk
+	$(PRINTF) " MK\t$(@F)\n"
+	$(AT)touch $@
+endif
 
 .PHONY: haskell_%
-haskell_%: $(CABALCONFIG) $(CABALFREEZE)
+haskell_%: $(BASE)/cabal.project.local $(BASE)/cabal.project.freeze
 ifndef CABAL
 	$(PRINTF) "cabal-install not found, skipping Haskell parts\n"
 else
@@ -22,17 +21,17 @@ else
 	$(AT)$(CABAL) --builddir="$(abspath $(BUILD)/haskell/)" \
 	    v2-build $(subst _,:,$*) $(if $(AT),2>/dev/null >/dev/null,)
 
-$(CABALCONFIG): $(BASE)/cabal.project $(BASE)/Config.mk
+$(BASE)/cabal.project.local: $(BASE)/cabal.project $(BASE)/Config.mk
 	$(PRINTF) " CABAL\tconfigure\n"
 	$(AT)$(CABAL) --builddir="$(abspath $(BUILD)/haskell/)" v2-update \
 	    $(if $(AT),2>/dev/null >/dev/null,)
-ifneq ($(BASE)/$(PROJECTFILE).freeze, $(wildcard $(BASE)/$(PROJECTFILE).freeze))
+ifneq ($(FREEZEFILE), $(wildcard $(FREEZEFILE)))
 	$(AT)rm -f $(BASE)/cabal.project.freeze
 endif
 	$(AT)$(CABAL) --builddir="$(abspath $(BUILD)/haskell/)" \
 	    --with-compiler="$(GHC)" -j24 v2-configure \
 	    $(if $(AT),2>/dev/null >/dev/null,)
-	$(AT)rm -f $(CABALCONFIG)~
+	$(AT)rm -f $(BASE)/cabal.project.local~
 
 .PHONY: freeze
 freeze: $(BASE)/cabal.project
@@ -40,10 +39,10 @@ freeze: $(BASE)/cabal.project
 	$(AT)rm -f $(BASE)/cabal.project.freeze
 	$(AT)$(CABAL) --builddir="$(abspath $(BUILD)/haskell/)" \
 	    v2-freeze $(if $(AT),2>/dev/null >/dev/null,)
-	$(AT)cp "$(BASE)/cabal.project.freeze" "$(BASE)/$(PROJECTFILE).freeze"
+	$(AT)cp "$(BASE)/cabal.project.freeze" "$(FREEZEFILE)"
 
 .PHONY: install-%
-install-%: $(CABALCONFIG) $(CABALFREEZE) | $(TARGET)/
+install-%: $(BASE)/cabal.project.local $(BASE)/cabal.project.freeze | $(TARGET)/
 ifdef TARGET
 	$(PRINTF) " CABAL\t$@\n"
 	$(AT)cp $$($(CABAL) --builddir="$(abspath $(BUILD)/haskell/)" \

@@ -15,14 +15,18 @@ endif
 ifndef NVCC
 NVCC:=$(shell command -v nvcc 2> /dev/null)
 endif
-ifndef PROJECTFILE
 GHC_VERSION_PARTS:=$(subst ., ,$(shell $(GHC) --numeric-version))
 GHC_VERSION:=$(word 1,$(GHC_VERSION_PARTS)).$(word 2,$(GHC_VERSION_PARTS))
-ifneq ($(wildcard $(BASE)/cabal.project.ghc-$(GHC_VERSION)),)
-PROJECTFILE:=cabal.project.ghc-$(GHC_VERSION)
+ifndef PROJECTFILE
+ifneq ($(wildcard $(BASE)/makefiles/cabal.project.ghc-$(GHC_VERSION)),)
+PROJECTFILE:=$(BASE)/makefiles/cabal.project.ghc-$(GHC_VERSION)
 else
-PROJECTFILE:=cabal.project.ghc-8.10
+PROJECTFILE:=$(BASE)/makefiles/cabal.project.default
 endif
+endif
+
+ifndef FREEZEFILE
+FREEZEFILE:=$(BASE)/makefiles/cabal.project.ghc-$(GHC_VERSION).freeze
 endif
 
 all:
