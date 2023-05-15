@@ -7,7 +7,7 @@ import Foreign.Storable (Storable(..))
 
 data PropValue = PropValue
     { propValuePropId :: {-# UNPACK #-} !Int64
-    , propValueValue :: {-# UNPACK #-} ! Double
+    , propValueValue :: {-# UNPACK #-} !Double
     }
 
 instance Show PropValue where

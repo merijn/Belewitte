@@ -7,7 +7,7 @@ import Foreign.Storable (Storable(..))
 
 data ImplTiming = ImplTiming
     { implTimingImpl :: {-# UNPACK #-} !Int64
-    , implTimingTiming :: {-# UNPACK #-} ! Double
+    , implTimingTiming :: {-# UNPACK #-} !Double
     }
 
 liftImplTiming
