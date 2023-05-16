@@ -44,7 +44,7 @@ module OptionParsers
 
 import Control.Monad (void, when)
 import Data.Char (toLower)
-import Data.Foldable (asum)
+import qualified Data.Foldable as F (asum)
 import Data.Function (on)
 import Data.Interval (Boundary(Closed), Extended(Finite), Interval)
 import qualified Data.Interval as I
@@ -239,21 +239,21 @@ platformParser = queryPlatform <$> platformOpt
     queryPlatform (Left name) = Sql.validateUniqEntity $ UniqPlatform name
 
 parseMispredictionStrategy :: Parsec Void String MispredictionStrategy
-parseMispredictionStrategy = asum
+parseMispredictionStrategy = F.asum
     [ None <$ string' "none"
     , FirstInSet <$ string' "firstinset"
     , Ranked <$> columnParser <* char '-' <*> rankParser
     ]
   where
     columnParser :: Parsec Void String Column
-    columnParser = asum
+    columnParser = F.asum
         [ MinTime <$ string' "min"
         , AvgTime <$ string' "avg"
         , MaxTime <$ string' "max"
         ]
 
     rankParser :: Parsec Void String Ranking
-    rankParser = asum
+    rankParser = F.asum
         [ Min <$ string' "min"
         , Avg <$ string' "avg"
         , Total <$ string' "total"
@@ -290,7 +290,7 @@ rawPredictorConfigParser = do
         modelId <- decimal
         implId <- implIdParser
 
-        strategy <- asum
+        strategy <- F.asum
             [ colon *> parseMispredictionStrategy
             , fromMaybe None mStrategy <$ eof
             ]
@@ -301,7 +301,7 @@ rawPredictorConfigParser = do
         colon = void $ char ':'
 
         implIdParser :: Parsec Void String (Either Int Text)
-        implIdParser = asum
+        implIdParser = F.asum
             [ try $ colon *> (Left <$> numericId)
             , try $ colon *> (Right <$> textId)
             , maybe empty pure mDefImpl <* (colon <|> eof)
@@ -359,7 +359,7 @@ predictorConfigsParser = do
         | makePredictorConfigs <- predictorConfigMakers
         ]
   where
-    multiConfigParser = asum
+    multiConfigParser = F.asum
         [ (\f x y -> pure <$> f x y) <$> rawPredictorConfigParser
         , rawPredictorConfigSetParser
         ]

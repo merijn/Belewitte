@@ -7,7 +7,7 @@ module PlotOptions (PlotCommand(..), commands) where
 import Control.Monad (forM)
 import Data.Conduit ((.|))
 import qualified Data.Conduit.Combinators as C
-import Data.Foldable (asum)
+import qualified Data.Foldable as F (asum)
 import Data.IntervalSet (IntervalSet)
 import qualified Data.IntervalSet as IS
 import Data.Map (Map)
@@ -98,7 +98,7 @@ barPlotParser = do
         [ long "numbered", help "Use indices for group labels" ]
 
 variantSelectionOption :: Parser (Key Algorithm -> SqlM VariantSelection)
-variantSelectionOption = asum
+variantSelectionOption = F.asum
     [ fmap (fmap ConfigSelection) <$> variantConfigIdParser
     , pure $ const (return Everything)
     ]
@@ -304,4 +304,4 @@ plotQueryMap = M.fromList
     variantsParser :: Parser (Key Algorithm -> SqlM (Set (Key Variant)))
     variantsParser = do
         variants <- some variantIdParser
-        pure $ \algoId -> S.fromList <$> traverse ($algoId) variants
+        pure $ \algoId -> S.fromList <$> traverse ($ algoId) variants

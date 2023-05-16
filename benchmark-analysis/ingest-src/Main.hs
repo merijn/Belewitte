@@ -15,7 +15,7 @@ import Data.Conduit (ConduitT, Void, ZipConduit(..), (.|), runConduit)
 import qualified Data.Conduit as C
 import qualified Data.Conduit.Combinators as C
 import qualified Data.Conduit.Text as C
-import Data.Foldable (asum)
+import qualified Data.Foldable as F (asum)
 import Data.Map (Map)
 import qualified Data.Map as M
 import qualified Data.Text as T
@@ -151,7 +151,8 @@ runBenchmarks = lift $ do
             numNodes = platformAvailable platform
 
     tryAlternatives :: (MonadIO m, MonadLogger m) => [MaybeT m a] -> m a
-    tryAlternatives alts = runMaybeT (asum alts) >>= maybe exitOnNothing return
+    tryAlternatives alts =
+        runMaybeT (F.asum alts) >>= maybe exitOnNothing return
 
     exitOnNothing :: (MonadIO m, MonadLogger m) => m a
     exitOnNothing = do

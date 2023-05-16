@@ -141,8 +141,7 @@ implNames = {
     kernelConfig :: Text -> (Builder, Builder)
     kernelConfig implName
         | "-warp-" `T.isInfixOf` implName
-        , Just warp <- readMaybe (T.unpack warpTxt) :: Maybe Int
-        , Just chunk <- readMaybe (T.unpack chunkTxt) :: Maybe Int
+        , Just (warp, chunk) <- mWarpChunk
         = (fromText newName, decimal warp <> ", " <> decimal chunk)
         | "-warp-" `T.isInfixOf` implName || "-warp" `T.isSuffixOf` implName
         = (fromText implName, "32, 32")
@@ -152,7 +151,13 @@ implNames = {
 
         (revWarpCfg, revRemainder) = splitAt 2 . reverse $ chunks
 
-        [warpTxt, chunkTxt] = reverse revWarpCfg
+        mWarpChunk :: Maybe (Int, Int)
+        mWarpChunk = case revWarpCfg of
+            [chunkTxt, warpTxt]
+                | Just chunk <- readMaybe (T.unpack chunkTxt)
+                , Just warp <- readMaybe (T.unpack warpTxt)
+                -> Just (warp, chunk)
+            _ -> Nothing
 
         newName = T.intercalate "-" . reverse $ revRemainder
 

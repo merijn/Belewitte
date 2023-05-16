@@ -17,7 +17,7 @@ module ModelOptions
 import Control.Monad (forM)
 import Data.Char (toLower)
 import qualified Data.Conduit.Combinators as C
-import Data.Foldable (asum)
+import qualified Data.Foldable as F (asum)
 import Data.IntervalSet (IntervalSet)
 import qualified Data.IntervalSet as IS
 import Data.IntMap (IntMap)
@@ -516,7 +516,7 @@ trainStepConfig = do
         :: MonadIO m
         => String
         -> Parser (m (Map Text (Key PropertyName) -> Set (Key PropertyName)))
-    props name = asum
+    props name = F.asum
         [ keepFilter name
         , dropFilter name
         , pure . return $ S.fromList . M.elems

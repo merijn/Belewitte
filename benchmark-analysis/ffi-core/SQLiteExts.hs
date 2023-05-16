@@ -40,7 +40,7 @@ instance Exception SqliteErrorCode where
 
 registerSqlFunctions
     :: (MonadIO m, MonadLogger m, MonadThrow m) => Ptr () -> m ()
-registerSqlFunctions sqlitePtr = mapM_ ($sqlitePtr)
+registerSqlFunctions sqlitePtr = mapM_ ($ sqlitePtr)
     [ createSqlFunction 1 "legacy_random" randomFun
     , createSqlFunction 1 "sqrt" sqliteSqrt
     , createSqlAggregate 3 "init_key_value_vector" infinity

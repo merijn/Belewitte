@@ -168,4 +168,4 @@ getCurrentSchema = mkMigration $ map fst
 updateSchemaToVersion
     :: (MonadLogger m, MonadSql m, MonadThrow m)
     => Int64 -> Transaction m Migration
-updateSchemaToVersion n = mapM (($n) . snd) migrations >>= mkMigration
+updateSchemaToVersion n = mapM (($ n) . snd) migrations >>= mkMigration
