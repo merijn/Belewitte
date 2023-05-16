@@ -1,0 +1,25 @@
+packages: */*.cabal
+
+solver: modular
+doc-index-file: $datadir/doc/$arch-$os-$compiler/index.html
+optimization: 2
+documentation: False
+
+allow-newer: persistent:template-haskell
+
+package evolution
+    Ghc-Options: -freverse-errors -Wno-incomplete-uni-patterns
+
+package benchmark-analysis
+    Ghc-Options: -freverse-errors -Werror=incomplete-patterns
+
+source-repository-package
+  type: git
+  location: https://github.com/merijn/persistent.git
+  tag: 0e24b14ad0a6f79c294bb6cf8b34394f4c2b8745
+  subdir: persistent
+
+source-repository-package
+  type: git
+  location: https://github.com/merijn/pipes-binary.git
+  tag: 0469f3560fda4d8837914a9c4d2c75221f7ba564
