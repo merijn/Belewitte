@@ -14,7 +14,7 @@ License-File:        LICENSE
 
 Category:            System
 Build-Type:          Simple
-Tested-With:         GHC == 8.10.7, GHC == 9.0.2, GHC == 9.2.7
+Tested-With:         GHC == 8.10.7, GHC == 9.0.2, GHC == 9.2.7, GHC == 9.4.5
 
 Synopsis:            
 
@@ -255,7 +255,8 @@ Library
                ,        persistent ^>= 2.14.4
                ,        persistent-sqlite ^>= 2.13.1
                ,        resource-pool ^>= 0.4.0.0
-               ,        template-haskell ^>= { 2.16.0.0, 2.17.0.0, 2.18.0.0 }
+               ,        template-haskell ^>=
+                        { 2.16.0.0, 2.17.0.0, 2.18.0.0, 2.19.0.0 }
                ,        terminal-size ^>= 0.3.3
                ,        transformers
                ,        unliftio-core ^>= 0.2.0.1
