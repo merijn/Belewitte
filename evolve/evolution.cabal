@@ -14,7 +14,7 @@ License-File:        LICENSE
 
 Category:            System
 Build-Type:          Simple
-Tested-With:         GHC == 8.10.7
+Tested-With:         GHC == 8.10.7, GHC == 9.0.2
 
 Synopsis:            
 
@@ -28,10 +28,15 @@ Common all
   Build-Depends:        base
                ,        containers ^>= 0.6.6
                ,        exceptions ^>= 0.10.7
-               ,        mtl ^>= 2.3.1
                ,        pipes ^>= 4.3.16
                ,        process ^>= 1.6.16.0
                ,        text ^>= 2.0.2
+
+  -- mtl 2.3.1 is broken on GHC 9.0 and thus never valid
+  if impl(ghc == 9.0.*)
+    Build-Depends:      mtl ^>= 2.2.2
+  else
+    Build-Depends:      mtl ^>= 2.3.1
 
 Common exes
   GHC-Options:          -threaded

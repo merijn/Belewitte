@@ -14,7 +14,7 @@ License-File:        LICENSE
 
 Category:            System
 Build-Type:          Simple
-Tested-With:         GHC == 8.10.7
+Tested-With:         GHC == 8.10.7, GHC == 9.0.2
 
 Synopsis:            
 
@@ -42,7 +42,6 @@ Library
                ,        filepath ^>= 1.4.100.0
                ,        hostname ^>= 1.0
                ,        monad-logger ^>= 0.3.39
-               ,        mtl ^>= 2.3.1
                ,        prettyprinter ^>= 1.7.1
                ,        prettyprinter-ansi-terminal ^>= 1.1.3
                ,        process ^>= 1.6.16.0
@@ -55,6 +54,12 @@ Library
                ,        transformers
                ,        unix ^>= 2.8.1.1
                ,        unliftio-core ^>= 0.2.0.1
+
+  -- mtl 2.3.1 is broken on GHC 9.0 and thus never valid
+  if impl(ghc == 9.0.*)
+    Build-Depends:      mtl ^>= 2.2.2
+  else
+    Build-Depends:      mtl ^>= 2.3.1
 
 Source-Repository head
   Type:     git

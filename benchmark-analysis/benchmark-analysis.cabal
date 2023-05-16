@@ -1,4 +1,4 @@
-Cabal-Version:       2.2
+Cabal-Version:       3.0
 Name:                benchmark-analysis
 Version:             0.9.0
 
@@ -14,7 +14,7 @@ License-File:        LICENSE
 
 Category:            System
 Build-Type:          Simple
-Tested-With:         GHC == 8.10.7
+Tested-With:         GHC == 8.10.7, GHC == 9.0.2
 
 Synopsis:            
 
@@ -58,13 +58,18 @@ Common all
                ,        conduit-extra ^>= 1.3.6
                ,        containers ^>= 0.6.6
                ,        interpolate ^>= 0.2.1
-               ,        mtl ^>= 2.3.1
                ,        optparse-applicative ^>= 0.17
                ,        pretty-show ^>= 1.10
                --       resourcet 1.3.0 is not supported by broadcast-chan
                ,        resourcet ^>= 1.2.0
                ,        time ^>= 1.12.2
                ,        unix ^>= 2.8.1.1
+
+  -- mtl 2.3.1 is broken on GHC 9.0 and thus never valid
+  if impl(ghc == 9.0.*)
+    Build-Depends:      mtl ^>= 2.2.2
+  else
+    Build-Depends:      mtl ^>= 2.3.1
 
 Common exes
   GHC-Options:          -rtsopts -threaded -with-rtsopts=-qg
@@ -250,7 +255,7 @@ Library
                ,        persistent ^>= 2.14.4
                ,        persistent-sqlite ^>= 2.13.1
                ,        resource-pool ^>= 0.4.0.0
-               ,        template-haskell ^>= 2.16.0.0
+               ,        template-haskell ^>= { 2.16.0.0, 2.17.0.0 }
                ,        terminal-size ^>= 0.3.3
                ,        transformers
                ,        unliftio-core ^>= 0.2.0.1
