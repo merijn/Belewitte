@@ -7,14 +7,14 @@ Bug-Reports:
 
 Author:              Merijn Verstraaten
 Maintainer:          Merijn Verstraaten <merijn@inconsistent.nl>
-Copyright:           Copyright © 2015-2020 Merijn Verstraaten
+Copyright:           Copyright © 2015-2023 Merijn Verstraaten
 
 License:             GPL-3.0-or-later
 License-File:        LICENSE
 
 Category:            System
 Build-Type:          Simple
-Tested-With:         GHC == 8.10.7, GHC == 9.0.2, GHC == 9.2.7, GHC == 9.4.5
+Tested-With:         GHC == 8.10.7, GHC == 9.2.7, GHC == 9.4.5, GHC == 9.6.1
 
 Synopsis:            
 
@@ -28,15 +28,14 @@ Common all
   Build-Depends:        base
                ,        containers ^>= 0.6.6
                ,        exceptions ^>= 0.10.7
+               ,        mtl ^>= 2.3.1
                ,        pipes ^>= 4.3.16
                ,        process ^>= 1.6.16.0
                ,        text ^>= 2.0.2
 
-  -- mtl 2.3.1 is broken on GHC 9.0 and thus never valid
+  -- GHC 9.0 produces broken code and is unusable
   if impl(ghc == 9.0.*)
-    Build-Depends:      mtl ^>= 2.2.2
-  else
-    Build-Depends:      mtl ^>= 2.3.1
+    Buildable:          False
 
 Common exes
   GHC-Options:          -threaded

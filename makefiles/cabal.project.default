@@ -9,7 +9,7 @@ package evolution
     Ghc-Options: -freverse-errors -Wno-incomplete-uni-patterns
 
 package benchmark-analysis
-    Ghc-Options: -freverse-errors -Werror=incomplete-patterns
+    Ghc-Options: -freverse-errors -Werror=incomplete-patterns -g -debug
 
 source-repository-package
   type: git

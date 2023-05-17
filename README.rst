@@ -58,10 +58,10 @@ SLURM Workload Manager
 Python 3.6 or 3.7
     The python 3.6/3.7 executable is expected to be in the user's ``PATH``
 
-GHC Haskell compiler 8.10.7
+GHC Haskell compiler 8.10.7, 9.2.7, 9.4.5, or 9.6.1
     https://www.haskell.org/ghc/download.html
 
-cabal-install 3.6
+cabal-install 3.6+
     https://www.haskell.org/cabal/download.html
 
 Intel Threading Building Blocks
